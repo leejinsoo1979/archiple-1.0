@@ -6,6 +6,7 @@ export interface GuideLayerConfig {
   gridSnapColor?: string;
   distanceLabelColor?: string;
   showDistanceLabels?: boolean;
+  orthogonalGuideColor?: string; // 수직/수평 가이드 색상
 }
 
 /**
@@ -16,11 +17,13 @@ export interface GuideLayerConfig {
  * - Grid snap indicators
  * - Distance measurements
  * - Perpendicular guides
+ * - Orthogonal (수직/수평) guide lines
  */
 export class GuideLayer extends BaseLayer {
   private angleGuide: { from: Point; angle: number } | null = null;
   private gridSnapPoint: Point | null = null;
   private distanceMeasurement: { from: Point; to: Point; distance: number } | null = null;
+  private orthogonalGuides: { from: Point; to: Point; type: 'horizontal' | 'vertical' } | null = null;
 
   private config: Required<GuideLayerConfig>;
 
@@ -32,6 +35,7 @@ export class GuideLayer extends BaseLayer {
       gridSnapColor: config?.gridSnapColor || 'rgba(46, 204, 113, 0.6)',
       distanceLabelColor: config?.distanceLabelColor || '#34495e',
       showDistanceLabels: config?.showDistanceLabels ?? true,
+      orthogonalGuideColor: config?.orthogonalGuideColor || 'rgba(52, 152, 219, 0.6)', // 파란색
     };
   }
 
@@ -53,8 +57,21 @@ export class GuideLayer extends BaseLayer {
       const dy = to.y - from.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
       this.distanceMeasurement = { from, to, distance };
+
+      // 수직/수평 가이드 자동 감지 (오차 3px 이내)
+      const threshold = 3;
+      if (Math.abs(dy) <= threshold) {
+        // 수평선
+        this.orthogonalGuides = { from, to, type: 'horizontal' };
+      } else if (Math.abs(dx) <= threshold) {
+        // 수직선
+        this.orthogonalGuides = { from, to, type: 'vertical' };
+      } else {
+        this.orthogonalGuides = null;
+      }
     } else {
       this.distanceMeasurement = null;
+      this.orthogonalGuides = null;
     }
   }
 
@@ -62,6 +79,11 @@ export class GuideLayer extends BaseLayer {
     if (!this.visible) return;
 
     this.applyOpacity(ctx);
+
+    // Render orthogonal guides first (background)
+    if (this.orthogonalGuides) {
+      this.renderOrthogonalGuide(ctx, this.orthogonalGuides);
+    }
 
     // Render angle guide line
     if (this.angleGuide) {
@@ -84,6 +106,49 @@ export class GuideLayer extends BaseLayer {
     }
 
     this.resetOpacity(ctx);
+  }
+
+  private renderOrthogonalGuide(
+    ctx: CanvasRenderingContext2D,
+    guide: { from: Point; to: Point; type: 'horizontal' | 'vertical' }
+  ): void {
+    ctx.save();
+
+    ctx.strokeStyle = this.config.orthogonalGuideColor;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 4]);
+
+    if (guide.type === 'horizontal') {
+      // 수평 가이드 (캔버스 전체 너비)
+      const y = guide.from.y;
+      ctx.beginPath();
+      ctx.moveTo(-1000, y);
+      ctx.lineTo(5000, y);
+      ctx.stroke();
+
+      // 라벨
+      ctx.fillStyle = this.config.orthogonalGuideColor;
+      ctx.font = 'bold 11px system-ui';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('수평', guide.from.x + 10, y - 5);
+    } else {
+      // 수직 가이드 (캔버스 전체 높이)
+      const x = guide.from.x;
+      ctx.beginPath();
+      ctx.moveTo(x, -1000);
+      ctx.lineTo(x, 5000);
+      ctx.stroke();
+
+      // 라벨
+      ctx.fillStyle = this.config.orthogonalGuideColor;
+      ctx.font = 'bold 11px system-ui';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('수직', x + 5, guide.from.y + 10);
+    }
+
+    ctx.restore();
   }
 
   private renderAngleGuide(ctx: CanvasRenderingContext2D, from: Point, angle: number): void {
