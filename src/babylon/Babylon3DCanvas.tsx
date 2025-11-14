@@ -69,7 +69,7 @@ const Babylon3DCanvas = ({ floorplanData }: Babylon3DCanvasProps) => {
 
       // Create grid material for ground
       const groundMaterial = new StandardMaterial('groundMat', scene);
-      groundMaterial.diffuseColor = new Color3(0.95, 0.95, 0.95);
+      groundMaterial.diffuseColor = new Color3(1, 1, 1); // White background
       groundMaterial.specularColor = new Color3(0.1, 0.1, 0.1);
 
       // Create grid texture
@@ -77,11 +77,12 @@ const Babylon3DCanvas = ({ floorplanData }: Babylon3DCanvasProps) => {
         <svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
-              <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#d0d0d0" stroke-width="0.5"/>
+              <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#e0e0e0" stroke-width="0.5"/>
             </pattern>
             <pattern id="majorGrid" width="50" height="50" patternUnits="userSpaceOnUse">
+              <rect width="50" height="50" fill="white"/>
               <rect width="50" height="50" fill="url(#grid)"/>
-              <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#a0a0a0" stroke-width="1"/>
+              <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#c0c0c0" stroke-width="1"/>
             </pattern>
           </defs>
           <rect width="100" height="100" fill="url(#majorGrid)"/>
