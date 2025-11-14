@@ -73,6 +73,9 @@ export class WallLayer extends BaseLayer {
       this.renderWall(ctx, wall, isHovered);
     });
 
+    // Render wall joints (circles at connection points) for clean corners
+    this.renderWallJoints(ctx);
+
     // Render preview wall
     if (this.previewWall) {
       this.renderPreviewWall(ctx, this.previewWall.start, this.previewWall.end);
@@ -141,5 +144,47 @@ export class WallLayer extends BaseLayer {
     ctx.stroke();
 
     ctx.restore();
+  }
+
+  /**
+   * Render circular joints at wall connection points for clean corners
+   */
+  private renderWallJoints(ctx: CanvasRenderingContext2D): void {
+    // Get all unique points that have walls connected
+    const connectedPoints = new Map<string, Point>();
+
+    this.walls.forEach((wall) => {
+      const startPoint = this.points.get(wall.startPointId);
+      const endPoint = this.points.get(wall.endPointId);
+
+      if (startPoint && startPoint.connectedWalls && startPoint.connectedWalls.length > 1) {
+        connectedPoints.set(startPoint.id, startPoint);
+      }
+      if (endPoint && endPoint.connectedWalls && endPoint.connectedWalls.length > 1) {
+        connectedPoints.set(endPoint.id, endPoint);
+      }
+    });
+
+    // Draw circular joints at each connection point
+    connectedPoints.forEach((point) => {
+      // Find the thickest wall connected to this point
+      let maxThickness = this.config.wallThickness;
+
+      if (point.connectedWalls) {
+        point.connectedWalls.forEach((wallId) => {
+          const wall = this.walls.find((w) => w.id === wallId);
+          if (wall && wall.thickness) {
+            maxThickness = Math.max(maxThickness, wall.thickness);
+          }
+        });
+      }
+
+      const radiusPixels = (maxThickness * this.MM_TO_PIXELS) / 2;
+
+      ctx.fillStyle = this.config.wallColor;
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, radiusPixels, 0, Math.PI * 2);
+      ctx.fill();
+    });
   }
 }
