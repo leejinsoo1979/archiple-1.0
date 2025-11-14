@@ -223,6 +223,33 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
       guideLayer.setGridSnapPoint(null);
     });
 
+    // Room detection on wall added (detect rooms automatically)
+    eventBus.on(FloorEvents.WALL_ADDED, () => {
+      console.log('[FloorplanCanvas] Wall added, detecting rooms...');
+      const points = sceneManager.objectManager.getAllPoints();
+      const walls = sceneManager.objectManager.getAllWalls();
+      const rooms = sceneManager.objectManager.getAllRooms();
+      const detectedRooms = roomDetectionService.detectRooms(walls, points);
+
+      detectedRooms.forEach((room) => {
+        // Check if room already exists
+        const existing = rooms.find((r) => {
+          const samePoints =
+            r.points.length === room.points.length &&
+            r.points.every((pid) => room.points.includes(pid));
+          return samePoints;
+        });
+
+        if (!existing) {
+          sceneManager.objectManager.addRoom(room);
+          eventBus.emit(FloorEvents.ROOM_DETECTED, { room });
+          console.log('[FloorplanCanvas] Room detected:', room.name, room.area.toFixed(2), 'm²');
+        }
+      });
+
+      updateLayers();
+    });
+
     // Room detection on potential room
     eventBus.on(FloorEvents.POTENTIAL_ROOM_DETECTED, () => {
       console.log('[FloorplanCanvas] Detecting rooms...');
