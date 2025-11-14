@@ -307,7 +307,7 @@ const EditorPage = () => {
             <h4>Basic Parameters</h4>
             <div className={styles.settingRow}>
               <label>Total Building</label>
-              <input type="text" value="0.00 ㎡" readOnly />
+              <input type="text" defaultValue="0.00 ㎡" readOnly />
             </div>
           </div>
 
@@ -320,11 +320,11 @@ const EditorPage = () => {
             </div>
             <div className={styles.settingRow}>
               <label>Wall Height</label>
-              <input type="text" value="9' 3\"" />
+              <input type="text" defaultValue="9' 3&quot;" />
             </div>
             <div className={styles.settingRow}>
               <label>Wall Thickness</label>
-              <input type="text" value="9.45 in" />
+              <input type="text" defaultValue="9.45 in" />
             </div>
             <button className={styles.deleteBtn}>Delete All Walls</button>
           </div>
@@ -334,7 +334,7 @@ const EditorPage = () => {
             <h4>Floor Setting</h4>
             <div className={styles.settingRow}>
               <label>Floor Thickness</label>
-              <input type="text" value="0' 4\"" />
+              <input type="text" defaultValue="0' 4&quot;" />
             </div>
             <button className={styles.editBtn}>Edit Floor ›</button>
           </div>
