@@ -1,112 +1,388 @@
-/* Coohom-style unified viewport */
+/* Archiple Studio UI - Exact Recreation */
 .editorContainer {
   position: relative;
-  width: 100%;
+  width: 100vw;
   height: 100vh;
-  background: #f5f5f5;
-  overflow: hidden;
-}
-
-.viewport {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1;
-}
-
-/* Top-right view mode toggle */
-.viewToggle {
-  position: absolute;
-  top: 20px;
-  right: 20px;
   display: flex;
-  gap: 0;
-  background: white;
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: #e8e8e8;
   overflow: hidden;
-  z-index: 100;
 }
 
-.viewToggle button {
-  padding: 8px 20px;
-  border: none;
-  background: white;
-  color: #666;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  border-radius: 0;
-}
-
-.viewToggle button:hover {
-  background: #f5f5f5;
-}
-
-.viewToggle button.active {
-  background: #3498db;
-  color: white;
-}
-
-/* Left toolbar */
-.leftToolbar {
-  position: absolute;
-  top: 50%;
-  left: 20px;
-  transform: translateY(-50%);
+/* ===== LEFT GREEN SIDEBAR ===== */
+.leftSidebar {
+  width: 72px;
+  height: 100vh;
+  background: linear-gradient(180deg, #3fae7a 0%, #2d9967 100%);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  background: white;
-  padding: 12px;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-  z-index: 100;
+  align-items: center;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  z-index: 200;
+  flex-shrink: 0;
 }
 
-.tool {
-  width: 40px;
-  height: 40px;
+.logo {
+  padding: 20px 0;
+  text-align: center;
+  color: white;
+  font-weight: bold;
+  font-size: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  width: 100%;
+}
+
+.logo svg {
+  display: block;
+  margin: 0 auto 8px;
+}
+
+.sidebarButtons {
+  flex: 1;
+  padding: 20px 0;
+  width: 100%;
+}
+
+.sidebarBtn {
+  width: 100%;
+  padding: 12px 8px;
+  border: none;
+  background: transparent;
+  color: white;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+}
+
+.sidebarBtn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.sidebarBtn .icon {
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 18px;
+}
+
+.sidebarBottom {
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 12px 0;
+  width: 100%;
+}
+
+.sidebarBottom .sidebarBtn {
+  padding: 8px;
+}
+
+/* ===== LEFT TOOLS PANEL ===== */
+.leftPanel {
+  width: 310px;
+  height: 100vh;
+  background: white;
+  border-right: 1px solid #ddd;
+  overflow-y: auto;
+  flex-shrink: 0;
+  z-index: 150;
+}
+
+.panelHeader {
+  padding: 16px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 10;
+}
+
+.panelHeader h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.panelHeader button {
+  border: none;
+  background: none;
+  font-size: 24px;
   cursor: pointer;
-  border-radius: 6px;
+  color: #999;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  line-height: 1;
+}
+
+.panelHeader button:hover {
+  color: #333;
+}
+
+.createRoomOptions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid #eee;
+}
+
+.optionCard {
+  aspect-ratio: 1.2;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
   color: #666;
+}
+
+.optionCard:hover {
+  border-color: #3fae7a;
+  box-shadow: 0 2px 8px rgba(63, 174, 122, 0.2);
+}
+
+.optionIcon {
+  font-size: 32px;
+  filter: grayscale(0.3);
+}
+
+.toolSection {
+  padding: 20px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.toolSection h4 {
+  margin: 0 0 16px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+}
+
+.toolGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.toolBtn {
+  aspect-ratio: 1;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  color: #666;
+}
+
+.toolBtn:hover {
+  border-color: #3fae7a;
+  background: #f8fdfb;
+  color: #3fae7a;
+}
+
+.toolBtn svg {
+  width: 32px;
+  height: 32px;
+}
+
+.toolBtn span {
+  font-size: 10px;
+  text-align: center;
+  line-height: 1.2;
+  color: #666;
+}
+
+/* ===== TOP TOOLBAR ===== */
+.topToolbar {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: white;
+  border-radius: 8px;
+  padding: 8px 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+}
+
+.topBtn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.topBtn:hover {
+  background: #f5f5f5;
+}
+
+.playButtons {
+  display: flex;
+  gap: 4px;
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid #e0e0e0;
+}
+
+.navBtn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #ddd;
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+}
+
+.navBtn:hover {
+  background: #f5f5f5;
+  border-color: #3fae7a;
+}
+
+.playBtn {
+  padding: 8px 20px;
+  border: none;
+  background: #3fae7a;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
   transition: all 0.2s;
 }
 
-.tool:hover {
-  background: #f5f5f5;
-  color: #3498db;
+.playBtn:hover {
+  background: #2d9967;
 }
 
-.tool.active {
-  background: #3498db;
-  color: white;
+/* ===== MAIN VIEWPORT ===== */
+.viewport {
+  flex: 1;
+  position: relative;
+  background: #e8e8e8;
 }
 
-/* Bottom status bar */
-.statusBar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 32px;
-  background: rgba(255, 255, 255, 0.95);
-  border-top: 1px solid #e0e0e0;
+/* ===== RIGHT SETTINGS PANEL ===== */
+.rightPanel {
+  width: 320px;
+  height: 100vh;
+  background: white;
+  border-left: 1px solid #ddd;
+  overflow-y: auto;
+  flex-shrink: 0;
+  z-index: 150;
+}
+
+.settingsSection {
+  padding: 20px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.settingsSection h4 {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
   display: flex;
   align-items: center;
-  padding: 0 20px;
-  font-size: 13px;
-  color: #666;
-  z-index: 100;
-  backdrop-filter: blur(10px);
+  justify-content: space-between;
 }
 
-.statusBar span {
-  margin-right: 20px;
+.settingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.settingRow label {
+  font-size: 13px;
+  color: #666;
+}
+
+.settingRow input[type="text"] {
+  width: 120px;
+  padding: 6px 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 13px;
+  text-align: right;
+}
+
+.settingRow input[type="checkbox"] {
+  width: 40px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.deleteBtn,
+.editBtn {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 13px;
+  color: #666;
+  transition: all 0.2s;
+  margin-top: 12px;
+}
+
+.deleteBtn:hover,
+.editBtn:hover {
+  border-color: #3fae7a;
+  color: #3fae7a;
+}
+
+/* ===== SCROLLBAR STYLING ===== */
+.leftPanel::-webkit-scrollbar,
+.rightPanel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.leftPanel::-webkit-scrollbar-track,
+.rightPanel::-webkit-scrollbar-track {
+  background: #f5f5f5;
+}
+
+.leftPanel::-webkit-scrollbar-thumb,
+.rightPanel::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+.leftPanel::-webkit-scrollbar-thumb:hover,
+.rightPanel::-webkit-scrollbar-thumb:hover {
+  background: #aaa;
 }
