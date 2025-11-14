@@ -11,7 +11,7 @@ const EditorPage = () => {
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [activeTool, setActiveTool] = useState<ToolType>(ToolType.WALL);
-  const [viewMode, setViewMode] = useState<'2D' | '3D'>('3D'); // Start in 3D to test
+  const [viewMode, setViewMode] = useState<'2D' | '3D'>('2D');
   const [floorplanData, setFloorplanData] = useState<any>(null);
 
   return (
@@ -118,24 +118,24 @@ const EditorPage = () => {
       <div className={styles.mainContent}>
         {/* Left Green Sidebar */}
         <div className={styles.leftSidebar}>
-        <div className={styles.logo}>
-          <img src="/images/archiple-icon.svg" alt="Archiple Studio" />
-        </div>
-
         <div className={styles.sidebarButtons}>
           <button className={styles.sidebarBtn}>
             <div className={styles.icon}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 3L2 12h3v8h6v-6h2v6h6v-8h3L12 3z"/>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="3" y="3" width="7" height="7"/>
+                <rect x="14" y="3" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/>
+                <rect x="14" y="14" width="7" height="7"/>
               </svg>
             </div>
-            <span>Create Room</span>
+            <span>Create<br/>Room</span>
           </button>
 
           <button className={styles.sidebarBtn}>
             <div className={styles.icon}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M12 1v6m0 6v6M1 12h6m6 0h6"/>
               </svg>
             </div>
             <span>Customize</span>
@@ -143,19 +143,18 @@ const EditorPage = () => {
 
           <button className={styles.sidebarBtn}>
             <div className={styles.icon}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="3" y="3" width="18" height="18"/>
+                <path d="M3 9h18M9 9v12"/>
               </svg>
             </div>
-            <span>Model Library</span>
+            <span>Model<br/>Library</span>
           </button>
 
           <button className={styles.sidebarBtn}>
             <div className={styles.icon}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2l-5.5 9h11z"/>
-                <circle cx="17.5" cy="17.5" r="4.5"/>
-                <path d="M3 13.5h8v8H3z"/>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M3 12l9-9 9 9M5 10v11h4v-6h6v6h4V10"/>
               </svg>
             </div>
             <span>Mode</span>
@@ -163,8 +162,9 @@ const EditorPage = () => {
 
           <button className={styles.sidebarBtn}>
             <div className={styles.icon}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="12" r="10"/>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="12" cy="8" r="4"/>
+                <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
               </svg>
             </div>
             <span>My</span>
@@ -174,8 +174,8 @@ const EditorPage = () => {
         <div className={styles.sidebarBottom}>
           <button className={styles.sidebarBtn}>
             <div className={styles.icon}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="12" cy="12" r="1"/>
               </svg>
             </div>
           </button>
@@ -427,10 +427,26 @@ const EditorPage = () => {
           </button>
         </div>
 
-        <div style={{ display: viewMode === '2D' ? 'block' : 'none', width: '100%', height: '100%' }}>
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          visibility: viewMode === '2D' ? 'visible' : 'hidden',
+          pointerEvents: viewMode === '2D' ? 'auto' : 'none'
+        }}>
           <FloorplanCanvas activeTool={activeTool} onDataChange={setFloorplanData} />
         </div>
-        <div style={{ display: viewMode === '3D' ? 'block' : 'none', width: '100%', height: '100%' }}>
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          visibility: viewMode === '3D' ? 'visible' : 'hidden',
+          pointerEvents: viewMode === '3D' ? 'auto' : 'none'
+        }}>
           <Babylon3DCanvas floorplanData={floorplanData} visible={viewMode === '3D'} />
         </div>
       </div>
