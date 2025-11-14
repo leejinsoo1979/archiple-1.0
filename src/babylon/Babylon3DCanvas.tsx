@@ -93,60 +93,6 @@ const Babylon3DCanvas = ({ floorplanData }: Babylon3DCanvasProps) => {
       groundMaterial.diffuseTexture = gridTexture;
       ground.material = groundMaterial;
 
-      // Create sample room with walls
-      const wallHeight = 2.8;
-      const wallThickness = 0.2;
-      const wallMaterial = new StandardMaterial('wallMat', scene);
-      wallMaterial.diffuseColor = new Color3(0.95, 0.95, 0.9);
-      wallMaterial.specularColor = new Color3(0.2, 0.2, 0.2);
-
-      // Back wall
-      const wall1 = MeshBuilder.CreateBox('wall1', { width: 6, height: wallHeight, depth: wallThickness }, scene);
-      wall1.position.set(0, wallHeight / 2, -3);
-      wall1.material = wallMaterial;
-
-      // Left wall
-      const wall2 = MeshBuilder.CreateBox('wall2', { width: wallThickness, height: wallHeight, depth: 6 }, scene);
-      wall2.position.set(-3, wallHeight / 2, 0);
-      wall2.material = wallMaterial;
-
-      // Right wall with door opening
-      const wall3a = MeshBuilder.CreateBox('wall3a', { width: wallThickness, height: wallHeight, depth: 2 }, scene);
-      wall3a.position.set(3, wallHeight / 2, -2);
-      wall3a.material = wallMaterial;
-
-      const wall3b = MeshBuilder.CreateBox('wall3b', { width: wallThickness, height: wallHeight, depth: 2 }, scene);
-      wall3b.position.set(3, wallHeight / 2, 2);
-      wall3b.material = wallMaterial;
-
-      const wall3c = MeshBuilder.CreateBox('wall3c', { width: wallThickness, height: wallHeight - 2.1, depth: 2 }, scene);
-      wall3c.position.set(3, wallHeight - (wallHeight - 2.1) / 2, 0);
-      wall3c.material = wallMaterial;
-
-      // Front wall with window
-      const wall4a = MeshBuilder.CreateBox('wall4a', { width: 2, height: wallHeight, depth: wallThickness }, scene);
-      wall4a.position.set(-2, wallHeight / 2, 3);
-      wall4a.material = wallMaterial;
-
-      const wall4b = MeshBuilder.CreateBox('wall4b', { width: 2, height: wallHeight, depth: wallThickness }, scene);
-      wall4b.position.set(2, wallHeight / 2, 3);
-      wall4b.material = wallMaterial;
-
-      const wall4c = MeshBuilder.CreateBox('wall4c', { width: 2, height: 0.8, depth: wallThickness }, scene);
-      wall4c.position.set(0, 0.4, 3);
-      wall4c.material = wallMaterial;
-
-      const wall4d = MeshBuilder.CreateBox('wall4d', { width: 2, height: 0.6, depth: wallThickness }, scene);
-      wall4d.position.set(0, wallHeight - 0.3, 3);
-      wall4d.material = wallMaterial;
-
-      // Add floor inside room
-      const floor = MeshBuilder.CreateGround('floor', { width: 6, height: 6 }, scene);
-      floor.position.set(0, 0.01, 0);
-      const floorMaterial = new StandardMaterial('floorMat', scene);
-      floorMaterial.diffuseColor = new Color3(0.8, 0.75, 0.7);
-      floor.material = floorMaterial;
-
       // Render loop
       engine.runRenderLoop(() => {
         scene.render();
