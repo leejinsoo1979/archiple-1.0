@@ -35,8 +35,8 @@ export class RoomLayer extends BaseLayer {
     super(1); // z-index: 1 (below walls)
 
     this.config = {
-      fillColor: config?.fillColor || '#ecf0f1',
-      fillOpacity: config?.fillOpacity || 0.3,
+      fillColor: config?.fillColor || '#d4a574',
+      fillOpacity: config?.fillOpacity || 0.6,
       strokeColor: config?.strokeColor || '#95a5a6',
       strokeWidth: config?.strokeWidth || 1,
       selectedFillColor: config?.selectedFillColor || '#3498db',
