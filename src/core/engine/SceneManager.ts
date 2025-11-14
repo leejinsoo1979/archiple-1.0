@@ -1,7 +1,8 @@
 import { ObjectManager } from './ObjectManager';
 import { SelectionManager } from './SelectionManager';
 import { HistoryManager } from './HistoryManager';
-import { EditorConfig, ToolType } from '../types/EditorState';
+import type { EditorConfig } from '../types/EditorState';
+import { ToolType } from '../types/EditorState';
 import { eventBus } from '../events/EventBus';
 import { EditorEvents } from '../events/EditorEvents';
 
