@@ -62,6 +62,10 @@ export class Vector2 {
     return this.subtract(v).length();
   }
 
+  distanceTo(v: Vector2): number {
+    return this.distance(v);
+  }
+
   distanceSquared(v: Vector2): number {
     return this.subtract(v).lengthSquared();
   }

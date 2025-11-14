@@ -14,12 +14,18 @@ export const FloorEvents = {
   WALL_MODIFIED: 'floor:wall:modified',
   WALL_REMOVED: 'floor:wall:removed',
   WALL_SPLIT: 'floor:wall:split',
+  WALL_PREVIEW_UPDATED: 'floor:wall:preview:updated',
+  WALL_PREVIEW_CLEARED: 'floor:wall:preview:cleared',
+
+  // Snap events
+  SNAP_POINT_UPDATED: 'floor:snap:point:updated',
 
   // Room events
   ROOM_DETECTED: 'floor:room:detected',
   ROOM_CREATED: 'floor:room:created',
   ROOM_MODIFIED: 'floor:room:modified',
   ROOM_REMOVED: 'floor:room:removed',
+  POTENTIAL_ROOM_DETECTED: 'floor:room:potential',
 
   // Intersection events
   INTERSECTION_DETECTED: 'floor:intersection:detected',
