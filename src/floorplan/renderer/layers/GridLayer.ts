@@ -27,8 +27,8 @@ export class GridLayer extends BaseLayer {
     this.config = {
       gridSize: config.gridSize,
       majorGridSize: config.majorGridSize || config.gridSize * 5,
-      minorColor: config.minorColor || '#e8e8e8',
-      majorColor: config.majorColor || '#d0d0d0',
+      minorColor: config.minorColor || '#b0b0b0',
+      majorColor: config.majorColor || '#808080',
       backgroundColor: config.backgroundColor || '#ffffff',
     };
   }
@@ -54,7 +54,8 @@ export class GridLayer extends BaseLayer {
 
     // Get current transform to calculate visible bounds in world space
     const transform = ctx.getTransform();
-    const invZoom = 1 / transform.a; // a = scaleX = zoom
+    const zoom = transform.a; // a = scaleX = zoom
+    const invZoom = 1 / zoom;
 
     // Calculate visible world bounds
     const viewLeft = (-transform.e) * invZoom;
@@ -67,11 +68,22 @@ export class GridLayer extends BaseLayer {
     ctx.fillStyle = this.config.backgroundColor;
     ctx.fillRect(viewLeft - margin, viewTop - margin, (viewRight - viewLeft) + margin * 2, (viewBottom - viewTop) + margin * 2);
 
-    // Draw minor grid
-    this.drawGrid(ctx, this.config.gridSize, this.config.minorColor, 0.5, viewLeft, viewTop, viewRight, viewBottom);
+    // Calculate grid opacity based on zoom level
+    // Zoom < 0.2: opacity 0.2
+    // Zoom 0.2-1.0: fade from 0.2 to 1.0
+    // Zoom >= 1.0: opacity 1.0
+    let gridOpacity = 1.0;
+    if (zoom < 0.2) {
+      gridOpacity = 0.2;
+    } else if (zoom < 1.0) {
+      gridOpacity = 0.2 + (zoom - 0.2) / 0.8 * 0.8; // Linear fade from 0.2 to 1.0
+    }
 
-    // Draw major grid
-    this.drawGrid(ctx, this.config.majorGridSize, this.config.majorColor, 1.0, viewLeft, viewTop, viewRight, viewBottom);
+    // Draw minor grid with fade effect
+    this.drawGrid(ctx, this.config.gridSize, this.config.minorColor, 1, viewLeft, viewTop, viewRight, viewBottom, gridOpacity);
+
+    // Draw major grid with fade effect
+    this.drawGrid(ctx, this.config.majorGridSize, this.config.majorColor, 1.5, viewLeft, viewTop, viewRight, viewBottom, gridOpacity);
 
     this.resetOpacity(ctx);
   }
@@ -84,10 +96,13 @@ export class GridLayer extends BaseLayer {
     viewLeft: number,
     viewTop: number,
     viewRight: number,
-    viewBottom: number
+    viewBottom: number,
+    opacity: number = 1.0
   ): void {
-    ctx.strokeStyle = color;
-    ctx.lineWidth = lineWidth / ctx.getTransform().a; // Scale line width with zoom
+    // Parse color and apply opacity
+    const rgb = this.hexToRgb(color);
+    ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})`;
+    ctx.lineWidth = lineWidth;
     ctx.beginPath();
 
     // Calculate grid start positions (snap to grid)
@@ -107,5 +122,16 @@ export class GridLayer extends BaseLayer {
     }
 
     ctx.stroke();
+  }
+
+  private hexToRgb(hex: string): { r: number; g: number; b: number } {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result
+      ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16),
+        }
+      : { r: 0, g: 0, b: 0 };
   }
 }
