@@ -3,20 +3,25 @@ import {
   Engine,
   Scene,
   ArcRotateCamera,
-  HemisphericLight,
   Vector3,
   MeshBuilder,
-  StandardMaterial,
+  PBRMaterial,
   Color3,
-  Texture
+  Texture,
+  CubeTexture,
+  DirectionalLight,
+  ShadowGenerator,
+  HemisphericLight,
+  GlowLayer
 } from '@babylonjs/core';
 import styles from './Babylon3DCanvas.module.css';
 
 interface Babylon3DCanvasProps {
   floorplanData?: { points: any[]; walls: any[]; rooms: any[] } | null;
+  visible?: boolean;
 }
 
-const Babylon3DCanvas = ({ floorplanData }: Babylon3DCanvasProps) => {
+const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const sceneRef = useRef<Scene | null>(null);
@@ -41,57 +46,76 @@ const Babylon3DCanvas = ({ floorplanData }: Babylon3DCanvasProps) => {
       });
       engineRef.current = engine;
 
-      // Create scene
+      // Create scene with advanced settings
       const scene = new Scene(engine);
-      scene.clearColor.set(0.85, 0.9, 0.95, 1); // Sky blue background
+      scene.clearColor = new Color3(0.9, 0.92, 0.95).toColor4();
+      scene.ambientColor = new Color3(0.3, 0.3, 0.3);
       sceneRef.current = scene;
 
-      // Create camera
+      // Enable glow layer for better visuals
+      const glowLayer = new GlowLayer('glow', scene);
+      glowLayer.intensity = 0.3;
+
+      // Create camera with smooth controls
       const camera = new ArcRotateCamera(
         'camera',
-        -Math.PI / 4, // Alpha (horizontal rotation) - diagonal view
-        Math.PI / 3.5, // Beta (vertical rotation) - looking down at angle
-        15, // Radius - farther out
-        new Vector3(0, 1, 0), // Target slightly above ground
+        -Math.PI / 4,
+        Math.PI / 3.5,
+        20,
+        new Vector3(0, 1.5, 0),
         scene
       );
       camera.attachControl(canvas, true);
-      camera.lowerRadiusLimit = 3;
-      camera.upperRadiusLimit = 100;
-      camera.upperBetaLimit = Math.PI / 2.1; // Don't go below ground
-      camera.wheelPrecision = 50;
-      camera.panningSensibility = 50;
+      camera.lowerRadiusLimit = 5;
+      camera.upperRadiusLimit = 150;
+      camera.upperBetaLimit = Math.PI / 2.05;
+      camera.wheelPrecision = 20;
+      camera.panningSensibility = 100;
+      camera.inertia = 0.9;
+      camera.angularSensibilityX = 1000;
+      camera.angularSensibilityY = 1000;
 
-      // Create lights
+      // Advanced lighting setup
+      // 1. Ambient light
       const hemisphericLight = new HemisphericLight('hemiLight', new Vector3(0, 1, 0), scene);
-      hemisphericLight.intensity = 0.6;
+      hemisphericLight.intensity = 0.4;
+      hemisphericLight.groundColor = new Color3(0.3, 0.3, 0.35);
 
-      const directionalLight = new HemisphericLight('dirLight', new Vector3(1, -0.5, 0.5), scene);
-      directionalLight.intensity = 0.4;
+      // 2. Main directional light (sun) with shadows
+      const sunLight = new DirectionalLight('sunLight', new Vector3(-1, -2, -1), scene);
+      sunLight.position = new Vector3(20, 40, 20);
+      sunLight.intensity = 1.2;
+      sunLight.diffuse = new Color3(1, 0.98, 0.95);
+      sunLight.specular = new Color3(1, 1, 0.95);
 
-      // Create infinite ground grid (no background, grid lines only)
-      const ground = MeshBuilder.CreateGround('ground', { width: 200, height: 200, subdivisions: 1 }, scene);
+      // Shadow generator
+      const shadowGenerator = new ShadowGenerator(2048, sunLight);
+      shadowGenerator.useBlurExponentialShadowMap = true;
+      shadowGenerator.blurKernel = 32;
+      shadowGenerator.darkness = 0.3;
+
+      // Create high-quality ground with PBR material
+      const ground = MeshBuilder.CreateGround('ground', { width: 200, height: 200, subdivisions: 50 }, scene);
       ground.position.y = 0;
+      ground.receiveShadows = true;
 
-      // Create grid material - white lines on transparent background
-      const groundMaterial = new StandardMaterial('groundMat', scene);
-      groundMaterial.emissiveColor = new Color3(0.9, 0.9, 0.9); // Bright grid lines
-      groundMaterial.diffuseColor = new Color3(0, 0, 0);
-      groundMaterial.specularColor = new Color3(0, 0, 0);
-      groundMaterial.alpha = 1;
-      groundMaterial.backFaceCulling = false;
+      // PBR Ground material with subtle grid
+      const groundMaterial = new PBRMaterial('groundMat', scene);
+      groundMaterial.albedoColor = new Color3(0.95, 0.95, 0.96);
+      groundMaterial.metallic = 0.0;
+      groundMaterial.roughness = 0.8;
+      groundMaterial.environmentIntensity = 0.5;
 
-      // Create grid texture - only lines, no background fill
+      // Subtle grid texture
       const gridTexture = new Texture('data:image/svg+xml;base64,' + btoa(`
         <svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
-          <rect width="100" height="100" fill="transparent"/>
           <defs>
             <pattern id="smallGrid" width="10" height="10" patternUnits="userSpaceOnUse">
-              <path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(200,200,200,0.3)" stroke-width="0.5"/>
+              <path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(0,0,0,0.03)" stroke-width="0.5"/>
             </pattern>
             <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
               <rect width="50" height="50" fill="url(#smallGrid)"/>
-              <path d="M 50 0 L 0 0 0 50" fill="none" stroke="rgba(180,180,180,0.6)" stroke-width="1"/>
+              <path d="M 50 0 L 0 0 0 50" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
             </pattern>
           </defs>
           <rect width="100" height="100" fill="url(#grid)"/>
@@ -99,9 +123,7 @@ const Babylon3DCanvas = ({ floorplanData }: Babylon3DCanvasProps) => {
       `), scene);
       gridTexture.uScale = 200;
       gridTexture.vScale = 200;
-      gridTexture.hasAlpha = true;
-      groundMaterial.diffuseTexture = gridTexture;
-      groundMaterial.opacityTexture = gridTexture;
+      groundMaterial.albedoTexture = gridTexture;
       ground.material = groundMaterial;
 
       // Render loop
@@ -136,8 +158,12 @@ const Babylon3DCanvas = ({ floorplanData }: Babylon3DCanvasProps) => {
 
     console.log('[Babylon3DCanvas] Updating 3D scene from 2D data...', floorplanData);
 
-    // Remove ALL old wall meshes (copy array first to avoid modification during iteration)
-    const meshesToRemove = scene.meshes.filter(mesh => mesh.name.startsWith('wall'));
+    // Remove ALL old meshes (walls, floors, ceilings)
+    const meshesToRemove = scene.meshes.filter(mesh =>
+      mesh.name.startsWith('wall') ||
+      mesh.name.startsWith('floor_') ||
+      mesh.name.startsWith('ceiling_')
+    );
     meshesToRemove.forEach((mesh) => {
       console.log('[Babylon3DCanvas] Removing mesh:', mesh.name);
       mesh.dispose();
@@ -151,14 +177,34 @@ const Babylon3DCanvas = ({ floorplanData }: Babylon3DCanvasProps) => {
     const pointMap = new Map();
     points.forEach((p) => pointMap.set(p.id, p));
 
-    // Create wall material
-    const wallMaterial = new StandardMaterial('wallMat_2d', scene);
-    wallMaterial.diffuseColor = new Color3(0.95, 0.95, 0.9);
-    wallMaterial.specularColor = new Color3(0.2, 0.2, 0.2);
+    // Get shadow generator
+    const sunLight = scene.getLightByName('sunLight') as DirectionalLight;
+    const shadowGenerator = sunLight?.getShadowGenerator() as ShadowGenerator;
+
+    // Create high-quality wall material (PBR)
+    const wallMaterial = new PBRMaterial('wallMat_2d', scene);
+    wallMaterial.albedoColor = new Color3(0.96, 0.96, 0.94);
+    wallMaterial.metallic = 0.0;
+    wallMaterial.roughness = 0.6;
+    wallMaterial.environmentIntensity = 0.7;
+
+    // Create floor material (wood texture)
+    const floorMaterial = new PBRMaterial('floorMat_2d', scene);
+    floorMaterial.albedoColor = new Color3(0.8, 0.65, 0.45);
+    floorMaterial.metallic = 0.0;
+    floorMaterial.roughness = 0.7;
+    floorMaterial.environmentIntensity = 0.5;
+
+    // Create ceiling material
+    const ceilingMaterial = new PBRMaterial('ceilingMat_2d', scene);
+    ceilingMaterial.albedoColor = new Color3(0.98, 0.98, 0.98);
+    ceilingMaterial.metallic = 0.0;
+    ceilingMaterial.roughness = 0.9;
+    ceilingMaterial.environmentIntensity = 0.3;
 
     // Create walls from 2D data
     const wallHeight = 2.8;
-    const PIXELS_PER_METER = 20; // 2D scale: 20px = 1m
+    const PIXELS_PER_METER = 20;
 
     walls.forEach((wall, index) => {
       const startPoint = pointMap.get(wall.startPointId);
@@ -199,6 +245,12 @@ const Babylon3DCanvas = ({ floorplanData }: Babylon3DCanvasProps) => {
         wallMesh.position.set(midX, wallHeight / 2, midZ);
         wallMesh.rotation.y = angle;
         wallMesh.material = wallMaterial;
+        wallMesh.receiveShadows = true;
+
+        // Add to shadow casters
+        if (shadowGenerator) {
+          shadowGenerator.addShadowCaster(wallMesh);
+        }
       } else {
         console.warn(`[Babylon3DCanvas] Missing point for wall ${index}:`, {
           startId: wall.startPointId,
@@ -210,7 +262,73 @@ const Babylon3DCanvas = ({ floorplanData }: Babylon3DCanvasProps) => {
     });
 
     console.log('[Babylon3DCanvas] Created', walls.length, '3D walls from 2D data');
+
+    // Create floors and ceilings for each room
+    const { rooms } = floorplanData;
+    if (rooms && rooms.length > 0) {
+      rooms.forEach((room, roomIndex) => {
+        // Get room boundary points
+        const roomPoints = room.points.map((pid: string) => {
+          const p = pointMap.get(pid);
+          if (!p) return null;
+          return {
+            x: (p.x / PIXELS_PER_METER) - 10,
+            z: (p.y / PIXELS_PER_METER) - 10
+          };
+        }).filter((p: any) => p !== null);
+
+        if (roomPoints.length < 3) return;
+
+        // Calculate bounding box for floor/ceiling
+        const minX = Math.min(...roomPoints.map((p: any) => p.x));
+        const maxX = Math.max(...roomPoints.map((p: any) => p.x));
+        const minZ = Math.min(...roomPoints.map((p: any) => p.z));
+        const maxZ = Math.max(...roomPoints.map((p: any) => p.z));
+
+        const width = maxX - minX;
+        const depth = maxZ - minZ;
+        const centerX = (minX + maxX) / 2;
+        const centerZ = (minZ + maxZ) / 2;
+
+        // Create floor
+        const floor = MeshBuilder.CreateGround(
+          `floor_${roomIndex}`,
+          { width, height: depth, subdivisions: 1 },
+          scene
+        );
+        floor.position.set(centerX, 0.01, centerZ);
+        floor.material = floorMaterial;
+        floor.receiveShadows = true;
+
+        // Create ceiling
+        const ceiling = MeshBuilder.CreateGround(
+          `ceiling_${roomIndex}`,
+          { width, height: depth, subdivisions: 1 },
+          scene
+        );
+        ceiling.position.set(centerX, wallHeight, centerZ);
+        ceiling.rotation.z = Math.PI; // Flip upside down
+        ceiling.material = ceilingMaterial;
+        ceiling.receiveShadows = true;
+      });
+
+      console.log('[Babylon3DCanvas] Created floors and ceilings for', rooms.length, 'rooms');
+    }
   }, [floorplanData]);
+
+  // Resize engine when visibility changes
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+
+    if (visible) {
+      console.log('[Babylon3DCanvas] Visible! Resizing engine...');
+      // Small delay to ensure DOM is updated
+      setTimeout(() => {
+        engine.resize();
+      }, 100);
+    }
+  }, [visible]);
 
   return (
     <div className={styles.container}>

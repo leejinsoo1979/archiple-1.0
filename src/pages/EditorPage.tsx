@@ -11,7 +11,7 @@ const EditorPage = () => {
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [activeTool, setActiveTool] = useState<ToolType>(ToolType.WALL);
-  const [viewMode, setViewMode] = useState<'2D' | '3D'>('2D');
+  const [viewMode, setViewMode] = useState<'2D' | '3D'>('3D'); // Start in 3D to test
   const [floorplanData, setFloorplanData] = useState<any>(null);
 
   return (
@@ -431,7 +431,7 @@ const EditorPage = () => {
           <FloorplanCanvas activeTool={activeTool} onDataChange={setFloorplanData} />
         </div>
         <div style={{ display: viewMode === '3D' ? 'block' : 'none', width: '100%', height: '100%' }}>
-          <Babylon3DCanvas floorplanData={floorplanData} />
+          <Babylon3DCanvas floorplanData={floorplanData} visible={viewMode === '3D'} />
         </div>
       </div>
 
