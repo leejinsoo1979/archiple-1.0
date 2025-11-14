@@ -73,9 +73,6 @@ export class WallLayer extends BaseLayer {
       this.renderWall(ctx, wall, isHovered);
     });
 
-    // Render wall joints (circles at connection points) for clean corners
-    this.renderWallJoints(ctx);
-
     // Render preview wall
     if (this.previewWall) {
       this.renderPreviewWall(ctx, this.previewWall.start, this.previewWall.end);
@@ -90,28 +87,21 @@ export class WallLayer extends BaseLayer {
 
     if (!startPoint || !endPoint) return;
 
-    // Draw wall as filled rectangle (not line) for clean corners
-    ctx.save();
-
     // Convert mm to pixels for rendering
     const thicknessMm = wall.thickness || this.config.wallThickness;
     const thicknessPixels = thicknessMm * this.MM_TO_PIXELS;
 
-    const dx = endPoint.x - startPoint.x;
-    const dy = endPoint.y - startPoint.y;
-    const length = Math.sqrt(dx * dx + dy * dy);
-    const angle = Math.atan2(dy, dx);
+    // Use stroke with square linecap and linejoin for sharp corners
+    ctx.strokeStyle = isHovered ? '#e74c3c' : this.config.wallColor;
+    ctx.lineWidth = thicknessPixels;
+    ctx.lineCap = 'square';
+    ctx.lineJoin = 'miter';
+    ctx.miterLimit = 10;
 
-    // Translate to start point
-    ctx.translate(startPoint.x, startPoint.y);
-    // Rotate to wall direction
-    ctx.rotate(angle);
-
-    // Draw wall as rectangle (centered)
-    ctx.fillStyle = isHovered ? '#e74c3c' : this.config.wallColor;
-    ctx.fillRect(0, -thicknessPixels / 2, length, thicknessPixels);
-
-    ctx.restore();
+    ctx.beginPath();
+    ctx.moveTo(startPoint.x, startPoint.y);
+    ctx.lineTo(endPoint.x, endPoint.y);
+    ctx.stroke();
   }
 
   private renderPreviewWall(ctx: CanvasRenderingContext2D, start: Point, end: Point): void {
@@ -146,45 +136,4 @@ export class WallLayer extends BaseLayer {
     ctx.restore();
   }
 
-  /**
-   * Render circular joints at wall connection points for clean corners
-   */
-  private renderWallJoints(ctx: CanvasRenderingContext2D): void {
-    // Get all unique points that have walls connected
-    const connectedPoints = new Map<string, Point>();
-
-    this.walls.forEach((wall) => {
-      const startPoint = this.points.get(wall.startPointId);
-      const endPoint = this.points.get(wall.endPointId);
-
-      if (startPoint && startPoint.connectedWalls && startPoint.connectedWalls.length > 1) {
-        connectedPoints.set(startPoint.id, startPoint);
-      }
-      if (endPoint && endPoint.connectedWalls && endPoint.connectedWalls.length > 1) {
-        connectedPoints.set(endPoint.id, endPoint);
-      }
-    });
-
-    // Draw circular joints at each connection point
-    connectedPoints.forEach((point) => {
-      // Find the thickest wall connected to this point
-      let maxThickness = this.config.wallThickness;
-
-      if (point.connectedWalls) {
-        point.connectedWalls.forEach((wallId) => {
-          const wall = this.walls.find((w) => w.id === wallId);
-          if (wall && wall.thickness) {
-            maxThickness = Math.max(maxThickness, wall.thickness);
-          }
-        });
-      }
-
-      const radiusPixels = (maxThickness * this.MM_TO_PIXELS) / 2;
-
-      ctx.fillStyle = this.config.wallColor;
-      ctx.beginPath();
-      ctx.arc(point.x, point.y, radiusPixels, 0, Math.PI * 2);
-      ctx.fill();
-    });
-  }
 }
