@@ -48,7 +48,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
 
       // Create scene with advanced settings
       const scene = new Scene(engine);
-      scene.clearColor = new Color3(0.9, 0.92, 0.95).toColor4();
+      scene.clearColor = new Color3(0.95, 0.95, 0.97).toColor4(1);
       scene.ambientColor = new Color3(0.3, 0.3, 0.3);
       sceneRef.current = scene;
 
@@ -78,15 +78,15 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
       // Advanced lighting setup
       // 1. Ambient light
       const hemisphericLight = new HemisphericLight('hemiLight', new Vector3(0, 1, 0), scene);
-      hemisphericLight.intensity = 0.4;
-      hemisphericLight.groundColor = new Color3(0.3, 0.3, 0.35);
+      hemisphericLight.intensity = 0.7;
+      hemisphericLight.groundColor = new Color3(0.5, 0.5, 0.55);
 
       // 2. Main directional light (sun) with shadows
       const sunLight = new DirectionalLight('sunLight', new Vector3(-1, -2, -1), scene);
       sunLight.position = new Vector3(20, 40, 20);
-      sunLight.intensity = 1.2;
-      sunLight.diffuse = new Color3(1, 0.98, 0.95);
-      sunLight.specular = new Color3(1, 1, 0.95);
+      sunLight.intensity = 1.5;
+      sunLight.diffuse = new Color3(1, 1, 1);
+      sunLight.specular = new Color3(1, 1, 1);
 
       // Shadow generator
       const shadowGenerator = new ShadowGenerator(2048, sunLight);

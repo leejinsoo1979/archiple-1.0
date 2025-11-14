@@ -45,12 +45,12 @@ export class SnapService {
       pointSnapEnabled: true,
       gridSnapEnabled: true,
       angleSnapEnabled: true,
-      orthogonalSnapEnabled: false, // Enable with Shift key
+      orthogonalSnapEnabled: true, // Always enable orthogonal snap
       perpendicularSnapEnabled: true,
       midpointSnapEnabled: true,
       pointSnapThreshold: 15,
       gridSize: 20,
-      angleSnapDegrees: [0, 45, 90, 135, 180, 225, 270, 315],
+      angleSnapDegrees: [0, 90, 180, 270], // Only 90 degree angles
       orthogonalAngles: [0, 90, 180, 270], // Strict horizontal/vertical
       ...config,
     };

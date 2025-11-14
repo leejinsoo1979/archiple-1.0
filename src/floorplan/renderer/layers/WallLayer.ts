@@ -17,6 +17,9 @@ export interface WallLayerConfig {
  * - Preview walls (dashed, while drawing)
  * - Thickness visualization
  * - Hover highlight
+ *
+ * Units: Wall thickness and height are stored in mm
+ * Rendering: 1mm = 0.1 pixels for display
  */
 export class WallLayer extends BaseLayer {
   private walls: Wall[] = [];
@@ -25,13 +28,14 @@ export class WallLayer extends BaseLayer {
   private hoveredWallId: string | null = null;
 
   private config: Required<WallLayerConfig>;
+  private readonly MM_TO_PIXELS = 0.1; // 1mm = 0.1 pixels
 
   constructor(config?: WallLayerConfig) {
     super(2); // z-index: 2
 
     this.config = {
       wallColor: config?.wallColor || '#2c3e50',
-      wallThickness: config?.wallThickness || 20,
+      wallThickness: config?.wallThickness || 200, // 200mm = 20cm
       previewColor: config?.previewColor || '#3498db',
       previewStyle: config?.previewStyle || 'dashed',
     };
@@ -86,7 +90,10 @@ export class WallLayer extends BaseLayer {
     // Draw wall as filled rectangle (not line) for clean corners
     ctx.save();
 
-    const thickness = wall.thickness || this.config.wallThickness;
+    // Convert mm to pixels for rendering
+    const thicknessMm = wall.thickness || this.config.wallThickness;
+    const thicknessPixels = thicknessMm * this.MM_TO_PIXELS;
+
     const dx = endPoint.x - startPoint.x;
     const dy = endPoint.y - startPoint.y;
     const length = Math.sqrt(dx * dx + dy * dy);
@@ -97,9 +104,9 @@ export class WallLayer extends BaseLayer {
     // Rotate to wall direction
     ctx.rotate(angle);
 
-    // Draw wall as rectangle
+    // Draw wall as rectangle (centered)
     ctx.fillStyle = isHovered ? '#e74c3c' : this.config.wallColor;
-    ctx.fillRect(-thickness / 2, -thickness / 2, length + thickness, thickness);
+    ctx.fillRect(0, -thicknessPixels / 2, length, thicknessPixels);
 
     ctx.restore();
   }
@@ -107,9 +114,12 @@ export class WallLayer extends BaseLayer {
   private renderPreviewWall(ctx: CanvasRenderingContext2D, start: Point, end: Point): void {
     ctx.save();
 
+    // Convert mm to pixels for rendering
+    const thicknessPixels = this.config.wallThickness * this.MM_TO_PIXELS;
+
     // Draw background glow for better visibility
     ctx.strokeStyle = 'rgba(52, 152, 219, 0.3)';
-    ctx.lineWidth = this.config.wallThickness + 4;
+    ctx.lineWidth = thicknessPixels + 4;
     ctx.lineCap = 'butt'; // Square corners
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);

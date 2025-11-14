@@ -66,12 +66,14 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     console.log('[FloorplanCanvas] Initializing...');
 
     // 1. Initialize SceneManager
+    // Units: mm (millimeters)
+    // Conversion: 1 pixel = 10mm for display
     const config: EditorConfig = {
       gridSize: 20,
       snapEnabled: true,
       snapThreshold: 15,
-      wallThickness: 20,
-      wallHeight: 280,
+      wallThickness: 200, // 200mm = 20cm
+      wallHeight: 2800, // 2800mm = 2.8m
       canvasWidth: container.clientWidth,
       canvasHeight: container.clientHeight,
     };
@@ -91,8 +93,8 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     const gridLayer = new GridLayer({
       gridSize: config.gridSize,
       majorGridSize: config.gridSize * 5,
-      minorColor: '#a0a0a0',
-      majorColor: '#606060',
+      minorColor: '#e0e0e0',
+      majorColor: '#c0c0c0',
       backgroundColor: '#ffffff',
     });
     gridLayer.setSize(canvas.width, canvas.height);
