@@ -62,8 +62,16 @@ export class RectangleTool extends BaseTool {
     if (!this.isDrawing || !this.startPoint) return;
 
     // Snap position
-    const snapResult = this.snapService.snap(position);
-    this.currentPreviewEnd = snapResult.position;
+    let snapResult = this.snapService.snap(position);
+    let snappedPos = snapResult.position;
+
+    // Rectangle-specific snap: align X or Y with existing points
+    const alignedPos = this.snapToRectangleAlignment(snappedPos);
+    if (alignedPos) {
+      snappedPos = alignedPos;
+    }
+
+    this.currentPreviewEnd = snappedPos;
 
     // Emit preview event for rendering
     this.emitPreview();
@@ -135,7 +143,7 @@ export class RectangleTool extends BaseTool {
   private emitPreview(): void {
     if (!this.startPoint || !this.currentPreviewEnd) return;
 
-    // Emit 4 preview walls for rectangle
+    // Create 4 corner points for rectangle preview
     const start = new Vector2(this.startPoint.x, this.startPoint.y);
     const end = this.currentPreviewEnd;
 
@@ -144,11 +152,67 @@ export class RectangleTool extends BaseTool {
     const bottomRight = { x: end.x, y: end.y, id: 'preview-br' };
     const bottomLeft = { x: start.x, y: end.y, id: 'preview-bl' };
 
-    // Emit preview for all 4 sides
-    eventBus.emit(FloorEvents.WALL_PREVIEW_UPDATED, {
-      start: topLeft,
-      end: topRight,
+    // Emit preview event with rectangle data
+    eventBus.emit(FloorEvents.RECTANGLE_PREVIEW_UPDATED, {
+      corners: [topLeft, topRight, bottomRight, bottomLeft],
     });
+  }
+
+  /**
+   * Snap rectangle corners to existing points' X or Y coordinates
+   */
+  private snapToRectangleAlignment(position: Vector2): Vector2 | null {
+    if (!this.startPoint) return null;
+
+    const threshold = 15; // Snap tolerance
+    const allPoints = this.sceneManager.objectManager.getAllPoints();
+
+    let snapX: number | null = null;
+    let snapY: number | null = null;
+    let minXDiff = threshold;
+    let minYDiff = threshold;
+
+    // Find closest point with matching X (vertical alignment)
+    for (const point of allPoints) {
+      const xDiff = Math.abs(position.x - point.x);
+      const yDiff = Math.abs(position.y - point.y);
+
+      if (xDiff < minXDiff) {
+        minXDiff = xDiff;
+        snapX = point.x;
+      }
+
+      if (yDiff < minYDiff) {
+        minYDiff = yDiff;
+        snapY = point.y;
+      }
+    }
+
+    // Apply snap if found
+    if (snapX !== null || snapY !== null) {
+      const resultX = snapX ?? position.x;
+      const resultY = snapY ?? position.y;
+
+      // Emit guide for vertical alignment (same X)
+      if (snapX !== null) {
+        eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, {
+          from: { id: 'rect-vertical-guide', x: snapX, y: this.startPoint.y },
+          angle: 90, // Vertical line
+        });
+      }
+
+      // Emit guide for horizontal alignment (same Y)
+      if (snapY !== null) {
+        eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, {
+          from: { id: 'rect-horizontal-guide', x: this.startPoint.x, y: snapY },
+          angle: 0, // Horizontal line
+        });
+      }
+
+      return new Vector2(resultX, resultY);
+    }
+
+    return null;
   }
 
   private resetState(): void {
@@ -156,7 +220,8 @@ export class RectangleTool extends BaseTool {
     this.startPoint = null;
     this.currentPreviewEnd = null;
 
-    eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
+    eventBus.emit(FloorEvents.RECTANGLE_PREVIEW_CLEARED, {});
+    eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, { from: null, angle: null });
   }
 
   private createPoint(position: Vector2): Point {
