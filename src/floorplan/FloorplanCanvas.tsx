@@ -91,8 +91,8 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     const gridLayer = new GridLayer({
       gridSize: config.gridSize,
       majorGridSize: config.gridSize * 5,
-      minorColor: '#e0e0e0',
-      majorColor: '#c0c0c0',
+      minorColor: '#a0a0a0',
+      majorColor: '#606060',
       backgroundColor: '#ffffff',
     });
     gridLayer.setSize(canvas.width, canvas.height);
