@@ -73,6 +73,11 @@ export class WallLayer extends BaseLayer {
       this.renderWall(ctx, wall, isHovered);
     });
 
+    // Render wall dimensions
+    this.walls.forEach((wall) => {
+      this.renderWallDimension(ctx, wall);
+    });
+
     // Render preview wall
     if (this.previewWall) {
       this.renderPreviewWall(ctx, this.previewWall.start, this.previewWall.end);
@@ -132,6 +137,74 @@ export class WallLayer extends BaseLayer {
     ctx.moveTo(start.x, start.y);
     ctx.lineTo(end.x, end.y);
     ctx.stroke();
+
+    ctx.restore();
+  }
+
+  /**
+   * Render wall dimension label
+   */
+  private renderWallDimension(ctx: CanvasRenderingContext2D, wall: Wall): void {
+    const startPoint = this.points.get(wall.startPointId);
+    const endPoint = this.points.get(wall.endPointId);
+
+    if (!startPoint || !endPoint) return;
+
+    const dx = endPoint.x - startPoint.x;
+    const dy = endPoint.y - startPoint.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Convert pixels to mm (1 pixel = 10mm)
+    const PIXELS_TO_MM = 10;
+    const millimeters = distance * PIXELS_TO_MM;
+
+    // Calculate label position (midpoint, offset perpendicular to wall)
+    const midX = (startPoint.x + endPoint.x) / 2;
+    const midY = (startPoint.y + endPoint.y) / 2;
+    const angle = Math.atan2(dy, dx);
+
+    // Offset label perpendicular to wall
+    const offsetDistance = 25;
+    const labelX = midX - Math.sin(angle) * offsetDistance;
+    const labelY = midY + Math.cos(angle) * offsetDistance;
+
+    // Format label based on size
+    let label: string;
+    if (millimeters >= 1000) {
+      label = `${(millimeters / 1000).toFixed(2)}m`;
+    } else {
+      label = `${Math.round(millimeters)}mm`;
+    }
+
+    ctx.save();
+    ctx.font = 'bold 11px system-ui';
+    const metrics = ctx.measureText(label);
+    const padding = 4;
+
+    // Draw label background
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.fillRect(
+      labelX - metrics.width / 2 - padding,
+      labelY - 8,
+      metrics.width + padding * 2,
+      16
+    );
+
+    // Draw border
+    ctx.strokeStyle = '#34495e';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(
+      labelX - metrics.width / 2 - padding,
+      labelY - 8,
+      metrics.width + padding * 2,
+      16
+    );
+
+    // Draw text
+    ctx.fillStyle = '#34495e';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, labelX, labelY);
 
     ctx.restore();
   }
