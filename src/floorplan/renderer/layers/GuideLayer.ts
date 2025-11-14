@@ -58,8 +58,8 @@ export class GuideLayer extends BaseLayer {
       const distance = Math.sqrt(dx * dx + dy * dy);
       this.distanceMeasurement = { from, to, distance };
 
-      // 수직/수평 가이드 자동 감지 (오차 3px 이내)
-      const threshold = 3;
+      // 수직/수평 가이드 자동 감지 (오차 10px 이내)
+      const threshold = 10;
       if (Math.abs(dy) <= threshold) {
         // 수평선
         this.orthogonalGuides = { from, to, type: 'horizontal' };
@@ -114,9 +114,9 @@ export class GuideLayer extends BaseLayer {
   ): void {
     ctx.save();
 
-    ctx.strokeStyle = this.config.orthogonalGuideColor;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([8, 4]);
+    ctx.strokeStyle = '#3498db';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([10, 5]);
 
     if (guide.type === 'horizontal') {
       // 수평 가이드 (캔버스 전체 너비)

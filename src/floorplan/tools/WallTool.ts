@@ -30,9 +30,9 @@ export class WallTool extends BaseTool {
   private currentPreviewEnd: Vector2 | null = null;
   private wallChain: Point[] = [];
 
-  // Config
-  private defaultWallThickness = 20;
-  private defaultWallHeight = 280; // 2.8m
+  // Config (units: mm)
+  private defaultWallThickness = 200; // 200mm = 20cm
+  private defaultWallHeight = 2800; // 2800mm = 2.8m
 
   constructor(sceneManager: SceneManager, snapService: SnapService) {
     super('wall');

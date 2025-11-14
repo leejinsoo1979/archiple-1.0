@@ -203,8 +203,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
     ceilingMaterial.environmentIntensity = 0.3;
 
     // Create walls from 2D data
-    const wallHeight = 2.8;
+    // Units: wall.thickness and wall.height are in mm
     const PIXELS_PER_METER = 20;
+    const MM_TO_METERS = 0.001; // 1mm = 0.001m
 
     walls.forEach((wall, index) => {
       const startPoint = pointMap.get(wall.startPointId);
@@ -224,6 +225,10 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
         const midZ = (z1 + z2) / 2;
         const angle = Math.atan2(z2 - z1, x2 - x1);
 
+        // Convert mm to meters
+        const wallHeightMeters = (wall.height || 2800) * MM_TO_METERS; // default 2800mm = 2.8m
+        const thicknessMeters = (wall.thickness || 200) * MM_TO_METERS; // default 200mm = 0.2m
+
         console.log(`[Babylon3DCanvas] Wall ${index}:`, {
           start: { x: startPoint.x, y: startPoint.y },
           end: { x: endPoint.x, y: endPoint.y },
@@ -231,18 +236,19 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
           length,
           position: { x: midX, z: midZ },
           angle: angle * (180 / Math.PI),
+          heightMm: wall.height || 2800,
+          thicknessMm: wall.thickness || 200,
         });
 
         // Create wall mesh
-        const thickness = (wall.thickness || 20) / PIXELS_PER_METER;
         const wallMesh = MeshBuilder.CreateBox(
           `wall_${index}`,
-          { width: length, height: wallHeight, depth: thickness },
+          { width: length, height: wallHeightMeters, depth: thicknessMeters },
           scene
         );
 
         // Position and rotate
-        wallMesh.position.set(midX, wallHeight / 2, midZ);
+        wallMesh.position.set(midX, wallHeightMeters / 2, midZ);
         wallMesh.rotation.y = angle;
         wallMesh.material = wallMaterial;
         wallMesh.receiveShadows = true;
@@ -290,6 +296,10 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
         const centerX = (minX + maxX) / 2;
         const centerZ = (minZ + maxZ) / 2;
 
+        // Use first wall's height for ceiling (assume all walls have same height)
+        const firstWall = walls[0];
+        const ceilingHeight = firstWall ? (firstWall.height || 2800) * MM_TO_METERS : 2.8;
+
         // Create floor
         const floor = MeshBuilder.CreateGround(
           `floor_${roomIndex}`,
@@ -306,7 +316,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
           { width, height: depth, subdivisions: 1 },
           scene
         );
-        ceiling.position.set(centerX, wallHeight, centerZ);
+        ceiling.position.set(centerX, ceilingHeight, centerZ);
         ceiling.rotation.z = Math.PI; // Flip upside down
         ceiling.material = ceilingMaterial;
         ceiling.receiveShadows = true;
