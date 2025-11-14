@@ -25,6 +25,12 @@ const Babylon3DCanvas = ({ floorplanData }: Babylon3DCanvasProps) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // Prevent double initialization
+    if (engineRef.current || sceneRef.current) {
+      console.log('[Babylon3DCanvas] Already initialized, skipping...');
+      return;
+    }
+
     console.log('[Babylon3DCanvas] Initializing Babylon.js...');
 
     const initScene = () => {
