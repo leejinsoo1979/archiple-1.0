@@ -1,6 +1,6 @@
-import { Point } from '../types/Point';
-import { Wall } from '../types/Wall';
-import { Room } from '../types/Room';
+import type { Point } from '../types/Point';
+import type { Wall } from '../types/Wall';
+import type { Room } from '../types/Room';
 import { eventBus } from '../events/EventBus';
 import { FloorEvents } from '../events/FloorEvents';
 

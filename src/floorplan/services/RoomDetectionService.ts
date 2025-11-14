@@ -1,6 +1,6 @@
-import { Point } from '../../core/types/Point';
-import { Wall } from '../../core/types/Wall';
-import { Room } from '../../core/types/Room';
+import type { Point } from '../../core/types/Point';
+import type { Wall } from '../../core/types/Wall';
+import type { Room } from '../../core/types/Room';
 import { v4 as uuidv4 } from 'uuid';
 
 interface Graph {

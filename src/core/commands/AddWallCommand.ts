@@ -1,6 +1,6 @@
 import { Command } from './Command';
-import { Wall } from '../types/Wall';
-import { Point } from '../types/Point';
+import type { Wall } from '../types/Wall';
+import type { Point } from '../types/Point';
 
 /**
  * AddWallCommand - Command to add a wall to the floorplan

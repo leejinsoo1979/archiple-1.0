@@ -1,6 +1,6 @@
 import { BaseLayer } from './Layer';
-import { Wall } from '../../../core/types/Wall';
-import { Point } from '../../../core/types/Point';
+import type { Wall } from '../../../core/types/Wall';
+import type { Point } from '../../../core/types/Point';
 
 export interface WallLayerConfig {
   wallColor?: string;

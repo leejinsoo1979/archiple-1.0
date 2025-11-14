@@ -1,4 +1,4 @@
-import { PointId } from './Point';
+import type { PointId } from './Point';
 
 /**
  * Wall connects two points and represents a physical wall in the floorplan

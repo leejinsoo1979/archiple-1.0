@@ -1,6 +1,6 @@
-import { Point } from './Point';
-import { Wall } from './Wall';
-import { Room } from './Room';
+import type { Point } from './Point';
+import type { Wall } from './Wall';
+import type { Room } from './Room';
 
 /**
  * EditorState represents the complete state of the editor

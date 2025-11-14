@@ -1,4 +1,4 @@
-import { Tool } from './Tool';
+import type { Tool } from './Tool';
 import { Vector2 } from '../../core/math/Vector2';
 import { ToolType } from '../../core/types/EditorState';
 

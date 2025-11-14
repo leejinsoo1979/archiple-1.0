@@ -1,5 +1,5 @@
-import { PointId } from './Point';
-import { WallId } from './Wall';
+import type { PointId } from './Point';
+import type { WallId } from './Wall';
 
 /**
  * Room represents a closed polygon space in the floorplan

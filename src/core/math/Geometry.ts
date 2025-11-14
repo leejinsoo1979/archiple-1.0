@@ -1,5 +1,5 @@
 import { Vector2 } from './Vector2';
-import { Point } from '../types/Point';
+import type { Point } from '../types/Point';
 
 /**
  * Geometry utilities for intersection, distance, and collision detection

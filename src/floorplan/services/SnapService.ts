@@ -1,5 +1,5 @@
 import { Vector2 } from '../../core/math/Vector2';
-import { Point } from '../../core/types/Point';
+import type { Point } from '../../core/types/Point';
 
 export interface SnapResult {
   position: Vector2;

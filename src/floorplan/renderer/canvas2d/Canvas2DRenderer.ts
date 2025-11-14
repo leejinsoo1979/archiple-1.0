@@ -1,4 +1,4 @@
-import { Layer } from '../layers/Layer';
+import type { Layer } from '../layers/Layer';
 
 /**
  * Canvas2DRenderer - Main rendering coordinator

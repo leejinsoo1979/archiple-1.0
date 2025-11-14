@@ -1,7 +1,7 @@
 import { BaseTool } from './Tool';
 import { Vector2 } from '../../core/math/Vector2';
-import { Point } from '../../core/types/Point';
-import { Wall } from '../../core/types/Wall';
+import type { Point } from '../../core/types/Point';
+import type { Wall } from '../../core/types/Wall';
 import { SceneManager } from '../../core/engine/SceneManager';
 import { SnapService } from '../services/SnapService';
 import { eventBus } from '../../core/events/EventBus';

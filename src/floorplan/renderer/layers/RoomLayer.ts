@@ -1,6 +1,6 @@
 import { BaseLayer } from './Layer';
-import { Room } from '../../../core/types/Room';
-import { Point } from '../../../core/types/Point';
+import type { Room } from '../../../core/types/Room';
+import type { Point } from '../../../core/types/Point';
 
 export interface RoomLayerConfig {
   fillColor?: string;

@@ -1,5 +1,5 @@
 import { BaseLayer } from './Layer';
-import { Point } from '../../../core/types/Point';
+import type { Point } from '../../../core/types/Point';
 
 export interface PointLayerConfig {
   pointRadius?: number;

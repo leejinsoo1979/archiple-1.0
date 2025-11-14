@@ -1,4 +1,4 @@
-import { ICommand } from '../commands/Command';
+import type { ICommand } from '../commands/Command';
 import { eventBus } from '../events/EventBus';
 import { EditorEvents } from '../events/EditorEvents';
 
