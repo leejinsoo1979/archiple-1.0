@@ -136,12 +136,11 @@ const Babylon3DCanvas = ({ floorplanData }: Babylon3DCanvasProps) => {
 
     console.log('[Babylon3DCanvas] Updating 3D scene from 2D data...', floorplanData);
 
-    // Remove ALL old wall meshes (including sample walls)
-    scene.meshes.forEach((mesh) => {
-      if (mesh.name.startsWith('wall')) {
-        console.log('[Babylon3DCanvas] Removing mesh:', mesh.name);
-        mesh.dispose();
-      }
+    // Remove ALL old wall meshes (copy array first to avoid modification during iteration)
+    const meshesToRemove = scene.meshes.filter(mesh => mesh.name.startsWith('wall'));
+    meshesToRemove.forEach((mesh) => {
+      console.log('[Babylon3DCanvas] Removing mesh:', mesh.name);
+      mesh.dispose();
     });
 
     const { points, walls } = floorplanData;
