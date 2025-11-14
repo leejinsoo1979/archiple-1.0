@@ -45,7 +45,7 @@ export class SnapService {
       pointSnapEnabled: true,
       gridSnapEnabled: true,
       angleSnapEnabled: true,
-      orthogonalSnapEnabled: true, // Always enable orthogonal snap
+      orthogonalSnapEnabled: false, // Smart snap: only when near horizontal/vertical
       perpendicularSnapEnabled: true,
       midpointSnapEnabled: true,
       pointSnapThreshold: 15,
@@ -91,25 +91,31 @@ export class SnapService {
       if (pointSnap) return pointSnap;
     }
 
-    // 2. Midpoint snap
-    if (this.config.midpointSnapEnabled) {
-      const midpointSnap = this.snapToMidpoint(position);
-      if (midpointSnap) return midpointSnap;
-    }
-
-    // 3. Orthogonal snap (when enabled - Shift key pressed)
+    // 2. Orthogonal snap (when Shift key pressed - takes priority over everything)
     if (this.config.orthogonalSnapEnabled && this.lastPoint) {
       const orthogonalSnap = this.snapToOrthogonal(position, this.lastPoint);
       if (orthogonalSnap) return orthogonalSnap;
     }
 
-    // 4. Angle snap (when drawing from a point)
-    if (this.config.angleSnapEnabled && this.lastPoint) {
+    // 3. Axis alignment snap (snap to existing points' x or y axis)
+    if (!this.config.orthogonalSnapEnabled) {
+      const axisSnap = this.snapToAxisAlignment(position);
+      if (axisSnap) return axisSnap;
+    }
+
+    // 4. Midpoint snap
+    if (this.config.midpointSnapEnabled) {
+      const midpointSnap = this.snapToMidpoint(position);
+      if (midpointSnap) return midpointSnap;
+    }
+
+    // 5. Angle snap (when drawing from a point)
+    if (this.config.angleSnapEnabled && this.lastPoint && !this.config.orthogonalSnapEnabled) {
       const angleSnap = this.snapToAngle(position, this.lastPoint);
       if (angleSnap) return angleSnap;
     }
 
-    // 4. Grid snap (lowest priority)
+    // 6. Grid snap (lowest priority)
     if (this.config.gridSnapEnabled) {
       return this.snapToGrid(position);
     }
@@ -122,7 +128,7 @@ export class SnapService {
    */
   private snapToPoint(position: Vector2): SnapResult | null {
     let nearestPoint: Point | null = null;
-    let minDistance = this.config.pointSnapThreshold;
+    let minDistance = this.config.pointSnapThreshold * 1.5; // Increase snap range for easier connection
 
     for (const point of this.points) {
       const pointVec = new Vector2(point.x, point.y);
@@ -189,8 +195,8 @@ export class SnapService {
       }
     }
 
-    // Snap if within 10 degrees
-    if (minDiff < 10) {
+    // Snap if within 15 degrees (more forgiving for orthogonal snap)
+    if (minDiff < 15) {
       const radians = (nearestAngle * Math.PI) / 180;
       const snappedX = fromPoint.x + Math.cos(radians) * distance;
       const snappedY = fromPoint.y + Math.sin(radians) * distance;
@@ -253,6 +259,64 @@ export class SnapService {
   private snapToMidpoint(_position: Vector2): SnapResult | null {
     // TODO: Implement midpoint snap for walls
     // This requires wall data, will implement in Phase 3
+    return null;
+  }
+
+  /**
+   * Snap to axis alignment with existing points
+   * Snaps when x or y coordinate aligns with any existing point
+   */
+  private snapToAxisAlignment(position: Vector2): SnapResult | null {
+    const threshold = 15; // 15px tolerance for easier snapping
+
+    let closestXPoint: Point | null = null;
+    let closestYPoint: Point | null = null;
+    let minXDiff = threshold;
+    let minYDiff = threshold;
+
+    // Find closest point with matching x or y coordinate
+    for (const point of this.points) {
+      const xDiff = Math.abs(position.x - point.x);
+      const yDiff = Math.abs(position.y - point.y);
+
+      if (xDiff < minXDiff) {
+        minXDiff = xDiff;
+        closestXPoint = point;
+      }
+
+      if (yDiff < minYDiff) {
+        minYDiff = yDiff;
+        closestYPoint = point;
+      }
+    }
+
+    // Prioritize vertical alignment (x-axis match) if both are close
+    if (closestXPoint && minXDiff < threshold) {
+      // Snap to vertical line (same x)
+      eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, {
+        from: { id: 'axis-guide', x: closestXPoint.x, y: closestXPoint.y },
+        angle: 90, // Vertical
+      });
+
+      return {
+        position: new Vector2(closestXPoint.x, position.y),
+        snappedTo: 'angle',
+      };
+    }
+
+    if (closestYPoint && minYDiff < threshold) {
+      // Snap to horizontal line (same y)
+      eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, {
+        from: { id: 'axis-guide', x: closestYPoint.x, y: closestYPoint.y },
+        angle: 0, // Horizontal
+      });
+
+      return {
+        position: new Vector2(position.x, closestYPoint.y),
+        snappedTo: 'angle',
+      };
+    }
+
     return null;
   }
 

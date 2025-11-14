@@ -216,43 +216,60 @@ export class GuideLayer extends BaseLayer {
   ): void {
     ctx.save();
 
-    // Convert pixels to meters (20 pixels = 1 meter)
-    const PIXELS_PER_METER = 20;
-    const meters = distance / PIXELS_PER_METER;
+    // Convert pixels to mm (1 pixel = 10mm)
+    const PIXELS_TO_MM = 10;
+    const millimeters = distance * PIXELS_TO_MM;
 
-    // Calculate label position (midpoint)
+    // Calculate label position (midpoint, offset slightly above)
     const midX = (from.x + to.x) / 2;
     const midY = (from.y + to.y) / 2;
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const angle = Math.atan2(dy, dx);
+
+    // Offset label perpendicular to wall
+    const offsetDistance = 20;
+    const labelX = midX - Math.sin(angle) * offsetDistance;
+    const labelY = midY + Math.cos(angle) * offsetDistance;
+
+    // Format label based on size
+    let label: string;
+    if (millimeters >= 1000) {
+      // Show in meters if >= 1000mm
+      label = `${(millimeters / 1000).toFixed(2)}m`;
+    } else {
+      // Show in mm
+      label = `${Math.round(millimeters)}mm`;
+    }
+
+    ctx.font = 'bold 13px system-ui';
+    const metrics = ctx.measureText(label);
+    const padding = 6;
 
     // Draw label background
-    const label = `${meters.toFixed(2)}m`;
-    ctx.font = 'bold 12px system-ui';
-    const metrics = ctx.measureText(label);
-    const padding = 4;
-
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
     ctx.fillRect(
-      midX - metrics.width / 2 - padding,
-      midY - 10,
+      labelX - metrics.width / 2 - padding,
+      labelY - 10,
       metrics.width + padding * 2,
       20
     );
 
     // Draw border
-    ctx.strokeStyle = this.config.distanceLabelColor;
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1.5;
     ctx.strokeRect(
-      midX - metrics.width / 2 - padding,
-      midY - 10,
+      labelX - metrics.width / 2 - padding,
+      labelY - 10,
       metrics.width + padding * 2,
       20
     );
 
     // Draw text
-    ctx.fillStyle = this.config.distanceLabelColor;
+    ctx.fillStyle = '#2c3e50';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(label, midX, midY);
+    ctx.fillText(label, labelX, labelY);
 
     ctx.restore();
   }

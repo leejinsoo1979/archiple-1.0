@@ -1,0 +1,193 @@
+import { BaseTool } from './Tool';
+import { Vector2 } from '../../core/math/Vector2';
+import type { Point } from '../../core/types/Point';
+import type { Wall } from '../../core/types/Wall';
+import { SceneManager } from '../../core/engine/SceneManager';
+import { SnapService } from '../services/SnapService';
+import { eventBus } from '../../core/events/EventBus';
+import { FloorEvents } from '../../core/events/FloorEvents';
+import { v4 as uuidv4 } from 'uuid';
+
+/**
+ * RectangleTool - Draw rectangular rooms with 4 walls
+ *
+ * Features:
+ * - Click to set first corner
+ * - Drag to preview rectangle
+ * - Release to create 4 walls
+ */
+export class RectangleTool extends BaseTool {
+  private sceneManager: SceneManager;
+  private snapService: SnapService;
+
+  // Drawing state
+  private isDrawing = false;
+  private startPoint: Point | null = null;
+  private currentPreviewEnd: Vector2 | null = null;
+
+  // Config (units: mm)
+  private defaultWallThickness = 200; // 200mm = 20cm
+  private defaultWallHeight = 2800; // 2800mm = 2.8m
+
+  constructor(sceneManager: SceneManager, snapService: SnapService) {
+    super('rectangle');
+    this.sceneManager = sceneManager;
+    this.snapService = snapService;
+  }
+
+  protected onActivate(): void {
+    console.log('[RectangleTool] Activated');
+    this.resetState();
+  }
+
+  protected onDeactivate(): void {
+    console.log('[RectangleTool] Deactivated');
+    this.resetState();
+  }
+
+  handleMouseDown(position: Vector2, event: MouseEvent): void {
+    if (event.button !== 0) return; // Only handle left-click
+
+    // Snap position
+    const snapResult = this.snapService.snap(position);
+    const snappedPos = snapResult.position;
+
+    if (!this.isDrawing) {
+      // First click - start rectangle
+      this.startDrawing(snappedPos);
+    }
+  }
+
+  handleMouseMove(position: Vector2, event: MouseEvent): void {
+    if (!this.isDrawing || !this.startPoint) return;
+
+    // Snap position
+    const snapResult = this.snapService.snap(position);
+    this.currentPreviewEnd = snapResult.position;
+
+    // Emit preview event for rendering
+    this.emitPreview();
+  }
+
+  handleMouseUp(position: Vector2, event: MouseEvent): void {
+    if (!this.isDrawing || !this.startPoint || event.button !== 0) return;
+
+    // Snap position
+    const snapResult = this.snapService.snap(position);
+    const snappedPos = snapResult.position;
+
+    // Create rectangle
+    this.createRectangle(this.startPoint, snappedPos);
+    this.resetState();
+  }
+
+  cancel(): void {
+    console.log('[RectangleTool] Cancelled');
+    this.resetState();
+  }
+
+  private startDrawing(position: Vector2): void {
+    console.log('[RectangleTool] Start drawing at', position);
+
+    this.startPoint = this.createPoint(position);
+    this.isDrawing = true;
+  }
+
+  private createRectangle(start: Point, end: Vector2): void {
+    console.log('[RectangleTool] Creating rectangle from', start, 'to', end);
+
+    // Create 4 corner points
+    const topLeft = start;
+    const topRight = this.createPoint(new Vector2(end.x, start.y));
+    const bottomRight = this.createPoint(end);
+    const bottomLeft = this.createPoint(new Vector2(start.x, end.y));
+
+    // Add all points
+    this.sceneManager.objectManager.addPoint(topLeft);
+    this.sceneManager.objectManager.addPoint(topRight);
+    this.sceneManager.objectManager.addPoint(bottomRight);
+    this.sceneManager.objectManager.addPoint(bottomLeft);
+
+    eventBus.emit(FloorEvents.POINT_ADDED, { point: topLeft });
+    eventBus.emit(FloorEvents.POINT_ADDED, { point: topRight });
+    eventBus.emit(FloorEvents.POINT_ADDED, { point: bottomRight });
+    eventBus.emit(FloorEvents.POINT_ADDED, { point: bottomLeft });
+
+    // Create 4 walls
+    const walls: Wall[] = [
+      this.createWall(topLeft, topRight), // Top
+      this.createWall(topRight, bottomRight), // Right
+      this.createWall(bottomRight, bottomLeft), // Bottom
+      this.createWall(bottomLeft, topLeft), // Left
+    ];
+
+    walls.forEach((wall) => {
+      this.sceneManager.objectManager.addWall(wall);
+      eventBus.emit(FloorEvents.WALL_ADDED, { wall });
+    });
+
+    // Clear preview
+    eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
+
+    console.log('[RectangleTool] Rectangle created with 4 walls');
+  }
+
+  private emitPreview(): void {
+    if (!this.startPoint || !this.currentPreviewEnd) return;
+
+    // Emit 4 preview walls for rectangle
+    const start = new Vector2(this.startPoint.x, this.startPoint.y);
+    const end = this.currentPreviewEnd;
+
+    const topLeft = { x: start.x, y: start.y, id: 'preview-tl' };
+    const topRight = { x: end.x, y: start.y, id: 'preview-tr' };
+    const bottomRight = { x: end.x, y: end.y, id: 'preview-br' };
+    const bottomLeft = { x: start.x, y: end.y, id: 'preview-bl' };
+
+    // Emit preview for all 4 sides
+    eventBus.emit(FloorEvents.WALL_PREVIEW_UPDATED, {
+      start: topLeft,
+      end: topRight,
+    });
+  }
+
+  private resetState(): void {
+    this.isDrawing = false;
+    this.startPoint = null;
+    this.currentPreviewEnd = null;
+
+    eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
+  }
+
+  private createPoint(position: Vector2): Point {
+    return {
+      id: uuidv4(),
+      x: position.x,
+      y: position.y,
+      connectedWalls: [],
+    };
+  }
+
+  private createWall(startPoint: Point, endPoint: Point): Wall {
+    const wall: Wall = {
+      id: uuidv4(),
+      startPointId: startPoint.id,
+      endPointId: endPoint.id,
+      thickness: this.defaultWallThickness,
+      height: this.defaultWallHeight,
+    };
+
+    // Update point connections
+    if (!startPoint.connectedWalls) startPoint.connectedWalls = [];
+    if (!endPoint.connectedWalls) endPoint.connectedWalls = [];
+
+    startPoint.connectedWalls.push(wall.id);
+    endPoint.connectedWalls.push(wall.id);
+
+    return wall;
+  }
+
+  getCursor(): string {
+    return 'crosshair';
+  }
+}

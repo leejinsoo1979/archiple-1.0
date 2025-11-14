@@ -19,6 +19,7 @@ export interface EditorState {
 export enum ToolType {
   SELECT = 'select',
   WALL = 'wall',
+  RECTANGLE = 'rectangle',
   DRAW_WALL = 'draw_wall',
   MOVE = 'move',
   ERASE = 'erase',

@@ -22,6 +22,10 @@ export const FloorEvents = {
   ANGLE_GUIDE_UPDATED: 'floor:snap:angle:updated',
   GRID_SNAP_UPDATED: 'floor:snap:grid:updated',
 
+  // Measurement events
+  DISTANCE_MEASUREMENT_UPDATED: 'floor:measurement:distance:updated',
+  DISTANCE_MEASUREMENT_CLEARED: 'floor:measurement:distance:cleared',
+
   // Room events
   ROOM_DETECTED: 'floor:room:detected',
   ROOM_CREATED: 'floor:room:created',

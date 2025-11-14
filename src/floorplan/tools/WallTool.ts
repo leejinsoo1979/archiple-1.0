@@ -74,16 +74,12 @@ export class WallTool extends BaseTool {
   }
 
   handleMouseMove(position: Vector2, event: MouseEvent): void {
-    // Check if Shift key is pressed for orthogonal snap
-    const isOrthogonalMode = event.shiftKey;
+    // Enable orthogonal mode when Shift is pressed
+    const isShiftPressed = event.shiftKey;
 
-    // Update snap service config
-    const currentConfig = this.snapService.getConfig();
-    if (currentConfig.orthogonalSnapEnabled !== isOrthogonalMode) {
-      this.snapService.updateConfig({
-        orthogonalSnapEnabled: isOrthogonalMode,
-      });
-    }
+    this.snapService.updateConfig({
+      orthogonalSnapEnabled: isShiftPressed,
+    });
 
     // Always update snap indicator
     const snapResult = this.snapService.snap(position);
@@ -104,6 +100,16 @@ export class WallTool extends BaseTool {
     eventBus.emit(FloorEvents.WALL_PREVIEW_UPDATED, {
       start: this.startPoint,
       end: {
+        x: this.currentPreviewEnd.x,
+        y: this.currentPreviewEnd.y,
+        id: 'preview',
+      },
+    });
+
+    // Emit distance measurement event
+    eventBus.emit(FloorEvents.DISTANCE_MEASUREMENT_UPDATED, {
+      from: this.startPoint,
+      to: {
         x: this.currentPreviewEnd.x,
         y: this.currentPreviewEnd.y,
         id: 'preview',
@@ -226,6 +232,7 @@ export class WallTool extends BaseTool {
     this.wallChain = [];
 
     eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
+    eventBus.emit(FloorEvents.DISTANCE_MEASUREMENT_CLEARED, {});
   }
 
   /**
