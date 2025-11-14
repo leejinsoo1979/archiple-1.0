@@ -83,18 +83,23 @@ export class WallLayer extends BaseLayer {
 
     if (!startPoint || !endPoint) return;
 
-    // Draw wall as thick line with SQUARE caps (no rounded corners)
+    // Draw wall as filled rectangle (not line) for clean corners
     ctx.save();
 
-    ctx.strokeStyle = isHovered ? '#e74c3c' : this.config.wallColor;
-    ctx.lineWidth = wall.thickness || this.config.wallThickness;
-    ctx.lineCap = 'butt'; // Square corners, not rounded
-    ctx.lineJoin = 'miter'; // Sharp corners
+    const thickness = wall.thickness || this.config.wallThickness;
+    const dx = endPoint.x - startPoint.x;
+    const dy = endPoint.y - startPoint.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx);
 
-    ctx.beginPath();
-    ctx.moveTo(startPoint.x, startPoint.y);
-    ctx.lineTo(endPoint.x, endPoint.y);
-    ctx.stroke();
+    // Translate to start point
+    ctx.translate(startPoint.x, startPoint.y);
+    // Rotate to wall direction
+    ctx.rotate(angle);
+
+    // Draw wall as rectangle
+    ctx.fillStyle = isHovered ? '#e74c3c' : this.config.wallColor;
+    ctx.fillRect(-thickness / 2, -thickness / 2, length + thickness, thickness);
 
     ctx.restore();
   }
