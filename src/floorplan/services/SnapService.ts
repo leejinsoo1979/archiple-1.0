@@ -1,5 +1,7 @@
 import { Vector2 } from '../../core/math/Vector2';
 import type { Point } from '../../core/types/Point';
+import { eventBus } from '../../core/events/EventBus';
+import { FloorEvents } from '../../core/events/FloorEvents';
 
 export interface SnapResult {
   position: Vector2;
@@ -141,6 +143,11 @@ export class SnapService {
     const snappedX = Math.round(position.x / gridSize) * gridSize;
     const snappedY = Math.round(position.y / gridSize) * gridSize;
 
+    // Emit grid snap event
+    eventBus.emit(FloorEvents.GRID_SNAP_UPDATED, {
+      point: { id: 'grid-snap', x: snappedX, y: snappedY },
+    });
+
     return {
       position: new Vector2(snappedX, snappedY),
       snappedTo: 'grid',
@@ -177,6 +184,12 @@ export class SnapService {
       const radians = (nearestAngle * Math.PI) / 180;
       const snappedX = fromPoint.x + Math.cos(radians) * distance;
       const snappedY = fromPoint.y + Math.sin(radians) * distance;
+
+      // Emit angle guide event
+      eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, {
+        from: { id: 'angle-guide', x: fromPoint.x, y: fromPoint.y },
+        angle: nearestAngle,
+      });
 
       return {
         position: new Vector2(snappedX, snappedY),

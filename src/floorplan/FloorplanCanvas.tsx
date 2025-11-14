@@ -14,6 +14,7 @@ import { GridLayer } from './renderer/layers/GridLayer';
 import { RoomLayer } from './renderer/layers/RoomLayer';
 import { WallLayer } from './renderer/layers/WallLayer';
 import { PointLayer } from './renderer/layers/PointLayer';
+import { GuideLayer } from './renderer/layers/GuideLayer';
 import { SelectionLayer } from './renderer/layers/SelectionLayer';
 
 // Tools
@@ -48,6 +49,7 @@ const FloorplanCanvas = () => {
   const roomLayerRef = useRef<RoomLayer | null>(null);
   const wallLayerRef = useRef<WallLayer | null>(null);
   const pointLayerRef = useRef<PointLayer | null>(null);
+  const guideLayerRef = useRef<GuideLayer | null>(null);
   const selectionLayerRef = useRef<SelectionLayer | null>(null);
 
   // Initialize all systems
@@ -97,14 +99,18 @@ const FloorplanCanvas = () => {
     const pointLayer = new PointLayer();
     pointLayerRef.current = pointLayer;
 
+    const guideLayer = new GuideLayer();
+    guideLayerRef.current = guideLayer;
+
     const selectionLayer = new SelectionLayer();
     selectionLayerRef.current = selectionLayer;
 
-    // Add layers to renderer
+    // Add layers to renderer (z-index order: Grid→Room→Wall→Point→Guide→Selection)
     renderer.addLayer(gridLayer);
     renderer.addLayer(roomLayer);
     renderer.addLayer(wallLayer);
     renderer.addLayer(pointLayer);
+    renderer.addLayer(guideLayer);
     renderer.addLayer(selectionLayer);
 
     // 5. Initialize Services
@@ -177,6 +183,28 @@ const FloorplanCanvas = () => {
     // Snap indicator
     eventBus.on(FloorEvents.SNAP_POINT_UPDATED, (data: any) => {
       pointLayer.setSnapPoint(data.point);
+    });
+
+    // Angle guide indicator
+    eventBus.on(FloorEvents.ANGLE_GUIDE_UPDATED, (data: any) => {
+      guideLayer.setAngleGuide(data.from, data.angle);
+    });
+
+    // Grid snap indicator
+    eventBus.on(FloorEvents.GRID_SNAP_UPDATED, (data: any) => {
+      guideLayer.setGridSnapPoint(data.point);
+    });
+
+    // Wall preview with guides
+    eventBus.on(FloorEvents.WALL_PREVIEW_UPDATED, (data: any) => {
+      // Show distance measurement
+      guideLayer.setDistanceMeasurement(data.start, data.end);
+    });
+
+    eventBus.on(FloorEvents.WALL_PREVIEW_CLEARED, () => {
+      guideLayer.setDistanceMeasurement(null, null);
+      guideLayer.setAngleGuide(null, null);
+      guideLayer.setGridSnapPoint(null);
     });
 
     // Room detection on potential room

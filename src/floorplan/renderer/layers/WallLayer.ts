@@ -102,11 +102,22 @@ export class WallLayer extends BaseLayer {
   private renderPreviewWall(ctx: CanvasRenderingContext2D, start: Point, end: Point): void {
     ctx.save();
 
+    // Draw background glow for better visibility
+    ctx.strokeStyle = 'rgba(52, 152, 219, 0.3)';
+    ctx.lineWidth = this.config.wallThickness + 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+
+    // Draw main preview line
     ctx.strokeStyle = this.config.previewColor;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3; // Thicker for better visibility
+    ctx.lineCap = 'round';
 
     if (this.config.previewStyle === 'dashed') {
-      ctx.setLineDash([10, 5]);
+      ctx.setLineDash([12, 6]);
     }
 
     ctx.beginPath();

@@ -19,6 +19,8 @@ export const FloorEvents = {
 
   // Snap events
   SNAP_POINT_UPDATED: 'floor:snap:point:updated',
+  ANGLE_GUIDE_UPDATED: 'floor:snap:angle:updated',
+  GRID_SNAP_UPDATED: 'floor:snap:grid:updated',
 
   // Room events
   ROOM_DETECTED: 'floor:room:detected',
