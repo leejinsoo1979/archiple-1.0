@@ -158,11 +158,12 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
 
     console.log('[Babylon3DCanvas] Updating 3D scene from 2D data...', floorplanData);
 
-    // Remove ALL old meshes (walls, floors, ceilings)
+    // Remove ALL old meshes (walls, floors, ceilings, corners)
     const meshesToRemove = scene.meshes.filter(mesh =>
       mesh.name.startsWith('wall') ||
       mesh.name.startsWith('floor_') ||
-      mesh.name.startsWith('ceiling_')
+      mesh.name.startsWith('ceiling_') ||
+      mesh.name.startsWith('corner_')
     );
     meshesToRemove.forEach((mesh) => {
       console.log('[Babylon3DCanvas] Removing mesh:', mesh.name);
@@ -268,6 +269,60 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
     });
 
     console.log('[Babylon3DCanvas] Created', walls.length, '3D walls from 2D data');
+
+    // Create wall corner joints (boxes at connection points) for clean 3D corners
+    const connectedPoints = new Map<string, any>();
+    walls.forEach((wall) => {
+      const startPoint = pointMap.get(wall.startPointId);
+      const endPoint = pointMap.get(wall.endPointId);
+
+      if (startPoint && startPoint.connectedWalls && startPoint.connectedWalls.length > 1) {
+        connectedPoints.set(startPoint.id, startPoint);
+      }
+      if (endPoint && endPoint.connectedWalls && endPoint.connectedWalls.length > 1) {
+        connectedPoints.set(endPoint.id, endPoint);
+      }
+    });
+
+    connectedPoints.forEach((point) => {
+      // Find the thickest wall connected to this point
+      let maxThickness = 200; // default 200mm
+      let maxHeight = 2800; // default 2800mm
+
+      if (point.connectedWalls) {
+        point.connectedWalls.forEach((wallId: string) => {
+          const wall = walls.find((w) => w.id === wallId);
+          if (wall) {
+            maxThickness = Math.max(maxThickness, wall.thickness || 200);
+            maxHeight = Math.max(maxHeight, wall.height || 2800);
+          }
+        });
+      }
+
+      const thicknessMeters = maxThickness * MM_TO_METERS;
+      const heightMeters = maxHeight * MM_TO_METERS;
+
+      // Convert point position to 3D
+      const x = (point.x / PIXELS_PER_METER) - 10;
+      const z = (point.y / PIXELS_PER_METER) - 10;
+
+      // Create a box at the corner
+      const cornerJoint = MeshBuilder.CreateBox(
+        `corner_${point.id}`,
+        { width: thicknessMeters, height: heightMeters, depth: thicknessMeters },
+        scene
+      );
+
+      cornerJoint.position.set(x, heightMeters / 2, z);
+      cornerJoint.material = wallMaterial;
+      cornerJoint.receiveShadows = true;
+
+      if (shadowGenerator) {
+        shadowGenerator.addShadowCaster(cornerJoint);
+      }
+    });
+
+    console.log('[Babylon3DCanvas] Created', connectedPoints.size, 'corner joints');
 
     // Create floors and ceilings for each room
     const { rooms } = floorplanData;
