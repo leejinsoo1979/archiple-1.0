@@ -14,10 +14,10 @@ const EditorPage = () => {
       {/* Left Green Sidebar */}
       <div className={styles.leftSidebar}>
         <div className={styles.logo}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-            <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="white">
+            <path d="M24 8L8 18v20h10v-12h12v12h10V18L24 8z"/>
+            <rect x="26" y="26" width="6" height="12" fill="rgba(255,255,255,0.8)"/>
           </svg>
-          <span>ARCHIPLE STUDIO</span>
         </div>
 
         <div className={styles.sidebarButtons}>
