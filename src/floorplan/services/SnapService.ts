@@ -97,11 +97,9 @@ export class SnapService {
       if (orthogonalSnap) return orthogonalSnap;
     }
 
-    // 3. Axis alignment snap (snap to existing points' x or y axis)
-    if (!this.config.orthogonalSnapEnabled) {
-      const axisSnap = this.snapToAxisAlignment(position);
-      if (axisSnap) return axisSnap;
-    }
+    // 3. Axis alignment snap (ONLY when creating perfect 90° angles)
+    const axisSnap = this.snapToAxisAlignment(position);
+    if (axisSnap) return axisSnap;
 
     // 4. Midpoint snap
     if (this.config.midpointSnapEnabled) {
@@ -264,55 +262,82 @@ export class SnapService {
 
   /**
    * Snap to axis alignment with existing points
-   * Snaps when x or y coordinate aligns with any existing point
+   * ONLY snaps when forming perfect right angles (90°)
+   * Requires lastPoint to determine if alignment creates perpendicular angle
    */
   private snapToAxisAlignment(position: Vector2): SnapResult | null {
-    const threshold = 15; // 15px tolerance for easier snapping
+    if (!this.lastPoint) return null;
 
-    let closestXPoint: Point | null = null;
-    let closestYPoint: Point | null = null;
-    let minXDiff = threshold;
-    let minYDiff = threshold;
+    const threshold = 15; // Snap tolerance in pixels
+    const dx = position.x - this.lastPoint.x;
+    const dy = position.y - this.lastPoint.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
 
-    // Find closest point with matching x or y coordinate
-    for (const point of this.points) {
-      const xDiff = Math.abs(position.x - point.x);
-      const yDiff = Math.abs(position.y - point.y);
+    if (distance < 5) return null; // Too close
 
-      if (xDiff < minXDiff) {
-        minXDiff = xDiff;
-        closestXPoint = point;
-      }
+    // Calculate current angle from lastPoint
+    const currentAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+    const normalizedAngle = ((currentAngle % 360) + 360) % 360;
 
-      if (yDiff < minYDiff) {
-        minYDiff = yDiff;
-        closestYPoint = point;
+    // Check if angle is close to 0°, 90°, 180°, or 270° (within 15 degrees)
+    const angles = [0, 90, 180, 270];
+    let nearestAngle: number | null = null;
+    let minAngleDiff = 15; // Maximum 15 degree tolerance
+
+    for (const angle of angles) {
+      const diff = Math.abs(this.angleDifference(normalizedAngle, angle));
+      if (diff < minAngleDiff) {
+        minAngleDiff = diff;
+        nearestAngle = angle;
       }
     }
 
-    // Prioritize vertical alignment (x-axis match) if both are close
-    if (closestXPoint && minXDiff < threshold) {
-      // Snap to vertical line (same x)
+    // Only snap if close to a right angle
+    if (nearestAngle !== null) {
+      // Find closest point to align with
+      let snapPoint: Point | null = null;
+      let minDist = threshold;
+
+      for (const point of this.points) {
+        // Skip lastPoint
+        if (this.lastPoint.x === point.x && this.lastPoint.y === point.y) continue;
+
+        let dist: number;
+        if (nearestAngle === 0 || nearestAngle === 180) {
+          // Horizontal - find points with matching Y
+          dist = Math.abs(position.y - point.y);
+        } else {
+          // Vertical - find points with matching X
+          dist = Math.abs(position.x - point.x);
+        }
+
+        if (dist < minDist) {
+          minDist = dist;
+          snapPoint = point;
+        }
+      }
+
+      // Apply snap
+      let snappedX: number, snappedY: number;
+
+      if (nearestAngle === 0 || nearestAngle === 180) {
+        // Horizontal snap
+        snappedX = position.x;
+        snappedY = snapPoint ? snapPoint.y : this.lastPoint.y;
+      } else {
+        // Vertical snap
+        snappedX = snapPoint ? snapPoint.x : this.lastPoint.x;
+        snappedY = position.y;
+      }
+
+      // Emit guide
       eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, {
-        from: { id: 'axis-guide', x: closestXPoint.x, y: closestXPoint.y },
-        angle: 90, // Vertical
+        from: { id: 'right-angle-guide', x: this.lastPoint.x, y: this.lastPoint.y },
+        angle: nearestAngle,
       });
 
       return {
-        position: new Vector2(closestXPoint.x, position.y),
-        snappedTo: 'angle',
-      };
-    }
-
-    if (closestYPoint && minYDiff < threshold) {
-      // Snap to horizontal line (same y)
-      eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, {
-        from: { id: 'axis-guide', x: closestYPoint.x, y: closestYPoint.y },
-        angle: 0, // Horizontal
-      });
-
-      return {
-        position: new Vector2(position.x, closestYPoint.y),
+        position: new Vector2(snappedX, snappedY),
         snappedTo: 'angle',
       };
     }
