@@ -1,73 +1,113 @@
-# React + TypeScript + Vite
+# Archiple 1.0
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+> Professional 2D/3D Floor Plan Editor with Enterprise Architecture
 
-Currently, two official plugins are available:
+Archiple is a powerful, extensible floor plan editor built with enterprise-level architecture patterns. Create, edit, and visualize floor plans in real-time with seamless 2D-to-3D conversion.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## ✨ Features
 
-## React Compiler
+### 2D Floor Plan Editor
+- ✏️ **Draw Tools**: Walls, rooms, openings with precision
+- 🎯 **Smart Snapping**: Grid, point, and angle snapping
+- 📐 **Geometry Tools**: Automatic room detection and measurement
+- 🔄 **Undo/Redo**: Full command history with unlimited steps
+- 🎨 **Layer System**: Organized rendering with z-index management
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 3D Visualization
+- 🏗️ **Real-time 3D**: Instant 2D-to-3D conversion
+- 🎥 **Camera Controls**: WASD navigation + orbit controls
+- 💡 **Lighting**: Realistic lighting with shadows
+- 🎨 **Materials**: PBR materials for walls, floors, ceilings
 
-## Expanding the ESLint configuration
+### Enterprise Architecture
+- 🏛️ **SOLID Principles**: Maintainable, extensible codebase
+- 🎯 **Design Patterns**: Command, Observer, Factory, Singleton
+- 🔌 **Event-Driven**: Loosely coupled with EventBus
+- 📦 **Modular**: Independent core, floorplan, and viewer3d modules
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## 🚀 Quick Start
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Prerequisites
+- Node.js 18+
+- npm 9+
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Installation
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Visit `http://localhost:5173` to see the editor.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Build for Production
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build
+npm run preview
 ```
+
+## 📖 Documentation
+
+- [Architecture Guide](./ARCHITECTURE.md) - Detailed architecture overview
+
+## 🏗️ Project Structure
+
+```
+archiple-1.0/
+├── src/
+│   ├── core/           # Business logic (framework-agnostic)
+│   ├── floorplan/      # 2D editor engine
+│   ├── viewer3d/       # Babylon.js 3D viewer
+│   ├── ui/             # React components
+│   ├── state/          # State management
+│   ├── hooks/          # Custom React hooks
+│   └── lib/            # Utilities and constants
+│
+├── public/             # Static assets
+└── ARCHITECTURE.md     # Architecture documentation
+```
+
+## 📦 Tech Stack
+
+### Core
+- **TypeScript 5.x** - Type safety
+- **React 19** - UI framework
+- **Vite 7.x** - Build tool
+
+### 3D Rendering
+- **Babylon.js** - WebGL 3D engine
+- **@babylonjs/core** - Core 3D functionality
+- **@babylonjs/loaders** - Model loading
+- **@babylonjs/gui** - 3D UI components
+
+## 🗺️ Roadmap
+
+### Phase 1: Foundation (✅ Complete)
+- [x] Project setup with Vite + React + TypeScript
+- [x] Basic 2D/3D split layout
+- [x] Canvas rendering with coordinate tracking
+- [x] Enterprise architecture implementation
+
+### Phase 2: Core Features (🚧 In Progress)
+- [ ] Wall drawing tool
+- [ ] Point snapping
+- [ ] Room detection
+- [ ] Basic 2D-to-3D conversion
+
+### Phase 3: Advanced Features
+- [ ] Door and window placement
+- [ ] Material editor
+- [ ] Measurement tools
+- [ ] Export (JSON, SVG, PNG, GLB)
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+---
+
+Made with ❤️ by the Archiple Team
