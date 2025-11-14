@@ -29,7 +29,12 @@ import { RoomDetectionService } from './services/RoomDetectionService';
 import { MouseController } from './controllers/MouseController';
 import { KeyboardController } from './controllers/KeyboardController';
 
-const FloorplanCanvas = () => {
+interface FloorplanCanvasProps {
+  activeTool: ToolType;
+  onDataChange?: (data: { points: any[]; walls: any[]; rooms: any[] }) => void;
+}
+
+const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
@@ -137,6 +142,7 @@ const FloorplanCanvas = () => {
 
     // 7. Initialize Controllers
     const mouseController = new MouseController(canvas, toolManager);
+    mouseController.setCamera(renderer.getCamera()); // Set camera for coordinate transformation
     mouseControllerRef.current = mouseController;
 
     const keyboardController = new KeyboardController(toolManager, sceneManager);
@@ -164,6 +170,11 @@ const FloorplanCanvas = () => {
         rooms: rooms.length,
         fps: renderer.getFPS(),
       });
+
+      // Notify parent component of data changes (for 3D sync)
+      if (onDataChange) {
+        onDataChange({ points, walls, rooms });
+      }
     };
 
     // Listen to floorplan events
@@ -256,6 +267,9 @@ const FloorplanCanvas = () => {
 
     console.log('[FloorplanCanvas] Initialized successfully');
 
+    // Store toolManager in ref for tool switching
+    toolManagerRef.current = toolManager;
+
     // Cleanup
     return () => {
       console.log('[FloorplanCanvas] Cleaning up...');
@@ -277,6 +291,43 @@ const FloorplanCanvas = () => {
     };
   }, []);
 
+  // Handle tool changes from parent
+  useEffect(() => {
+    const toolManager = toolManagerRef.current;
+    const sceneManager = sceneManagerRef.current;
+
+    if (toolManager && sceneManager) {
+      console.log('[FloorplanCanvas] Switching to tool:', activeTool);
+      toolManager.setActiveTool(activeTool);
+      sceneManager.setTool(activeTool);
+    }
+  }, [activeTool]);
+
+  // Handle mouse wheel zoom
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const renderer = rendererRef.current;
+    if (!canvas || !renderer) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+
+      const camera = renderer.getCamera();
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      const mouseY = event.clientY - rect.top;
+
+      // Zoom delta: -1 for zoom in, +1 for zoom out
+      const zoomDelta = event.deltaY > 0 ? -0.1 : 0.1;
+      camera.zoomAt(mouseX, mouseY, zoomDelta);
+
+      console.log('[FloorplanCanvas] Camera zoom:', camera.getZoom().toFixed(2));
+    };
+
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', handleWheel);
+  }, []);
+
   // Handle mouse move for coordinate display
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -292,32 +343,6 @@ const FloorplanCanvas = () => {
   return (
     <div ref={containerRef} className={styles.canvasContainer}>
       <canvas ref={canvasRef} className={styles.canvas} onMouseMove={handleMouseMove} />
-
-      {/* Coordinate Display */}
-      {mousePos && (
-        <div className={styles.coordinates}>
-          x: {mousePos.x}, y: {mousePos.y}
-        </div>
-      )}
-
-      {/* Stats Display */}
-      <div className={styles.stats}>
-        <div>Points: {stats.points}</div>
-        <div>Walls: {stats.walls}</div>
-        <div>Rooms: {stats.rooms}</div>
-        <div>FPS: {stats.fps}</div>
-      </div>
-
-      {/* Instructions */}
-      <div className={styles.instructions}>
-        <div>
-          <strong>Wall Tool (W)</strong>
-        </div>
-        <div>• Click to place points</div>
-        <div>• Click first point to close loop</div>
-        <div>• Right-click or ESC to finish</div>
-        <div>• Grid Snap: G | Point Snap: S</div>
-      </div>
     </div>
   );
 };

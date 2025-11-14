@@ -1,0 +1,7 @@
+<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+  <!-- House Icon - Centered -->
+  <path d="M24 6 L8 18 v20 h8 v-12 h16 v12 h8 V18 Z" fill="#3fae7a"/>
+  <rect x="26" y="26" width="8" height="12" fill="#2d9967"/>
+  <!-- Small "A" letter -->
+  <text x="24" y="22" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white" text-anchor="middle">A</text>
+</svg>

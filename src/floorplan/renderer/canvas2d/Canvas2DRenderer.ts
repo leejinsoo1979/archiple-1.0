@@ -1,17 +1,19 @@
 import type { Layer } from '../layers/Layer';
+import { Camera2D } from '../Camera2D';
 
 /**
  * Canvas2DRenderer - Main rendering coordinator
  *
  * Features:
  * - Layer-based rendering with z-index sorting
- * - Dirty rectangle optimization
+ * - CAD-style camera with zoom/pan
  * - RequestAnimationFrame loop
  * - Performance monitoring
  */
 export class Canvas2DRenderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
+  private camera: Camera2D;
   private layers: Layer[] = [];
   private animationFrameId: number | null = null;
   private isRunning = false;
@@ -30,6 +32,9 @@ export class Canvas2DRenderer {
       throw new Error('Failed to get 2D context');
     }
     this.ctx = ctx;
+
+    // Initialize camera
+    this.camera = new Camera2D(canvas.width, canvas.height);
 
     // Enable smooth rendering
     this.ctx.imageSmoothingEnabled = true;
@@ -100,6 +105,9 @@ export class Canvas2DRenderer {
     // Clear canvas
     this.clear();
 
+    // Apply camera transform
+    this.camera.applyTransform(this.ctx);
+
     // Update all layers
     this.layers.forEach((layer) => {
       if (layer.visible) {
@@ -115,6 +123,9 @@ export class Canvas2DRenderer {
         this.ctx.restore();
       }
     });
+
+    // Reset transform for UI elements
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
   /**
@@ -159,6 +170,9 @@ export class Canvas2DRenderer {
     this.canvas.width = width;
     this.canvas.height = height;
 
+    // Update camera size
+    this.camera.setSize(width, height);
+
     // Reset context settings after resize
     this.ctx.imageSmoothingEnabled = true;
     this.ctx.imageSmoothingQuality = 'high';
@@ -195,6 +209,13 @@ export class Canvas2DRenderer {
    */
   getCanvas(): HTMLCanvasElement {
     return this.canvas;
+  }
+
+  /**
+   * Get camera
+   */
+  getCamera(): Camera2D {
+    return this.camera;
   }
 
   /**

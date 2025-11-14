@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import FloorplanCanvas from '../floorplan/FloorplanCanvas';
+import Babylon3DCanvas from '../babylon/Babylon3DCanvas';
 import styles from './EditorPage.module.css';
+import { ToolType } from '../core/types/EditorState';
 
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 
@@ -8,16 +10,33 @@ const EditorPage = () => {
   const [activeCategory, setActiveCategory] = useState<ToolCategory>('walls');
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [activeTool, setActiveTool] = useState<ToolType>(ToolType.WALL);
+  const [viewMode, setViewMode] = useState<'2D' | '3D'>('2D');
+  const [floorplanData, setFloorplanData] = useState<any>(null);
 
   return (
     <div className={styles.editorContainer}>
-      {/* Left Green Sidebar */}
-      <div className={styles.leftSidebar}>
+      {/* Header */}
+      <header className={styles.header}>
+        <div className={styles.headerLeft}>
+          <img src="/images/archiple_logo.png" alt="Archiple Studio" className={styles.headerLogo} />
+        </div>
+        <div className={styles.headerCenter}>
+          <h1 className={styles.headerTitle}>Archiple Studio</h1>
+        </div>
+        <div className={styles.headerRight}>
+          <button className={styles.headerBtn}>Save</button>
+          <button className={styles.headerBtn}>Export</button>
+          <button className={styles.headerBtnPrimary}>Publish</button>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <div className={styles.mainContent}>
+        {/* Left Green Sidebar */}
+        <div className={styles.leftSidebar}>
         <div className={styles.logo}>
-          <svg width="48" height="48" viewBox="0 0 48 48" fill="white">
-            <path d="M24 8L8 18v20h10v-12h12v12h10V18L24 8z"/>
-            <rect x="26" y="26" width="6" height="12" fill="rgba(255,255,255,0.8)"/>
-          </svg>
+          <img src="/images/archiple-icon.svg" alt="Archiple Studio" />
         </div>
 
         <div className={styles.sidebarButtons}>
@@ -154,7 +173,11 @@ const EditorPage = () => {
           <div className={styles.toolSection}>
             <h4>Walls</h4>
             <div className={styles.toolGrid}>
-              <button className={styles.toolBtn} title="Draw Staight Walls">
+              <button
+                className={`${styles.toolBtn} ${activeTool === ToolType.WALL ? styles.toolBtnActive : ''}`}
+                title="Draw Staight Walls"
+                onClick={() => setActiveTool(ToolType.WALL)}
+              >
                 <svg width="32" height="32" viewBox="0 0 48 48">
                   <rect x="8" y="20" width="32" height="8" stroke="currentColor" strokeWidth="2" fill="none"/>
                 </svg>
@@ -390,7 +413,27 @@ const EditorPage = () => {
 
       {/* Main Viewport */}
       <div className={styles.viewport}>
-        <FloorplanCanvas />
+        {/* View Mode Toggle (Top Right) */}
+        <div className={styles.viewModeToggle}>
+          <button
+            className={`${styles.viewModeBtn} ${viewMode === '2D' ? styles.viewModeBtnActive : ''}`}
+            onClick={() => setViewMode('2D')}
+          >
+            2D
+          </button>
+          <button
+            className={`${styles.viewModeBtn} ${viewMode === '3D' ? styles.viewModeBtnActive : ''}`}
+            onClick={() => setViewMode('3D')}
+          >
+            3D
+          </button>
+        </div>
+
+        {viewMode === '2D' ? (
+          <FloorplanCanvas activeTool={activeTool} onDataChange={setFloorplanData} />
+        ) : (
+          <Babylon3DCanvas floorplanData={floorplanData} />
+        )}
       </div>
 
       {/* Right Settings Panel */}
@@ -439,6 +482,7 @@ const EditorPage = () => {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

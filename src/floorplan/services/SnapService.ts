@@ -14,12 +14,14 @@ export interface SnapConfig {
   pointSnapEnabled: boolean;
   gridSnapEnabled: boolean;
   angleSnapEnabled: boolean;
+  orthogonalSnapEnabled: boolean; // Force horizontal/vertical only
   perpendicularSnapEnabled: boolean;
   midpointSnapEnabled: boolean;
 
   pointSnapThreshold: number;
   gridSize: number;
   angleSnapDegrees: number[];
+  orthogonalAngles: number[]; // [0, 90, 180, 270] for strict horizontal/vertical
 }
 
 /**
@@ -43,11 +45,13 @@ export class SnapService {
       pointSnapEnabled: true,
       gridSnapEnabled: true,
       angleSnapEnabled: true,
+      orthogonalSnapEnabled: false, // Enable with Shift key
       perpendicularSnapEnabled: true,
       midpointSnapEnabled: true,
       pointSnapThreshold: 15,
       gridSize: 20,
       angleSnapDegrees: [0, 45, 90, 135, 180, 225, 270, 315],
+      orthogonalAngles: [0, 90, 180, 270], // Strict horizontal/vertical
       ...config,
     };
   }
@@ -93,7 +97,13 @@ export class SnapService {
       if (midpointSnap) return midpointSnap;
     }
 
-    // 3. Angle snap (when drawing from a point)
+    // 3. Orthogonal snap (when enabled - Shift key pressed)
+    if (this.config.orthogonalSnapEnabled && this.lastPoint) {
+      const orthogonalSnap = this.snapToOrthogonal(position, this.lastPoint);
+      if (orthogonalSnap) return orthogonalSnap;
+    }
+
+    // 4. Angle snap (when drawing from a point)
     if (this.config.angleSnapEnabled && this.lastPoint) {
       const angleSnap = this.snapToAngle(position, this.lastPoint);
       if (angleSnap) return angleSnap;
@@ -198,6 +208,43 @@ export class SnapService {
     }
 
     return null;
+  }
+
+  /**
+   * Snap to orthogonal (horizontal/vertical only)
+   * Forces 0°, 90°, 180°, 270° angles
+   */
+  private snapToOrthogonal(position: Vector2, fromPoint: Vector2): SnapResult {
+    const dx = position.x - fromPoint.x;
+    const dy = position.y - fromPoint.y;
+
+    // Determine if more horizontal or vertical
+    const isMoreHorizontal = Math.abs(dx) > Math.abs(dy);
+
+    let snappedX: number, snappedY: number, angle: number;
+
+    if (isMoreHorizontal) {
+      // Snap to horizontal (0° or 180°)
+      snappedX = position.x;
+      snappedY = fromPoint.y;
+      angle = dx >= 0 ? 0 : 180;
+    } else {
+      // Snap to vertical (90° or 270°)
+      snappedX = fromPoint.x;
+      snappedY = position.y;
+      angle = dy >= 0 ? 90 : 270;
+    }
+
+    // Emit orthogonal guide event
+    eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, {
+      from: { id: 'orthogonal-guide', x: fromPoint.x, y: fromPoint.y },
+      angle,
+    });
+
+    return {
+      position: new Vector2(snappedX, snappedY),
+      snappedTo: 'angle',
+    };
   }
 
   /**

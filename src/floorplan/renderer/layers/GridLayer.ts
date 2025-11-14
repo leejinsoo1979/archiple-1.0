@@ -39,7 +39,12 @@ export class GridLayer extends BaseLayer {
   }
 
   updateConfig(config: Partial<GridLayerConfig>): void {
-    this.config = { ...this.config, ...config };
+    this.config = {
+      ...this.config,
+      ...config,
+      majorGridSize: config.majorGridSize || (config.gridSize ? config.gridSize * 5 : this.config.majorGridSize),
+    };
+    console.log('[GridLayer] Config updated:', this.config);
   }
 
   render(ctx: CanvasRenderingContext2D): void {
@@ -47,15 +52,26 @@ export class GridLayer extends BaseLayer {
 
     this.applyOpacity(ctx);
 
-    // Fill background
+    // Get current transform to calculate visible bounds in world space
+    const transform = ctx.getTransform();
+    const invZoom = 1 / transform.a; // a = scaleX = zoom
+
+    // Calculate visible world bounds
+    const viewLeft = (-transform.e) * invZoom;
+    const viewTop = (-transform.f) * invZoom;
+    const viewRight = (this.width - transform.e) * invZoom;
+    const viewBottom = (this.height - transform.f) * invZoom;
+
+    // Fill background (in world space, so it appears infinite)
+    const margin = Math.max(this.width, this.height) * invZoom;
     ctx.fillStyle = this.config.backgroundColor;
-    ctx.fillRect(0, 0, this.width, this.height);
+    ctx.fillRect(viewLeft - margin, viewTop - margin, (viewRight - viewLeft) + margin * 2, (viewBottom - viewTop) + margin * 2);
 
     // Draw minor grid
-    this.drawGrid(ctx, this.config.gridSize, this.config.minorColor, 0.5);
+    this.drawGrid(ctx, this.config.gridSize, this.config.minorColor, 0.5, viewLeft, viewTop, viewRight, viewBottom);
 
     // Draw major grid
-    this.drawGrid(ctx, this.config.majorGridSize, this.config.majorColor, 1.0);
+    this.drawGrid(ctx, this.config.majorGridSize, this.config.majorColor, 1.0, viewLeft, viewTop, viewRight, viewBottom);
 
     this.resetOpacity(ctx);
   }
@@ -64,22 +80,30 @@ export class GridLayer extends BaseLayer {
     ctx: CanvasRenderingContext2D,
     gridSize: number,
     color: string,
-    lineWidth: number
+    lineWidth: number,
+    viewLeft: number,
+    viewTop: number,
+    viewRight: number,
+    viewBottom: number
   ): void {
     ctx.strokeStyle = color;
-    ctx.lineWidth = lineWidth;
+    ctx.lineWidth = lineWidth / ctx.getTransform().a; // Scale line width with zoom
     ctx.beginPath();
 
-    // Vertical lines
-    for (let x = 0; x <= this.width; x += gridSize) {
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, this.height);
+    // Calculate grid start positions (snap to grid)
+    const startX = Math.floor(viewLeft / gridSize) * gridSize;
+    const startY = Math.floor(viewTop / gridSize) * gridSize;
+
+    // Vertical lines (draw beyond visible area for smooth panning)
+    for (let x = startX; x <= viewRight; x += gridSize) {
+      ctx.moveTo(x, viewTop);
+      ctx.lineTo(x, viewBottom);
     }
 
-    // Horizontal lines
-    for (let y = 0; y <= this.height; y += gridSize) {
-      ctx.moveTo(0, y);
-      ctx.lineTo(this.width, y);
+    // Horizontal lines (draw beyond visible area for smooth panning)
+    for (let y = startY; y <= viewBottom; y += gridSize) {
+      ctx.moveTo(viewLeft, y);
+      ctx.lineTo(viewRight, y);
     }
 
     ctx.stroke();

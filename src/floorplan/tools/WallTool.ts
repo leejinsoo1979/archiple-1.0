@@ -73,7 +73,18 @@ export class WallTool extends BaseTool {
     }
   }
 
-  handleMouseMove(position: Vector2, _event: MouseEvent): void {
+  handleMouseMove(position: Vector2, event: MouseEvent): void {
+    // Check if Shift key is pressed for orthogonal snap
+    const isOrthogonalMode = event.shiftKey;
+
+    // Update snap service config
+    const currentConfig = this.snapService.getConfig();
+    if (currentConfig.orthogonalSnapEnabled !== isOrthogonalMode) {
+      this.snapService.updateConfig({
+        orthogonalSnapEnabled: isOrthogonalMode,
+      });
+    }
+
     // Always update snap indicator
     const snapResult = this.snapService.snap(position);
 

@@ -83,13 +83,13 @@ export class WallLayer extends BaseLayer {
 
     if (!startPoint || !endPoint) return;
 
-    // Draw wall as thick line
+    // Draw wall as thick line with SQUARE caps (no rounded corners)
     ctx.save();
 
     ctx.strokeStyle = isHovered ? '#e74c3c' : this.config.wallColor;
     ctx.lineWidth = wall.thickness || this.config.wallThickness;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'miter';
+    ctx.lineCap = 'butt'; // Square corners, not rounded
+    ctx.lineJoin = 'miter'; // Sharp corners
 
     ctx.beginPath();
     ctx.moveTo(startPoint.x, startPoint.y);
@@ -105,7 +105,7 @@ export class WallLayer extends BaseLayer {
     // Draw background glow for better visibility
     ctx.strokeStyle = 'rgba(52, 152, 219, 0.3)';
     ctx.lineWidth = this.config.wallThickness + 4;
-    ctx.lineCap = 'round';
+    ctx.lineCap = 'butt'; // Square corners
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
     ctx.lineTo(end.x, end.y);
@@ -114,7 +114,7 @@ export class WallLayer extends BaseLayer {
     // Draw main preview line
     ctx.strokeStyle = this.config.previewColor;
     ctx.lineWidth = 3; // Thicker for better visibility
-    ctx.lineCap = 'round';
+    ctx.lineCap = 'butt'; // Square corners
 
     if (this.config.previewStyle === 'dashed') {
       ctx.setLineDash([12, 6]);

@@ -1,23 +1,32 @@
 import { Vector2 } from '../../core/math/Vector2';
 import { ToolManager } from '../tools/ToolManager';
+import type { Camera2D } from '../renderer/Camera2D';
 
 /**
  * MouseController - Handles mouse input for the canvas
  *
  * Features:
- * - Canvas coordinate conversion
+ * - Canvas coordinate conversion with camera transform
  * - Event routing to ToolManager
  * - Right-click prevention
  */
 export class MouseController {
   private canvas: HTMLCanvasElement;
   private toolManager: ToolManager;
+  private camera: Camera2D | null = null;
 
   constructor(canvas: HTMLCanvasElement, toolManager: ToolManager) {
     this.canvas = canvas;
     this.toolManager = toolManager;
 
     this.setupEventListeners();
+  }
+
+  /**
+   * Set camera for coordinate transformation
+   */
+  setCamera(camera: Camera2D): void {
+    this.camera = camera;
   }
 
   /**
@@ -43,11 +52,20 @@ export class MouseController {
   }
 
   /**
-   * Convert mouse event to canvas coordinates
+   * Convert mouse event to world coordinates (with camera transform)
    */
   private getCanvasPosition(event: MouseEvent): Vector2 {
     const rect = this.canvas.getBoundingClientRect();
-    return new Vector2(event.clientX - rect.left, event.clientY - rect.top);
+    const screenX = event.clientX - rect.left;
+    const screenY = event.clientY - rect.top;
+
+    // Convert screen coordinates to world coordinates using camera
+    if (this.camera) {
+      return this.camera.screenToWorld(screenX, screenY);
+    }
+
+    // Fallback to screen coordinates if no camera
+    return new Vector2(screenX, screenY);
   }
 
   /**

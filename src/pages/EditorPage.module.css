@@ -6,7 +6,94 @@
   width: 100%;
   height: 100%;
   display: flex;
+  flex-direction: column;
   background: #e8e8e8;
+  overflow: hidden;
+}
+
+/* ===== HEADER ===== */
+.header {
+  width: 100%;
+  height: 60px;
+  background: white;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  z-index: 300;
+  flex-shrink: 0;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.headerLogo {
+  height: 36px;
+  width: auto;
+}
+
+.headerCenter {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.headerTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+  color: #333;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.headerBtn {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  background: white;
+  color: #666;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.headerBtn:hover {
+  background: #f5f5f5;
+  border-color: #3fae7a;
+  color: #3fae7a;
+}
+
+.headerBtnPrimary {
+  padding: 8px 20px;
+  border: none;
+  background: #3fae7a;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.headerBtnPrimary:hover {
+  background: #2d9967;
+}
+
+/* ===== MAIN CONTENT ===== */
+.mainContent {
+  flex: 1;
+  display: flex;
   overflow: hidden;
 }
 
@@ -24,17 +111,21 @@
 }
 
 .logo {
-  padding: 12px 0;
+  padding: 12px 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   width: 100%;
+  background: rgba(255, 255, 255, 0.95);
+  min-height: 72px;
 }
 
-.logo svg {
+.logo img {
   display: block;
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
 }
 
 .sidebarButtons {
@@ -206,6 +297,13 @@
   color: #3fae7a;
 }
 
+.toolBtnActive {
+  border-color: #3fae7a;
+  background: #e8f9f3;
+  color: #3fae7a;
+  box-shadow: 0 0 0 2px rgba(63, 174, 122, 0.2);
+}
+
 .toolBtn svg {
   width: 32px;
   height: 32px;
@@ -297,6 +395,88 @@
   flex: 1;
   position: relative;
   background: #e8e8e8;
+}
+
+/* ===== VIEW MODE TOGGLE ===== */
+.viewModeToggle {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  gap: 0;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.viewModeBtn {
+  padding: 8px 20px;
+  border: none;
+  background: white;
+  color: #666;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+  border-right: 1px solid #e0e0e0;
+}
+
+.viewModeBtn:last-child {
+  border-right: none;
+}
+
+.viewModeBtn:hover {
+  background: #f5f5f5;
+}
+
+.viewModeBtnActive {
+  background: #3fae7a !important;
+  color: white !important;
+}
+
+/* ===== ZOOM CONTROLS ===== */
+.zoomControls {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  border-radius: 6px;
+  padding: 8px 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+}
+
+.zoomBtn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #e0e0e0;
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  color: #666;
+}
+
+.zoomBtn:hover {
+  background: #f5f5f5;
+  border-color: #3fae7a;
+  color: #3fae7a;
+}
+
+.zoomLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  min-width: 45px;
+  text-align: center;
 }
 
 /* ===== RIGHT SETTINGS PANEL ===== */
