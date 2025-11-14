@@ -63,37 +63,39 @@ const Babylon3DCanvas = ({ floorplanData }: Babylon3DCanvasProps) => {
       const directionalLight = new HemisphericLight('dirLight', new Vector3(1, -0.5, 0.5), scene);
       directionalLight.intensity = 0.4;
 
-      // Create infinite ground grid with distance fade
-      const ground = MeshBuilder.CreateGround('ground', { width: 100, height: 100, subdivisions: 100 }, scene);
+      // Create infinite ground grid (no background, grid lines only)
+      const ground = MeshBuilder.CreateGround('ground', { width: 200, height: 200, subdivisions: 1 }, scene);
       ground.position.y = 0;
 
-      // Create grid material with transparency
+      // Create grid material - white lines on transparent background
       const groundMaterial = new StandardMaterial('groundMat', scene);
-      groundMaterial.diffuseColor = new Color3(0, 0, 0); // No color
-      groundMaterial.alpha = 0; // Fully transparent background
+      groundMaterial.emissiveColor = new Color3(0.9, 0.9, 0.9); // Bright grid lines
+      groundMaterial.diffuseColor = new Color3(0, 0, 0);
+      groundMaterial.specularColor = new Color3(0, 0, 0);
+      groundMaterial.alpha = 1;
       groundMaterial.backFaceCulling = false;
 
-      // Create grid texture with transparency
+      // Create grid texture - only lines, no background fill
       const gridTexture = new Texture('data:image/svg+xml;base64,' + btoa(`
         <svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100" height="100" fill="transparent"/>
           <defs>
-            <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
-              <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#d0d0d0" stroke-width="0.5"/>
+            <pattern id="smallGrid" width="10" height="10" patternUnits="userSpaceOnUse">
+              <path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(200,200,200,0.3)" stroke-width="0.5"/>
             </pattern>
-            <pattern id="majorGrid" width="50" height="50" patternUnits="userSpaceOnUse">
-              <rect width="50" height="50" fill="transparent"/>
-              <rect width="50" height="50" fill="url(#grid)"/>
-              <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#a0a0a0" stroke-width="1.5"/>
+            <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+              <rect width="50" height="50" fill="url(#smallGrid)"/>
+              <path d="M 50 0 L 0 0 0 50" fill="none" stroke="rgba(180,180,180,0.6)" stroke-width="1"/>
             </pattern>
           </defs>
-          <rect width="100" height="100" fill="url(#majorGrid)"/>
+          <rect width="100" height="100" fill="url(#grid)"/>
         </svg>
       `), scene);
-      gridTexture.uScale = 100;
-      gridTexture.vScale = 100;
+      gridTexture.uScale = 200;
+      gridTexture.vScale = 200;
       gridTexture.hasAlpha = true;
-      groundMaterial.opacityTexture = gridTexture;
       groundMaterial.diffuseTexture = gridTexture;
+      groundMaterial.opacityTexture = gridTexture;
       ground.material = groundMaterial;
 
       // Render loop
