@@ -1,4 +1,5 @@
 import BabylonScene from '../viewer/BabylonScene';
+import FloorplanCanvas from '../floorplan/FloorplanCanvas';
 import styles from './EditorPage.module.css';
 
 const EditorPage = () => {
@@ -7,13 +8,7 @@ const EditorPage = () => {
       {/* Left Panel: 2D Floorplan Area */}
       <div className={styles.leftPanel}>
         <div className={styles.panelTitle}>2D Floorplan</div>
-        <div className={styles.placeholder}>
-          2D Floorplan Editor
-          <br />
-          <small style={{ fontSize: '14px', color: '#666' }}>
-            (Placeholder - Coming Soon)
-          </small>
-        </div>
+        <FloorplanCanvas />
       </div>
 
       {/* Right Panel: 3D Viewer */}
