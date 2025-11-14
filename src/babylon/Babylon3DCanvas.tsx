@@ -319,13 +319,23 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
   // Resize engine when visibility changes
   useEffect(() => {
     const engine = engineRef.current;
-    if (!engine) return;
+    const canvas = canvasRef.current;
+    if (!engine || !canvas) return;
 
     if (visible) {
       console.log('[Babylon3DCanvas] Visible! Resizing engine...');
       // Small delay to ensure DOM is updated
       setTimeout(() => {
-        engine.resize();
+        // Force canvas to take full parent size
+        const parent = canvas.parentElement;
+        if (parent) {
+          const width = parent.clientWidth;
+          const height = parent.clientHeight;
+          console.log(`[Babylon3DCanvas] Resizing to ${width}x${height}`);
+          canvas.width = width;
+          canvas.height = height;
+          engine.resize();
+        }
       }, 100);
     }
   }, [visible]);
