@@ -74,10 +74,19 @@ export class WallTool extends BaseTool {
   }
 
   handleMouseMove(position: Vector2, _event: MouseEvent): void {
+    // Always update snap indicator
+    const snapResult = this.snapService.snap(position);
+
+    // Emit snap indicator
+    if (snapResult.snapPoint) {
+      eventBus.emit(FloorEvents.SNAP_POINT_UPDATED, {
+        point: snapResult.snapPoint,
+      });
+    }
+
     if (!this.isDrawing || !this.startPoint) return;
 
     // Update preview
-    const snapResult = this.snapService.snap(position);
     this.currentPreviewEnd = snapResult.position;
 
     // Emit preview event for rendering

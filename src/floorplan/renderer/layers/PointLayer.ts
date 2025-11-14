@@ -31,12 +31,12 @@ export class PointLayer extends BaseLayer {
     super(3); // z-index: 3
 
     this.config = {
-      pointRadius: config?.pointRadius || 5,
-      pointColor: config?.pointColor || '#2c3e50',
+      pointRadius: config?.pointRadius || 6,
+      pointColor: config?.pointColor || '#e74c3c',
       selectedColor: config?.selectedColor || '#3498db',
-      hoveredColor: config?.hoveredColor || '#e74c3c',
+      hoveredColor: config?.hoveredColor || '#f39c12',
       snapIndicatorColor: config?.snapIndicatorColor || '#2ecc71',
-      snapIndicatorRadius: config?.snapIndicatorRadius || 12,
+      snapIndicatorRadius: config?.snapIndicatorRadius || 15,
     };
   }
 
