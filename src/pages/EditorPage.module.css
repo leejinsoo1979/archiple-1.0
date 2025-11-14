@@ -1,8 +1,10 @@
 /* Archiple Studio UI - Exact Recreation */
 .editorContainer {
-  position: relative;
-  width: 100vw;
-  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   display: flex;
   background: #e8e8e8;
   overflow: hidden;
@@ -11,7 +13,7 @@
 /* ===== LEFT GREEN SIDEBAR ===== */
 .leftSidebar {
   width: 72px;
-  height: 100vh;
+  height: 100%;
   background: linear-gradient(180deg, #3fae7a 0%, #2d9967 100%);
   display: flex;
   flex-direction: column;
@@ -83,7 +85,7 @@
 /* ===== LEFT TOOLS PANEL ===== */
 .leftPanel {
   width: 310px;
-  height: 100vh;
+  height: 100%;
   background: white;
   border-right: 1px solid #ddd;
   overflow-y: auto;
@@ -301,7 +303,7 @@
 /* ===== RIGHT SETTINGS PANEL ===== */
 .rightPanel {
   width: 320px;
-  height: 100vh;
+  height: 100%;
   background: white;
   border-left: 1px solid #ddd;
   overflow-y: auto;
