@@ -74,7 +74,7 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
       gridSize: 250, // 250mm = 25cm grid
       snapEnabled: true,
       snapThreshold: 15, // 15px snap threshold (screen space)
-      wallThickness: 50, // 50mm = 5cm
+      wallThickness: 100, // 100mm = 10cm
       wallHeight: 2800, // 2800mm = 2.8m
       canvasWidth: container.clientWidth,
       canvasHeight: container.clientHeight,

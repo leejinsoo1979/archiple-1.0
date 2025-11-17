@@ -598,7 +598,7 @@ const EditorPage = () => {
             </div>
             <div className={styles.settingRow}>
               <label>Wall Thickness</label>
-              <input type="text" defaultValue="50 mm" />
+              <input type="text" defaultValue="100 mm" />
             </div>
             <button className={styles.deleteBtn}>Delete All Walls</button>
           </div>
