@@ -327,10 +327,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
 
       const wallThicknessMM = wall.thickness;
       const wallHeightMM = wall.height || 2800;
-      const thickness = wallThicknessMM * MM_TO_METERS;
-      const wallHeight = wallHeightMM * MM_TO_METERS;
 
-      // Wall direction
+      // Points are in mm, thickness is in mm
+      // Wall direction in mm space
       const dx = endPoint.x - startPoint.x;
       const dy = endPoint.y - startPoint.y;
       const length = Math.sqrt(dx * dx + dy * dy);
@@ -341,10 +340,10 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       const perpX = -dirY;
       const perpY = dirX;
 
-      // Calculate miter offsets at start and end
-      const halfThick = thickness / 2;
+      // Half thickness in mm
+      const halfThick = wallThicknessMM / 2;
 
-      // 4 corners in pixel space (convert to mm later)
+      // 4 corners in mm space
       const c0 = { // start left
         x: startPoint.x + perpX * halfThick,
         y: startPoint.y + perpY * halfThick
@@ -362,13 +361,14 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
         y: startPoint.y - perpY * halfThick
       };
 
-      // Convert to 3D coordinates (mm)
-      const PIXELS_TO_MM = 10;
+      // Convert to 3D meters
       const shape = [c0, c1, c2, c3].map(c => new Vector3(
-        (c.x * PIXELS_TO_MM * MM_TO_METERS) - centerX,
+        (c.x * MM_TO_METERS) - centerX,
         0,
-        (c.y * PIXELS_TO_MM * MM_TO_METERS) - centerZ
+        (c.y * MM_TO_METERS) - centerZ
       ));
+
+      const wallHeight = wallHeightMM * MM_TO_METERS;
 
       const wallMesh = MeshBuilder.ExtrudePolygon(
         `wall_${index}`,
