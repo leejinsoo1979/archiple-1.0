@@ -30,6 +30,7 @@ export class RoomLayer extends BaseLayer {
   private hoveredRoomId: string | null = null;
 
   private config: Required<RoomLayerConfig>;
+  private woodPattern: CanvasPattern | null = null;
 
   constructor(config?: RoomLayerConfig) {
     super(1); // z-index: 1 (below walls)
@@ -45,6 +46,24 @@ export class RoomLayer extends BaseLayer {
       labelFont: config?.labelFont || '14px Arial',
       labelColor: config?.labelColor || '#2c3e50',
     };
+
+    // Load wood texture pattern
+    this.loadWoodPattern();
+  }
+
+  private loadWoodPattern(): void {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        this.woodPattern = ctx.createPattern(canvas, 'repeat');
+      }
+    };
+    img.src = '/texture/floor/f2 diffuse.JPG';
   }
 
   setRooms(rooms: Room[]): void {
@@ -90,21 +109,25 @@ export class RoomLayer extends BaseLayer {
 
     if (roomPoints.length < 3) return;
 
-    // Determine colors
-    let fillColor = this.config.fillColor;
+    // Determine fill style
+    let fillStyle: string | CanvasPattern = this.config.fillColor;
     let fillOpacity = this.config.fillOpacity;
 
     if (isHovered) {
-      fillColor = this.config.hoveredFillColor;
+      fillStyle = this.config.hoveredFillColor;
       fillOpacity = 0.5;
     } else if (isSelected) {
-      fillColor = this.config.selectedFillColor;
+      fillStyle = this.config.selectedFillColor;
       fillOpacity = 0.4;
+    } else if (this.woodPattern) {
+      // Use wood pattern for normal rooms
+      fillStyle = this.woodPattern;
+      fillOpacity = 1.0;
     }
 
     // Draw polygon fill
     ctx.save();
-    ctx.fillStyle = fillColor;
+    ctx.fillStyle = fillStyle;
     ctx.globalAlpha = fillOpacity;
 
     ctx.beginPath();
