@@ -69,21 +69,19 @@ export class GridLayer extends BaseLayer {
     ctx.fillRect(viewLeft - margin, viewTop - margin, (viewRight - viewLeft) + margin * 2, (viewBottom - viewTop) + margin * 2);
 
     // Calculate grid opacity based on zoom level
-    // Zoom < 0.05: opacity 0.5
-    // Zoom 0.05-1.0: fade from 0.5 to 1.0
-    // Zoom >= 1.0: opacity 1.0
+    // Always show grid with good visibility
     let gridOpacity = 1.0;
     if (zoom < 0.05) {
-      gridOpacity = 0.5;
+      gridOpacity = 0.8; // More visible at low zoom
     } else if (zoom < 1.0) {
-      gridOpacity = 0.5 + (zoom - 0.05) / 0.95 * 0.5; // Linear fade from 0.5 to 1.0
+      gridOpacity = 0.8 + (zoom - 0.05) / 0.95 * 0.2; // Fade from 0.8 to 1.0
     }
 
-    // Draw minor grid with fade effect
-    this.drawGrid(ctx, this.config.gridSize, this.config.minorColor, 1.5, viewLeft, viewTop, viewRight, viewBottom, gridOpacity);
+    // Draw minor grid with fade effect (very thin lines)
+    this.drawGrid(ctx, this.config.gridSize, this.config.minorColor, 1, viewLeft, viewTop, viewRight, viewBottom, gridOpacity);
 
-    // Draw major grid with fade effect
-    this.drawGrid(ctx, this.config.majorGridSize, this.config.majorColor, 2.5, viewLeft, viewTop, viewRight, viewBottom, gridOpacity);
+    // Draw major grid with fade effect (much thicker lines)
+    this.drawGrid(ctx, this.config.majorGridSize, this.config.majorColor, 3, viewLeft, viewTop, viewRight, viewBottom, gridOpacity);
 
     this.resetOpacity(ctx);
   }
@@ -109,16 +107,21 @@ export class GridLayer extends BaseLayer {
     const startX = Math.floor(viewLeft / gridSize) * gridSize;
     const startY = Math.floor(viewTop / gridSize) * gridSize;
 
+    // Pixel alignment offset for crisp 1px lines (0.5px offset for odd lineWidth)
+    const offset = lineWidth % 2 === 1 ? 0.5 : 0;
+
     // Vertical lines (draw beyond visible area for smooth panning)
     for (let x = startX; x <= viewRight; x += gridSize) {
-      ctx.moveTo(x, viewTop);
-      ctx.lineTo(x, viewBottom);
+      const alignedX = Math.floor(x) + offset;
+      ctx.moveTo(alignedX, viewTop);
+      ctx.lineTo(alignedX, viewBottom);
     }
 
     // Horizontal lines (draw beyond visible area for smooth panning)
     for (let y = startY; y <= viewBottom; y += gridSize) {
-      ctx.moveTo(viewLeft, y);
-      ctx.lineTo(viewRight, y);
+      const alignedY = Math.floor(y) + offset;
+      ctx.moveTo(viewLeft, alignedY);
+      ctx.lineTo(viewRight, alignedY);
     }
 
     ctx.stroke();
