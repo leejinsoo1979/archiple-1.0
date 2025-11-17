@@ -65,13 +65,19 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     const container = containerRef.current;
     if (!canvas || !container) return;
 
+    // Prevent double initialization
+    if (sceneManagerRef.current) {
+      console.log('[FloorplanCanvas] Already initialized, skipping...');
+      return;
+    }
+
     console.log('[FloorplanCanvas] Initializing...');
 
     // 1. Initialize SceneManager
     // Units: mm (millimeters) - 모든 내부 좌표는 mm 단위
     // Scale: scalePxPerMm = 0.1 means 1mm = 0.1px (4800mm = 480px)
     const config: EditorConfig = {
-      gridSize: 50, // 50mm = 5cm grid
+      gridSize: 1, // 1mm precision
       snapEnabled: true,
       snapThreshold: 15, // 15px snap threshold (screen space)
       wallThickness: 150, // 150mm = 15cm
@@ -94,9 +100,9 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     // 4. Create Layers
     const gridLayer = new GridLayer({
       gridSize: config.gridSize,
-      majorGridSize: config.gridSize * 10, // 500mm major grid (50mm * 10)
-      minorColor: '#e8e8e8', // 연한 회색 (50mm 작은 그리드)
-      majorColor: '#666666', // 진한 회색 (500mm 큰 그리드)
+      majorGridSize: 1000, // 1000mm = 1m major grid
+      minorColor: '#f5f5f5', // 매우 연한 회색 (1mm 그리드)
+      majorColor: '#666666', // 진한 회색 (1m 그리드)
       backgroundColor: '#ffffff', // 순백색 배경
     });
     gridLayer.setSize(canvas.width, canvas.height);
