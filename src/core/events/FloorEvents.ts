@@ -19,6 +19,7 @@ export const FloorEvents = {
   WALL_MODIFIED: 'floor:wall:modified',
   WALL_REMOVED: 'floor:wall:removed',
   WALL_SPLIT: 'floor:wall:split',
+  WALL_SELECTED: 'floor:wall:selected',
   WALL_PREVIEW_UPDATED: 'floor:wall:preview:updated',
   WALL_PREVIEW_CLEARED: 'floor:wall:preview:cleared',
 
@@ -45,6 +46,13 @@ export const FloorEvents = {
   ROOM_MODIFIED: 'floor:room:modified',
   ROOM_REMOVED: 'floor:room:removed',
   POTENTIAL_ROOM_DETECTED: 'floor:room:potential',
+
+  // Door events
+  DOOR_ADDED: 'floor:door:added',
+  DOOR_MODIFIED: 'floor:door:modified',
+  DOOR_REMOVED: 'floor:door:removed',
+  DOOR_PREVIEW_UPDATED: 'floor:door:preview:updated',
+  DOOR_PREVIEW_CLEARED: 'floor:door:preview:cleared',
 
   // Intersection events
   INTERSECTION_DETECTED: 'floor:intersection:detected',
