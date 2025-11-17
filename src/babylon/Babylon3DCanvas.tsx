@@ -387,7 +387,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
         if (roomPoints.length < 3) return;
 
         // Create polygon floor using ExtrudePolygon (more reliable)
-        const floorShape = roomPoints.map((p: Vector3) => new Vector3(p.x, 0, p.z));
+        // ExtrudePolygon expects 2D points (x, z only) for the shape
+        const floorShape = roomPoints.map((p: Vector3) => new Vector3(p.x, p.z, 0));
 
         const floor = MeshBuilder.ExtrudePolygon(
           `floor_${roomIndex}`,
