@@ -753,49 +753,105 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     sunLight.intensity = intensity;
   }, [sunSettings]);
 
-  // Switch camera when playMode changes
+  // Switch camera and controls based on view mode and play mode
   useEffect(() => {
     const scene = sceneRef.current;
     const canvas = canvasRef.current;
     const arcCamera = arcCameraRef.current;
+    const fpsCamera = fpsCameraRef.current;
     const thirdPersonCamera = thirdPersonCameraRef.current;
     const character = characterRef.current;
 
-    if (!scene || !canvas || !arcCamera || !thirdPersonCamera || !character) return;
+    if (!scene || !canvas || !arcCamera || !fpsCamera || !thirdPersonCamera || !character) return;
+
+    if (!visible) return; // Only run when 3D view is visible
 
     if (playMode) {
-      // Switch to fixed camera (character moves, camera stays)
-      console.log('[Babylon3DCanvas] Switching to fixed camera (Play Mode)');
+      // ====== PLAY MODE: 1st Person FPS (game mode) ======
+      console.log('[Babylon3DCanvas] Play Mode: 1st Person FPS');
 
-      // Calculate room center from floorplan data
       const planMetrics = computePlanMetrics(floorplanData?.points);
       if (planMetrics) {
-        // Position character at room center, on ground
+        fpsCamera.position = new Vector3(
+          planMetrics.centerX,
+          DEFAULT_CAMERA_HEIGHT,
+          planMetrics.centerZ
+        );
+        fpsCamera.rotation = new Vector3(0, 0, 0);
+
         character.position = new Vector3(
           planMetrics.centerX,
           0,
           planMetrics.centerZ
         );
-        character.rotation.y = 0; // Face forward
-
-        // Position fixed camera to view the room
-        arcCamera.setPosition(new Vector3(
-          planMetrics.centerX + 5, // 5m to the side
-          3, // 3m height
-          planMetrics.centerZ - 5 // 5m back
-        ));
-        arcCamera.setTarget(new Vector3(
-          planMetrics.centerX,
-          1, // Look at character torso
-          planMetrics.centerZ
-        ));
       }
 
-      // Disable camera controls (fixed position)
-      arcCamera.detachControl();
-      scene.activeCamera = arcCamera;
+      // Hide character in FPS mode
+      character.isVisible = false;
 
-      // Character movement controls
+      arcCamera.detachControl();
+      thirdPersonCamera.detachControl();
+      fpsCamera.attachControl(canvas, true);
+      scene.activeCamera = fpsCamera;
+
+      let lastCameraPos = fpsCamera.position.clone();
+
+      scene.onBeforeRenderObservable.add(() => {
+        if (!fpsCamera || !character) return;
+
+        // Sync character position for collision
+        const cameraDelta = fpsCamera.position.subtract(lastCameraPos);
+        character.position.x += cameraDelta.x;
+        character.position.z += cameraDelta.z;
+        character.position.y = 0;
+
+        character.rotation.y = fpsCamera.rotation.y;
+        lastCameraPos = fpsCamera.position.clone();
+
+        // Walking bob
+        const keys = (fpsCamera as any)._keys;
+        const isMoving = keys && (keys.forward || keys.backward || keys.left || keys.right);
+
+        if (isMoving) {
+          const time = performance.now() * 0.01;
+          fpsCamera.position.y = DEFAULT_CAMERA_HEIGHT + Math.sin(time) * 0.015;
+        } else {
+          fpsCamera.position.y = DEFAULT_CAMERA_HEIGHT;
+        }
+      });
+
+      return () => {
+        scene.onBeforeRenderObservable.clear();
+        character.isVisible = true;
+      };
+    } else {
+      // ====== 3D VIEW MODE: 3rd Person (character control) ======
+      console.log('[Babylon3DCanvas] 3D View Mode: 3rd Person');
+
+      const planMetrics = computePlanMetrics(floorplanData?.points);
+      if (planMetrics) {
+        character.position = new Vector3(
+          planMetrics.centerX,
+          0,
+          planMetrics.centerZ
+        );
+        character.rotation.y = 0;
+      }
+
+      // Show character
+      character.isVisible = true;
+
+      // Setup 3rd person camera
+      thirdPersonCamera.lockedTarget = character;
+      thirdPersonCamera.radius = 4;
+      thirdPersonCamera.heightOffset = 2;
+
+      fpsCamera.detachControl();
+      arcCamera.detachControl();
+      thirdPersonCamera.attachControl(canvas, true);
+      scene.activeCamera = thirdPersonCamera;
+
+      // Character controls
       const inputMap: { [key: string]: boolean } = {};
       const onKeyDown = (evt: KeyboardEvent) => {
         inputMap[evt.key.toLowerCase()] = true;
@@ -807,8 +863,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       window.addEventListener('keydown', onKeyDown);
       window.addEventListener('keyup', onKeyUp);
 
-      // Movement logic
-      const moveSpeed = 0.05; // 5cm per frame
+      const moveSpeed = 0.05;
       const rotateSpeed = 0.03;
 
       scene.onBeforeRenderObservable.add(() => {
@@ -816,22 +871,17 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
         let moved = false;
 
-        // Rotation (A/D keys)
-        if (inputMap['a']) {
-          character.rotation.y += rotateSpeed;
-        }
-        if (inputMap['d']) {
-          character.rotation.y -= rotateSpeed;
-        }
+        // Rotation
+        if (inputMap['a']) character.rotation.y += rotateSpeed;
+        if (inputMap['d']) character.rotation.y -= rotateSpeed;
 
-        // Calculate forward direction based on character rotation
+        // Movement
         const forward = new Vector3(
           Math.sin(character.rotation.y),
           0,
           Math.cos(character.rotation.y)
         );
 
-        // Forward/Backward (W/S keys)
         if (inputMap['w']) {
           character.position.addInPlace(forward.scale(moveSpeed));
           moved = true;
@@ -841,27 +891,17 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           moved = true;
         }
 
-        // Walking animation (bob head and arms)
+        // Walking animation
         if (moved) {
           const time = performance.now() * 0.005;
           const head = scene.getMeshByName('head');
           const leftArm = scene.getMeshByName('leftArm');
           const rightArm = scene.getMeshByName('rightArm');
 
-          if (head) {
-            const baseY = 1.62;
-            head.position.y = baseY + Math.sin(time) * 0.03; // Bob 3cm
-          }
-
-          // Swing arms
-          if (leftArm) {
-            leftArm.rotation.x = Math.sin(time) * 0.3; // Swing forward/back
-          }
-          if (rightArm) {
-            rightArm.rotation.x = Math.sin(time + Math.PI) * 0.3; // Opposite swing
-          }
+          if (head) head.position.y = 1.62 + Math.sin(time) * 0.03;
+          if (leftArm) leftArm.rotation.x = Math.sin(time) * 0.3;
+          if (rightArm) rightArm.rotation.x = Math.sin(time + Math.PI) * 0.3;
         } else {
-          // Reset to neutral pose
           const head = scene.getMeshByName('head');
           const leftArm = scene.getMeshByName('leftArm');
           const rightArm = scene.getMeshByName('rightArm');
@@ -872,20 +912,13 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         }
       });
 
-      // Cleanup
       return () => {
         window.removeEventListener('keydown', onKeyDown);
         window.removeEventListener('keyup', onKeyUp);
         scene.onBeforeRenderObservable.clear();
       };
-    } else {
-      // Switch back to ArcRotate camera
-      console.log('[Babylon3DCanvas] Switching to ArcRotate camera (3D View)');
-      arcCamera.attachControl(canvas, true);
-      scene.activeCamera = arcCamera;
-      scene.onBeforeRenderObservable.clear();
     }
-  }, [playMode, floorplanData]);
+  }, [playMode, floorplanData, visible]);
 
   // Resize engine when visibility changes
   useEffect(() => {
