@@ -233,9 +233,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       const maxWallHeight = walls.reduce((max, wall) => Math.max(max, wall.height || 2800), 2800);
       const targetY = Math.max((maxWallHeight * MM_TO_METERS) / 2, DEFAULT_CAMERA_HEIGHT);
 
-      // CRITICAL FIX: 카메라가 floorplan의 실제 중심을 봐야 함!
-      // centerX와 centerZ는 이미 미터 단위 (MM_TO_METERS 곱해진 값)
-      arcCamera.setTarget(new Vector3(0, targetY, 0));
+      // Camera target at floor level (Y=0) to see room properly
+      arcCamera.setTarget(new Vector3(0, 0, 0));
 
       // CRITICAL FIX: 작은 방(< 1m)을 위한 카메라 거리 자동 조정
       const roomSize = Math.max(planMetrics.extentX, planMetrics.extentZ);
@@ -379,6 +378,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
         },
         scene
       );
+
+      // ExtrudePolygon extrudes upward (Y+), so mesh is already at correct height
+      // No position adjustment needed
 
       wallMesh.material = wallMaterial;
       wallMesh.receiveShadows = true;
