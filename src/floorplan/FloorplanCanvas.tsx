@@ -22,6 +22,7 @@ import { SelectionLayer } from './renderer/layers/SelectionLayer';
 import { ToolManager } from './tools/ToolManager';
 import { WallTool } from './tools/WallTool';
 import { RectangleTool } from './tools/RectangleTool';
+import { SelectTool } from './tools/SelectTool';
 
 // Services
 import { SnapService } from './services/SnapService';
@@ -148,15 +149,18 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     toolManagerRef.current = toolManager;
 
     // Register tools
+    const selectTool = new SelectTool(sceneManager, snapService);
+    toolManager.registerTool(ToolType.SELECT, selectTool);
+
     const wallTool = new WallTool(sceneManager, snapService);
     toolManager.registerTool(ToolType.WALL, wallTool);
 
     const rectangleTool = new RectangleTool(sceneManager, snapService);
     toolManager.registerTool(ToolType.RECTANGLE, rectangleTool);
 
-    // Set default tool
-    toolManager.setActiveTool(ToolType.WALL);
-    sceneManager.setTool(ToolType.WALL);
+    // Set default tool to SELECT
+    toolManager.setActiveTool(ToolType.SELECT);
+    sceneManager.setTool(ToolType.SELECT);
 
     // 7. Initialize Controllers
     const mouseController = new MouseController(canvas, toolManager);
@@ -202,8 +206,27 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
 
     // Listen to floorplan events
     eventBus.on(FloorEvents.POINT_ADDED, updateLayers);
+    eventBus.on(FloorEvents.POINT_MOVED, updateLayers);
+    eventBus.on(FloorEvents.POINT_UPDATED, updateLayers);
     eventBus.on(FloorEvents.WALL_ADDED, updateLayers);
     eventBus.on(FloorEvents.ROOM_DETECTED, updateLayers);
+
+    // Point selection/hover events
+    eventBus.on(FloorEvents.POINT_SELECTED, (data: any) => {
+      pointLayer.setSelectedPoints([data.point.id]);
+    });
+
+    eventBus.on(FloorEvents.POINT_HOVERED, (data: any) => {
+      pointLayer.setHoveredPoint(data.point.id);
+    });
+
+    eventBus.on(FloorEvents.POINT_SELECTION_CLEARED, () => {
+      pointLayer.setSelectedPoints([]);
+    });
+
+    eventBus.on(FloorEvents.POINT_HOVER_CLEARED, () => {
+      pointLayer.setHoveredPoint(null);
+    });
 
     // Wall preview
     eventBus.on(FloorEvents.WALL_PREVIEW_UPDATED, (data: any) => {

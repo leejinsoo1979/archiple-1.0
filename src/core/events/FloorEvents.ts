@@ -6,8 +6,13 @@ export const FloorEvents = {
   // Point events
   POINT_ADDED: 'floor:point:added',
   POINT_MOVED: 'floor:point:moved',
+  POINT_UPDATED: 'floor:point:updated',
   POINT_REMOVED: 'floor:point:removed',
   POINT_SNAPPED: 'floor:point:snapped',
+  POINT_SELECTED: 'floor:point:selected',
+  POINT_HOVERED: 'floor:point:hovered',
+  POINT_SELECTION_CLEARED: 'floor:point:selection:cleared',
+  POINT_HOVER_CLEARED: 'floor:point:hover:cleared',
 
   // Wall events
   WALL_ADDED: 'floor:wall:added',

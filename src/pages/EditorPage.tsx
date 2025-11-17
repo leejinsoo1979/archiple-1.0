@@ -11,7 +11,7 @@ const EditorPage = () => {
   const [activeCategory, setActiveCategory] = useState<ToolCategory>('walls');
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
-  const [activeTool, setActiveTool] = useState<ToolType>(ToolType.WALL);
+  const [activeTool, setActiveTool] = useState<ToolType>(ToolType.SELECT);
   const [viewMode, setViewMode] = useState<'2D' | '3D'>('2D');
   const [floorplanData, setFloorplanData] = useState<any>(null);
   const [sunPanelOpen, setSunPanelOpen] = useState(false);
@@ -342,6 +342,16 @@ const EditorPage = () => {
           <div className={styles.toolSection}>
             <h4>Walls</h4>
             <div className={styles.toolGrid}>
+              <button
+                className={`${styles.toolBtn} ${activeTool === ToolType.SELECT ? styles.toolBtnActive : ''}`}
+                title="Select and Move Points"
+                onClick={() => setActiveTool(ToolType.SELECT)}
+              >
+                <svg width="32" height="32" viewBox="0 0 48 48">
+                  <path d="M 10 10 L 10 38 L 24 28 L 30 38 L 34 36 L 28 26 L 38 26 Z" stroke="currentColor" strokeWidth="2" fill="none"/>
+                </svg>
+                <span>Select</span>
+              </button>
               <button
                 className={`${styles.toolBtn} ${activeTool === ToolType.WALL ? styles.toolBtnActive : ''}`}
                 title="Draw Staight Walls"
