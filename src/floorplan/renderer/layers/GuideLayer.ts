@@ -29,6 +29,7 @@ export class GuideLayer extends BaseLayer {
   private verticalGuide: { x: number; fromY: number; toY: number } | null = null;
   private horizontalGuide: { y: number; fromX: number; toX: number } | null = null;
   private camera: Camera2D | null = null;
+  private wallThickness: number = 100; // 100mm default
 
   private config: Required<GuideLayerConfig>;
 
@@ -102,6 +103,10 @@ export class GuideLayer extends BaseLayer {
 
   setCamera(camera: Camera2D): void {
     this.camera = camera;
+  }
+
+  setWallThickness(thickness: number): void {
+    this.wallThickness = thickness;
   }
 
   render(ctx: CanvasRenderingContext2D): void {
@@ -358,10 +363,12 @@ export class GuideLayer extends BaseLayer {
   private renderRectanglePreview(ctx: CanvasRenderingContext2D, corners: Point[]): void {
     ctx.save();
 
-    // Draw dashed rectangle outline
+    // Draw rectangle with WALL THICKNESS (like confirmed walls)
     ctx.strokeStyle = '#3498db';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([8, 4]);
+    ctx.lineWidth = this.wallThickness; // Use actual wall thickness
+    ctx.lineCap = 'square';
+    ctx.lineJoin = 'miter';
+    ctx.setLineDash([12, 6]);
 
     ctx.beginPath();
     ctx.moveTo(corners[0].x, corners[0].y);
@@ -370,8 +377,6 @@ export class GuideLayer extends BaseLayer {
     ctx.lineTo(corners[3].x, corners[3].y);
     ctx.closePath();
     ctx.stroke();
-
-    // NO fill - just outline
 
     ctx.setLineDash([]);
 

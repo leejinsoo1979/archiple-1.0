@@ -94,10 +94,10 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     // 4. Create Layers
     const gridLayer = new GridLayer({
       gridSize: config.gridSize,
-      majorGridSize: config.gridSize * 5,
-      minorColor: '#888888',
-      majorColor: '#444444',
-      backgroundColor: '#f8f8f8',
+      majorGridSize: config.gridSize * 10, // 500mm major grid (50mm * 10)
+      minorColor: '#e8e8e8', // 연한 회색 (50mm 작은 그리드)
+      majorColor: '#666666', // 진한 회색 (500mm 큰 그리드)
+      backgroundColor: '#ffffff', // 순백색 배경
     });
     gridLayer.setSize(canvas.width, canvas.height);
     gridLayerRef.current = gridLayer;
@@ -114,6 +114,7 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
 
     const guideLayer = new GuideLayer();
     guideLayer.setCamera(renderer.getCamera());
+    guideLayer.setWallThickness(config.wallThickness);
     guideLayerRef.current = guideLayer;
 
     const selectionLayer = new SelectionLayer();

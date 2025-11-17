@@ -99,7 +99,7 @@ export class WallLayer extends BaseLayer {
 
     if (!startPoint || !endPoint) return;
 
-    // Thickness is already in pixels
+    // Thickness in mm (world space) - camera transform is already applied by renderer
     const thickness = wall.thickness || this.config.wallThickness;
 
     // Use stroke with square linecap and linejoin for sharp corners
@@ -118,22 +118,15 @@ export class WallLayer extends BaseLayer {
   private renderPreviewWall(ctx: CanvasRenderingContext2D, start: Point, end: Point): void {
     ctx.save();
 
-    // Thickness is already in pixels
+    // Thickness in mm (world space) - camera transform is already applied by renderer
     const thickness = this.config.wallThickness;
 
-    // Draw background glow for better visibility
-    ctx.strokeStyle = 'rgba(52, 152, 219, 0.3)';
-    ctx.lineWidth = thickness + 4;
-    ctx.lineCap = 'butt'; // Square corners
-    ctx.beginPath();
-    ctx.moveTo(start.x, start.y);
-    ctx.lineTo(end.x, end.y);
-    ctx.stroke();
-
-    // Draw main preview line
+    // Draw preview with SAME thickness as confirmed walls
     ctx.strokeStyle = this.config.previewColor;
-    ctx.lineWidth = 3; // Thicker for better visibility
-    ctx.lineCap = 'butt'; // Square corners
+    ctx.lineWidth = thickness;
+    ctx.lineCap = 'square';
+    ctx.lineJoin = 'miter';
+    ctx.miterLimit = 10;
 
     if (this.config.previewStyle === 'dashed') {
       ctx.setLineDash([12, 6]);

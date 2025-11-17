@@ -43,13 +43,13 @@ export class SnapService {
     this.config = {
       enabled: true,
       pointSnapEnabled: true,
-      gridSnapEnabled: false, // DISABLED - no grid snap for precise 1mm control
+      gridSnapEnabled: true, // ENABLED - grid snap
       angleSnapEnabled: false, // DISABLED - free drawing
       orthogonalSnapEnabled: false, // DISABLED - free drawing
       perpendicularSnapEnabled: false, // DISABLED - free drawing
       midpointSnapEnabled: false, // DISABLED - free drawing
       pointSnapThreshold: 15,
-      gridSize: 1, // 1mm grid (but disabled)
+      gridSize: 50, // 50mm grid precision (default)
       angleSnapDegrees: [], // No angle snapping
       orthogonalAngles: [], // No orthogonal snapping
       ...config,
@@ -78,11 +78,11 @@ export class SnapService {
   }
 
   /**
-   * Snap coordinate to 1mm precision
-   * All coordinates are in mm, so we round to nearest 1mm
+   * Snap coordinate to grid precision
+   * Uses config.gridSize for snapping precision
    */
   private snapToPrecision(value: number): number {
-    const precision = 1; // 1mm precision
+    const precision = this.config.gridSize;
     return Math.round(value / precision) * precision;
   }
 
@@ -162,8 +162,8 @@ export class SnapService {
    * Snap to grid
    */
   private snapToGrid(position: Vector2): SnapResult {
-    // Snap to 1mm precision (coordinates are already in mm)
-    const snapPrecision = 1; // 1mm precision
+    // Snap to gridSize precision (coordinates are already in mm)
+    const snapPrecision = this.config.gridSize;
     const snappedX = Math.round(position.x / snapPrecision) * snapPrecision;
     const snappedY = Math.round(position.y / snapPrecision) * snapPrecision;
 
