@@ -260,8 +260,8 @@ export function applyZoom(
   delta: number,
   centerPx?: PointPX
 ): ViewportState {
-  const minScale = 0.01; // 최소 0.01 px/mm
-  const maxScale = 1.0; // 최대 1.0 px/mm
+  const minScale = 0.05; // 최소 0.05 px/mm (1mm = 0.05px, 4800mm = 240px)
+  const maxScale = 2.0; // 최대 2.0 px/mm (1mm = 2px, 4800mm = 9600px)
 
   const zoomFactor = 1 + delta;
   const newScale = Math.max(minScale, Math.min(maxScale, viewport.scalePxPerMm * zoomFactor));
