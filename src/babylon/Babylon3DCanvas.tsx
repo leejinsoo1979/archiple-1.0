@@ -386,38 +386,50 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
 
         if (roomPoints.length < 3) return;
 
-        // Calculate room bounding box
-        const minX = Math.min(...roomPoints.map((p: Vector3) => p.x));
-        const maxX = Math.max(...roomPoints.map((p: Vector3) => p.x));
-        const minZ = Math.min(...roomPoints.map((p: Vector3) => p.z));
-        const maxZ = Math.max(...roomPoints.map((p: Vector3) => p.z));
-        const width = maxX - minX;
-        const depth = maxZ - minZ;
-        const floorCenterX = (minX + maxX) / 2;
-        const floorCenterZ = (minZ + maxZ) / 2;
+        // Create polygon floor - ONLY inside walls
+        // CreatePolygon works on XY plane, so use x,z as x,y for the shape
+        const shape = roomPoints.map((p: Vector3) => new Vector2(p.x, p.z));
 
-        // Create simple rectangular floor (for now - TODO: polygon shape)
-        const floor = MeshBuilder.CreateGround(
-          `floor_${roomIndex}`,
-          { width, height: depth, subdivisions: 1 },
-          scene
-        );
-        floor.position.set(floorCenterX, 0.01, floorCenterZ);
+        try {
+          const floor = MeshBuilder.CreatePolygon(
+            `floor_${roomIndex}`,
+            {
+              shape: shape,
+              sideOrientation: 2 // DOUBLESIDE to see from both sides
+            },
+            scene,
+            earcut
+          );
 
-        // Clone material for each floor
-        const roomFloorMat = floorMaterial.clone(`floorMat_room_${roomIndex}`);
-        if (roomFloorMat.albedoTexture && roomFloorMat.albedoTexture instanceof Texture) {
-          (roomFloorMat.albedoTexture as Texture).uScale = width; // width in meters
-          (roomFloorMat.albedoTexture as Texture).vScale = depth; // depth in meters
+          // Polygon is created on XY plane, rotate to XZ plane (horizontal)
+          floor.rotation.x = Math.PI / 2;
+          floor.position.y = 0.01; // Slightly above ground to prevent z-fighting
+
+          // Calculate texture scale
+          const minX = Math.min(...roomPoints.map((p: Vector3) => p.x));
+          const maxX = Math.max(...roomPoints.map((p: Vector3) => p.x));
+          const minZ = Math.min(...roomPoints.map((p: Vector3) => p.z));
+          const maxZ = Math.max(...roomPoints.map((p: Vector3) => p.z));
+          const width = maxX - minX;
+          const depth = maxZ - minZ;
+
+          // Clone material for each floor
+          const roomFloorMat = floorMaterial.clone(`floorMat_room_${roomIndex}`);
+          if (roomFloorMat.albedoTexture && roomFloorMat.albedoTexture instanceof Texture) {
+            (roomFloorMat.albedoTexture as Texture).uScale = width; // width in meters
+            (roomFloorMat.albedoTexture as Texture).vScale = depth; // depth in meters
+          }
+          floor.material = roomFloorMat;
+          floor.receiveShadows = true;
+
+          console.log(`[Babylon3DCanvas] Polygon floor ${roomIndex}:`, {
+            points: roomPoints.length,
+            width_m: width,
+            depth_m: depth,
+          });
+        } catch (error) {
+          console.error(`[Babylon3DCanvas] Failed to create polygon floor ${roomIndex}:`, error);
         }
-        floor.material = roomFloorMat;
-        floor.receiveShadows = true;
-
-        console.log(`[Babylon3DCanvas] Polygon floor ${roomIndex}:`, {
-          points: roomPoints.length,
-          width_m: width,
-          depth_m: depth,
-        });
       });
 
       console.log('[Babylon3DCanvas] Created polygon floors for', rooms.length, 'rooms');
