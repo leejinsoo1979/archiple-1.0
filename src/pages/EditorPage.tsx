@@ -22,7 +22,7 @@ const EditorPage = () => {
   });
   const [playMode, setPlayMode] = useState(false); // FPS mode toggle
 
-  // Load test room data (2800mm x 2800mm room with 200mm walls)
+  // Load test room data (2800mm x 2800mm room with 100mm walls)
   const handleLoadTestRoom = () => {
     const testData = createTestRoom();
     console.log('[EditorPage] Loading test room:', testData);
@@ -598,7 +598,7 @@ const EditorPage = () => {
             </div>
             <div className={styles.settingRow}>
               <label>Wall Thickness</label>
-              <input type="text" defaultValue="200 mm" />
+              <input type="text" defaultValue="100 mm" />
             </div>
             <button className={styles.deleteBtn}>Delete All Walls</button>
           </div>
