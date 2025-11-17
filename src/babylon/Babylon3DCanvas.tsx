@@ -515,12 +515,13 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           shadowGenerator.addShadowCaster(wallMesh);
         }
       } else {
-        // Has doors - split wall
+        // Has doors - split wall (NO EXTENSION - use original wall length)
         const openings: Array<{ start: number; end: number }> = [];
 
         wallDoors.forEach((door: any) => {
           const doorWidthM = door.width * MM_TO_METERS;
           const halfWidth = doorWidthM / 2;
+          // door.position is 0-1 normalized along ORIGINAL wall length
           const openingStart = Math.max(0, door.position - halfWidth / wallLengthM);
           const openingEnd = Math.min(1, door.position + halfWidth / wallLengthM);
           openings.push({ start: openingStart, end: openingEnd });
@@ -810,15 +811,20 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           character.rotation.y -= rotateSpeed;
         }
 
+        // Calculate forward direction based on character rotation
+        const forward = new Vector3(
+          Math.sin(character.rotation.y),
+          0,
+          Math.cos(character.rotation.y)
+        );
+
         // Forward/Backward (W/S keys)
         if (inputMap['w']) {
-          const forward = character.forward;
           character.position.addInPlace(forward.scale(moveSpeed));
           moved = true;
         }
         if (inputMap['s']) {
-          const backward = character.forward;
-          character.position.addInPlace(backward.scale(-moveSpeed));
+          character.position.addInPlace(forward.scale(-moveSpeed));
           moved = true;
         }
 
