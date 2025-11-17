@@ -13,6 +13,12 @@ const EditorPage = () => {
   const [activeTool, setActiveTool] = useState<ToolType>(ToolType.WALL);
   const [viewMode, setViewMode] = useState<'2D' | '3D'>('2D');
   const [floorplanData, setFloorplanData] = useState<any>(null);
+  const [sunDropdownOpen, setSunDropdownOpen] = useState(false);
+  const [sunSettings, setSunSettings] = useState({
+    intensity: 1.5,
+    position: { x: 20, y: 40, z: 20 },
+    time: 12, // 0-24 hours
+  });
 
   return (
     <div className={styles.editorContainer}>
@@ -34,11 +40,135 @@ const EditorPage = () => {
                 <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
               </svg>
             </button>
-            <button className={styles.topBtn} title="Sun">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2v2.95zm-7.45-3.91l1.41 1.41 1.79-1.8-1.41-1.41-1.79 1.8z"/>
-              </svg>
-            </button>
+            <div style={{ position: 'relative' }}>
+              <button
+                className={`${styles.topBtn} ${sunDropdownOpen ? styles.topBtnActive : ''}`}
+                title="Sun"
+                onClick={() => setSunDropdownOpen(!sunDropdownOpen)}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2v2.95zm-7.45-3.91l1.41 1.41 1.79-1.8-1.41-1.41-1.79 1.8z"/>
+                </svg>
+              </button>
+
+              {sunDropdownOpen && (
+                <div className={styles.sunDropdown}>
+                  <div className={styles.dropdownHeader}>
+                    <h4>햇빛 설정</h4>
+                    <button onClick={() => setSunDropdownOpen(false)}>×</button>
+                  </div>
+
+                  <div className={styles.dropdownContent}>
+                    {/* 햇빛 강도 */}
+                    <div className={styles.settingItem}>
+                      <label>햇빛 강도</label>
+                      <div className={styles.sliderContainer}>
+                        <input
+                          type="range"
+                          min="0"
+                          max="3"
+                          step="0.1"
+                          value={sunSettings.intensity}
+                          onChange={(e) => setSunSettings({...sunSettings, intensity: parseFloat(e.target.value)})}
+                          className={styles.slider}
+                        />
+                        <span className={styles.sliderValue}>{sunSettings.intensity.toFixed(1)}</span>
+                      </div>
+                    </div>
+
+                    {/* 태양 위치 X */}
+                    <div className={styles.settingItem}>
+                      <label>태양 위치 X</label>
+                      <div className={styles.sliderContainer}>
+                        <input
+                          type="range"
+                          min="-50"
+                          max="50"
+                          step="1"
+                          value={sunSettings.position.x}
+                          onChange={(e) => setSunSettings({
+                            ...sunSettings,
+                            position: {...sunSettings.position, x: parseFloat(e.target.value)}
+                          })}
+                          className={styles.slider}
+                        />
+                        <span className={styles.sliderValue}>{sunSettings.position.x}</span>
+                      </div>
+                    </div>
+
+                    {/* 태양 위치 Y (높이) */}
+                    <div className={styles.settingItem}>
+                      <label>태양 높이</label>
+                      <div className={styles.sliderContainer}>
+                        <input
+                          type="range"
+                          min="10"
+                          max="80"
+                          step="1"
+                          value={sunSettings.position.y}
+                          onChange={(e) => setSunSettings({
+                            ...sunSettings,
+                            position: {...sunSettings.position, y: parseFloat(e.target.value)}
+                          })}
+                          className={styles.slider}
+                        />
+                        <span className={styles.sliderValue}>{sunSettings.position.y}</span>
+                      </div>
+                    </div>
+
+                    {/* 태양 위치 Z */}
+                    <div className={styles.settingItem}>
+                      <label>태양 위치 Z</label>
+                      <div className={styles.sliderContainer}>
+                        <input
+                          type="range"
+                          min="-50"
+                          max="50"
+                          step="1"
+                          value={sunSettings.position.z}
+                          onChange={(e) => setSunSettings({
+                            ...sunSettings,
+                            position: {...sunSettings.position, z: parseFloat(e.target.value)}
+                          })}
+                          className={styles.slider}
+                        />
+                        <span className={styles.sliderValue}>{sunSettings.position.z}</span>
+                      </div>
+                    </div>
+
+                    {/* 시간 조절 */}
+                    <div className={styles.settingItem}>
+                      <label>시간 ({sunSettings.time}:00)</label>
+                      <div className={styles.sliderContainer}>
+                        <input
+                          type="range"
+                          min="0"
+                          max="23"
+                          step="1"
+                          value={sunSettings.time}
+                          onChange={(e) => {
+                            const time = parseInt(e.target.value);
+                            // Calculate sun position based on time
+                            const angle = (time - 12) * 15; // 15 degrees per hour
+                            const height = 40 + Math.sin((angle * Math.PI) / 180) * 30;
+                            setSunSettings({
+                              ...sunSettings,
+                              time,
+                              position: {
+                                ...sunSettings.position,
+                                y: height
+                              }
+                            });
+                          }}
+                          className={styles.slider}
+                        />
+                        <span className={styles.sliderValue}>{sunSettings.time}:00</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <button className={styles.topBtn} title="Ambient">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/>
