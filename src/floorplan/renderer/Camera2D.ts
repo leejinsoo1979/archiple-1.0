@@ -163,7 +163,7 @@ export class Camera2D {
    * Reset camera to default state
    */
   reset(): void {
-    this.viewport.scalePxPerMm = 0.1; // Default scale
+    this.viewport.scalePxPerMm = 0.12; // Default scale
     this.viewport.offsetX = 0;
     this.viewport.offsetY = 0;
   }

@@ -1,5 +1,6 @@
 import { BaseLayer } from './Layer';
 import type { Point } from '../../../core/types/Point';
+import type { Camera2D } from '../Camera2D';
 
 export interface PointLayerConfig {
   pointRadius?: number;
@@ -18,12 +19,14 @@ export interface PointLayerConfig {
  * - Selected points (highlighted)
  * - Hovered points (highlight)
  * - Snap indicators (magnet effect)
+ * - Points rendered in screen space for consistent size
  */
 export class PointLayer extends BaseLayer {
   private points: Point[] = [];
   private selectedPointIds: Set<string> = new Set();
   private hoveredPointId: string | null = null;
   private snapPoint: Point | null = null;
+  private camera: Camera2D | null = null;
 
   private config: Required<PointLayerConfig>;
 
@@ -31,13 +34,17 @@ export class PointLayer extends BaseLayer {
     super(3); // z-index: 3
 
     this.config = {
-      pointRadius: config?.pointRadius || 8,
+      pointRadius: config?.pointRadius || 8, // Screen space pixels
       pointColor: config?.pointColor || '#e74c3c',
       selectedColor: config?.selectedColor || '#3498db',
       hoveredColor: config?.hoveredColor || '#f39c12',
       snapIndicatorColor: config?.snapIndicatorColor || '#2ecc71',
-      snapIndicatorRadius: config?.snapIndicatorRadius || 15,
+      snapIndicatorRadius: config?.snapIndicatorRadius || 12, // Screen space pixels
     };
+  }
+
+  setCamera(camera: Camera2D): void {
+    this.camera = camera;
   }
 
   setPoints(points: Point[]): void {
@@ -57,16 +64,16 @@ export class PointLayer extends BaseLayer {
   }
 
   render(ctx: CanvasRenderingContext2D): void {
-    if (!this.visible) return;
+    if (!this.visible || !this.camera) return;
 
     this.applyOpacity(ctx);
 
-    // Render snap indicator first (background)
+    // Render snap indicator first (background) - in screen space
     if (this.snapPoint) {
       this.renderSnapIndicator(ctx, this.snapPoint);
     }
 
-    // Render all points
+    // Render all points in screen space
     this.points.forEach((point) => {
       const isSelected = this.selectedPointIds.has(point.id);
       const isHovered = point.id === this.hoveredPointId;
@@ -82,50 +89,73 @@ export class PointLayer extends BaseLayer {
     isSelected: boolean,
     isHovered: boolean
   ): void {
+    if (!this.camera) return;
+
+    // Convert world coordinates to screen coordinates
+    const screenPos = this.camera.worldToScreen(point.x, point.y);
+
     let color = this.config.pointColor;
     let radius = this.config.pointRadius;
 
     if (isHovered) {
       color = this.config.hoveredColor;
-      radius = this.config.pointRadius * 1.3;
+      radius = this.config.pointRadius * 1.5;
     } else if (isSelected) {
       color = this.config.selectedColor;
-      radius = this.config.pointRadius * 1.2;
+      radius = this.config.pointRadius * 1.3;
     }
+
+    ctx.save();
+    // Reset transform to screen space
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
 
     // Draw point
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+    ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
     ctx.fill();
 
     // Draw outline
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
     ctx.stroke();
+
+    ctx.restore();
   }
 
   private renderSnapIndicator(ctx: CanvasRenderingContext2D, point: Point): void {
+    if (!this.camera) return;
+
+    // Convert world coordinates to screen coordinates
+    const screenPos = this.camera.worldToScreen(point.x, point.y);
+
+    ctx.save();
+    // Reset transform to screen space
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
     // Outer ring (pulsing effect)
     ctx.strokeStyle = this.config.snapIndicatorColor;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(point.x, point.y, this.config.snapIndicatorRadius, 0, Math.PI * 2);
+    ctx.arc(screenPos.x, screenPos.y, this.config.snapIndicatorRadius, 0, Math.PI * 2);
     ctx.stroke();
 
     // Inner ring
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(point.x, point.y, this.config.snapIndicatorRadius * 0.7, 0, Math.PI * 2);
+    ctx.arc(screenPos.x, screenPos.y, this.config.snapIndicatorRadius * 0.6, 0, Math.PI * 2);
     ctx.stroke();
 
     // Crosshair
-    const crossSize = 4;
+    const crossSize = 6;
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(point.x - crossSize, point.y);
-    ctx.lineTo(point.x + crossSize, point.y);
-    ctx.moveTo(point.x, point.y - crossSize);
-    ctx.lineTo(point.x, point.y + crossSize);
+    ctx.moveTo(screenPos.x - crossSize, screenPos.y);
+    ctx.lineTo(screenPos.x + crossSize, screenPos.y);
+    ctx.moveTo(screenPos.x, screenPos.y - crossSize);
+    ctx.lineTo(screenPos.x, screenPos.y + crossSize);
     ctx.stroke();
+
+    ctx.restore();
   }
 }

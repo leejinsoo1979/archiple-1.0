@@ -59,6 +59,9 @@ export class RectangleTool extends BaseTool {
   handleMouseMove(position: Vector2, event: MouseEvent): void {
     if (!this.isDrawing || !this.startPoint) return;
 
+    // Update snap service with all existing points for axis alignment
+    this.snapService.setPoints(this.sceneManager.objectManager.getAllPoints());
+
     // Snap position
     let snapResult = this.snapService.snap(position);
     let snappedPos = snapResult.position;
@@ -122,11 +125,22 @@ export class RectangleTool extends BaseTool {
   }
 
   private createRectangle(start: Point, end: Vector2): void {
-    // Create 4 corner points
+    // Create 4 corner points - FORCE perfect rectangle
+    // Lock X coordinates to start.x and end.x
+    // Lock Y coordinates to start.y and end.y
     const topLeftTemp = start;
-    const topRightTemp = this.createPoint(new Vector2(end.x, start.y));
-    const bottomRightTemp = this.createPoint(end);
-    const bottomLeftTemp = this.createPoint(new Vector2(start.x, end.y));
+    const topRightTemp = this.createPoint(new Vector2(
+      this.snapToPrecision(end.x),
+      this.snapToPrecision(start.y)
+    ));
+    const bottomRightTemp = this.createPoint(new Vector2(
+      this.snapToPrecision(end.x),
+      this.snapToPrecision(end.y)
+    ));
+    const bottomLeftTemp = this.createPoint(new Vector2(
+      this.snapToPrecision(start.x),
+      this.snapToPrecision(end.y)
+    ));
 
     // Add all points and get actual IDs from blueprint
     const topLeft = this.sceneManager.objectManager.addPoint(topLeftTemp);
@@ -184,7 +198,7 @@ export class RectangleTool extends BaseTool {
   } | null {
     if (!this.startPoint) return null;
 
-    const threshold = 15; // Snap tolerance
+    const threshold = 150; // Match SnapService threshold for stable axis locking
     const allPoints = this.sceneManager.objectManager.getAllPoints();
 
     let snapX: number | null = null;
@@ -231,6 +245,11 @@ export class RectangleTool extends BaseTool {
     eventBus.emit(FloorEvents.RECTANGLE_PREVIEW_CLEARED, {});
     eventBus.emit(FloorEvents.VERTICAL_GUIDE_CLEARED, {});
     eventBus.emit(FloorEvents.HORIZONTAL_GUIDE_CLEARED, {});
+  }
+
+  private snapToPrecision(value: number): number {
+    const precision = 1; // 1mm precision
+    return Math.round(value / precision) * precision;
   }
 
   private createPoint(position: Vector2): Point {

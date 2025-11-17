@@ -37,11 +37,11 @@ export class GuideLayer extends BaseLayer {
     super(4); // z-index: 4 (above points but below selection)
 
     this.config = {
-      angleGuideColor: config?.angleGuideColor || 'rgba(155, 89, 182, 0.4)',
-      gridSnapColor: config?.gridSnapColor || 'rgba(46, 204, 113, 0.6)',
+      angleGuideColor: config?.angleGuideColor || 'rgba(52, 152, 219, 0.8)', // Brighter blue for visibility
+      gridSnapColor: config?.gridSnapColor || 'rgba(46, 204, 113, 0.8)',
       distanceLabelColor: config?.distanceLabelColor || '#34495e',
       showDistanceLabels: config?.showDistanceLabels ?? true,
-      orthogonalGuideColor: config?.orthogonalGuideColor || 'rgba(52, 152, 219, 0.6)', // 파란색
+      orthogonalGuideColor: config?.orthogonalGuideColor || 'rgba(231, 76, 60, 0.8)', // 빨간색 for better visibility
     };
   }
 
@@ -201,31 +201,34 @@ export class GuideLayer extends BaseLayer {
 
   private renderAngleGuide(ctx: CanvasRenderingContext2D, from: Point, angle: number): void {
     const radians = (angle * Math.PI) / 180;
-    const length = 2000; // Extend guide line across canvas
+    const length = 10000; // Extend guide line across entire canvas
 
     const endX = from.x + Math.cos(radians) * length;
     const endY = from.y + Math.sin(radians) * length;
+    const startX = from.x - Math.cos(radians) * length;
+    const startY = from.y - Math.sin(radians) * length;
 
     ctx.save();
 
     ctx.strokeStyle = this.config.angleGuideColor;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([8, 4]);
+    ctx.lineWidth = 2; // Thicker line for better visibility
+    ctx.setLineDash([15, 8]); // Longer dashes
 
     ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
+    ctx.moveTo(startX, startY);
     ctx.lineTo(endX, endY);
     ctx.stroke();
 
     // Draw angle label
-    const labelX = from.x + Math.cos(radians) * 50;
-    const labelY = from.y + Math.sin(radians) * 50;
+    const labelX = from.x + Math.cos(radians) * 100;
+    const labelY = from.y + Math.sin(radians) * 100;
 
     ctx.fillStyle = this.config.angleGuideColor;
-    ctx.font = '12px system-ui';
+    ctx.font = 'bold 14px system-ui';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`${angle}°`, labelX, labelY);
+    const label = angle === 0 ? '수평 (0°)' : angle === 90 ? '수직 (90°)' : `${angle}°`;
+    ctx.fillText(label, labelX, labelY);
 
     ctx.restore();
   }

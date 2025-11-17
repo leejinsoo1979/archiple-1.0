@@ -230,13 +230,13 @@ export function scaleVector(v: PointMM, scale: number): PointMM {
  *
  * @param canvasWidth - Canvas 너비 (px)
  * @param canvasHeight - Canvas 높이 (px)
- * @param initialScale - 초기 스케일 (px/mm) - 기본값 0.1
+ * @param initialScale - 초기 스케일 (px/mm) - 기본값 0.12
  * @returns 뷰포트 상태
  */
 export function createViewport(
   canvasWidth: number,
   canvasHeight: number,
-  initialScale: number = 0.1
+  initialScale: number = 0.12
 ): ViewportState {
   return {
     scalePxPerMm: initialScale,
@@ -312,7 +312,7 @@ export function applyPan(
 export function resetViewport(viewport: ViewportState): ViewportState {
   return {
     ...viewport,
-    scalePxPerMm: 0.1,
+    scalePxPerMm: 0.12,
     offsetX: 0,
     offsetY: 0,
   };

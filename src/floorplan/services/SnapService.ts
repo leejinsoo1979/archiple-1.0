@@ -48,7 +48,7 @@ export class SnapService {
       orthogonalSnapEnabled: false, // DISABLED by default - enable with Shift key
       perpendicularSnapEnabled: false, // DISABLED - free drawing
       midpointSnapEnabled: false, // DISABLED - free drawing
-      pointSnapThreshold: 150, // 150mm default (15px at scale 0.1)
+      pointSnapThreshold: 150, // 150mm = 15cm snap range (zoom independent)
       gridSize: 100, // 100mm grid display only
       angleSnapDegrees: [0, 45, 90, 135, 180, 225, 270, 315], // 8-direction angle snap
       orthogonalAngles: [0, 90, 180, 270], // Orthogonal angles for Shift key
@@ -94,32 +94,45 @@ export class SnapService {
       return { position, snappedTo: 'none' };
     }
 
-    // 1. Point snap (highest priority)
+    // 1. Point snap (highest priority - snap to existing points)
     if (this.config.pointSnapEnabled) {
       const pointSnap = this.snapToPoint(position);
-      if (pointSnap) return pointSnap;
+      if (pointSnap) {
+        console.log('[SnapService] Point snap triggered');
+        return pointSnap;
+      }
     }
 
-    // 2. Orthogonal snap (when Shift key pressed - takes priority over everything)
+    // 2. Orthogonal snap (when Shift key pressed)
     if (this.config.orthogonalSnapEnabled && this.lastPoint) {
       const orthogonalSnap = this.snapToOrthogonal(position, this.lastPoint);
-      if (orthogonalSnap) return orthogonalSnap;
+      if (orthogonalSnap) {
+        console.log('[SnapService] Orthogonal snap triggered');
+        return orthogonalSnap;
+      }
     }
 
-    // 3. Axis alignment snap (ONLY when creating perfect 90° angles)
+    // 3. Axis alignment snap - SECOND PRIORITY (before angle snap)
+    // Locks axis when aligned with existing points
     const axisSnap = this.snapToAxisAlignment(position);
-    if (axisSnap) return axisSnap;
+    if (axisSnap) {
+      console.log('[SnapService] Axis snap triggered');
+      return axisSnap;
+    }
 
-    // 4. Midpoint snap
+    // 4. Angle snap (when drawing from a point)
+    if (this.config.angleSnapEnabled && this.lastPoint && !this.config.orthogonalSnapEnabled) {
+      const angleSnap = this.snapToAngle(position, this.lastPoint);
+      if (angleSnap) {
+        console.log('[SnapService] Angle snap triggered');
+        return angleSnap;
+      }
+    }
+
+    // 5. Midpoint snap
     if (this.config.midpointSnapEnabled) {
       const midpointSnap = this.snapToMidpoint(position);
       if (midpointSnap) return midpointSnap;
-    }
-
-    // 5. Angle snap (when drawing from a point)
-    if (this.config.angleSnapEnabled && this.lastPoint && !this.config.orthogonalSnapEnabled) {
-      const angleSnap = this.snapToAngle(position, this.lastPoint);
-      if (angleSnap) return angleSnap;
     }
 
     // 6. Grid snap (lowest priority)
@@ -128,6 +141,7 @@ export class SnapService {
     }
 
     // No snap - return position with 1mm precision
+    console.log('[SnapService] No snap - free position');
     return {
       position: new Vector2(
         this.snapToPrecision(position.x),
@@ -139,10 +153,11 @@ export class SnapService {
 
   /**
    * Snap to nearest point
+   * Use small threshold to not interfere with axis alignment
    */
   private snapToPoint(position: Vector2): SnapResult | null {
     let nearestPoint: Point | null = null;
-    let minDistance = this.config.pointSnapThreshold * 1.5; // Increase snap range for easier connection
+    let minDistance = 30; // 30mm - very tight snap range to not interfere with axis snap
 
     for (const point of this.points) {
       const pointVec = new Vector2(point.x, point.y);
@@ -279,79 +294,63 @@ export class SnapService {
 
   /**
    * Snap to axis alignment with existing points
-   * ONLY snaps when forming perfect right angles (90°)
-   * Requires lastPoint to determine if alignment creates perpendicular angle
+   * When X or Y axis aligns with existing point, LOCK that axis
    */
   private snapToAxisAlignment(position: Vector2): SnapResult | null {
-    if (!this.lastPoint) return null;
+    if (this.points.length === 0) return null;
 
-    const threshold = 15; // Snap tolerance in pixels
-    const dx = position.x - this.lastPoint.x;
-    const dy = position.y - this.lastPoint.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    const threshold = 150; // Increased threshold for easier snapping (150mm)
 
-    if (distance < 5) return null; // Too close
+    // Find closest point to align with vertically or horizontally
+    let snapPointVertical: Point | null = null;
+    let snapPointHorizontal: Point | null = null;
+    let minDistVertical = threshold;
+    let minDistHorizontal = threshold;
 
-    // Calculate current angle from lastPoint
-    const currentAngle = Math.atan2(dy, dx) * 180 / Math.PI;
-    const normalizedAngle = ((currentAngle % 360) + 360) % 360;
+    for (const point of this.points) {
+      // Vertical alignment (matching X coordinate) - creates vertical line
+      const distX = Math.abs(position.x - point.x);
+      if (distX < minDistVertical) {
+        minDistVertical = distX;
+        snapPointVertical = point;
+      }
 
-    // Check if angle is close to 0°, 90°, 180°, or 270° (within 15 degrees)
-    const angles = [0, 90, 180, 270];
-    let nearestAngle: number | null = null;
-    let minAngleDiff = 15; // Maximum 15 degree tolerance
-
-    for (const angle of angles) {
-      const diff = Math.abs(this.angleDifference(normalizedAngle, angle));
-      if (diff < minAngleDiff) {
-        minAngleDiff = diff;
-        nearestAngle = angle;
+      // Horizontal alignment (matching Y coordinate) - creates horizontal line
+      const distY = Math.abs(position.y - point.y);
+      if (distY < minDistHorizontal) {
+        minDistHorizontal = distY;
+        snapPointHorizontal = point;
       }
     }
 
-    // Only snap if close to a right angle
-    if (nearestAngle !== null) {
-      // Find closest point to align with
-      let snapPoint: Point | null = null;
-      let minDist = threshold;
+    // Prioritize the closer alignment
+    if (snapPointVertical || snapPointHorizontal) {
+      let snappedX = this.snapToPrecision(position.x);
+      let snappedY = this.snapToPrecision(position.y);
+      let guideAngle: number | null = null;
+      let guideFrom: Point | null = null;
 
-      for (const point of this.points) {
-        // Skip lastPoint
-        if (this.lastPoint.x === point.x && this.lastPoint.y === point.y) continue;
-
-        let dist: number;
-        if (nearestAngle === 0 || nearestAngle === 180) {
-          // Horizontal - find points with matching Y
-          dist = Math.abs(position.y - point.y);
-        } else {
-          // Vertical - find points with matching X
-          dist = Math.abs(position.x - point.x);
-        }
-
-        if (dist < minDist) {
-          minDist = dist;
-          snapPoint = point;
-        }
+      if (snapPointVertical && (!snapPointHorizontal || minDistVertical <= minDistHorizontal)) {
+        // Vertical alignment - LOCK X coordinate to create vertical line
+        snappedX = this.snapToPrecision(snapPointVertical.x);
+        snappedY = this.snapToPrecision(position.y); // Y is free to move
+        guideAngle = 90; // Vertical guide
+        guideFrom = snapPointVertical;
+      } else if (snapPointHorizontal) {
+        // Horizontal alignment - LOCK Y coordinate to create horizontal line
+        snappedX = this.snapToPrecision(position.x); // X is free to move
+        snappedY = this.snapToPrecision(snapPointHorizontal.y);
+        guideAngle = 0; // Horizontal guide
+        guideFrom = snapPointHorizontal;
       }
 
-      // Apply snap
-      let snappedX: number, snappedY: number;
-
-      if (nearestAngle === 0 || nearestAngle === 180) {
-        // Horizontal snap
-        snappedX = this.snapToPrecision(position.x);
-        snappedY = this.snapToPrecision(snapPoint ? snapPoint.y : this.lastPoint.y);
-      } else {
-        // Vertical snap
-        snappedX = this.snapToPrecision(snapPoint ? snapPoint.x : this.lastPoint.x);
-        snappedY = this.snapToPrecision(position.y);
+      // Emit vertical or horizontal guide line
+      if (guideFrom && guideAngle !== null) {
+        eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, {
+          from: { id: 'axis-alignment-guide', x: guideFrom.x, y: guideFrom.y },
+          angle: guideAngle,
+        });
       }
-
-      // Emit guide
-      eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, {
-        from: { id: 'right-angle-guide', x: this.lastPoint.x, y: this.lastPoint.y },
-        angle: nearestAngle,
-      });
 
       return {
         position: new Vector2(snappedX, snappedY),

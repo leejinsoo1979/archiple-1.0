@@ -280,8 +280,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
     floorMaterial.metallic = 0.0;
     floorMaterial.environmentIntensity = 0.6;
 
-    // Physical texture size: 200mm x 200mm wood plank
-    const TEXTURE_PHYSICAL_SIZE = 0.2; // 200mm = 0.2m
+    // Physical texture size: 100mm x 100mm to match 2D grid
+    const TEXTURE_PHYSICAL_SIZE = 0.1; // 100mm = 0.1m (matches 2D minor grid)
 
     // Load real wood textures
     const diffuseTexture = new Texture('/texture/floor/f2 diffuse.JPG', scene);
@@ -430,9 +430,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
           // Normal pointing UP (+Y)
           normals.push(0, 1, 0);
 
-          // UV coordinates
-          const u = ((p.x - minX) / width) * width;
-          const v = ((p.z - minZ) / depth) * depth;
+          // UV coordinates based on physical size (2000mm = 2.0m per texture tile)
+          const u = (p.x - minX) / 2.0; // Every 2.0m = 1 UV unit
+          const v = (p.z - minZ) / 2.0; // Every 2.0m = 1 UV unit
           uvs.push(u, v);
         });
 
@@ -448,24 +448,19 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
         // Apply material with correct texture tiling
         const roomFloorMat = floorMaterial.clone(`floorMat_room_${roomIndex}`);
 
-        // Texture represents 200mm x 200mm wood plank
-        const TEXTURE_PHYSICAL_SIZE = 0.2; // 200mm = 0.2m
-
-        // Calculate how many times to repeat texture based on room size
-        const uRepeat = width / TEXTURE_PHYSICAL_SIZE;
-        const vRepeat = depth / TEXTURE_PHYSICAL_SIZE;
-
+        // UV coordinates already calculated based on 0.1m (100mm) physical size
+        // Set scale to 1.0 since UV already contains the correct tiling
         if (roomFloorMat.albedoTexture && roomFloorMat.albedoTexture instanceof Texture) {
-          (roomFloorMat.albedoTexture as Texture).uScale = uRepeat;
-          (roomFloorMat.albedoTexture as Texture).vScale = vRepeat;
+          (roomFloorMat.albedoTexture as Texture).uScale = 1.0;
+          (roomFloorMat.albedoTexture as Texture).vScale = 1.0;
         }
         if (roomFloorMat.metallicTexture && roomFloorMat.metallicTexture instanceof Texture) {
-          (roomFloorMat.metallicTexture as Texture).uScale = uRepeat;
-          (roomFloorMat.metallicTexture as Texture).vScale = vRepeat;
+          (roomFloorMat.metallicTexture as Texture).uScale = 1.0;
+          (roomFloorMat.metallicTexture as Texture).vScale = 1.0;
         }
         if (roomFloorMat.bumpTexture && roomFloorMat.bumpTexture instanceof Texture) {
-          (roomFloorMat.bumpTexture as Texture).uScale = uRepeat;
-          (roomFloorMat.bumpTexture as Texture).vScale = vRepeat;
+          (roomFloorMat.bumpTexture as Texture).uScale = 1.0;
+          (roomFloorMat.bumpTexture as Texture).vScale = 1.0;
         }
 
         floor.material = roomFloorMat;
