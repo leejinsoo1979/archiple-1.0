@@ -33,8 +33,8 @@ export class Canvas2DRenderer {
     }
     this.ctx = ctx;
 
-    // Initialize camera with scalePxPerMm = 0.15 (1mm = 0.15px, so 5000mm = 750px)
-    this.camera = new Camera2D(canvas.width, canvas.height, 0.15);
+    // Initialize camera with scalePxPerMm = 0.1 (1mm = 0.1px, so 10000mm = 1000px)
+    this.camera = new Camera2D(canvas.width, canvas.height, 0.1);
 
     // Enable smooth rendering
     this.ctx.imageSmoothingEnabled = true;

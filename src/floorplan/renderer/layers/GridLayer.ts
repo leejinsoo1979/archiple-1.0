@@ -69,14 +69,14 @@ export class GridLayer extends BaseLayer {
     ctx.fillRect(viewLeft - margin, viewTop - margin, (viewRight - viewLeft) + margin * 2, (viewBottom - viewTop) + margin * 2);
 
     // Calculate grid opacity based on zoom level
-    // Zoom < 0.1: opacity 0.4
-    // Zoom 0.1-1.0: fade from 0.4 to 1.0
+    // Zoom < 0.05: opacity 0.5
+    // Zoom 0.05-1.0: fade from 0.5 to 1.0
     // Zoom >= 1.0: opacity 1.0
     let gridOpacity = 1.0;
-    if (zoom < 0.1) {
-      gridOpacity = 0.4;
+    if (zoom < 0.05) {
+      gridOpacity = 0.5;
     } else if (zoom < 1.0) {
-      gridOpacity = 0.4 + (zoom - 0.1) / 0.9 * 0.6; // Linear fade from 0.4 to 1.0
+      gridOpacity = 0.5 + (zoom - 0.05) / 0.95 * 0.5; // Linear fade from 0.5 to 1.0
     }
 
     // Draw minor grid with fade effect
