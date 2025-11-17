@@ -184,11 +184,31 @@ const EditorPage = () => {
                   <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
                 </svg>
               </button>
-              <button className={styles.playBtn}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: '6px' }}>
-                  <path d="M8 5v14l11-7z"/>
-                </svg>
-                Play
+              <button
+                className={`${styles.playBtn} ${playMode ? styles.playBtnActive : ''}`}
+                onClick={() => {
+                  if (!playMode) {
+                    setViewMode('3D'); // Switch to 3D view
+                  }
+                  setPlayMode(!playMode);
+                }}
+                title={playMode ? 'Exit Play Mode' : 'Enter Play Mode (WASD)'}
+              >
+                {playMode ? (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: '6px' }}>
+                      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                    </svg>
+                    Stop
+                  </>
+                ) : (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: '6px' }}>
+                      <path d="M8 5v14l11-7z"/>
+                    </svg>
+                    Play
+                  </>
+                )}
               </button>
             </div>
           </div>
