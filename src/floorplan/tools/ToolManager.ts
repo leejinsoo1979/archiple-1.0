@@ -75,7 +75,10 @@ export class ToolManager {
    */
   handleMouseDown(position: Vector2, event: MouseEvent): void {
     if (this.activeTool) {
+      console.log('[ToolManager] Routing mouse down to active tool:', this.activeTool.name);
       this.activeTool.handleMouseDown(position, event);
+    } else {
+      console.warn('[ToolManager] No active tool to route mouse down to!');
     }
   }
 
@@ -93,6 +96,7 @@ export class ToolManager {
    */
   handleMouseUp(position: Vector2, event: MouseEvent): void {
     if (this.activeTool) {
+      console.log('[ToolManager] Routing mouse up to active tool:', this.activeTool.name);
       this.activeTool.handleMouseUp(position, event);
     }
   }
