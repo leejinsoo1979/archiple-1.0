@@ -26,10 +26,11 @@ interface Babylon3DCanvasProps {
   };
 }
 
-// UNIFIED SCALE: 1 Babylon unit = 1mm (완전 통일)
-const PIXELS_TO_UNITS = 1; // 1 pixel = 1mm = 1 Babylon unit
-const DEFAULT_CAMERA_RADIUS = 8000; // 8000mm = 8m viewing distance
-const DEFAULT_CAMERA_HEIGHT = 1700; // 1700mm = 1.7m eye height
+// 2D 좌표(mm)를 Babylon 미터 단위로 변환
+const PIXELS_TO_METERS = 0.001; // 1 pixel (1mm) = 0.001m
+const MM_TO_METERS = 0.001; // 1mm = 0.001m
+const DEFAULT_CAMERA_RADIUS = 8; // 8m orbit distance
+const DEFAULT_CAMERA_HEIGHT = 1.7; // 1.7m eye height
 
 interface PlanMetrics {
   centerX: number;
@@ -48,8 +49,8 @@ const computePlanMetrics = (points?: any[] | null): PlanMetrics | null => {
   let maxZ = -Infinity;
 
   points.forEach((point) => {
-    const worldX = point.x * PIXELS_TO_UNITS; // 1px = 1mm
-    const worldZ = point.y * PIXELS_TO_UNITS;
+    const worldX = point.x * PIXELS_TO_METERS;
+    const worldZ = point.y * PIXELS_TO_METERS;
 
     if (worldX < minX) minX = worldX;
     if (worldX > maxX) maxX = worldX;
@@ -61,11 +62,11 @@ const computePlanMetrics = (points?: any[] | null): PlanMetrics | null => {
     return null;
   }
 
-  const extentX = Math.max(maxX - minX, 100); // min 100mm
-  const extentZ = Math.max(maxZ - minZ, 100);
+  const extentX = Math.max(maxX - minX, 0.1); // min 0.1m
+  const extentZ = Math.max(maxZ - minZ, 0.1);
   const centerX = (minX + maxX) / 2;
   const centerZ = (minZ + maxZ) / 2;
-  const boundingRadius = Math.max(extentX, extentZ) * 0.75 + 2000; // +2000mm margin
+  const boundingRadius = Math.max(extentX, extentZ) * 0.75 + 2; // +2m margin
 
   return {
     centerX,
@@ -225,11 +226,11 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
     if (planMetrics && arcCameraRef.current) {
       const arcCamera = arcCameraRef.current;
       const maxWallHeight = walls.reduce((max, wall) => Math.max(max, wall.height || 2800), 2800);
-      const targetY = Math.max(maxWallHeight / 2, DEFAULT_CAMERA_HEIGHT); // All in mm
-      arcCamera.setTarget(new Vector3(centerX, targetY, centerZ));
+      const targetY = Math.max((maxWallHeight * MM_TO_METERS) / 2, DEFAULT_CAMERA_HEIGHT);
+      arcCamera.setTarget(new Vector3(0, targetY, 0));
 
-      const minRadius = Math.max(500, boundingRadius * 0.6);
-      const maxRadius = Math.max(minRadius * 5, boundingRadius * 2.5);
+      const minRadius = Math.max(0.5, boundingRadius * 0.6);
+      const maxRadius = Math.max(minRadius * 4, boundingRadius * 2.5);
       arcCamera.lowerRadiusLimit = minRadius;
       arcCamera.upperRadiusLimit = maxRadius;
       arcCamera.radius = Math.min(Math.max(arcCamera.radius, minRadius), maxRadius);
@@ -266,10 +267,10 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
 
       if (startPoint && endPoint) {
         // Convert 2D coordinates to 3D (1px = 1mm = 1 Babylon unit)
-        const x1 = startPoint.x * PIXELS_TO_UNITS - centerX;
-        const z1 = startPoint.y * PIXELS_TO_UNITS - centerZ;
-        const x2 = endPoint.x * PIXELS_TO_UNITS - centerX;
-        const z2 = endPoint.y * PIXELS_TO_UNITS - centerZ;
+        const x1 = startPoint.x * PIXELS_TO_METERS - centerX;
+        const z1 = startPoint.y * PIXELS_TO_METERS - centerZ;
+        const x2 = endPoint.x * PIXELS_TO_METERS - centerX;
+        const z2 = endPoint.y * PIXELS_TO_METERS - centerZ;
 
         // Calculate wall dimensions (all in mm)
         const length = Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
@@ -277,9 +278,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
         const midZ = (z1 + z2) / 2;
         const angle = Math.atan2(z2 - z1, x2 - x1);
 
-        // Heights in mm (no conversion needed!)
-        const wallHeight = wall.height || 2800; // mm
-        const thickness = wall.thickness || 200; // mm
+        const wallHeight = (wall.height || 2800) * MM_TO_METERS;
+        const thickness = (wall.thickness || 200) * MM_TO_METERS;
 
         console.log(`[Babylon3DCanvas] Wall ${index}:`, {
           start: { x: startPoint.x, y: startPoint.y },
@@ -292,14 +292,14 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
           thicknessMm: wall.thickness || 200,
         });
 
-        // Create wall mesh (all dimensions in mm)
+        // Create wall mesh (meters)
         const wallMesh = MeshBuilder.CreateBox(
           `wall_${index}`,
           { width: length, height: wallHeight, depth: thickness },
           scene
         );
 
-        // Position and rotate (all in mm)
+        // Position and rotate
         wallMesh.position.set(midX, wallHeight / 2, midZ);
         wallMesh.rotation.y = angle;
         wallMesh.material = wallMaterial;
@@ -353,14 +353,14 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
         });
       }
 
-      const thickness = maxThickness; // mm
-      const height = maxHeight; // mm
+      const thickness = maxThickness * MM_TO_METERS;
+      const height = maxHeight * MM_TO_METERS;
 
       // Convert point position to 3D (1px = 1mm)
-      const x = point.x * PIXELS_TO_UNITS - centerX;
-      const z = point.y * PIXELS_TO_UNITS - centerZ;
+      const x = point.x * PIXELS_TO_METERS - centerX;
+      const z = point.y * PIXELS_TO_METERS - centerZ;
 
-      // Create a box at the corner (all dimensions in mm)
+      // Create a box at the corner (meters)
       const cornerJoint = MeshBuilder.CreateBox(
         `corner_${point.id}`,
         { width: thickness, height: height, depth: thickness },
@@ -390,8 +390,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
           const p = pointMap.get(pid);
           if (!p) return null;
           return {
-            x: p.x * PIXELS_TO_UNITS - centerX, // 1px = 1mm
-            z: p.y * PIXELS_TO_UNITS - centerZ,
+            x: p.x * PIXELS_TO_METERS - centerX,
+            z: p.y * PIXELS_TO_METERS - centerZ,
           };
         }).filter((p: any) => p !== null);
 

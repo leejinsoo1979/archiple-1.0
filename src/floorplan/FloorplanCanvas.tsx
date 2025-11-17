@@ -68,7 +68,7 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
 
     // 1. Initialize SceneManager
     // Units: mm (millimeters)
-    // Conversion: 1 pixel = 10mm for display
+    // Scale: 1 pixel = 1mm (Blueprint.js 방식, 20배 더 정밀)
     const config: EditorConfig = {
       gridSize: 20,
       snapEnabled: true,
