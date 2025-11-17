@@ -280,17 +280,20 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
     floorMaterial.metallic = 0.0;
     floorMaterial.environmentIntensity = 0.6;
 
+    // Physical texture size: 200mm x 200mm wood plank
+    const TEXTURE_PHYSICAL_SIZE = 0.2; // 200mm = 0.2m
+
     // Load real wood textures
     const diffuseTexture = new Texture('/texture/floor/f2 diffuse.JPG', scene);
-    diffuseTexture.uScale = 0.01; // Scale to meters
-    diffuseTexture.vScale = 0.01;
+    diffuseTexture.uScale = 1.0; // Will be set per-room based on size
+    diffuseTexture.vScale = 1.0;
     diffuseTexture.wrapU = Texture.WRAP_ADDRESSMODE;
     diffuseTexture.wrapV = Texture.WRAP_ADDRESSMODE;
     floorMaterial.albedoTexture = diffuseTexture;
 
     const glossTexture = new Texture('/texture/floor/f2 gloss.png', scene);
-    glossTexture.uScale = 0.01;
-    glossTexture.vScale = 0.01;
+    glossTexture.uScale = 1.0;
+    glossTexture.vScale = 1.0;
     glossTexture.wrapU = Texture.WRAP_ADDRESSMODE;
     glossTexture.wrapV = Texture.WRAP_ADDRESSMODE;
     floorMaterial.metallicTexture = glossTexture;
@@ -299,8 +302,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
     floorMaterial.useRoughnessFromMetallicTextureAlpha = true;
 
     const normalTexture = new Texture('/texture/floor/f2 normal.png', scene);
-    normalTexture.uScale = 0.01;
-    normalTexture.vScale = 0.01;
+    normalTexture.uScale = 1.0;
+    normalTexture.vScale = 1.0;
     normalTexture.wrapU = Texture.WRAP_ADDRESSMODE;
     normalTexture.wrapV = Texture.WRAP_ADDRESSMODE;
     floorMaterial.bumpTexture = normalTexture;
@@ -442,12 +445,29 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
         vertexData.indices = Array.from(triangleIndices);
         vertexData.applyToMesh(floor);
 
-        // Apply material
+        // Apply material with correct texture tiling
         const roomFloorMat = floorMaterial.clone(`floorMat_room_${roomIndex}`);
+
+        // Texture represents 200mm x 200mm wood plank
+        const TEXTURE_PHYSICAL_SIZE = 0.2; // 200mm = 0.2m
+
+        // Calculate how many times to repeat texture based on room size
+        const uRepeat = width / TEXTURE_PHYSICAL_SIZE;
+        const vRepeat = depth / TEXTURE_PHYSICAL_SIZE;
+
         if (roomFloorMat.albedoTexture && roomFloorMat.albedoTexture instanceof Texture) {
-          (roomFloorMat.albedoTexture as Texture).uScale = width;
-          (roomFloorMat.albedoTexture as Texture).vScale = depth;
+          (roomFloorMat.albedoTexture as Texture).uScale = uRepeat;
+          (roomFloorMat.albedoTexture as Texture).vScale = vRepeat;
         }
+        if (roomFloorMat.metallicTexture && roomFloorMat.metallicTexture instanceof Texture) {
+          (roomFloorMat.metallicTexture as Texture).uScale = uRepeat;
+          (roomFloorMat.metallicTexture as Texture).vScale = vRepeat;
+        }
+        if (roomFloorMat.bumpTexture && roomFloorMat.bumpTexture instanceof Texture) {
+          (roomFloorMat.bumpTexture as Texture).uScale = uRepeat;
+          (roomFloorMat.bumpTexture as Texture).vScale = vRepeat;
+        }
+
         floor.material = roomFloorMat;
         floor.receiveShadows = true;
 
