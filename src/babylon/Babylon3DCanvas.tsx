@@ -764,8 +764,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     if (!scene || !canvas || !arcCamera || !thirdPersonCamera || !character) return;
 
     if (playMode) {
-      // Switch to 3rd person camera
-      console.log('[Babylon3DCanvas] Switching to 3rd Person camera (Play Mode)');
+      // Switch to fixed camera (character moves, camera stays)
+      console.log('[Babylon3DCanvas] Switching to fixed camera (Play Mode)');
 
       // Calculate room center from floorplan data
       const planMetrics = computePlanMetrics(floorplanData?.points);
@@ -777,16 +777,23 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           planMetrics.centerZ
         );
         character.rotation.y = 0; // Face forward
+
+        // Position fixed camera to view the room
+        arcCamera.setPosition(new Vector3(
+          planMetrics.centerX + 5, // 5m to the side
+          3, // 3m height
+          planMetrics.centerZ - 5 // 5m back
+        ));
+        arcCamera.setTarget(new Vector3(
+          planMetrics.centerX,
+          1, // Look at character torso
+          planMetrics.centerZ
+        ));
       }
 
-      // Setup camera to follow character
-      thirdPersonCamera.lockedTarget = character;
-      thirdPersonCamera.radius = 3; // 3m behind character
-      thirdPersonCamera.heightOffset = 1.5; // Look at upper body
-
+      // Disable camera controls (fixed position)
       arcCamera.detachControl();
-      thirdPersonCamera.attachControl(canvas, true);
-      scene.activeCamera = thirdPersonCamera;
+      scene.activeCamera = arcCamera;
 
       // Character movement controls
       const inputMap: { [key: string]: boolean } = {};
@@ -874,7 +881,6 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     } else {
       // Switch back to ArcRotate camera
       console.log('[Babylon3DCanvas] Switching to ArcRotate camera (3D View)');
-      thirdPersonCamera.detachControl();
       arcCamera.attachControl(canvas, true);
       scene.activeCamera = arcCamera;
       scene.onBeforeRenderObservable.clear();
