@@ -166,7 +166,7 @@ export class WallTool extends BaseTool {
 
   /**
    * Confirm wall and continue chain
-   * Rooms are detected automatically when loops are closed
+   * Rooms are detected when loops are closed (either directly or through existing walls)
    */
   private confirmWall(position: Vector2, existingPoint?: Point): void {
     if (!this.startPoint) return;
@@ -183,10 +183,6 @@ export class WallTool extends BaseTool {
       // NOTE: POINT_ADDED event is emitted by BlueprintObjectManager, no need to emit here
     }
 
-    // Check if closing loop (end point === first point in chain)
-    const isClosingLoop =
-      this.wallChain.length > 2 && endPoint.id === this.wallChain[0].id;
-
     // Create wall
     const wall = this.createWall(this.startPoint, endPoint);
     this.sceneManager.objectManager.addWall(wall);
@@ -196,10 +192,45 @@ export class WallTool extends BaseTool {
     eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
     this.currentPreviewEnd = null;
 
+    // Check if closing loop - ENHANCED LOGIC
+    let isClosingLoop = false;
+    let loopPoints: Point[] = [];
+
+    if (this.wallChain.length > 2) {
+      const firstPoint = this.wallChain[0];
+
+      // Direct closure - clicking on the first point
+      if (endPoint.id === firstPoint.id) {
+        isClosingLoop = true;
+        loopPoints = [...this.wallChain];
+        console.log('[WallTool] Direct loop closure detected');
+      }
+      // Smart closure - connecting to any existing point that has a path back to first point
+      else if (existingPoint && existingPoint.connectedWalls && existingPoint.connectedWalls.length > 0) {
+        const pathToStart = this.findPathBetweenPoints(endPoint, firstPoint);
+        if (pathToStart && pathToStart.length > 0) {
+          isClosingLoop = true;
+          // Combine wallChain with the path back to start (excluding duplicate endPoint)
+          loopPoints = [...this.wallChain, ...pathToStart.slice(1)];
+          console.log('[WallTool] Smart loop closure detected through existing walls');
+        }
+      }
+    }
+
     if (isClosingLoop) {
-      console.log('[WallTool] Loop closed!');
-      this.finishChain();
-      this.resetState();
+      console.log('[WallTool] Loop closed with', loopPoints.length, 'points');
+
+      // Reset state
+      this.wallChain = [];
+      this.isDrawing = false;
+      this.startPoint = null;
+      this.snapService.setLastPoint(null);
+      this.snapService.updateConfig({ orthogonalSnapEnabled: false });
+
+      // Emit potential room with all points in the closed loop
+      eventBus.emit(FloorEvents.POTENTIAL_ROOM_DETECTED, {
+        points: loopPoints,
+      });
       return;
     }
 
@@ -210,10 +241,59 @@ export class WallTool extends BaseTool {
     // Update snap service
     this.snapService.setLastPoint(position);
     this.snapService.setPoints(this.sceneManager.objectManager.getAllPoints());
+  }
 
-    // NOTE: Room detection happens automatically via WALL_ADDED event
-    // User must manually close the loop by clicking on the first point
-    // No auto-completion - let user draw freely
+  /**
+   * Find path between two points through existing walls (BFS)
+   * Returns array of points forming the path, or null if no path exists
+   */
+  private findPathBetweenPoints(from: Point, to: Point): Point[] | null {
+    if (from.id === to.id) return [from];
+
+    const visited = new Set<string>();
+    const queue: { point: Point; path: Point[] }[] = [];
+
+    // Start BFS from 'from' point
+    queue.push({ point: from, path: [from] });
+    visited.add(from.id);
+
+    while (queue.length > 0) {
+      const { point, path } = queue.shift()!;
+
+      // Get all walls connected to this point
+      const connectedWalls = point.connectedWalls || [];
+
+      for (const wallId of connectedWalls) {
+        // Get the wall object
+        const walls = this.sceneManager.objectManager.getAllWalls();
+        const wall = walls.find((w) => w.id === wallId);
+        if (!wall) continue;
+
+        // Find the other point in this wall
+        const otherPointId =
+          wall.startPointId === point.id ? wall.endPointId : wall.startPointId;
+
+        // Skip if already visited
+        if (visited.has(otherPointId)) continue;
+
+        // Get the other point
+        const allPoints = this.sceneManager.objectManager.getAllPoints();
+        const otherPoint = allPoints.find((p) => p.id === otherPointId);
+        if (!otherPoint) continue;
+
+        // Check if we reached the target
+        if (otherPoint.id === to.id) {
+          return [...path, otherPoint];
+        }
+
+        // Add to queue for further exploration
+        visited.add(otherPoint.id);
+        queue.push({ point: otherPoint, path: [...path, otherPoint] });
+      }
+    }
+
+    // No path found
+    return null;
   }
 
   /**
