@@ -295,30 +295,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       console.warn('[Babylon3DCanvas] Grid texture failed, using solid color');
     }
 
-    // Create walls from 2D data using manual miter joint calculation
-    // Units: wall.thickness and wall.height are in mm
-
-    // Calculate miter joints for each point
-    const pointAngles = new Map<string, { incoming: number[]; outgoing: number[] }>();
-
-    walls.forEach(wall => {
-      const startPoint = pointMap.get(wall.startPointId);
-      const endPoint = pointMap.get(wall.endPointId);
-      if (!startPoint || !endPoint) return;
-
-      const angle = Math.atan2(endPoint.y - startPoint.y, endPoint.x - startPoint.x);
-
-      if (!pointAngles.has(wall.startPointId)) {
-        pointAngles.set(wall.startPointId, { incoming: [], outgoing: [] });
-      }
-      if (!pointAngles.has(wall.endPointId)) {
-        pointAngles.set(wall.endPointId, { incoming: [], outgoing: [] });
-      }
-
-      pointAngles.get(wall.startPointId)!.outgoing.push(angle);
-      pointAngles.get(wall.endPointId)!.incoming.push(angle);
-    });
-
+    // Create walls using simple CreateBox (works reliably)
     walls.forEach((wall, index) => {
       const startPoint = pointMap.get(wall.startPointId);
       const endPoint = pointMap.get(wall.endPointId);
@@ -327,57 +304,39 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       const wallThicknessMM = wall.thickness;
       const wallHeightMM = wall.height || 2800;
 
-      // Points are in mm, thickness is in mm
-      // Wall direction in mm space
-      const dx = endPoint.x - startPoint.x;
-      const dy = endPoint.y - startPoint.y;
-      const length = Math.sqrt(dx * dx + dy * dy);
-      const dirX = dx / length;
-      const dirY = dy / length;
+      // Convert to meters
+      const start = new Vector3(
+        startPoint.x * MM_TO_METERS - centerX,
+        wallHeightMM * MM_TO_METERS / 2,
+        startPoint.y * MM_TO_METERS - centerZ
+      );
+      const end = new Vector3(
+        endPoint.x * MM_TO_METERS - centerX,
+        wallHeightMM * MM_TO_METERS / 2,
+        endPoint.y * MM_TO_METERS - centerZ
+      );
 
-      // Perpendicular (left side when looking along wall)
-      const perpX = -dirY;
-      const perpY = dirX;
-
-      // Half thickness in mm
-      const halfThick = wallThicknessMM / 2;
-
-      // 4 corners in mm space
-      const c0 = { // start left
-        x: startPoint.x + perpX * halfThick,
-        y: startPoint.y + perpY * halfThick
-      };
-      const c1 = { // end left
-        x: endPoint.x + perpX * halfThick,
-        y: endPoint.y + perpY * halfThick
-      };
-      const c2 = { // end right
-        x: endPoint.x - perpX * halfThick,
-        y: endPoint.y - perpY * halfThick
-      };
-      const c3 = { // start right
-        x: startPoint.x - perpX * halfThick,
-        y: startPoint.y - perpY * halfThick
-      };
-
+      const wallDirection = end.subtract(start);
+      const wallLength = wallDirection.length();
+      const wallThickness = wallThicknessMM * MM_TO_METERS;
       const wallHeight = wallHeightMM * MM_TO_METERS;
 
-      // Shape at top (Y = wallHeight), extrude downward to Y = 0
-      const shape = [c0, c1, c2, c3].map(c => new Vector3(
-        (c.x * MM_TO_METERS) - centerX,
-        wallHeight,
-        (c.y * MM_TO_METERS) - centerZ
-      ));
-
-      const wallMesh = MeshBuilder.ExtrudePolygon(
+      const wallMesh = MeshBuilder.CreateBox(
         `wall_${index}`,
         {
-          shape: shape,
-          depth: -wallHeight, // Negative depth extrudes downward
-          sideOrientation: 2
+          width: wallLength,
+          height: wallHeight,
+          depth: wallThickness,
         },
         scene
       );
+
+      // Calculate rotation
+      const angle = Math.atan2(wallDirection.z, wallDirection.x);
+      wallMesh.rotation.y = -angle;
+
+      // Position at center
+      wallMesh.position = start.add(end).scale(0.5);
 
       wallMesh.material = wallMaterial;
       wallMesh.receiveShadows = true;
