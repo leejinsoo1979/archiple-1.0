@@ -18,7 +18,7 @@ import {
   VertexData,
   Mesh
 } from '@babylonjs/core';
-import * as earcut from 'earcut';
+import earcut from 'earcut';
 import styles from './Babylon3DCanvas.module.css';
 
 // Make earcut available globally for Babylon.js polygon operations
