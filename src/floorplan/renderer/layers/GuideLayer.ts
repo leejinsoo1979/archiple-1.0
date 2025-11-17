@@ -358,10 +358,73 @@ export class GuideLayer extends BaseLayer {
     ctx.closePath();
     ctx.stroke();
 
-    // Fill with semi-transparent blue
-    ctx.fillStyle = 'rgba(52, 152, 219, 0.1)';
-    ctx.fill();
+    // NO fill - just outline
+
+    ctx.setLineDash([]);
+
+    const PIXELS_TO_MM = 10;
+
+    // Calculate dimensions
+    const width = Math.abs(corners[1].x - corners[0].x);
+    const height = Math.abs(corners[2].y - corners[1].y);
+    const widthMm = width * PIXELS_TO_MM;
+    const heightMm = height * PIXELS_TO_MM;
+
+    // Format labels
+    const widthLabel = `${Math.round(widthMm)}mm`;
+    const heightLabel = `${Math.round(heightMm)}mm`;
+
+    // Top edge - width label
+    const topMidX = (corners[0].x + corners[1].x) / 2;
+    const topY = corners[0].y;
+    this.renderDimensionLabel(ctx, widthLabel, topMidX, topY - 15);
+
+    // Right edge - height label
+    const rightX = corners[1].x;
+    const rightMidY = (corners[1].y + corners[2].y) / 2;
+    this.renderDimensionLabel(ctx, heightLabel, rightX + 40, rightMidY);
+
+    // Bottom edge - width label
+    const bottomMidX = (corners[2].x + corners[3].x) / 2;
+    const bottomY = corners[2].y;
+    this.renderDimensionLabel(ctx, widthLabel, bottomMidX, bottomY + 25);
+
+    // Left edge - height label
+    const leftX = corners[0].x;
+    const leftMidY = (corners[0].y + corners[3].y) / 2;
+    this.renderDimensionLabel(ctx, heightLabel, leftX - 40, leftMidY);
 
     ctx.restore();
+  }
+
+  private renderDimensionLabel(ctx: CanvasRenderingContext2D, label: string, x: number, y: number): void {
+    ctx.font = 'bold 12px system-ui';
+    const metrics = ctx.measureText(label);
+    const padding = 5;
+
+    // Background
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.fillRect(
+      x - metrics.width / 2 - padding,
+      y - 9,
+      metrics.width + padding * 2,
+      18
+    );
+
+    // Border
+    ctx.strokeStyle = '#3498db';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(
+      x - metrics.width / 2 - padding,
+      y - 9,
+      metrics.width + padding * 2,
+      18
+    );
+
+    // Text
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x, y);
   }
 }
