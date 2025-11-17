@@ -153,8 +153,8 @@ export class SnapService {
    * Snap to grid
    */
   private snapToGrid(position: Vector2): SnapResult {
-    // Snap to 1 pixel = 1mm precision (matches canvas scale)
-    const snapPrecision = 1;
+    // Snap to 1mm precision (0.1 pixels, since 1 pixel = 10mm)
+    const snapPrecision = 0.1; // 0.1 pixel = 1mm
     const snappedX = Math.round(position.x / snapPrecision) * snapPrecision;
     const snappedY = Math.round(position.y / snapPrecision) * snapPrecision;
 

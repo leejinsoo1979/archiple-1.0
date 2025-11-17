@@ -168,8 +168,9 @@ export class WallLayer extends BaseLayer {
     const labelX = midX - Math.sin(angle) * offsetDistance;
     const labelY = midY + Math.cos(angle) * offsetDistance;
 
-    // Format label in mm only
-    const label = `${Math.round(millimeters)}mm`;
+    // Format label: show whole mm without decimals for cleaner display
+    // Round to nearest 1mm for accurate measurement
+    const label = `${millimeters.toFixed(0)}mm`;
 
     ctx.save();
     ctx.font = 'bold 11px system-ui';
