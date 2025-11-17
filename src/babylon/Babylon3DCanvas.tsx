@@ -232,11 +232,15 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       // centerX와 centerZ는 이미 미터 단위 (PIXELS_TO_METERS 곱해진 값)
       arcCamera.setTarget(new Vector3(0, targetY, 0));
 
-      const minRadius = Math.max(0.5, boundingRadius * 0.6);
-      const maxRadius = Math.max(minRadius * 4, boundingRadius * 2.5);
+      // CRITICAL FIX: 작은 방(< 1m)을 위한 카메라 거리 자동 조정
+      const roomSize = Math.max(planMetrics.extentX, planMetrics.extentZ);
+      const optimalRadius = roomSize < 2 ? roomSize * 3 : boundingRadius;
+
+      const minRadius = Math.max(0.5, optimalRadius * 0.6);
+      const maxRadius = Math.max(minRadius * 4, optimalRadius * 2.5);
       arcCamera.lowerRadiusLimit = minRadius;
       arcCamera.upperRadiusLimit = maxRadius;
-      arcCamera.radius = Math.min(Math.max(arcCamera.radius, minRadius), maxRadius);
+      arcCamera.radius = optimalRadius;
 
       console.log('[Babylon3DCanvas] Camera setup:', {
         target: arcCamera.target,
@@ -307,24 +311,20 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
         const midZ = (z1 + z2) / 2;
         const angle = Math.atan2(z2 - z1, x2 - x1);
 
-        // CRITICAL DEBUG: wall.height 값 확인
+        // FIX: wall.height가 이미 미터 단위일 가능성 체크
+        // UI는 mm로 표시하지만 실제 저장은 m 단위일 수 있음
         const wallHeightMM = wall.height || 2800;
         const thicknessMM = wall.thickness || 200;
 
-        console.log('[DEBUG] Wall dimensions INPUT:', {
-          'wall.height': wall.height,
-          'wall.thickness': wall.thickness,
-          'wallHeightMM': wallHeightMM,
-          'thicknessMM': thicknessMM,
-        });
+        // CRITICAL FIX: wall.height > 100이면 mm 단위, 아니면 이미 m 단위
+        const wallHeight = wallHeightMM > 100 ? wallHeightMM * MM_TO_METERS : wallHeightMM;
+        const thickness = thicknessMM > 10 ? thicknessMM * MM_TO_METERS : thicknessMM;
 
-        const wallHeight = wallHeightMM * MM_TO_METERS;
-        const thickness = thicknessMM * MM_TO_METERS;
-
-        console.log('[DEBUG] Wall dimensions CONVERTED:', {
-          'wallHeight_m': wallHeight,
-          'thickness_m': thickness,
-          'MM_TO_METERS': MM_TO_METERS,
+        console.log('[DEBUG] Wall dimensions:', {
+          'input': { height: wall.height, thickness: wall.thickness },
+          'converted_m': { height: wallHeight, thickness },
+          'expected_m': { height: 2.8, thickness: 0.2 },
+          'match': wallHeight === 2.8 ? '✅' : `❌ ${wallHeight}m`,
         });
 
         // 2D와 3D 스케일 비교 로그
