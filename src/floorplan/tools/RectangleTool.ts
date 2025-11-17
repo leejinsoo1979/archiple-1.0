@@ -52,10 +52,8 @@ export class RectangleTool extends BaseTool {
     const snapResult = this.snapService.snap(position);
     const snappedPos = snapResult.position;
 
-    if (!this.isDrawing) {
-      // First click - start rectangle
-      this.startDrawing(snappedPos);
-    }
+    // Start rectangle drawing immediately on mouse down
+    this.startDrawing(snappedPos);
   }
 
   handleMouseMove(position: Vector2, event: MouseEvent): void {
