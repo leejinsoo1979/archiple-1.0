@@ -364,7 +364,6 @@ export class GuideLayer extends BaseLayer {
 
     // Calculate dimensions
     const PIXELS_TO_MM = 10;
-
     const width = Math.abs(corners[1].x - corners[0].x);
     const height = Math.abs(corners[2].y - corners[1].y);
     const widthMm = width * PIXELS_TO_MM;

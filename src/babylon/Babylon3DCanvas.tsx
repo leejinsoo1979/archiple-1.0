@@ -28,6 +28,55 @@ interface Babylon3DCanvasProps {
   };
 }
 
+const MM_TO_UNITS = 1; // 1 Babylon unit = 1mm from the 2D editor
+const DEFAULT_CAMERA_RADIUS = 8000; // ≈8m viewing distance in mm
+const DEFAULT_CAMERA_HEIGHT = 1500; // 1.5m eye height in mm
+
+interface PlanMetrics {
+  centerX: number;
+  centerZ: number;
+  extentX: number;
+  extentZ: number;
+  boundingRadius: number;
+}
+
+const computePlanMetrics = (points?: any[] | null): PlanMetrics | null => {
+  if (!points || points.length === 0) return null;
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+
+  points.forEach((point) => {
+    const worldX = point.x * MM_TO_UNITS;
+    const worldZ = point.y * MM_TO_UNITS;
+
+    if (worldX < minX) minX = worldX;
+    if (worldX > maxX) maxX = worldX;
+    if (worldZ < minZ) minZ = worldZ;
+    if (worldZ > maxZ) maxZ = worldZ;
+  });
+
+  if (!isFinite(minX) || !isFinite(maxX) || !isFinite(minZ) || !isFinite(maxZ)) {
+    return null;
+  }
+
+  const extentX = Math.max(maxX - minX, 0.1);
+  const extentZ = Math.max(maxZ - minZ, 0.1);
+  const centerX = (minX + maxX) / 2;
+  const centerZ = (minZ + maxZ) / 2;
+  const boundingRadius = Math.max(extentX, extentZ) * 0.75 + 2000;
+
+  return {
+    centerX,
+    centerZ,
+    extentX,
+    extentZ,
+    boundingRadius,
+  };
+};
+
 const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunSettings }: Babylon3DCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
@@ -71,16 +120,16 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
         'arcCamera',
         -Math.PI / 4,
         Math.PI / 3.5,
-        20,
-        new Vector3(0, 1.5, 0),
+        DEFAULT_CAMERA_RADIUS,
+        new Vector3(0, DEFAULT_CAMERA_HEIGHT, 0),
         scene
       );
       arcCamera.attachControl(canvas, true);
-      arcCamera.lowerRadiusLimit = 5;
-      arcCamera.upperRadiusLimit = 150;
+      arcCamera.lowerRadiusLimit = 500;
+      arcCamera.upperRadiusLimit = 50000;
       arcCamera.upperBetaLimit = Math.PI / 2.05;
-      arcCamera.wheelPrecision = 20;
-      arcCamera.panningSensibility = 200;
+      arcCamera.wheelPrecision = 200;
+      arcCamera.panningSensibility = 2000;
       arcCamera.inertia = 0.9;
       arcCamera.angularSensibilityX = 1000;
       arcCamera.angularSensibilityY = 1000;
@@ -89,10 +138,10 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
       // Create FPS camera (first-person WASD mode)
       const fpsCamera = new UniversalCamera(
         'fpsCamera',
-        new Vector3(0, 1.7, 0), // Eye height ~1.7m
+        new Vector3(0, 1700, 0),
         scene
       );
-      fpsCamera.speed = 0.5; // Movement speed
+      fpsCamera.speed = 500; // 0.5m per frame
       fpsCamera.angularSensibility = 2000;
       fpsCamera.keysUp = [87]; // W
       fpsCamera.keysDown = [83]; // S
@@ -103,7 +152,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
       // Collision detection
       fpsCamera.checkCollisions = true;
       fpsCamera.applyGravity = false; // Keep at constant height
-      fpsCamera.ellipsoid = new Vector3(0.3, 0.85, 0.3); // Collision capsule (radius, half-height, radius)
+      fpsCamera.ellipsoid = new Vector3(300, 850, 300);
       fpsCameraRef.current = fpsCamera;
 
       // Set default camera
@@ -121,7 +170,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
       const intensity = sunSettings?.intensity ?? 1.5;
 
       // Convert azimuth/altitude to 3D position
-      const radius = 50;
+      const radius = 50000; // 50m expressed in mm units
       const azimuthRad = (azimuth * Math.PI) / 180;
       const altitudeRad = (altitude * Math.PI) / 180;
 
@@ -190,6 +239,31 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
     console.log('[Babylon3DCanvas] Points:', points?.length, 'Walls:', walls?.length);
     if (!walls || walls.length === 0) return;
 
+    const planMetrics = computePlanMetrics(points);
+    const centerX = planMetrics?.centerX ?? 0;
+    const centerZ = planMetrics?.centerZ ?? 0;
+    const boundingRadius = planMetrics?.boundingRadius ?? 15;
+
+    if (planMetrics && arcCameraRef.current) {
+      const arcCamera = arcCameraRef.current;
+      const maxWallHeightMm = walls.reduce((max, wall) => Math.max(max, wall.height || 2800), 2800);
+      const targetY = Math.max(maxWallHeightMm / 2, DEFAULT_CAMERA_HEIGHT);
+      arcCamera.setTarget(new Vector3(0, targetY, 0));
+
+      const minRadius = Math.max(500, boundingRadius * 0.6);
+      const maxRadius = Math.max(minRadius * 5, boundingRadius * 2.5);
+      arcCamera.lowerRadiusLimit = minRadius;
+      arcCamera.upperRadiusLimit = maxRadius;
+      arcCamera.radius = Math.min(Math.max(arcCamera.radius, minRadius), maxRadius);
+    }
+
+    if (planMetrics && fpsCameraRef.current) {
+      const fpsCamera = fpsCameraRef.current;
+      // Position FPS camera at center of floorplan at eye height
+      fpsCamera.position = new Vector3(centerX, 1700, centerZ);
+      console.log('[Babylon3DCanvas] FPS camera positioned at:', fpsCamera.position);
+    }
+
     // Create point lookup map
     const pointMap = new Map();
     points.forEach((p) => pointMap.set(p.id, p));
@@ -214,8 +288,6 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
 
     // Create walls from 2D data
     // Units: wall.thickness and wall.height are in mm
-    const PIXELS_PER_METER = 1000; // 1px = 1mm
-    const MM_TO_METERS = 0.001; // 1mm = 0.001m
 
     walls.forEach((wall, index) => {
       const startPoint = pointMap.get(wall.startPointId);
@@ -223,11 +295,11 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
 
       if (startPoint && endPoint) {
         // Convert 2D coordinates to 3D
-        // 2D: x,y in pixels  →  3D: x,z in meters (y=height)
-        const x1 = (startPoint.x / PIXELS_PER_METER) - 10; // Center at origin
-        const z1 = (startPoint.y / PIXELS_PER_METER) - 10;
-        const x2 = (endPoint.x / PIXELS_PER_METER) - 10;
-        const z2 = (endPoint.y / PIXELS_PER_METER) - 10;
+        // 2D: x,y in mm  →  3D: x,z in meters (y=height)
+        const x1 = startPoint.x * MM_TO_UNITS - centerX;
+        const z1 = startPoint.y * MM_TO_UNITS - centerZ;
+        const x2 = endPoint.x * MM_TO_UNITS - centerX;
+        const z2 = endPoint.y * MM_TO_UNITS - centerZ;
 
         // Calculate wall dimensions
         const length = Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
@@ -236,8 +308,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
         const angle = Math.atan2(z2 - z1, x2 - x1);
 
         // Convert mm to meters
-        const wallHeightMeters = (wall.height || 2800) * MM_TO_METERS; // default 2800mm = 2.8m
-        const thicknessMeters = (wall.thickness || 200) * MM_TO_METERS; // default 200mm = 0.2m
+        const wallHeightUnits = (wall.height || 2800) * MM_TO_UNITS;
+        const thicknessUnits = (wall.thickness || 200) * MM_TO_UNITS;
 
         console.log(`[Babylon3DCanvas] Wall ${index}:`, {
           start: { x: startPoint.x, y: startPoint.y },
@@ -253,12 +325,12 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
         // Create wall mesh
         const wallMesh = MeshBuilder.CreateBox(
           `wall_${index}`,
-          { width: length, height: wallHeightMeters, depth: thicknessMeters },
+          { width: length, height: wallHeightUnits, depth: thicknessUnits },
           scene
         );
 
         // Position and rotate
-        wallMesh.position.set(midX, wallHeightMeters / 2, midZ);
+        wallMesh.position.set(midX, wallHeightUnits / 2, midZ);
         wallMesh.rotation.y = angle;
         wallMesh.material = wallMaterial;
         wallMesh.receiveShadows = true;
@@ -311,21 +383,21 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
         });
       }
 
-      const thicknessMeters = maxThickness * MM_TO_METERS;
-      const heightMeters = maxHeight * MM_TO_METERS;
+      const thicknessUnits = maxThickness * MM_TO_UNITS;
+      const heightUnits = maxHeight * MM_TO_UNITS;
 
       // Convert point position to 3D
-      const x = (point.x / PIXELS_PER_METER) - 10;
-      const z = (point.y / PIXELS_PER_METER) - 10;
+      const x = point.x * MM_TO_UNITS - centerX;
+      const z = point.y * MM_TO_UNITS - centerZ;
 
       // Create a box at the corner
       const cornerJoint = MeshBuilder.CreateBox(
         `corner_${point.id}`,
-        { width: thicknessMeters, height: heightMeters, depth: thicknessMeters },
+        { width: thicknessUnits, height: heightUnits, depth: thicknessUnits },
         scene
       );
 
-      cornerJoint.position.set(x, heightMeters / 2, z);
+      cornerJoint.position.set(x, heightUnits / 2, z);
       cornerJoint.material = wallMaterial;
       cornerJoint.receiveShadows = true;
 
@@ -348,8 +420,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
           const p = pointMap.get(pid);
           if (!p) return null;
           return {
-            x: (p.x / PIXELS_PER_METER) - 10,
-            z: (p.y / PIXELS_PER_METER) - 10
+            x: p.x * MM_TO_UNITS - centerX,
+            z: p.y * MM_TO_UNITS - centerZ,
           };
         }).filter((p: any) => p !== null);
 
@@ -408,22 +480,40 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
     const arcCamera = arcCameraRef.current;
     const fpsCamera = fpsCameraRef.current;
 
-    if (!scene || !canvas || !arcCamera || !fpsCamera) return;
+    if (!scene || !canvas || !arcCamera || !fpsCamera) {
+      console.log('[Babylon3DCanvas] Camera switch skipped - missing refs');
+      return;
+    }
 
     if (playMode) {
-      console.log('[Babylon3DCanvas] Switching to FPS camera (WASD mode)');
+      console.log('[Babylon3DCanvas] ===== SWITCHING TO FPS CAMERA (WASD MODE) =====');
+      console.log('[Babylon3DCanvas] FPS camera position:', fpsCamera.position);
+      console.log('[Babylon3DCanvas] FPS camera rotation:', fpsCamera.rotation);
+
       // Detach arc camera
       arcCamera.detachControl();
-      // Attach FPS camera
+
+      // Attach FPS camera with pointer lock
       fpsCamera.attachControl(canvas, true);
       scene.activeCamera = fpsCamera;
+
+      console.log('[Babylon3DCanvas] Active camera:', scene.activeCamera?.name);
+      console.log('[Babylon3DCanvas] FPS camera settings:', {
+        speed: fpsCamera.speed,
+        checkCollisions: fpsCamera.checkCollisions,
+        ellipsoid: fpsCamera.ellipsoid,
+      });
     } else {
-      console.log('[Babylon3DCanvas] Switching to ArcRotate camera');
+      console.log('[Babylon3DCanvas] ===== SWITCHING TO ARCROTATE CAMERA =====');
+
       // Detach FPS camera
       fpsCamera.detachControl();
+
       // Attach arc camera
       arcCamera.attachControl(canvas, true);
       scene.activeCamera = arcCamera;
+
+      console.log('[Babylon3DCanvas] Active camera:', scene.activeCamera?.name);
     }
   }, [playMode]);
 

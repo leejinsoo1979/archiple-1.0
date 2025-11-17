@@ -18,8 +18,8 @@ export interface WallLayerConfig {
  * - Thickness visualization
  * - Hover highlight
  *
- * Units: Wall thickness and height are stored in mm
- * Rendering: 1mm = 0.1 pixels for display
+ * Units: Wall thickness and height are stored in mm (world space)
+ * Rendering: 1 pixel = 10mm for display (1mm thickness → 0.1px)
  */
 export class WallLayer extends BaseLayer {
   private walls: Wall[] = [];
@@ -28,7 +28,7 @@ export class WallLayer extends BaseLayer {
   private hoveredWallId: string | null = null;
 
   private config: Required<WallLayerConfig>;
-  private readonly MM_TO_PIXELS = 0.1; // 1mm = 0.1 pixels
+  private readonly MM_TO_PIXELS = 0.1; // Visual scale: 1mm thickness → 0.1px
 
   constructor(config?: WallLayerConfig) {
     super(2); // z-index: 2
