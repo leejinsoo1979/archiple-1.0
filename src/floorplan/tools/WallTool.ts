@@ -29,6 +29,7 @@ export class WallTool extends BaseTool {
   private startPoint: Point | null = null;
   private currentPreviewEnd: Vector2 | null = null;
   private wallChain: Point[] = [];
+  private isStartFromExistingWall = false; // Track if started from existing wall
 
   // Config (units: mm)
   private defaultWallThickness = 150; // 150mm = 15cm
@@ -149,9 +150,14 @@ export class WallTool extends BaseTool {
     // Use existing point or create new one
     if (existingPoint) {
       this.startPoint = existingPoint;
+      // Check if starting from a point that already has walls
+      this.isStartFromExistingWall = existingPoint.connectedWalls && existingPoint.connectedWalls.length > 0;
+      console.log('[WallTool] Starting from existing wall:', this.isStartFromExistingWall);
     } else {
       const tempPoint = this.createPoint(position);
       this.startPoint = this.sceneManager.objectManager.addPoint(tempPoint);
+      this.isStartFromExistingWall = false;
+      console.log('[WallTool] Starting fresh room');
     }
 
     this.wallChain.push(this.startPoint);
@@ -207,10 +213,13 @@ export class WallTool extends BaseTool {
     this.startPoint = endPoint;
     this.wallChain.push(endPoint);
 
-    // Auto-complete room after 3 walls (ㄷ shape)
-    // wallChain has: [point1, point2, point3, point4] = 3 walls completed
-    if (this.wallChain.length === 4) {
-      console.log('[WallTool] 3 walls completed, auto-closing room');
+    // Auto-complete room based on starting condition:
+    // - If started from existing wall: 3 walls (4 points) - ㄷ shape
+    // - If started fresh: 4 walls (5 points) - full rectangle
+    const requiredPoints = this.isStartFromExistingWall ? 4 : 5;
+
+    if (this.wallChain.length === requiredPoints) {
+      console.log('[WallTool] Auto-closing room (started from existing wall:', this.isStartFromExistingWall, ')');
 
       // Create closing wall from current point back to first point
       const firstPoint = this.wallChain[0];
@@ -281,6 +290,7 @@ export class WallTool extends BaseTool {
     this.startPoint = null;
     this.currentPreviewEnd = null;
     this.wallChain = [];
+    this.isStartFromExistingWall = false;
 
     eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
     eventBus.emit(FloorEvents.DISTANCE_MEASUREMENT_CLEARED, {});
