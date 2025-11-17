@@ -386,29 +386,23 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
 
         if (roomPoints.length < 3) return;
 
-        // Create polygon floor using ExtrudePolygon (more reliable)
-        // ExtrudePolygon expects 2D points (x, z only) for the shape
-        const floorShape = roomPoints.map((p: Vector3) => new Vector3(p.x, p.z, 0));
-
-        const floor = MeshBuilder.ExtrudePolygon(
-          `floor_${roomIndex}`,
-          {
-            shape: floorShape,
-            depth: 0.01, // Very thin extrusion
-            sideOrientation: 2 // DOUBLESIDE
-          },
-          scene,
-          earcut
-        );
-        floor.position.y = 0; // At ground level
-
-        // Calculate texture scale based on room size
-        const minX = Math.min(...roomPoints.map((p: any) => p.x));
-        const maxX = Math.max(...roomPoints.map((p: any) => p.x));
-        const minZ = Math.min(...roomPoints.map((p: any) => p.z));
-        const maxZ = Math.max(...roomPoints.map((p: any) => p.z));
+        // Calculate room bounding box
+        const minX = Math.min(...roomPoints.map((p: Vector3) => p.x));
+        const maxX = Math.max(...roomPoints.map((p: Vector3) => p.x));
+        const minZ = Math.min(...roomPoints.map((p: Vector3) => p.z));
+        const maxZ = Math.max(...roomPoints.map((p: Vector3) => p.z));
         const width = maxX - minX;
         const depth = maxZ - minZ;
+        const floorCenterX = (minX + maxX) / 2;
+        const floorCenterZ = (minZ + maxZ) / 2;
+
+        // Create simple rectangular floor (for now - TODO: polygon shape)
+        const floor = MeshBuilder.CreateGround(
+          `floor_${roomIndex}`,
+          { width, height: depth, subdivisions: 1 },
+          scene
+        );
+        floor.position.set(floorCenterX, 0.01, floorCenterZ);
 
         // Clone material for each floor
         const roomFloorMat = floorMaterial.clone(`floorMat_room_${roomIndex}`);
