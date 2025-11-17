@@ -402,7 +402,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
           );
 
           // Polygon is created on XY plane, rotate to XZ plane (horizontal)
-          floor.rotation.x = Math.PI / 2;
+          // Use -90° so normal points UP (+Y direction)
+          floor.rotation.x = -Math.PI / 2;
           floor.position.y = 0.01; // Slightly above ground to prevent z-fighting
 
           // Calculate texture scale
