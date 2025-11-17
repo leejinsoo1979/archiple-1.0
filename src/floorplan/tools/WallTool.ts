@@ -188,6 +188,10 @@ export class WallTool extends BaseTool {
     this.sceneManager.objectManager.addWall(wall);
     // NOTE: WALL_ADDED event is emitted by BlueprintObjectManager, no need to emit here
 
+    // Clear preview of confirmed wall
+    eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
+    this.currentPreviewEnd = null;
+
     if (isClosingLoop) {
       console.log('[WallTool] Loop closed!');
       this.finishChain();
