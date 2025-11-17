@@ -758,90 +758,126 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     const scene = sceneRef.current;
     const canvas = canvasRef.current;
     const arcCamera = arcCameraRef.current;
-    const fpsCamera = fpsCameraRef.current;
+    const thirdPersonCamera = thirdPersonCameraRef.current;
     const character = characterRef.current;
 
-    if (!scene || !canvas || !arcCamera || !fpsCamera || !character) return;
+    if (!scene || !canvas || !arcCamera || !thirdPersonCamera || !character) return;
 
     if (playMode) {
-      // Switch to FPS camera (1st person)
-      console.log('[Babylon3DCanvas] Switching to FPS camera (Play Mode)');
+      // Switch to 3rd person camera
+      console.log('[Babylon3DCanvas] Switching to 3rd Person camera (Play Mode)');
 
       // Calculate room center from floorplan data
       const planMetrics = computePlanMetrics(floorplanData?.points);
       if (planMetrics) {
-        // Position FPS camera at room center
-        fpsCamera.position = new Vector3(
-          planMetrics.centerX,
-          DEFAULT_CAMERA_HEIGHT,
-          planMetrics.centerZ
-        );
-        fpsCamera.rotation = new Vector3(0, 0, 0);
-
-        // Position character at camera position (hidden or lower body visible)
+        // Position character at room center, on ground
         character.position = new Vector3(
           planMetrics.centerX,
           0,
           planMetrics.centerZ
         );
+        character.rotation.y = 0; // Face forward
       }
 
-      // Hide character head (so we don't see it in FPS view)
-      const head = scene.getMeshByName('head');
-      if (head) head.isVisible = false;
+      // Setup camera to follow character
+      thirdPersonCamera.lockedTarget = character;
+      thirdPersonCamera.radius = 3; // 3m behind character
+      thirdPersonCamera.heightOffset = 1.5; // Look at upper body
 
       arcCamera.detachControl();
-      fpsCamera.attachControl(canvas, true);
-      scene.activeCamera = fpsCamera;
+      thirdPersonCamera.attachControl(canvas, true);
+      scene.activeCamera = thirdPersonCamera;
 
-      // Sync character with camera movement
+      // Character movement controls
+      const inputMap: { [key: string]: boolean } = {};
+      const onKeyDown = (evt: KeyboardEvent) => {
+        inputMap[evt.key.toLowerCase()] = true;
+      };
+      const onKeyUp = (evt: KeyboardEvent) => {
+        inputMap[evt.key.toLowerCase()] = false;
+      };
+
+      window.addEventListener('keydown', onKeyDown);
+      window.addEventListener('keyup', onKeyUp);
+
+      // Movement logic
       const moveSpeed = 0.05; // 5cm per frame
-      let lastCameraPos = fpsCamera.position.clone();
+      const rotateSpeed = 0.03;
 
       scene.onBeforeRenderObservable.add(() => {
-        if (!fpsCamera || !character) return;
+        if (!character) return;
 
-        // Update character XZ position to follow camera (for collision)
-        // Keep Y=0 so character stays on ground
-        const cameraDelta = fpsCamera.position.subtract(lastCameraPos);
-        character.position.x += cameraDelta.x;
-        character.position.z += cameraDelta.z;
-        // character.position.y stays at 0 (on ground)
+        let moved = false;
 
-        // Match character rotation to camera rotation
-        character.rotation.y = fpsCamera.rotation.y;
+        // Rotation (A/D keys)
+        if (inputMap['a']) {
+          character.rotation.y += rotateSpeed;
+        }
+        if (inputMap['d']) {
+          character.rotation.y -= rotateSpeed;
+        }
 
-        lastCameraPos = fpsCamera.position.clone();
+        // Calculate forward direction based on character rotation
+        const forward = new Vector3(
+          Math.sin(character.rotation.y),
+          0,
+          Math.cos(character.rotation.y)
+        );
 
-        // Walking animation (bob camera slightly)
-        const keys = (fpsCamera as any)._keys;
-        const isMoving = keys && (keys.forward || keys.backward || keys.left || keys.right);
+        // Forward/Backward (W/S keys)
+        if (inputMap['w']) {
+          character.position.addInPlace(forward.scale(moveSpeed));
+          moved = true;
+        }
+        if (inputMap['s']) {
+          character.position.addInPlace(forward.scale(-moveSpeed));
+          moved = true;
+        }
 
-        if (isMoving) {
-          const time = performance.now() * 0.01;
-          fpsCamera.position.y = DEFAULT_CAMERA_HEIGHT + Math.sin(time) * 0.015; // Bob 1.5cm
+        // Walking animation (bob head and arms)
+        if (moved) {
+          const time = performance.now() * 0.005;
+          const head = scene.getMeshByName('head');
+          const leftArm = scene.getMeshByName('leftArm');
+          const rightArm = scene.getMeshByName('rightArm');
+
+          if (head) {
+            const baseY = 1.62;
+            head.position.y = baseY + Math.sin(time) * 0.03; // Bob 3cm
+          }
+
+          // Swing arms
+          if (leftArm) {
+            leftArm.rotation.x = Math.sin(time) * 0.3; // Swing forward/back
+          }
+          if (rightArm) {
+            rightArm.rotation.x = Math.sin(time + Math.PI) * 0.3; // Opposite swing
+          }
         } else {
-          // Reset camera height when not moving
-          fpsCamera.position.y = DEFAULT_CAMERA_HEIGHT;
+          // Reset to neutral pose
+          const head = scene.getMeshByName('head');
+          const leftArm = scene.getMeshByName('leftArm');
+          const rightArm = scene.getMeshByName('rightArm');
+
+          if (head) head.position.y = 1.62;
+          if (leftArm) leftArm.rotation.x = 0;
+          if (rightArm) rightArm.rotation.x = 0;
         }
       });
 
       // Cleanup
       return () => {
+        window.removeEventListener('keydown', onKeyDown);
+        window.removeEventListener('keyup', onKeyUp);
         scene.onBeforeRenderObservable.clear();
-        if (head) head.isVisible = true; // Show head again when exiting play mode
       };
     } else {
       // Switch back to ArcRotate camera
       console.log('[Babylon3DCanvas] Switching to ArcRotate camera (3D View)');
-      fpsCamera.detachControl();
+      thirdPersonCamera.detachControl();
       arcCamera.attachControl(canvas, true);
       scene.activeCamera = arcCamera;
       scene.onBeforeRenderObservable.clear();
-
-      // Show character head again
-      const head = scene.getMeshByName('head');
-      if (head) head.isVisible = true;
     }
   }, [playMode, floorplanData]);
 
