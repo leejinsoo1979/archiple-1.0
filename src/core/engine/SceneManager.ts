@@ -1,4 +1,4 @@
-import { ObjectManager } from './ObjectManager';
+import { BlueprintObjectManager } from './BlueprintObjectManager';
 import { SelectionManager } from './SelectionManager';
 import { HistoryManager } from './HistoryManager';
 import type { EditorConfig } from '../types/EditorState';
@@ -8,11 +8,12 @@ import { EditorEvents } from '../events/EditorEvents';
 
 /**
  * SceneManager - Central manager coordinating all editor systems
+ * NOW USES blueprint Floorplan internally via BlueprintObjectManager
  */
 export class SceneManager {
   private static instance: SceneManager;
 
-  public objectManager: ObjectManager;
+  public objectManager: BlueprintObjectManager;
   public selectionManager: SelectionManager;
   public historyManager: HistoryManager;
 
@@ -21,7 +22,7 @@ export class SceneManager {
 
   private constructor(config: EditorConfig) {
     this.config = config;
-    this.objectManager = new ObjectManager();
+    this.objectManager = new BlueprintObjectManager();
     this.selectionManager = new SelectionManager();
     this.historyManager = new HistoryManager();
   }

@@ -7,6 +7,7 @@ import type { EditorConfig } from '../core/types/EditorState';
 import { ToolType } from '../core/types/EditorState';
 import { eventBus } from '../core/events/EventBus';
 import { FloorEvents } from '../core/events/FloorEvents';
+import { convertFloorplanToBabylon } from './blueprint/BlueprintToBabylonAdapter';
 
 // Rendering
 import { Canvas2DRenderer } from './renderer/canvas2d/Canvas2DRenderer';
@@ -181,8 +182,12 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
       });
 
       // Notify parent component of data changes (for 3D sync)
+      // Convert blueprint Floorplan to Babylon format
       if (onDataChange) {
-        onDataChange({ points, walls, rooms });
+        const floorplan = sceneManager.objectManager.getFloorplan();
+        const babylonData = convertFloorplanToBabylon(floorplan);
+        console.log('[FloorplanCanvas] Sending blueprint data to Babylon:', babylonData);
+        onDataChange(babylonData);
       }
     };
 
