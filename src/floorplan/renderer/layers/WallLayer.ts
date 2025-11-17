@@ -19,7 +19,7 @@ export interface WallLayerConfig {
  * - Hover highlight
  *
  * Units: Wall thickness and height are stored in mm
- * Rendering: 1mm = 1 pixel for display
+ * Rendering: 1mm = 0.1 pixels for display
  */
 export class WallLayer extends BaseLayer {
   private walls: Wall[] = [];
@@ -28,7 +28,7 @@ export class WallLayer extends BaseLayer {
   private hoveredWallId: string | null = null;
 
   private config: Required<WallLayerConfig>;
-  private readonly MM_TO_PIXELS = 1; // 1mm = 1 pixel
+  private readonly MM_TO_PIXELS = 0.1; // 1mm = 0.1 pixels
 
   constructor(config?: WallLayerConfig) {
     super(2); // z-index: 2
@@ -154,8 +154,9 @@ export class WallLayer extends BaseLayer {
     const dy = endPoint.y - startPoint.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    // 1 pixel = 1mm → distance already in millimeters
-    const millimeters = distance;
+    // Convert pixels to mm (1 pixel = 10mm)
+    const PIXELS_TO_MM = 10;
+    const millimeters = distance * PIXELS_TO_MM;
 
     // Calculate label position (midpoint, offset perpendicular to wall)
     const midX = (startPoint.x + endPoint.x) / 2;

@@ -73,7 +73,7 @@ export const MAX_ROOM_AREA = 1000000;
 export const ROOM_DETECTION_TOLERANCE = 1;
 
 // 3D conversion
-export const SCALE_2D_TO_3D = 0.001; // 1 pixel = 1mm in 3D
+export const SCALE_2D_TO_3D = 0.01; // 1 pixel = 1cm in 3D
 export const DEFAULT_FLOOR_THICKNESS = 10;
 export const DEFAULT_CEILING_HEIGHT = 280;
 

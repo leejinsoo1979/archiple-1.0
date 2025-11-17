@@ -253,8 +253,9 @@ export class GuideLayer extends BaseLayer {
   ): void {
     ctx.save();
 
-    // 1 pixel = 1mm → distance already represents millimeters
-    const millimeters = distance;
+    // Convert pixels to mm (1 pixel = 10mm)
+    const PIXELS_TO_MM = 10;
+    const millimeters = distance * PIXELS_TO_MM;
 
     // Calculate label position (midpoint, offset slightly above)
     const midX = (from.x + to.x) / 2;
@@ -362,10 +363,12 @@ export class GuideLayer extends BaseLayer {
     ctx.setLineDash([]);
 
     // Calculate dimensions
+    const PIXELS_TO_MM = 10;
+
     const width = Math.abs(corners[1].x - corners[0].x);
     const height = Math.abs(corners[2].y - corners[1].y);
-    const widthMm = width;
-    const heightMm = height;
+    const widthMm = width * PIXELS_TO_MM;
+    const heightMm = height * PIXELS_TO_MM;
 
     // Format labels
     const widthLabel = `${Math.round(widthMm)}mm`;
