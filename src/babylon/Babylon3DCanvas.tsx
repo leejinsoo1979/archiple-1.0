@@ -324,8 +324,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     normalTexture.wrapV = Texture.WRAP_ADDRESSMODE;
     floorMaterial.bumpTexture = normalTexture;
 
-    // Create walls using simple CreateBox (works reliably)
-    walls.forEach((wall, index) => {
+    // Create walls - split if doors present
+    walls.forEach((wall, wallIndex) => {
       const startPoint = pointMap.get(wall.startPointId);
       const endPoint = pointMap.get(wall.endPointId);
       if (!startPoint || !endPoint) return;
@@ -333,63 +333,162 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       const wallThicknessMM = wall.thickness;
       const wallHeightMM = wall.height || 2400;
 
-      if (index === 0) {
-        console.log('[Babylon3DCanvas] Wall height check:', {
-          heightMM: wallHeightMM,
-          heightM: wallHeightMM * MM_TO_METERS,
-          thicknessMM: wallThicknessMM,
-          thicknessM: wallThicknessMM * MM_TO_METERS
-        });
-      }
+      // Find doors on this wall
+      const wallDoors = doors.filter((door: any) => door.wallId === wall.id);
 
       // Convert to meters
-      const start = new Vector3(
-        startPoint.x * MM_TO_METERS - centerX,
-        wallHeightMM * MM_TO_METERS / 2,
-        startPoint.y * MM_TO_METERS - centerZ
-      );
-      const end = new Vector3(
-        endPoint.x * MM_TO_METERS - centerX,
-        wallHeightMM * MM_TO_METERS / 2,
-        endPoint.y * MM_TO_METERS - centerZ
-      );
+      const startX = startPoint.x * MM_TO_METERS - centerX;
+      const startZ = startPoint.y * MM_TO_METERS - centerZ;
+      const endX = endPoint.x * MM_TO_METERS - centerX;
+      const endZ = endPoint.y * MM_TO_METERS - centerZ;
 
-      const wallDirection = end.subtract(start);
-      const wallLength = wallDirection.length();
+      const dx = endX - startX;
+      const dz = endZ - startZ;
+      const wallLengthM = Math.sqrt(dx * dx + dz * dz);
       const wallThickness = wallThicknessMM * MM_TO_METERS;
       const wallHeight = wallHeightMM * MM_TO_METERS;
 
-      // Extend wall length to overlap at corners (prevent gaps)
-      const extendedLength = wallLength + wallThickness;
+      const angle = Math.atan2(dz, dx);
 
-      // Set face colors: top face (ceiling edge) = black
+      // Set face colors: top face = black
       const faceColors = new Array(6);
-      faceColors[4] = new Color3(0, 0, 0); // Top face (천장 단면) - black
+      faceColors[4] = new Color3(0, 0, 0);
 
-      const wallMesh = MeshBuilder.CreateBox(
-        `wall_${index}`,
-        {
-          width: extendedLength,
-          height: wallHeight,
-          depth: wallThickness,
-          faceColors: faceColors,
-        },
-        scene
-      );
+      if (wallDoors.length === 0) {
+        // No doors - full wall
+        const extendedLength = wallLengthM + wallThickness;
 
-      // Calculate rotation
-      const angle = Math.atan2(wallDirection.z, wallDirection.x);
-      wallMesh.rotation.y = -angle;
+        const wallMesh = MeshBuilder.CreateBox(
+          `wall_${wallIndex}`,
+          {
+            width: extendedLength,
+            height: wallHeight,
+            depth: wallThickness,
+            faceColors: faceColors,
+          },
+          scene
+        );
 
-      // Position at center
-      wallMesh.position = start.add(end).scale(0.5);
+        wallMesh.rotation.y = -angle;
+        wallMesh.position = new Vector3(
+          (startX + endX) / 2,
+          wallHeight / 2,
+          (startZ + endZ) / 2
+        );
 
-      wallMesh.material = wallMaterial;
-      wallMesh.receiveShadows = true;
-      wallMesh.checkCollisions = true;
+        wallMesh.material = wallMaterial;
+        wallMesh.receiveShadows = true;
+        wallMesh.checkCollisions = true;
 
-      if (shadowGenerator) {
-        shadowGenerator.addShadowCaster(wallMesh);
+        if (shadowGenerator) {
+          shadowGenerator.addShadowCaster(wallMesh);
+        }
+      } else {
+        // Has doors - split wall
+        const openings: Array<{ start: number; end: number }> = [];
+
+        wallDoors.forEach((door: any) => {
+          const doorWidthM = door.width * MM_TO_METERS;
+          const halfWidth = doorWidthM / 2;
+          const openingStart = Math.max(0, door.position - halfWidth / wallLengthM);
+          const openingEnd = Math.min(1, door.position + halfWidth / wallLengthM);
+          openings.push({ start: openingStart, end: openingEnd });
+        });
+
+        openings.sort((a, b) => a.start - b.start);
+        const merged: Array<{ start: number; end: number }> = [];
+        openings.forEach(opening => {
+          if (merged.length === 0) {
+            merged.push(opening);
+          } else {
+            const last = merged[merged.length - 1];
+            if (opening.start <= last.end) {
+              last.end = Math.max(last.end, opening.end);
+            } else {
+              merged.push(opening);
+            }
+          }
+        });
+
+        // Create segments
+        let currentPos = 0;
+        let segIndex = 0;
+
+        merged.forEach(opening => {
+          if (currentPos < opening.start) {
+            const segStart = currentPos;
+            const segEnd = opening.start;
+            const segLength = (segEnd - segStart) * wallLengthM;
+
+            const segStartX = startX + dx * segStart;
+            const segStartZ = startZ + dz * segStart;
+            const segEndX = startX + dx * segEnd;
+            const segEndZ = startZ + dz * segEnd;
+
+            const segMesh = MeshBuilder.CreateBox(
+              `wall_${wallIndex}_seg_${segIndex++}`,
+              {
+                width: segLength,
+                height: wallHeight,
+                depth: wallThickness,
+                faceColors: faceColors,
+              },
+              scene
+            );
+
+            segMesh.rotation.y = -angle;
+            segMesh.position = new Vector3(
+              (segStartX + segEndX) / 2,
+              wallHeight / 2,
+              (segStartZ + segEndZ) / 2
+            );
+
+            segMesh.material = wallMaterial;
+            segMesh.receiveShadows = true;
+            segMesh.checkCollisions = true;
+
+            if (shadowGenerator) {
+              shadowGenerator.addShadowCaster(segMesh);
+            }
+          }
+          currentPos = opening.end;
+        });
+
+        // Final segment
+        if (currentPos < 1) {
+          const segStart = currentPos;
+          const segEnd = 1;
+          const segLength = (segEnd - segStart) * wallLengthM;
+
+          const segStartX = startX + dx * segStart;
+          const segStartZ = startZ + dz * segStart;
+
+          const segMesh = MeshBuilder.CreateBox(
+            `wall_${wallIndex}_seg_${segIndex}`,
+            {
+              width: segLength,
+              height: wallHeight,
+              depth: wallThickness,
+              faceColors: faceColors,
+            },
+            scene
+          );
+
+          segMesh.rotation.y = -angle;
+          segMesh.position = new Vector3(
+            (segStartX + endX) / 2,
+            wallHeight / 2,
+            (segStartZ + endZ) / 2
+          );
+
+          segMesh.material = wallMaterial;
+          segMesh.receiveShadows = true;
+          segMesh.checkCollisions = true;
+
+          if (shadowGenerator) {
+            shadowGenerator.addShadowCaster(segMesh);
+          }
+        }
       }
     });
 
@@ -542,12 +641,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           DEFAULT_CAMERA_HEIGHT,
           planMetrics.centerZ
         );
-        // Look forward (negative Z direction)
-        fpsCamera.setTarget(new Vector3(
-          planMetrics.centerX,
-          DEFAULT_CAMERA_HEIGHT,
-          planMetrics.centerZ - 1
-        ));
+        // Set camera rotation for horizontal view (like FPS game)
+        fpsCamera.rotation = new Vector3(0, 0, 0); // Pitch=0 (horizontal), Yaw=0 (forward), Roll=0
       }
 
       arcCamera.detachControl();
