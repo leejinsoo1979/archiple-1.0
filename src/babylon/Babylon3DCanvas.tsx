@@ -3,7 +3,6 @@ import {
   Engine,
   Scene,
   ArcRotateCamera,
-  UniversalCamera,
   Vector3,
   MeshBuilder,
   PBRMaterial,
@@ -20,7 +19,6 @@ import styles from './Babylon3DCanvas.module.css';
 interface Babylon3DCanvasProps {
   floorplanData?: { points: any[]; walls: any[]; rooms: any[] } | null;
   visible?: boolean;
-  playMode?: boolean; // FPS mode toggle
   sunSettings?: {
     intensity: number;
     azimuth: number;
@@ -78,13 +76,12 @@ const computePlanMetrics = (points?: any[] | null): PlanMetrics | null => {
   };
 };
 
-const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunSettings }: Babylon3DCanvasProps) => {
+const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon3DCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const sceneRef = useRef<Scene | null>(null);
   const sunLightRef = useRef<DirectionalLight | null>(null);
   const arcCameraRef = useRef<ArcRotateCamera | null>(null);
-  const fpsCameraRef = useRef<UniversalCamera | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -126,35 +123,15 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
         scene
       );
       arcCamera.attachControl(canvas, true);
-      arcCamera.lowerRadiusLimit = 500; // 500mm = 0.5m minimum distance
-      arcCamera.upperRadiusLimit = 50000; // 50000mm = 50m maximum distance
+      arcCamera.lowerRadiusLimit = 0.5;
+      arcCamera.upperRadiusLimit = 50;
       arcCamera.upperBetaLimit = Math.PI / 2.05;
-      arcCamera.wheelPrecision = 200; // Slower zoom for precision
-      arcCamera.panningSensibility = 2000; // Slower panning for precision
+      arcCamera.wheelPrecision = 20;
+      arcCamera.panningSensibility = 200;
       arcCamera.inertia = 0.9;
       arcCamera.angularSensibilityX = 1000;
       arcCamera.angularSensibilityY = 1000;
       arcCameraRef.current = arcCamera;
-
-      // Create FPS camera (first-person WASD mode)
-      const fpsCamera = new UniversalCamera(
-        'fpsCamera',
-        new Vector3(0, DEFAULT_CAMERA_HEIGHT, 0), // 1700mm eye height
-        scene
-      );
-      fpsCamera.speed = 500; // 500mm per frame = 0.5m
-      fpsCamera.angularSensibility = 2000;
-      fpsCamera.keysUp = [87]; // W
-      fpsCamera.keysDown = [83]; // S
-      fpsCamera.keysLeft = [65]; // A
-      fpsCamera.keysRight = [68]; // D
-      fpsCamera.minZ = 10; // 10mm near clipping
-
-      // Collision detection (all in mm)
-      fpsCamera.checkCollisions = true;
-      fpsCamera.applyGravity = false;
-      fpsCamera.ellipsoid = new Vector3(300, 850, 300); // 300mm radius, 850mm half-height
-      fpsCameraRef.current = fpsCamera;
 
       // Set default camera
       scene.activeCamera = arcCamera;
@@ -171,7 +148,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
       const intensity = sunSettings?.intensity ?? 1.5;
 
       // Convert azimuth/altitude to 3D position (in mm)
-      const radius = 50000; // 50000mm = 50m
+      const radius = 50; // 50m
       const azimuthRad = (azimuth * Math.PI) / 180;
       const altitudeRad = (altitude * Math.PI) / 180;
 
@@ -256,12 +233,6 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
       arcCamera.lowerRadiusLimit = minRadius;
       arcCamera.upperRadiusLimit = maxRadius;
       arcCamera.radius = Math.min(Math.max(arcCamera.radius, minRadius), maxRadius);
-    }
-
-    if (planMetrics && fpsCameraRef.current) {
-      const fpsCamera = fpsCameraRef.current;
-      fpsCamera.position = new Vector3(centerX, DEFAULT_CAMERA_HEIGHT, centerZ); // All in mm
-      console.log('[Babylon3DCanvas] FPS camera at:', fpsCamera.position);
     }
 
     // Create point lookup map
@@ -471,50 +442,6 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
     sunLight.position.set(x, y, z);
     sunLight.intensity = intensity;
   }, [sunSettings]);
-
-  // Switch between ArcRotate and FPS camera
-  useEffect(() => {
-    const scene = sceneRef.current;
-    const canvas = canvasRef.current;
-    const arcCamera = arcCameraRef.current;
-    const fpsCamera = fpsCameraRef.current;
-
-    if (!scene || !canvas || !arcCamera || !fpsCamera) {
-      console.log('[Babylon3DCanvas] Camera switch skipped - missing refs');
-      return;
-    }
-
-    if (playMode) {
-      console.log('[Babylon3DCanvas] ===== SWITCHING TO FPS CAMERA (WASD MODE) =====');
-      console.log('[Babylon3DCanvas] FPS camera position:', fpsCamera.position);
-      console.log('[Babylon3DCanvas] FPS camera rotation:', fpsCamera.rotation);
-
-      // Detach arc camera
-      arcCamera.detachControl();
-
-      // Attach FPS camera with pointer lock
-      fpsCamera.attachControl(canvas, true);
-      scene.activeCamera = fpsCamera;
-
-      console.log('[Babylon3DCanvas] Active camera:', scene.activeCamera?.name);
-      console.log('[Babylon3DCanvas] FPS camera settings:', {
-        speed: fpsCamera.speed,
-        checkCollisions: fpsCamera.checkCollisions,
-        ellipsoid: fpsCamera.ellipsoid,
-      });
-    } else {
-      console.log('[Babylon3DCanvas] ===== SWITCHING TO ARCROTATE CAMERA =====');
-
-      // Detach FPS camera
-      fpsCamera.detachControl();
-
-      // Attach arc camera
-      arcCamera.attachControl(canvas, true);
-      scene.activeCamera = arcCamera;
-
-      console.log('[Babylon3DCanvas] Active camera:', scene.activeCamera?.name);
-    }
-  }, [playMode]);
 
   // Resize engine when visibility changes
   useEffect(() => {
