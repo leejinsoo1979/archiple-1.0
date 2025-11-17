@@ -196,20 +196,6 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
     floorMaterial.roughness = 0.7;
     floorMaterial.environmentIntensity = 0.5;
 
-    // Create ceiling material (white with black cross-section)
-    const ceilingMaterial = new PBRMaterial('ceilingMat_2d', scene);
-    ceilingMaterial.albedoColor = new Color3(1.0, 1.0, 1.0); // White top
-    ceilingMaterial.metallic = 0.0;
-    ceilingMaterial.roughness = 0.9;
-    ceilingMaterial.environmentIntensity = 0.3;
-    ceilingMaterial.backFaceCulling = false; // Show both sides
-
-    // Create ceiling edge material (black for cross-section)
-    const ceilingEdgeMaterial = new PBRMaterial('ceilingEdgeMat_2d', scene);
-    ceilingEdgeMaterial.albedoColor = new Color3(0.0, 0.0, 0.0); // Black edges
-    ceilingEdgeMaterial.metallic = 0.0;
-    ceilingEdgeMaterial.roughness = 1.0;
-
     // Create walls from 2D data
     // Units: wall.thickness and wall.height are in mm
     const PIXELS_PER_METER = 20;
