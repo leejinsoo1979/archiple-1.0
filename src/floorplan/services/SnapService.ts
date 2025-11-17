@@ -78,6 +78,14 @@ export class SnapService {
   }
 
   /**
+   * Snap coordinate to 0.1 pixel (1mm) precision
+   */
+  private snapToPrecision(value: number): number {
+    const precision = 0.1; // 0.1 pixel = 1mm
+    return Math.round(value / precision) * precision;
+  }
+
+  /**
    * Main snap function
    */
   snap(position: Vector2): SnapResult {
@@ -197,8 +205,8 @@ export class SnapService {
     // Snap if within 15 degrees (more forgiving for orthogonal snap)
     if (minDiff < 15) {
       const radians = (nearestAngle * Math.PI) / 180;
-      const snappedX = fromPoint.x + Math.cos(radians) * distance;
-      const snappedY = fromPoint.y + Math.sin(radians) * distance;
+      const snappedX = this.snapToPrecision(fromPoint.x + Math.cos(radians) * distance);
+      const snappedY = this.snapToPrecision(fromPoint.y + Math.sin(radians) * distance);
 
       // Emit angle guide event
       eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, {
@@ -230,13 +238,13 @@ export class SnapService {
 
     if (isMoreHorizontal) {
       // Snap to horizontal (0° or 180°)
-      snappedX = position.x;
-      snappedY = fromPoint.y;
+      snappedX = this.snapToPrecision(position.x);
+      snappedY = this.snapToPrecision(fromPoint.y);
       angle = dx >= 0 ? 0 : 180;
     } else {
       // Snap to vertical (90° or 270°)
-      snappedX = fromPoint.x;
-      snappedY = position.y;
+      snappedX = this.snapToPrecision(fromPoint.x);
+      snappedY = this.snapToPrecision(position.y);
       angle = dy >= 0 ? 90 : 270;
     }
 
@@ -323,12 +331,12 @@ export class SnapService {
 
       if (nearestAngle === 0 || nearestAngle === 180) {
         // Horizontal snap
-        snappedX = position.x;
-        snappedY = snapPoint ? snapPoint.y : this.lastPoint.y;
+        snappedX = this.snapToPrecision(position.x);
+        snappedY = this.snapToPrecision(snapPoint ? snapPoint.y : this.lastPoint.y);
       } else {
         // Vertical snap
-        snappedX = snapPoint ? snapPoint.x : this.lastPoint.x;
-        snappedY = position.y;
+        snappedX = this.snapToPrecision(snapPoint ? snapPoint.x : this.lastPoint.x);
+        snappedY = this.snapToPrecision(position.y);
       }
 
       // Emit guide
