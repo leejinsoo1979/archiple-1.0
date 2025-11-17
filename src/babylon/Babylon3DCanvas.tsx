@@ -359,39 +359,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       }
     });
 
-    // Add corner cylinders to smooth wall joints
-    const wallThickness = walls[0]?.thickness || 100;
-    const wallHeight = walls[0]?.height || 2400;
-    const cornerRadius = (wallThickness * MM_TO_METERS) / 2;
-    const cornerHeight = wallHeight * MM_TO_METERS;
-
-    points.forEach((point, index) => {
-      const cornerMesh = MeshBuilder.CreateCylinder(
-        `corner_${index}`,
-        {
-          height: cornerHeight,
-          diameter: wallThickness * MM_TO_METERS,
-          tessellation: 16,
-        },
-        scene
-      );
-
-      cornerMesh.position.set(
-        point.x * MM_TO_METERS - centerX,
-        cornerHeight / 2,
-        point.y * MM_TO_METERS - centerZ
-      );
-
-      cornerMesh.material = wallMaterial;
-      cornerMesh.receiveShadows = true;
-      cornerMesh.checkCollisions = true;
-
-      if (shadowGenerator) {
-        shadowGenerator.addShadowCaster(cornerMesh);
-      }
-    });
-
-    console.log('[Babylon3DCanvas] Created', walls.length, '3D walls with', points.length, 'corner joints');
+    console.log('[Babylon3DCanvas] Created', walls.length, '3D walls');
 
     // Create floors for each room
     const { rooms } = floorplanData;
