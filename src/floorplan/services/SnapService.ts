@@ -153,8 +153,8 @@ export class SnapService {
    * Snap to grid
    */
   private snapToGrid(position: Vector2): SnapResult {
-    // Snap to 1 pixel = 10mm precision (not gridSize which is just for visual grid)
-    const snapPrecision = 1; // 1 pixel = 10mm
+    // Snap to pixel precision (1 pixel = 1mm)
+    const snapPrecision = 1;
     const snappedX = Math.round(position.x / snapPrecision) * snapPrecision;
     const snappedY = Math.round(position.y / snapPrecision) * snapPrecision;
 

@@ -188,8 +188,8 @@ export class RoomDetectionService {
 
     area = Math.abs(area) / 2;
 
-    // Convert from pixels² to m² (assuming 20 pixels = 1 meter)
-    const PIXELS_PER_METER = 20;
+    // Convert from pixels² to m² (1 pixel = 1mm ⇒ 1000 pixels = 1 meter)
+    const PIXELS_PER_METER = 1000;
     area = area / (PIXELS_PER_METER * PIXELS_PER_METER);
 
     return area;

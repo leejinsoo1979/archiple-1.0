@@ -19,12 +19,18 @@ import styles from './Babylon3DCanvas.module.css';
 interface Babylon3DCanvasProps {
   floorplanData?: { points: any[]; walls: any[]; rooms: any[] } | null;
   visible?: boolean;
+  sunSettings?: {
+    intensity: number;
+    azimuth: number;
+    altitude: number;
+  };
 }
 
-const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps) => {
+const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon3DCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const sceneRef = useRef<Scene | null>(null);
+  const sunLightRef = useRef<DirectionalLight | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -82,49 +88,31 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
       hemisphericLight.groundColor = new Color3(0.5, 0.5, 0.55);
 
       // 2. Main directional light (sun) with shadows
+      const azimuth = sunSettings?.azimuth ?? 45;
+      const altitude = sunSettings?.altitude ?? 45;
+      const intensity = sunSettings?.intensity ?? 1.5;
+
+      // Convert azimuth/altitude to 3D position
+      const radius = 50;
+      const azimuthRad = (azimuth * Math.PI) / 180;
+      const altitudeRad = (altitude * Math.PI) / 180;
+
+      const x = radius * Math.cos(altitudeRad) * Math.sin(azimuthRad);
+      const y = radius * Math.sin(altitudeRad);
+      const z = radius * Math.cos(altitudeRad) * Math.cos(azimuthRad);
+
       const sunLight = new DirectionalLight('sunLight', new Vector3(-1, -2, -1), scene);
-      sunLight.position = new Vector3(20, 40, 20);
-      sunLight.intensity = 1.5;
+      sunLight.position = new Vector3(x, y, z);
+      sunLight.intensity = intensity;
       sunLight.diffuse = new Color3(1, 1, 1);
       sunLight.specular = new Color3(1, 1, 1);
+      sunLightRef.current = sunLight;
 
       // Shadow generator
       const shadowGenerator = new ShadowGenerator(2048, sunLight);
       shadowGenerator.useBlurExponentialShadowMap = true;
       shadowGenerator.blurKernel = 32;
       shadowGenerator.darkness = 0.3;
-
-      // Create high-quality ground with PBR material
-      const ground = MeshBuilder.CreateGround('ground', { width: 200, height: 200, subdivisions: 50 }, scene);
-      ground.position.y = 0;
-      ground.receiveShadows = true;
-
-      // PBR Ground material with subtle grid
-      const groundMaterial = new PBRMaterial('groundMat', scene);
-      groundMaterial.albedoColor = new Color3(0.95, 0.95, 0.96);
-      groundMaterial.metallic = 0.0;
-      groundMaterial.roughness = 0.8;
-      groundMaterial.environmentIntensity = 0.5;
-
-      // Subtle grid texture
-      const gridTexture = new Texture('data:image/svg+xml;base64,' + btoa(`
-        <svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="smallGrid" width="10" height="10" patternUnits="userSpaceOnUse">
-              <path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(0,0,0,0.03)" stroke-width="0.5"/>
-            </pattern>
-            <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
-              <rect width="50" height="50" fill="url(#smallGrid)"/>
-              <path d="M 50 0 L 0 0 0 50" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
-            </pattern>
-          </defs>
-          <rect width="100" height="100" fill="url(#grid)"/>
-        </svg>
-      `), scene);
-      gridTexture.uScale = 200;
-      gridTexture.vScale = 200;
-      groundMaterial.albedoTexture = gridTexture;
-      ground.material = groundMaterial;
 
       // Render loop
       engine.runRenderLoop(() => {
@@ -358,6 +346,26 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
       console.log('[Babylon3DCanvas] Created floors for', rooms.length, 'rooms');
     }
   }, [floorplanData]);
+
+  // Update sun light when settings change
+  useEffect(() => {
+    const sunLight = sunLightRef.current;
+    if (!sunLight || !sunSettings) return;
+
+    const { azimuth, altitude, intensity } = sunSettings;
+
+    // Convert azimuth/altitude to 3D position
+    const radius = 50;
+    const azimuthRad = (azimuth * Math.PI) / 180;
+    const altitudeRad = (altitude * Math.PI) / 180;
+
+    const x = radius * Math.cos(altitudeRad) * Math.sin(azimuthRad);
+    const y = radius * Math.sin(altitudeRad);
+    const z = radius * Math.cos(altitudeRad) * Math.cos(azimuthRad);
+
+    sunLight.position.set(x, y, z);
+    sunLight.intensity = intensity;
+  }, [sunSettings]);
 
   // Resize engine when visibility changes
   useEffect(() => {
