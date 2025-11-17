@@ -307,6 +307,15 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       const wallThicknessMM = wall.thickness;
       const wallHeightMM = wall.height || 2800;
 
+      if (index === 0) {
+        console.log('[Babylon3DCanvas] Wall height check:', {
+          heightMM: wallHeightMM,
+          heightM: wallHeightMM * MM_TO_METERS,
+          thicknessMM: wallThicknessMM,
+          thicknessM: wallThicknessMM * MM_TO_METERS
+        });
+      }
+
       // Convert to meters
       const start = new Vector3(
         startPoint.x * MM_TO_METERS - centerX,
