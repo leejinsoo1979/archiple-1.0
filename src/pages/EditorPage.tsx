@@ -385,7 +385,11 @@ const EditorPage = () => {
           <div className={styles.toolSection}>
             <h4>Door</h4>
             <div className={styles.toolGrid}>
-              <button className={styles.toolBtn}>
+              <button
+                className={`${styles.toolBtn} ${activeTool === ToolType.DOOR ? styles.toolBtnActive : ''}`}
+                title="Place Door (900mm x 2100mm)"
+                onClick={() => setActiveTool(ToolType.DOOR)}
+              >
                 <svg width="32" height="32" viewBox="0 0 48 48">
                   <rect x="16" y="12" width="16" height="24" stroke="currentColor" strokeWidth="2" fill="none"/>
                   <line x1="28" y1="24" x2="30" y2="24" stroke="currentColor" strokeWidth="2"/>
@@ -574,6 +578,7 @@ const EditorPage = () => {
             floorplanData={floorplanData}
             visible={viewMode === '3D'}
             sunSettings={sunSettings}
+            playMode={playMode}
           />
         </div>
       </div>

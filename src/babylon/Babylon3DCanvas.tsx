@@ -3,6 +3,7 @@ import {
   Engine,
   Scene,
   ArcRotateCamera,
+  UniversalCamera,
   Vector3,
   MeshBuilder,
   PolygonMeshBuilder,
@@ -33,6 +34,7 @@ interface Babylon3DCanvasProps {
     azimuth: number;
     altitude: number;
   };
+  playMode?: boolean;
 }
 
 // 2D 좌표(mm)를 Babylon 미터 단위로 변환
@@ -87,12 +89,13 @@ const computePlanMetrics = (points?: any[] | null): PlanMetrics | null => {
   };
 };
 
-const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon3DCanvasProps) => {
+const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode = false }: Babylon3DCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const sceneRef = useRef<Scene | null>(null);
   const sunLightRef = useRef<DirectionalLight | null>(null);
   const arcCameraRef = useRef<ArcRotateCamera | null>(null);
+  const fpsCameraRef = useRef<UniversalCamera | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -143,6 +146,23 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       arcCamera.angularSensibilityX = 1000;
       arcCamera.angularSensibilityY = 1000;
       arcCameraRef.current = arcCamera;
+
+      // Create FPS camera (first-person view)
+      const fpsCamera = new UniversalCamera(
+        'fpsCamera',
+        new Vector3(0, DEFAULT_CAMERA_HEIGHT, 0),
+        scene
+      );
+      fpsCamera.speed = 0.2; // Movement speed (m/s)
+      fpsCamera.angularSensibility = 1000; // Mouse sensitivity
+      fpsCamera.keysUp = [87]; // W
+      fpsCamera.keysDown = [83]; // S
+      fpsCamera.keysLeft = [65]; // A
+      fpsCamera.keysRight = [68]; // D
+      fpsCamera.checkCollisions = true;
+      fpsCamera.applyGravity = false;
+      fpsCamera.ellipsoid = new Vector3(0.5, 0.9, 0.5); // Collision ellipsoid (radius)
+      fpsCameraRef.current = fpsCamera;
 
       // Set default camera
       scene.activeCamera = arcCamera;
@@ -496,6 +516,48 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
     sunLight.position.set(x, y, z);
     sunLight.intensity = intensity;
   }, [sunSettings]);
+
+  // Switch camera when playMode changes
+  useEffect(() => {
+    const scene = sceneRef.current;
+    const canvas = canvasRef.current;
+    const arcCamera = arcCameraRef.current;
+    const fpsCamera = fpsCameraRef.current;
+
+    if (!scene || !canvas || !arcCamera || !fpsCamera) return;
+
+    if (playMode) {
+      // Switch to FPS camera
+      console.log('[Babylon3DCanvas] Switching to FPS camera (Play Mode)');
+
+      // Calculate room center from floorplan data
+      const planMetrics = computePlanMetrics(floorplanData?.points);
+      if (planMetrics) {
+        // Position camera at room center, eye height (1.7m)
+        fpsCamera.position = new Vector3(
+          planMetrics.centerX,
+          DEFAULT_CAMERA_HEIGHT,
+          planMetrics.centerZ
+        );
+        // Look forward (negative Z direction)
+        fpsCamera.setTarget(new Vector3(
+          planMetrics.centerX,
+          DEFAULT_CAMERA_HEIGHT,
+          planMetrics.centerZ - 1
+        ));
+      }
+
+      arcCamera.detachControl();
+      fpsCamera.attachControl(canvas, true);
+      scene.activeCamera = fpsCamera;
+    } else {
+      // Switch back to ArcRotate camera
+      console.log('[Babylon3DCanvas] Switching to ArcRotate camera (3D View)');
+      fpsCamera.detachControl();
+      arcCamera.attachControl(canvas, true);
+      scene.activeCamera = arcCamera;
+    }
+  }, [playMode, floorplanData]);
 
   // Resize engine when visibility changes
   useEffect(() => {
