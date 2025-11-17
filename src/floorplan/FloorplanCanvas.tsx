@@ -43,6 +43,10 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
   const [stats, setStats] = useState({ points: 0, walls: 0, rooms: 0, fps: 0 });
 
+  // Pan state
+  const isPanningRef = useRef(false);
+  const lastPanPosRef = useRef<{ x: number; y: number } | null>(null);
+
   // Refs for cleanup
   const sceneManagerRef = useRef<SceneManager | null>(null);
   const rendererRef = useRef<Canvas2DRenderer | null>(null);
@@ -443,6 +447,63 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
 
     canvas.addEventListener('wheel', handleWheel, { passive: false });
     return () => canvas.removeEventListener('wheel', handleWheel);
+  }, []);
+
+  // Handle canvas panning (middle mouse or right mouse drag)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const renderer = rendererRef.current;
+    if (!canvas || !renderer) return;
+
+    const handleMouseDown = (event: MouseEvent) => {
+      // Middle mouse button (button 1) or Right mouse button (button 2)
+      if (event.button === 1 || event.button === 2) {
+        event.preventDefault();
+        isPanningRef.current = true;
+        lastPanPosRef.current = { x: event.clientX, y: event.clientY };
+        canvas.style.cursor = 'grab';
+      }
+    };
+
+    const handleMouseMove = (event: MouseEvent) => {
+      if (isPanningRef.current && lastPanPosRef.current) {
+        const dx = event.clientX - lastPanPosRef.current.x;
+        const dy = event.clientY - lastPanPosRef.current.y;
+
+        const camera = renderer.getCamera();
+        camera.pan(dx, dy);
+
+        lastPanPosRef.current = { x: event.clientX, y: event.clientY };
+        canvas.style.cursor = 'grabbing';
+      }
+    };
+
+    const handleMouseUp = (event: MouseEvent) => {
+      if (event.button === 1 || event.button === 2) {
+        isPanningRef.current = false;
+        lastPanPosRef.current = null;
+        canvas.style.cursor = 'default';
+      }
+    };
+
+    const handleContextMenu = (event: MouseEvent) => {
+      // Prevent context menu on right-click when used for panning
+      if (isPanningRef.current) {
+        event.preventDefault();
+      }
+    };
+
+    canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('mouseup', handleMouseUp);
+    canvas.addEventListener('contextmenu', handleContextMenu);
+
+    return () => {
+      canvas.removeEventListener('mousedown', handleMouseDown);
+      canvas.removeEventListener('mousemove', handleMouseMove);
+      canvas.removeEventListener('mouseup', handleMouseUp);
+      canvas.removeEventListener('contextmenu', handleContextMenu);
+    };
   }, []);
 
   // Handle mouse move for coordinate display
