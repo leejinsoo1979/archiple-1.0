@@ -268,38 +268,35 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
     wallMaterial.roughness = 0.6;
     wallMaterial.environmentIntensity = 0.7;
 
-    // Create floor material with wood texture
+    // Create floor material with real wood texture
     const floorMaterial = new PBRMaterial('floorMat_2d', scene);
-    floorMaterial.albedoColor = new Color3(0.6, 0.4, 0.2); // 나무 베이스 컬러
     floorMaterial.metallic = 0.0;
-    floorMaterial.roughness = 0.9;
-    floorMaterial.environmentIntensity = 0.4;
+    floorMaterial.environmentIntensity = 0.6;
 
-    // Add wood grain texture
-    try {
-      const woodTexture = new Texture('data:image/svg+xml;base64,' + btoa(`
-        <svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="wood" width="100" height="20" patternUnits="userSpaceOnUse">
-              <rect width="100" height="20" fill="#8B6F47"/>
-              <rect width="100" height="1" y="0" fill="#7A5C3E" opacity="0.3"/>
-              <rect width="100" height="1" y="10" fill="#7A5C3E" opacity="0.2"/>
-              <rect width="100" height="1" y="19" fill="#6B4E32" opacity="0.4"/>
-              <ellipse cx="30" cy="10" rx="15" ry="8" fill="#6B4E32" opacity="0.15"/>
-              <ellipse cx="70" cy="10" rx="20" ry="6" fill="#6B4E32" opacity="0.1"/>
-            </pattern>
-          </defs>
-          <rect width="512" height="512" fill="url(#wood)"/>
-        </svg>
-      `), scene);
-      woodTexture.uScale = 5; // 5 planks per meter
-      woodTexture.vScale = 5;
-      woodTexture.wrapU = Texture.WRAP_ADDRESSMODE;
-      woodTexture.wrapV = Texture.WRAP_ADDRESSMODE;
-      floorMaterial.albedoTexture = woodTexture;
-    } catch (e) {
-      console.warn('[Babylon3DCanvas] Wood texture failed, using solid color');
-    }
+    // Load real wood textures
+    const diffuseTexture = new Texture('/texture/floor/f2 diffuse.JPG', scene);
+    diffuseTexture.uScale = 0.01; // Scale to meters
+    diffuseTexture.vScale = 0.01;
+    diffuseTexture.wrapU = Texture.WRAP_ADDRESSMODE;
+    diffuseTexture.wrapV = Texture.WRAP_ADDRESSMODE;
+    floorMaterial.albedoTexture = diffuseTexture;
+
+    const glossTexture = new Texture('/texture/floor/f2 gloss.png', scene);
+    glossTexture.uScale = 0.01;
+    glossTexture.vScale = 0.01;
+    glossTexture.wrapU = Texture.WRAP_ADDRESSMODE;
+    glossTexture.wrapV = Texture.WRAP_ADDRESSMODE;
+    floorMaterial.metallicTexture = glossTexture;
+    floorMaterial.useMetallnessFromMetallicTextureBlue = false;
+    floorMaterial.useRoughnessFromMetallicTextureGreen = false;
+    floorMaterial.useRoughnessFromMetallicTextureAlpha = true;
+
+    const normalTexture = new Texture('/texture/floor/f2 normal.png', scene);
+    normalTexture.uScale = 0.01;
+    normalTexture.vScale = 0.01;
+    normalTexture.wrapU = Texture.WRAP_ADDRESSMODE;
+    normalTexture.wrapV = Texture.WRAP_ADDRESSMODE;
+    floorMaterial.bumpTexture = normalTexture;
 
     // Create walls using simple CreateBox (works reliably)
     walls.forEach((wall, index) => {
