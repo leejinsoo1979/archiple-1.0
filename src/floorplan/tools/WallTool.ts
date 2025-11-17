@@ -32,7 +32,7 @@ export class WallTool extends BaseTool {
 
   // Config (units: mm)
   private defaultWallThickness = 200; // 200mm = 20cm
-  private defaultWallHeight = 2800; // 2800mm = 2.8m
+  private defaultWallHeight = 2800; // 2800mm = 2.8m (일반 주거용 천장 높이)
 
   constructor(sceneManager: SceneManager, snapService: SnapService) {
     super('wall');
