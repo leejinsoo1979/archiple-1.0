@@ -166,6 +166,7 @@ export class WallTool extends BaseTool {
 
   /**
    * Confirm wall and continue chain
+   * Auto-completes room after 3 walls (ㄷ shape)
    */
   private confirmWall(position: Vector2, existingPoint?: Point): void {
     if (!this.startPoint) return;
@@ -205,6 +206,25 @@ export class WallTool extends BaseTool {
     // Continue chain from end point
     this.startPoint = endPoint;
     this.wallChain.push(endPoint);
+
+    // Auto-complete room after 3 walls (ㄷ shape)
+    // wallChain has: [point1, point2, point3, point4] = 3 walls completed
+    if (this.wallChain.length === 4) {
+      console.log('[WallTool] 3 walls completed, auto-closing room');
+
+      // Create closing wall from current point back to first point
+      const firstPoint = this.wallChain[0];
+      const closingWall = this.createWall(endPoint, firstPoint);
+      this.sceneManager.objectManager.addWall(closingWall);
+
+      // Mark as closed
+      this.wallChain.push(firstPoint);
+
+      console.log('[WallTool] Room auto-completed!');
+      this.finishChain();
+      this.resetState();
+      return;
+    }
 
     // Update snap service
     this.snapService.setLastPoint(position);
