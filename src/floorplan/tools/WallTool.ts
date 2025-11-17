@@ -73,13 +73,19 @@ export class WallTool extends BaseTool {
     }
   }
 
-  handleMouseMove(position: Vector2, event: MouseEvent): void {
-    // Enable orthogonal mode when Shift is pressed
-    const isShiftPressed = event.shiftKey;
+  handleMouseMove(position: Vector2, _event: MouseEvent): void {
+    const hasActiveStart = this.isDrawing && !!this.startPoint;
 
+    // Only enable orthogonal guides when actively drawing a segment
     this.snapService.updateConfig({
-      orthogonalSnapEnabled: isShiftPressed,
+      orthogonalSnapEnabled: hasActiveStart,
     });
+
+    if (hasActiveStart && this.startPoint) {
+      this.snapService.setLastPoint(new Vector2(this.startPoint.x, this.startPoint.y));
+    } else {
+      this.snapService.setLastPoint(null);
+    }
 
     // Always update snap indicator
     const snapResult = this.snapService.snap(position);
@@ -91,7 +97,7 @@ export class WallTool extends BaseTool {
       });
     }
 
-    if (!this.isDrawing || !this.startPoint) return;
+    if (!hasActiveStart || !this.startPoint) return;
 
     // Update preview
     this.currentPreviewEnd = snapResult.position;
@@ -163,16 +169,6 @@ export class WallTool extends BaseTool {
 
     console.log('[WallTool] Confirm wall to', position);
 
-    // Check if clicking on a wall (not at a point)
-    if (!existingPoint && this.wallChain.length > 0) {
-      const wallIntersection = this.findWallIntersection(position);
-      if (wallIntersection) {
-        console.log('[WallTool] Clicked on wall, auto-completing room');
-        this.completeRoomFromWall(wallIntersection.wall, position);
-        return;
-      }
-    }
-
     // Create or reuse end point
     let endPoint: Point;
     if (existingPoint) {
@@ -230,6 +226,11 @@ export class WallTool extends BaseTool {
     }
 
     this.wallChain = [];
+    this.isDrawing = false;
+    this.startPoint = null;
+
+    this.snapService.setLastPoint(null);
+    this.snapService.updateConfig({ orthogonalSnapEnabled: false });
   }
 
   /**
@@ -243,6 +244,9 @@ export class WallTool extends BaseTool {
 
     eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
     eventBus.emit(FloorEvents.DISTANCE_MEASUREMENT_CLEARED, {});
+
+    this.snapService.setLastPoint(null);
+    this.snapService.updateConfig({ orthogonalSnapEnabled: false });
   }
 
   /**
@@ -277,97 +281,6 @@ export class WallTool extends BaseTool {
     endPoint.connectedWalls.push(wall.id);
 
     return wall;
-  }
-
-  /**
-   * Find wall intersection near click position
-   */
-  private findWallIntersection(position: Vector2): { wall: Wall; point: Point } | null {
-    const walls = this.sceneManager.objectManager.getAllWalls();
-    const points = this.sceneManager.objectManager.getAllPoints();
-    const pointMap = new Map(points.map(p => [p.id, p]));
-    const threshold = 20; // 20px detection threshold
-
-    for (const wall of walls) {
-      const startPoint = pointMap.get(wall.startPointId);
-      const endPoint = pointMap.get(wall.endPointId);
-      if (!startPoint || !endPoint) continue;
-
-      const dist = this.distanceToLineSegment(
-        position,
-        new Vector2(startPoint.x, startPoint.y),
-        new Vector2(endPoint.x, endPoint.y)
-      );
-
-      if (dist < threshold) {
-        const closestPoint = this.getClosestPointOnWall(wall, position, pointMap);
-        if (closestPoint) {
-          return { wall, point: closestPoint };
-        }
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Get closest endpoint of a wall
-   */
-  private getClosestPointOnWall(
-    wall: Wall,
-    clickPosition: Vector2,
-    pointMap: Map<string, Point>
-  ): Point | null {
-    const startPoint = pointMap.get(wall.startPointId);
-    const endPoint = pointMap.get(wall.endPointId);
-    if (!startPoint || !endPoint) return null;
-
-    const distToStart = clickPosition.distanceTo(new Vector2(startPoint.x, startPoint.y));
-    const distToEnd = clickPosition.distanceTo(new Vector2(endPoint.x, endPoint.y));
-
-    return distToStart < distToEnd ? startPoint : endPoint;
-  }
-
-  /**
-   * Complete room by connecting to an existing wall
-   */
-  private completeRoomFromWall(wall: Wall, clickPosition: Vector2): void {
-    if (!this.startPoint) return;
-
-    const points = this.sceneManager.objectManager.getAllPoints();
-    const pointMap = new Map(points.map(p => [p.id, p]));
-
-    const startPoint = pointMap.get(wall.startPointId);
-    const endPoint = pointMap.get(wall.endPointId);
-    if (!startPoint || !endPoint) return;
-
-    const distToStart = clickPosition.distanceTo(new Vector2(startPoint.x, startPoint.y));
-    const distToEnd = clickPosition.distanceTo(new Vector2(endPoint.x, endPoint.y));
-    const closerPoint = distToStart < distToEnd ? startPoint : endPoint;
-
-    const newWall = this.createWall(this.startPoint, closerPoint);
-    this.sceneManager.objectManager.addWall(newWall);
-    eventBus.emit(FloorEvents.WALL_ADDED, { wall: newWall });
-
-    console.log('[WallTool] Room completed by connecting to existing wall');
-
-    this.finishChain();
-    this.resetState();
-  }
-
-  /**
-   * Calculate distance from point to line segment
-   */
-  private distanceToLineSegment(p: Vector2, a: Vector2, b: Vector2): number {
-    const ab = new Vector2(b.x - a.x, b.y - a.y);
-    const ap = new Vector2(p.x - a.x, p.y - a.y);
-
-    const abLengthSq = ab.x * ab.x + ab.y * ab.y;
-    if (abLengthSq === 0) return ap.length();
-
-    const t = Math.max(0, Math.min(1, (ap.x * ab.x + ap.y * ab.y) / abLengthSq));
-    const projection = new Vector2(a.x + t * ab.x, a.y + t * ab.y);
-
-    return p.distanceTo(projection);
   }
 
   getCursor(): string {
