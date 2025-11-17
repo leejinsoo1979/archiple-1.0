@@ -73,12 +73,12 @@ export class WallTool extends BaseTool {
     }
   }
 
-  handleMouseMove(position: Vector2, _event: MouseEvent): void {
+  handleMouseMove(position: Vector2, event: MouseEvent): void {
     const hasActiveStart = this.isDrawing && !!this.startPoint;
 
-    // Only enable orthogonal guides when actively drawing a segment
+    // Enable orthogonal snap only when Shift key is pressed during active drawing
     this.snapService.updateConfig({
-      orthogonalSnapEnabled: hasActiveStart,
+      orthogonalSnapEnabled: hasActiveStart && event.shiftKey,
     });
 
     if (hasActiveStart && this.startPoint) {

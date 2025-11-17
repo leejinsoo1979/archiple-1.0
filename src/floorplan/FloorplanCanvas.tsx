@@ -129,9 +129,14 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     renderer.addLayer(selectionLayer);
 
     // 5. Initialize Services
+    // Convert screen-space snap threshold to world-space (mm)
+    // snapThreshold is in px, need to convert to mm using current scale
+    const scalePxPerMm = renderer.getCamera().getZoom();
+    const snapThresholdMm = config.snapThreshold / scalePxPerMm; // 15px / 0.1 = 150mm
+
     const snapService = new SnapService({
       gridSize: config.gridSize,
-      pointSnapThreshold: config.snapThreshold,
+      pointSnapThreshold: snapThresholdMm,
     });
     snapServiceRef.current = snapService;
 

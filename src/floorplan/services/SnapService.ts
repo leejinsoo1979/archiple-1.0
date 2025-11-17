@@ -18,7 +18,7 @@ export interface SnapConfig {
   perpendicularSnapEnabled: boolean;
   midpointSnapEnabled: boolean;
 
-  pointSnapThreshold: number;
+  pointSnapThreshold: number; // In world space (mm)
   gridSize: number;
   angleSnapDegrees: number[];
   orthogonalAngles: number[]; // [0, 90, 180, 270] for strict horizontal/vertical
@@ -44,14 +44,14 @@ export class SnapService {
       enabled: true,
       pointSnapEnabled: true,
       gridSnapEnabled: true, // ENABLED - grid snap
-      angleSnapEnabled: false, // DISABLED - free drawing
-      orthogonalSnapEnabled: false, // DISABLED - free drawing
+      angleSnapEnabled: true, // ENABLED - angle guides (0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°)
+      orthogonalSnapEnabled: false, // DISABLED by default - enable with Shift key
       perpendicularSnapEnabled: false, // DISABLED - free drawing
       midpointSnapEnabled: false, // DISABLED - free drawing
-      pointSnapThreshold: 15,
+      pointSnapThreshold: 150, // 150mm default (15px at scale 0.1)
       gridSize: 50, // 50mm grid precision (default)
-      angleSnapDegrees: [], // No angle snapping
-      orthogonalAngles: [], // No orthogonal snapping
+      angleSnapDegrees: [0, 45, 90, 135, 180, 225, 270, 315], // 8-direction angle snap
+      orthogonalAngles: [0, 90, 180, 270], // Orthogonal angles for Shift key
       ...config,
     };
   }
