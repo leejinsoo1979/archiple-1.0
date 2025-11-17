@@ -28,7 +28,7 @@ export class SelectTool extends BaseTool {
 
   // Config
   private pointSelectRadius = 200; // 200mm selection radius (easier to click)
-  private wallSelectDistance = 100; // 100mm distance from wall to select
+  private wallSelectDistance = 300; // 300mm distance from wall to select (increased for easier selection)
 
   constructor(sceneManager: SceneManager, snapService: SnapService) {
     super('select');
@@ -49,8 +49,11 @@ export class SelectTool extends BaseTool {
   handleMouseDown(position: Vector2, event: MouseEvent): void {
     if (event.button !== 0) return; // Only handle left-click
 
+    console.log('[SelectTool] Mouse down at', position.x.toFixed(0), position.y.toFixed(0));
+
     // Try to find point near cursor first (points have priority)
     const allPoints = this.sceneManager.objectManager.getAllPoints();
+    console.log('[SelectTool] Checking', allPoints.length, 'points');
     const clickedPoint = this.findPointNear(position, allPoints);
 
     if (clickedPoint) {
@@ -71,6 +74,7 @@ export class SelectTool extends BaseTool {
 
     // No point found - try to find wall near cursor
     const allWalls = this.sceneManager.objectManager.getAllWalls();
+    console.log('[SelectTool] No point found, checking', allWalls.length, 'walls');
     const clickedWall = this.findWallNear(position, allWalls, allPoints);
 
     if (clickedWall) {
@@ -89,7 +93,7 @@ export class SelectTool extends BaseTool {
       return;
     }
 
-    console.log('[SelectTool] No point or wall found near click');
+    console.log('[SelectTool] No point or wall found near click at', position.x.toFixed(0), position.y.toFixed(0));
     // Clicked empty space - deselect
     this.resetState();
   }
@@ -151,14 +155,20 @@ export class SelectTool extends BaseTool {
       const dragDx = position.x - this.dragStartPos.x;
       const dragDy = position.y - this.dragStartPos.y;
 
+      console.log('[SelectTool] Dragging wall:', this.selectedWall.id,
+        isHorizontal ? '(horizontal)' : '(vertical)',
+        'delta:', dragDx.toFixed(1), dragDy.toFixed(1));
+
       if (isHorizontal) {
         // Horizontal wall - only move Y axis (상하)
         startPoint.y += dragDy;
         endPoint.y += dragDy;
+        console.log('[SelectTool] Moving horizontal wall on Y axis by', dragDy.toFixed(1));
       } else {
         // Vertical wall - only move X axis (좌우)
         startPoint.x += dragDx;
         endPoint.x += dragDx;
+        console.log('[SelectTool] Moving vertical wall on X axis by', dragDx.toFixed(1));
       }
 
       // Update drag start position for next frame
@@ -241,12 +251,17 @@ export class SelectTool extends BaseTool {
     let nearestWall: Wall | null = null;
     let minDistance = this.wallSelectDistance;
 
+    console.log('[SelectTool] findWallNear: checking', walls.length, 'walls, max distance:', this.wallSelectDistance);
+
     for (const wall of walls) {
       // Get wall endpoints
       const startPoint = points.find((p) => p.id === wall.startPointId);
       const endPoint = points.find((p) => p.id === wall.endPointId);
 
-      if (!startPoint || !endPoint) continue;
+      if (!startPoint || !endPoint) {
+        console.log('[SelectTool] Wall', wall.id, 'missing endpoints');
+        continue;
+      }
 
       // Calculate distance from point to line segment
       const distance = this.pointToLineSegmentDistance(
@@ -255,10 +270,19 @@ export class SelectTool extends BaseTool {
         new Vector2(endPoint.x, endPoint.y)
       );
 
+      console.log('[SelectTool] Wall', wall.id, 'distance:', distance.toFixed(1), 'mm');
+
       if (distance < minDistance) {
         minDistance = distance;
         nearestWall = wall;
+        console.log('[SelectTool] New nearest wall:', wall.id, 'at distance:', distance.toFixed(1));
       }
+    }
+
+    if (nearestWall) {
+      console.log('[SelectTool] Found wall:', nearestWall.id, 'at distance:', minDistance.toFixed(1));
+    } else {
+      console.log('[SelectTool] No wall found within', this.wallSelectDistance, 'mm');
     }
 
     return nearestWall;
