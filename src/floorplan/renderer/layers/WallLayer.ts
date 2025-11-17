@@ -1,6 +1,7 @@
 import { BaseLayer } from './Layer';
 import type { Wall } from '../../../core/types/Wall';
 import type { Point } from '../../../core/types/Point';
+import type { Camera2D } from '../Camera2D';
 
 export interface WallLayerConfig {
   wallColor?: string;
@@ -28,6 +29,7 @@ export class WallLayer extends BaseLayer {
   private points: Map<string, Point> = new Map();
   private previewWall: { start: Point; end: Point } | null = null;
   private hoveredWallId: string | null = null;
+  private camera: Camera2D | null = null;
 
   private config: Required<WallLayerConfig>;
 
@@ -61,6 +63,10 @@ export class WallLayer extends BaseLayer {
 
   setHoveredWall(wallId: string | null): void {
     this.hoveredWallId = wallId;
+  }
+
+  setCamera(camera: Camera2D): void {
+    this.camera = camera;
   }
 
   render(ctx: CanvasRenderingContext2D): void {
@@ -142,9 +148,11 @@ export class WallLayer extends BaseLayer {
   }
 
   /**
-   * Render wall dimension label
+   * Render wall dimension label in screen space
    */
   private renderWallDimension(ctx: CanvasRenderingContext2D, wall: Wall): void {
+    if (!this.camera) return;
+
     const startPoint = this.points.get(wall.startPointId);
     const endPoint = this.points.get(wall.endPointId);
 
@@ -154,51 +162,55 @@ export class WallLayer extends BaseLayer {
     const dy = endPoint.y - startPoint.y;
     const distanceMm = Math.sqrt(dx * dx + dy * dy);
 
-    // Coordinates are already in mm, no conversion needed
-    // Just display the raw mm value
-
-    // Calculate label position (midpoint, offset perpendicular to wall)
+    // Calculate midpoint in world space (mm)
     const midX = (startPoint.x + endPoint.x) / 2;
     const midY = (startPoint.y + endPoint.y) / 2;
     const angle = Math.atan2(dy, dx);
 
-    // Offset label perpendicular to wall
-    const offsetDistance = 25;
-    const labelX = midX - Math.sin(angle) * offsetDistance;
-    const labelY = midY + Math.cos(angle) * offsetDistance;
+    // Offset perpendicular to wall in world space (mm)
+    const offsetDistanceMm = 250; // 250mm = 25cm offset
+    const labelWorldX = midX - Math.sin(angle) * offsetDistanceMm;
+    const labelWorldY = midY + Math.cos(angle) * offsetDistanceMm;
 
-    // Format label: show whole mm without decimals for cleaner display
+    // Convert to screen space
+    const labelScreen = this.camera.worldToScreen(labelWorldX, labelWorldY);
+
+    // Format label: show whole mm without decimals
     const label = `${distanceMm.toFixed(0)}mm`;
 
     ctx.save();
-    ctx.font = 'bold 11px system-ui';
+
+    // Reset transform to screen space
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    ctx.font = 'bold 13px system-ui';
     const metrics = ctx.measureText(label);
-    const padding = 4;
+    const padding = 6;
 
     // Draw label background
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
     ctx.fillRect(
-      labelX - metrics.width / 2 - padding,
-      labelY - 8,
+      labelScreen.x - metrics.width / 2 - padding,
+      labelScreen.y - 10,
       metrics.width + padding * 2,
-      16
+      20
     );
 
     // Draw border
-    ctx.strokeStyle = '#34495e';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1.5;
     ctx.strokeRect(
-      labelX - metrics.width / 2 - padding,
-      labelY - 8,
+      labelScreen.x - metrics.width / 2 - padding,
+      labelScreen.y - 10,
       metrics.width + padding * 2,
-      16
+      20
     );
 
     // Draw text
-    ctx.fillStyle = '#34495e';
+    ctx.fillStyle = '#2c3e50';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(label, labelX, labelY);
+    ctx.fillText(label, labelScreen.x, labelScreen.y);
 
     ctx.restore();
   }
