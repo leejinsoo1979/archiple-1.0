@@ -134,10 +134,7 @@ export class RectangleTool extends BaseTool {
     const bottomRight = this.sceneManager.objectManager.addPoint(bottomRightTemp);
     const bottomLeft = this.sceneManager.objectManager.addPoint(bottomLeftTemp);
 
-    eventBus.emit(FloorEvents.POINT_ADDED, { point: topLeft });
-    eventBus.emit(FloorEvents.POINT_ADDED, { point: topRight });
-    eventBus.emit(FloorEvents.POINT_ADDED, { point: bottomRight });
-    eventBus.emit(FloorEvents.POINT_ADDED, { point: bottomLeft });
+    // NOTE: POINT_ADDED events are emitted by BlueprintObjectManager, no need to emit here
 
     // Create 4 walls using actual blueprint IDs
     const walls: Wall[] = [
@@ -149,7 +146,7 @@ export class RectangleTool extends BaseTool {
 
     walls.forEach((wall) => {
       this.sceneManager.objectManager.addWall(wall);
-      eventBus.emit(FloorEvents.WALL_ADDED, { wall });
+      // NOTE: WALL_ADDED event is emitted by BlueprintObjectManager, no need to emit here
     });
 
     // Clear preview

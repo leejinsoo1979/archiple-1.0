@@ -158,7 +158,7 @@ export class WallTool extends BaseTool {
     this.snapService.setLastPoint(position);
     this.snapService.setPoints(this.sceneManager.objectManager.getAllPoints());
 
-    eventBus.emit(FloorEvents.POINT_ADDED, { point: this.startPoint });
+    // NOTE: POINT_ADDED event is emitted by BlueprintObjectManager, no need to emit here
   }
 
   /**
@@ -176,7 +176,7 @@ export class WallTool extends BaseTool {
     } else {
       const tempPoint = this.createPoint(position);
       endPoint = this.sceneManager.objectManager.addPoint(tempPoint);
-      eventBus.emit(FloorEvents.POINT_ADDED, { point: endPoint });
+      // NOTE: POINT_ADDED event is emitted by BlueprintObjectManager, no need to emit here
     }
 
     // Check if closing loop (end point === first point in chain)
