@@ -105,7 +105,9 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     const roomLayer = new RoomLayer();
     roomLayerRef.current = roomLayer;
 
-    const wallLayer = new WallLayer();
+    const wallLayer = new WallLayer({
+      wallThickness: config.wallThickness,
+    });
     wallLayer.setCamera(renderer.getCamera());
     wallLayerRef.current = wallLayer;
 

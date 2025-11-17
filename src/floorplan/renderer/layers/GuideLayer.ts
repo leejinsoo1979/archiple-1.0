@@ -363,16 +363,14 @@ export class GuideLayer extends BaseLayer {
   private renderRectanglePreview(ctx: CanvasRenderingContext2D, corners: Point[]): void {
     ctx.save();
 
-    // Draw rectangle with WALL THICKNESS (like confirmed walls)
+    // EXACT SAME thickness as confirmed walls (100mm)
     ctx.strokeStyle = '#3498db';
     ctx.lineWidth = this.wallThickness; // Use actual wall thickness
     ctx.lineCap = 'square';
     ctx.lineJoin = 'miter';
 
-    // Use world-space dash pattern based on wall thickness
-    const dashLength = this.wallThickness * 1.5;
-    const gapLength = this.wallThickness * 0.75;
-    ctx.setLineDash([dashLength, gapLength]);
+    // NO DASH - solid line like confirmed walls (only different color)
+    ctx.setLineDash([]);
 
     ctx.beginPath();
     ctx.moveTo(corners[0].x, corners[0].y);

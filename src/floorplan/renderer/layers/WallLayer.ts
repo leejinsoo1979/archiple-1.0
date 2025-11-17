@@ -118,22 +118,18 @@ export class WallLayer extends BaseLayer {
   private renderPreviewWall(ctx: CanvasRenderingContext2D, start: Point, end: Point): void {
     ctx.save();
 
-    // Thickness in mm (world space) - camera transform is already applied by renderer
+    // EXACT SAME thickness as confirmed walls (100mm)
     const thickness = this.config.wallThickness;
 
-    // Draw preview with SAME thickness and style as confirmed walls
+    // Draw preview with IDENTICAL settings to confirmed walls
     ctx.strokeStyle = this.config.previewColor;
     ctx.lineWidth = thickness;
     ctx.lineCap = 'square';
     ctx.lineJoin = 'miter';
     ctx.miterLimit = 10;
 
-    // Use world-space dash pattern based on wall thickness
-    if (this.config.previewStyle === 'dashed') {
-      const dashLength = thickness * 1.5; // 1.5x wall thickness
-      const gapLength = thickness * 0.75; // 0.75x wall thickness
-      ctx.setLineDash([dashLength, gapLength]);
-    }
+    // NO DASH - solid line like confirmed walls (only different color)
+    ctx.setLineDash([]);
 
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
