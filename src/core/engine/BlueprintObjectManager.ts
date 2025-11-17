@@ -53,7 +53,9 @@ export class BlueprintObjectManager {
   // Point management (maps to blueprint Corner)
   addPoint(point: Point): Point {
     console.log('[BlueprintObjectManager] addPoint called:', point);
-    const existing = this.floorplan.overlappedCorner(point.x, point.y, 1);
+    // Use larger tolerance (150mm) to match snap threshold
+    // Prevents duplicate corners at same location, especially when zoomed in
+    const existing = this.floorplan.overlappedCorner(point.x, point.y, 150);
     if (!existing) {
       const corner = this.floorplan.newCorner(point.x, point.y, point.id);
       console.log('[BlueprintObjectManager] Created corner:', corner.id, 'at', corner.x, corner.y);
