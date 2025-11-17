@@ -37,6 +37,10 @@ export class SceneManager {
     return SceneManager.instance;
   }
 
+  static resetInstance(): void {
+    SceneManager.instance = null as any;
+  }
+
   /**
    * Tool management
    */

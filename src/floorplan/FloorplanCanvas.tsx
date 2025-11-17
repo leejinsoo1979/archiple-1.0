@@ -65,12 +65,6 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     const container = containerRef.current;
     if (!canvas || !container) return;
 
-    // Prevent double initialization
-    if (sceneManagerRef.current) {
-      console.log('[FloorplanCanvas] Already initialized, skipping...');
-      return;
-    }
-
     console.log('[FloorplanCanvas] Initializing...');
 
     // 1. Initialize SceneManager
@@ -380,6 +374,9 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
       eventBus.off(FloorEvents.POINT_ADDED, updateLayers);
       eventBus.off(FloorEvents.WALL_ADDED, updateLayers);
       eventBus.off(FloorEvents.ROOM_DETECTED, updateLayers);
+
+      // Reset SceneManager singleton for re-initialization
+      SceneManager.resetInstance();
     };
   }, []);
 
