@@ -227,6 +227,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       const arcCamera = arcCameraRef.current;
       const maxWallHeight = walls.reduce((max, wall) => Math.max(max, wall.height || 2800), 2800);
       const targetY = Math.max((maxWallHeight * MM_TO_METERS) / 2, DEFAULT_CAMERA_HEIGHT);
+
+      // CRITICAL FIX: 카메라가 floorplan의 실제 중심을 봐야 함!
+      // centerX와 centerZ는 이미 미터 단위 (PIXELS_TO_METERS 곱해진 값)
       arcCamera.setTarget(new Vector3(0, targetY, 0));
 
       const minRadius = Math.max(0.5, boundingRadius * 0.6);
@@ -234,6 +237,12 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       arcCamera.lowerRadiusLimit = minRadius;
       arcCamera.upperRadiusLimit = maxRadius;
       arcCamera.radius = Math.min(Math.max(arcCamera.radius, minRadius), maxRadius);
+
+      console.log('[Babylon3DCanvas] Camera setup:', {
+        target: arcCamera.target,
+        radius: arcCamera.radius,
+        planMetrics: { centerX, centerZ, boundingRadius },
+      });
     }
 
     // Create point lookup map
@@ -281,15 +290,23 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
         const wallHeight = (wall.height || 2800) * MM_TO_METERS;
         const thickness = (wall.thickness || 200) * MM_TO_METERS;
 
-        console.log(`[Babylon3DCanvas] Wall ${index}:`, {
-          start: { x: startPoint.x, y: startPoint.y },
-          end: { x: endPoint.x, y: endPoint.y },
-          '3D': { x1, z1, x2, z2 },
-          length,
-          position: { x: midX, z: midZ },
-          angle: angle * (180 / Math.PI),
-          heightMm: wall.height || 2800,
-          thicknessMm: wall.thickness || 200,
+        // 2D와 3D 스케일 비교 로그
+        const length2D_mm = Math.sqrt(
+          (endPoint.x - startPoint.x) ** 2 + (endPoint.y - startPoint.y) ** 2
+        );
+        const length3D_m = length;
+
+        console.log(`[Babylon3DCanvas] Wall ${index} SCALE CHECK:`, {
+          '2D_좌표_mm': {
+            start: { x: startPoint.x, y: startPoint.y },
+            end: { x: endPoint.x, y: endPoint.y }
+          },
+          '2D_길이_mm': length2D_mm,
+          '3D_좌표_m': { x1, z1, x2, z2 },
+          '3D_길이_m': length3D_m,
+          '변환_체크': length2D_mm * 0.001 === length3D_m ? '✅ 정확함' : '❌ 틀림',
+          '벽_높이_m': wallHeight,
+          '벽_두께_m': thickness,
         });
 
         // Create wall mesh (meters)
