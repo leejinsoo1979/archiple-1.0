@@ -113,6 +113,7 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     pointLayerRef.current = pointLayer;
 
     const guideLayer = new GuideLayer();
+    guideLayer.setCamera(renderer.getCamera());
     guideLayerRef.current = guideLayer;
 
     const selectionLayer = new SelectionLayer();

@@ -1,5 +1,6 @@
 import { BaseLayer } from './Layer';
 import type { Point } from '../../../core/types/Point';
+import type { Camera2D } from '../Camera2D';
 
 export interface GuideLayerConfig {
   angleGuideColor?: string;
@@ -27,6 +28,7 @@ export class GuideLayer extends BaseLayer {
   private rectanglePreview: Point[] | null = null;
   private verticalGuide: { x: number; fromY: number; toY: number } | null = null;
   private horizontalGuide: { y: number; fromX: number; toX: number } | null = null;
+  private camera: Camera2D | null = null;
 
   private config: Required<GuideLayerConfig>;
 
@@ -96,6 +98,10 @@ export class GuideLayer extends BaseLayer {
 
   clearHorizontalGuide(): void {
     this.horizontalGuide = null;
+  }
+
+  setCamera(camera: Camera2D): void {
+    this.camera = camera;
   }
 
   render(ctx: CanvasRenderingContext2D): void {
@@ -251,25 +257,33 @@ export class GuideLayer extends BaseLayer {
     to: Point,
     distance: number
   ): void {
+    if (!this.camera) return;
+
     ctx.save();
 
-    // 1 pixel = 1mm (완전 통일)
+    // Distance is already in mm
     const millimeters = distance;
 
-    // Calculate label position (midpoint, offset slightly above)
+    // Calculate label position in world space (mm)
     const midX = (from.x + to.x) / 2;
     const midY = (from.y + to.y) / 2;
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     const angle = Math.atan2(dy, dx);
 
-    // Offset label perpendicular to wall
-    const offsetDistance = 20;
-    const labelX = midX - Math.sin(angle) * offsetDistance;
-    const labelY = midY + Math.cos(angle) * offsetDistance;
+    // Offset label perpendicular to wall in world space (mm)
+    const offsetDistanceMm = 250; // 250mm = 25cm offset
+    const labelWorldX = midX - Math.sin(angle) * offsetDistanceMm;
+    const labelWorldY = midY + Math.cos(angle) * offsetDistanceMm;
+
+    // Convert to screen space
+    const labelScreen = this.camera.worldToScreen(labelWorldX, labelWorldY);
 
     // Format label in mm only
     const label = `${Math.round(millimeters)}mm`;
+
+    // Reset transform to screen space
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
 
     ctx.font = 'bold 13px system-ui';
     const metrics = ctx.measureText(label);
@@ -278,8 +292,8 @@ export class GuideLayer extends BaseLayer {
     // Draw label background
     ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
     ctx.fillRect(
-      labelX - metrics.width / 2 - padding,
-      labelY - 10,
+      labelScreen.x - metrics.width / 2 - padding,
+      labelScreen.y - 10,
       metrics.width + padding * 2,
       20
     );
@@ -288,8 +302,8 @@ export class GuideLayer extends BaseLayer {
     ctx.strokeStyle = '#2c3e50';
     ctx.lineWidth = 1.5;
     ctx.strokeRect(
-      labelX - metrics.width / 2 - padding,
-      labelY - 10,
+      labelScreen.x - metrics.width / 2 - padding,
+      labelScreen.y - 10,
       metrics.width + padding * 2,
       20
     );
@@ -298,7 +312,7 @@ export class GuideLayer extends BaseLayer {
     ctx.fillStyle = '#2c3e50';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(label, labelX, labelY);
+    ctx.fillText(label, labelScreen.x, labelScreen.y);
 
     ctx.restore();
   }
@@ -371,30 +385,38 @@ export class GuideLayer extends BaseLayer {
     const widthLabel = `${Math.round(widthMm)}mm`;
     const heightLabel = `${Math.round(heightMm)}mm`;
 
-    // Top edge - width label
+    // Top edge - width label (offset in mm)
     const topMidX = (corners[0].x + corners[1].x) / 2;
     const topY = corners[0].y;
-    this.renderDimensionLabel(ctx, widthLabel, topMidX, topY - 15);
+    this.renderDimensionLabel(ctx, widthLabel, topMidX, topY - 300); // 300mm offset
 
-    // Right edge - height label
+    // Right edge - height label (offset in mm)
     const rightX = corners[1].x;
     const rightMidY = (corners[1].y + corners[2].y) / 2;
-    this.renderDimensionLabel(ctx, heightLabel, rightX + 40, rightMidY);
+    this.renderDimensionLabel(ctx, heightLabel, rightX + 400, rightMidY); // 400mm offset
 
-    // Bottom edge - width label
+    // Bottom edge - width label (offset in mm)
     const bottomMidX = (corners[2].x + corners[3].x) / 2;
     const bottomY = corners[2].y;
-    this.renderDimensionLabel(ctx, widthLabel, bottomMidX, bottomY + 25);
+    this.renderDimensionLabel(ctx, widthLabel, bottomMidX, bottomY + 300); // 300mm offset
 
-    // Left edge - height label
+    // Left edge - height label (offset in mm)
     const leftX = corners[0].x;
     const leftMidY = (corners[0].y + corners[3].y) / 2;
-    this.renderDimensionLabel(ctx, heightLabel, leftX - 40, leftMidY);
+    this.renderDimensionLabel(ctx, heightLabel, leftX - 400, leftMidY); // 400mm offset
 
     ctx.restore();
   }
 
-  private renderDimensionLabel(ctx: CanvasRenderingContext2D, label: string, x: number, y: number): void {
+  private renderDimensionLabel(ctx: CanvasRenderingContext2D, label: string, worldX: number, worldY: number): void {
+    if (!this.camera) return;
+
+    // Convert world position to screen space
+    const screenPos = this.camera.worldToScreen(worldX, worldY);
+
+    // Reset transform to screen space
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
     ctx.font = 'bold 12px system-ui';
     const metrics = ctx.measureText(label);
     const padding = 5;
@@ -402,8 +424,8 @@ export class GuideLayer extends BaseLayer {
     // Background
     ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
     ctx.fillRect(
-      x - metrics.width / 2 - padding,
-      y - 9,
+      screenPos.x - metrics.width / 2 - padding,
+      screenPos.y - 9,
       metrics.width + padding * 2,
       18
     );
@@ -412,8 +434,8 @@ export class GuideLayer extends BaseLayer {
     ctx.strokeStyle = '#3498db';
     ctx.lineWidth = 1.5;
     ctx.strokeRect(
-      x - metrics.width / 2 - padding,
-      y - 9,
+      screenPos.x - metrics.width / 2 - padding,
+      screenPos.y - 9,
       metrics.width + padding * 2,
       18
     );
@@ -422,6 +444,6 @@ export class GuideLayer extends BaseLayer {
     ctx.fillStyle = '#2c3e50';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(label, x, y);
+    ctx.fillText(label, screenPos.x, screenPos.y);
   }
 }
