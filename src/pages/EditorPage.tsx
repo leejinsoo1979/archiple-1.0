@@ -3,6 +3,7 @@ import FloorplanCanvas from '../floorplan/FloorplanCanvas';
 import Babylon3DCanvas from '../babylon/Babylon3DCanvas';
 import styles from './EditorPage.module.css';
 import { ToolType } from '../core/types/EditorState';
+import { createTestRoom } from '../floorplan/blueprint/BlueprintToBabylonAdapter';
 
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 
@@ -21,12 +22,23 @@ const EditorPage = () => {
   });
   const [playMode, setPlayMode] = useState(false); // FPS mode toggle
 
+  // Load test room data (2800mm x 2800mm room with 200mm walls)
+  const handleLoadTestRoom = () => {
+    const testData = createTestRoom();
+    console.log('[EditorPage] Loading test room:', testData);
+    setFloorplanData(testData);
+    setViewMode('3D'); // Switch to 3D view to see the result
+  };
+
   return (
     <div className={styles.editorContainer}>
       {/* Header */}
       <header className={styles.header}>
         <div className={styles.headerLeft}>
           <img src="/images/archiple_logo.png" alt="Archiple Studio" className={styles.headerLogo} />
+          <button onClick={handleLoadTestRoom} className={styles.topBtn} title="Load Test Room (2.8m x 2.8m)" style={{ marginLeft: '10px', padding: '5px 10px', fontSize: '11px' }}>
+            TEST ROOM
+          </button>
         </div>
         <div className={styles.headerCenter}>
           {/* Top Toolbar */}
