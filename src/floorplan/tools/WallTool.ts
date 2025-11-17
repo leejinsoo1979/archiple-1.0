@@ -29,7 +29,6 @@ export class WallTool extends BaseTool {
   private startPoint: Point | null = null;
   private currentPreviewEnd: Vector2 | null = null;
   private wallChain: Point[] = [];
-  private isStartFromExistingWall = false; // Track if started from existing wall
 
   // Config (units: mm)
   private defaultWallThickness = 150; // 150mm = 15cm
@@ -150,14 +149,9 @@ export class WallTool extends BaseTool {
     // Use existing point or create new one
     if (existingPoint) {
       this.startPoint = existingPoint;
-      // Check if starting from a point that already has walls
-      this.isStartFromExistingWall = existingPoint.connectedWalls && existingPoint.connectedWalls.length > 0;
-      console.log('[WallTool] Starting from existing wall:', this.isStartFromExistingWall);
     } else {
       const tempPoint = this.createPoint(position);
       this.startPoint = this.sceneManager.objectManager.addPoint(tempPoint);
-      this.isStartFromExistingWall = false;
-      console.log('[WallTool] Starting fresh room');
     }
 
     this.wallChain.push(this.startPoint);
@@ -172,7 +166,7 @@ export class WallTool extends BaseTool {
 
   /**
    * Confirm wall and continue chain
-   * Auto-completes room after 3 walls (ㄷ shape)
+   * Rooms are detected automatically when loops are closed
    */
   private confirmWall(position: Vector2, existingPoint?: Point): void {
     if (!this.startPoint) return;
@@ -213,65 +207,36 @@ export class WallTool extends BaseTool {
     this.startPoint = endPoint;
     this.wallChain.push(endPoint);
 
-    // Auto-complete room based on starting condition:
-    // - If started from existing wall: 3 walls (4 points) - ㄷ shape
-    // - If started fresh: 4 walls (5 points) - full rectangle
-    const requiredPoints = this.isStartFromExistingWall ? 4 : 5;
-
-    if (this.wallChain.length === requiredPoints) {
-      console.log('[WallTool] Auto-closing room (started from existing wall:', this.isStartFromExistingWall, ')');
-
-      // Create closing wall from current point back to first point
-      const firstPoint = this.wallChain[0];
-      const closingWall = this.createWall(endPoint, firstPoint);
-      this.sceneManager.objectManager.addWall(closingWall);
-
-      // Mark as closed
-      this.wallChain.push(firstPoint);
-
-      console.log('[WallTool] Room auto-completed!');
-      this.finishChain();
-      this.resetState();
-      return;
-    }
-
     // Update snap service
     this.snapService.setLastPoint(position);
     this.snapService.setPoints(this.sceneManager.objectManager.getAllPoints());
+
+    // NOTE: Room detection happens automatically via WALL_ADDED event
+    // User must manually close the loop by clicking on the first point
+    // No auto-completion - let user draw freely
   }
 
   /**
    * Finish wall chain
-   * Auto-completes the room by connecting last point to first point
+   * Rooms are detected automatically when walls form closed loops
    */
   private finishChain(): void {
     if (this.wallChain.length === 0) return;
 
     console.log('[WallTool] Finished chain with', this.wallChain.length, 'points');
 
-    // Auto-complete room if we have at least 3 points
+    // Check if we formed a closed loop
     if (this.wallChain.length >= 3) {
       const firstPoint = this.wallChain[0];
       const lastPoint = this.wallChain[this.wallChain.length - 1];
 
-      // If not already closed, auto-complete by connecting last to first
-      if (firstPoint.id !== lastPoint.id) {
-        console.log('[WallTool] Auto-completing room by connecting last point to first');
-
-        // Create closing wall
-        const closingWall = this.createWall(lastPoint, firstPoint);
-        this.sceneManager.objectManager.addWall(closingWall);
-
-        // Add first point to chain to mark as closed
-        this.wallChain.push(firstPoint);
-
-        console.log('[WallTool] Auto-completed room with closing wall');
+      if (firstPoint.id === lastPoint.id) {
+        // Closed loop detected - trigger room detection
+        console.log('[WallTool] Closed loop detected, triggering room detection');
+        eventBus.emit(FloorEvents.POTENTIAL_ROOM_DETECTED, {
+          points: this.wallChain,
+        });
       }
-
-      // Closed loop - trigger room detection
-      eventBus.emit(FloorEvents.POTENTIAL_ROOM_DETECTED, {
-        points: this.wallChain,
-      });
     }
 
     this.wallChain = [];
@@ -290,7 +255,6 @@ export class WallTool extends BaseTool {
     this.startPoint = null;
     this.currentPreviewEnd = null;
     this.wallChain = [];
-    this.isStartFromExistingWall = false;
 
     eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
     eventBus.emit(FloorEvents.DISTANCE_MEASUREMENT_CLEARED, {});
