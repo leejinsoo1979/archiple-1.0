@@ -5,15 +5,15 @@ import type { Room } from './room';
 
 /**
  * Adapter to convert blueprint Floorplan data to Babylon3DCanvas format
- * 2D coordinates are in pixels, need to convert to mm for 3D
- * Scale: 1 pixel = 10mm = 1cm
+ * 2D coordinates are already in mm (new system)
+ * No conversion needed - pass through directly
  * Babylon3DCanvas will convert mm to meters with * 0.001
  */
 
 export interface BabylonPoint {
   id: string;
-  x: number; // mm (converted from pixels)
-  y: number; // mm (converted from pixels)
+  x: number; // mm (already in mm)
+  y: number; // mm (already in mm)
 }
 
 export interface BabylonWall {
@@ -40,29 +40,27 @@ export interface BabylonFloorplanData {
 
 /**
  * Convert blueprint Floorplan to Babylon3DCanvas data format
- * Converts pixels to mm: 1 pixel = 10mm
+ * All coordinates are already in mm - pass through directly
  */
 export function convertFloorplanToBabylon(floorplan: Floorplan): BabylonFloorplanData {
   const corners = floorplan.getCorners();
   const walls = floorplan.getWalls();
   const rooms = floorplan.getRooms();
 
-  const PIXELS_TO_MM = 10; // 1 pixel = 10mm = 1cm
-
-  // Convert corners to points (pixels → mm)
+  // Pass through corners (already in mm)
   const points: BabylonPoint[] = corners.map(corner => ({
     id: corner.id,
-    x: corner.x * PIXELS_TO_MM, // pixels → mm
-    y: corner.y * PIXELS_TO_MM, // pixels → mm
+    x: corner.x, // Already in mm
+    y: corner.y, // Already in mm
   }));
 
-  // Convert walls (thickness: pixels → mm, height: already mm)
+  // Pass through walls (already in mm)
   const babylonWalls: BabylonWall[] = walls.map(wall => ({
     id: wall.id,
     startPointId: wall.getStart().id,
     endPointId: wall.getEnd().id,
-    thickness: wall.thickness * PIXELS_TO_MM, // pixels → mm (10px → 100mm)
-    height: wall.height, // Already in mm (2800mm)
+    thickness: wall.thickness, // Already in mm (100mm = 10cm)
+    height: wall.height, // Already in mm (2800mm = 2.8m)
   }));
 
   // Convert rooms
