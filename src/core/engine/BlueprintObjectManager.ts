@@ -180,6 +180,25 @@ export class BlueprintObjectManager {
     return this.floorplan.getRooms().map((room, idx) => {
       const points = room.corners.map(c => c.id);
 
+      // Find walls that connect consecutive corners
+      const walls: string[] = [];
+      const allWalls = this.floorplan.getWalls();
+
+      for (let i = 0; i < room.corners.length; i++) {
+        const curr = room.corners[i];
+        const next = room.corners[(i + 1) % room.corners.length];
+
+        // Find wall connecting curr and next
+        const wall = allWalls.find(w =>
+          (w.getStart().id === curr.id && w.getEnd().id === next.id) ||
+          (w.getStart().id === next.id && w.getEnd().id === curr.id)
+        );
+
+        if (wall) {
+          walls.push(wall.id);
+        }
+      }
+
       // Calculate area (mm² -> m²)
       let area = 0;
       if (room.corners.length >= 3) {
@@ -196,8 +215,8 @@ export class BlueprintObjectManager {
         id: `room-${idx}`,
         name: `Room ${idx + 1}`,
         points,
+        walls,
         area,
-        perimeter: 0, // TODO: calculate
       };
     });
   }

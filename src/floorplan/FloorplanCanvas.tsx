@@ -368,10 +368,27 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
       }
       area = Math.abs(area / 2) / 1000000; // mm² to m²
 
+      // Find walls connecting consecutive points
+      const roomWalls: string[] = [];
+      for (let i = 0; i < roomPointIds.length; i++) {
+        const currId = roomPointIds[i];
+        const nextId = roomPointIds[(i + 1) % roomPointIds.length];
+
+        const wall = walls.find(w =>
+          (w.startPointId === currId && w.endPointId === nextId) ||
+          (w.startPointId === nextId && w.endPointId === currId)
+        );
+
+        if (wall) {
+          roomWalls.push(wall.id);
+        }
+      }
+
       const room = {
         id: `room_${Date.now()}`,
         name: `Room ${Math.floor(Math.random() * 1000)}`,
         points: roomPointIds,
+        walls: roomWalls,
         area: area,
       };
 
