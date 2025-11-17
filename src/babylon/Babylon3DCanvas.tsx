@@ -15,8 +15,13 @@ import {
   HemisphericLight,
   GlowLayer,
   VertexData,
-  Mesh
+  Mesh,
+  SceneLoader,
+  AbstractMesh,
+  AnimationGroup,
+  FollowCamera
 } from '@babylonjs/core';
+import '@babylonjs/loaders/glTF';
 import earcut from 'earcut';
 import styles from './Babylon3DCanvas.module.css';
 
@@ -96,6 +101,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
   const sunLightRef = useRef<DirectionalLight | null>(null);
   const arcCameraRef = useRef<ArcRotateCamera | null>(null);
   const fpsCameraRef = useRef<UniversalCamera | null>(null);
+  const thirdPersonCameraRef = useRef<FollowCamera | null>(null);
+  const characterRef = useRef<AbstractMesh | null>(null);
+  const animationsRef = useRef<AnimationGroup[]>([]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -166,6 +174,19 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       fpsCamera.ellipsoid = new Vector3(0.5, 0.9, 0.5); // Collision ellipsoid (radius)
       fpsCameraRef.current = fpsCamera;
 
+      // Create 3rd Person Follow Camera
+      const thirdPersonCamera = new FollowCamera(
+        'thirdPersonCamera',
+        new Vector3(0, DEFAULT_CAMERA_HEIGHT, -3), // Behind character
+        scene
+      );
+      thirdPersonCamera.radius = 3; // Distance from character (3m)
+      thirdPersonCamera.heightOffset = 1.5; // Camera height offset
+      thirdPersonCamera.rotationOffset = 0; // No rotation offset
+      thirdPersonCamera.cameraAcceleration = 0.05; // Smooth follow
+      thirdPersonCamera.maxCameraSpeed = 10; // Max speed
+      thirdPersonCameraRef.current = thirdPersonCamera;
+
       // Set default camera
       scene.activeCamera = arcCamera;
 
@@ -201,6 +222,107 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       shadowGenerator.useBlurExponentialShadowMap = true;
       shadowGenerator.blurKernel = 32;
       shadowGenerator.darkness = 0.3;
+
+      // Create realistic human character
+      const createCharacter = () => {
+        const character = MeshBuilder.CreateBox('characterRoot', { size: 0.01 }, scene);
+        character.position = new Vector3(0, 0, 0);
+        character.isVisible = false; // Root is invisible
+
+        // Body proportions (realistic human)
+        const headRadius = 0.12; // Head ~24cm diameter
+        const bodyHeight = 0.6; // Torso ~60cm
+        const bodyWidth = 0.4; // Shoulders ~40cm
+        const armLength = 0.6; // Arms ~60cm
+        const legLength = 0.9; // Legs ~90cm
+        const totalHeight = headRadius * 2 + bodyHeight + legLength; // ~1.74m
+
+        // Skin color
+        const skinMat = new PBRMaterial('skinMat', scene);
+        skinMat.albedoColor = new Color3(0.95, 0.76, 0.65); // Skin tone
+        skinMat.metallic = 0;
+        skinMat.roughness = 0.7;
+
+        // Clothing color
+        const clothMat = new PBRMaterial('clothMat', scene);
+        clothMat.albedoColor = new Color3(0.2, 0.3, 0.5); // Blue shirt
+        clothMat.metallic = 0;
+        clothMat.roughness = 0.8;
+
+        const pantsMat = new PBRMaterial('pantsMat', scene);
+        pantsMat.albedoColor = new Color3(0.15, 0.15, 0.2); // Dark pants
+        pantsMat.metallic = 0;
+        pantsMat.roughness = 0.9;
+
+        // Head (sphere)
+        const head = MeshBuilder.CreateSphere('head', { diameter: headRadius * 2 }, scene);
+        head.position.y = totalHeight - headRadius;
+        head.material = skinMat;
+        head.parent = character;
+        shadowGenerator.addShadowCaster(head);
+
+        // Torso (box)
+        const torso = MeshBuilder.CreateBox('torso', {
+          width: bodyWidth,
+          height: bodyHeight,
+          depth: 0.2
+        }, scene);
+        torso.position.y = legLength + bodyHeight / 2;
+        torso.material = clothMat;
+        torso.parent = character;
+        shadowGenerator.addShadowCaster(torso);
+
+        // Left arm
+        const leftArm = MeshBuilder.CreateCylinder('leftArm', {
+          diameter: 0.08,
+          height: armLength
+        }, scene);
+        leftArm.position.set(-bodyWidth / 2 - 0.05, legLength + bodyHeight - armLength / 2, 0);
+        leftArm.material = skinMat;
+        leftArm.parent = character;
+        shadowGenerator.addShadowCaster(leftArm);
+
+        // Right arm
+        const rightArm = MeshBuilder.CreateCylinder('rightArm', {
+          diameter: 0.08,
+          height: armLength
+        }, scene);
+        rightArm.position.set(bodyWidth / 2 + 0.05, legLength + bodyHeight - armLength / 2, 0);
+        rightArm.material = skinMat;
+        rightArm.parent = character;
+        shadowGenerator.addShadowCaster(rightArm);
+
+        // Left leg
+        const leftLeg = MeshBuilder.CreateCylinder('leftLeg', {
+          diameter: 0.12,
+          height: legLength
+        }, scene);
+        leftLeg.position.set(-0.1, legLength / 2, 0);
+        leftLeg.material = pantsMat;
+        leftLeg.parent = character;
+        shadowGenerator.addShadowCaster(leftLeg);
+
+        // Right leg
+        const rightLeg = MeshBuilder.CreateCylinder('rightLeg', {
+          diameter: 0.12,
+          height: legLength
+        }, scene);
+        rightLeg.position.set(0.1, legLength / 2, 0);
+        rightLeg.material = pantsMat;
+        rightLeg.parent = character;
+        shadowGenerator.addShadowCaster(rightLeg);
+
+        // Enable collisions
+        character.checkCollisions = true;
+        character.ellipsoid = new Vector3(0.3, totalHeight / 2, 0.3);
+
+        characterRef.current = character;
+        console.log('[Babylon3DCanvas] Created realistic human character (height: 1.74m)');
+
+        return character;
+      };
+
+      createCharacter();
 
       // Render loop
       engine.runRenderLoop(() => {
@@ -335,6 +457,15 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
       // Find doors on this wall
       const wallDoors = doors.filter((door: any) => door.wallId === wall.id);
+
+      if (wallIndex === 0) {
+        console.log('[Babylon3DCanvas] Wall door check:', {
+          wallId: wall.id,
+          totalDoors: doors.length,
+          wallDoors: wallDoors.length,
+          doors: wallDoors
+        });
+      }
 
       // Convert to meters
       const startX = startPoint.x * MM_TO_METERS - centerX;
@@ -624,36 +755,96 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     const scene = sceneRef.current;
     const canvas = canvasRef.current;
     const arcCamera = arcCameraRef.current;
-    const fpsCamera = fpsCameraRef.current;
+    const thirdPersonCamera = thirdPersonCameraRef.current;
+    const character = characterRef.current;
 
-    if (!scene || !canvas || !arcCamera || !fpsCamera) return;
+    if (!scene || !canvas || !arcCamera || !thirdPersonCamera || !character) return;
 
     if (playMode) {
-      // Switch to FPS camera
-      console.log('[Babylon3DCanvas] Switching to FPS camera (Play Mode)');
+      // Switch to 3rd person camera
+      console.log('[Babylon3DCanvas] Switching to 3rd Person camera (Play Mode)');
 
       // Calculate room center from floorplan data
       const planMetrics = computePlanMetrics(floorplanData?.points);
       if (planMetrics) {
-        // Position camera at room center, eye height (1.7m)
-        fpsCamera.position = new Vector3(
+        // Position character at room center
+        character.position = new Vector3(
           planMetrics.centerX,
-          DEFAULT_CAMERA_HEIGHT,
+          0,
           planMetrics.centerZ
         );
-        // Set camera rotation for horizontal view (like FPS game)
-        fpsCamera.rotation = new Vector3(0, 0, 0); // Pitch=0 (horizontal), Yaw=0 (forward), Roll=0
       }
 
+      // Attach camera to character
+      thirdPersonCamera.lockedTarget = character;
       arcCamera.detachControl();
-      fpsCamera.attachControl(canvas, true);
-      scene.activeCamera = fpsCamera;
+      thirdPersonCamera.attachControl(canvas, true);
+      scene.activeCamera = thirdPersonCamera;
+
+      // Character movement controls
+      const inputMap: { [key: string]: boolean } = {};
+      const onKeyDown = (evt: KeyboardEvent) => {
+        inputMap[evt.key.toLowerCase()] = true;
+      };
+      const onKeyUp = (evt: KeyboardEvent) => {
+        inputMap[evt.key.toLowerCase()] = false;
+      };
+
+      window.addEventListener('keydown', onKeyDown);
+      window.addEventListener('keyup', onKeyUp);
+
+      // Movement logic in render loop
+      const moveSpeed = 0.05; // 5cm per frame
+      const rotateSpeed = 0.03;
+
+      scene.onBeforeRenderObservable.add(() => {
+        if (!character) return;
+
+        let moved = false;
+
+        // Rotation (A/D keys)
+        if (inputMap['a']) {
+          character.rotation.y += rotateSpeed;
+        }
+        if (inputMap['d']) {
+          character.rotation.y -= rotateSpeed;
+        }
+
+        // Forward/Backward (W/S keys)
+        if (inputMap['w']) {
+          const forward = character.forward;
+          character.position.addInPlace(forward.scale(moveSpeed));
+          moved = true;
+        }
+        if (inputMap['s']) {
+          const backward = character.forward;
+          character.position.addInPlace(backward.scale(-moveSpeed));
+          moved = true;
+        }
+
+        // Simple walking animation (bob head up/down)
+        if (moved) {
+          const head = scene.getMeshByName('head');
+          if (head) {
+            const time = performance.now() * 0.005;
+            head.position.y = 1.62 + Math.sin(time) * 0.02; // Bob 2cm
+          }
+        }
+      });
+
+      // Cleanup
+      return () => {
+        window.removeEventListener('keydown', onKeyDown);
+        window.removeEventListener('keyup', onKeyUp);
+        scene.onBeforeRenderObservable.clear();
+      };
     } else {
       // Switch back to ArcRotate camera
       console.log('[Babylon3DCanvas] Switching to ArcRotate camera (3D View)');
-      fpsCamera.detachControl();
+      thirdPersonCamera.detachControl();
       arcCamera.attachControl(canvas, true);
       scene.activeCamera = arcCamera;
+      scene.onBeforeRenderObservable.clear();
     }
   }, [playMode, floorplanData]);
 
