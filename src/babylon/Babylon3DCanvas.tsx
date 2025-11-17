@@ -758,19 +758,27 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     const scene = sceneRef.current;
     const canvas = canvasRef.current;
     const arcCamera = arcCameraRef.current;
-    const thirdPersonCamera = thirdPersonCameraRef.current;
+    const fpsCamera = fpsCameraRef.current;
     const character = characterRef.current;
 
-    if (!scene || !canvas || !arcCamera || !thirdPersonCamera || !character) return;
+    if (!scene || !canvas || !arcCamera || !fpsCamera || !character) return;
 
     if (playMode) {
-      // Switch to 3rd person camera
-      console.log('[Babylon3DCanvas] Switching to 3rd Person camera (Play Mode)');
+      // Switch to FPS camera (1st person)
+      console.log('[Babylon3DCanvas] Switching to FPS camera (Play Mode)');
 
       // Calculate room center from floorplan data
       const planMetrics = computePlanMetrics(floorplanData?.points);
       if (planMetrics) {
-        // Position character at room center
+        // Position FPS camera at room center
+        fpsCamera.position = new Vector3(
+          planMetrics.centerX,
+          DEFAULT_CAMERA_HEIGHT,
+          planMetrics.centerZ
+        );
+        fpsCamera.rotation = new Vector3(0, 0, 0);
+
+        // Position character at camera position (hidden or lower body visible)
         character.position = new Vector3(
           planMetrics.centerX,
           0,
@@ -778,81 +786,56 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         );
       }
 
-      // Attach camera to character
-      thirdPersonCamera.lockedTarget = character;
+      // Hide character head (so we don't see it in FPS view)
+      const head = scene.getMeshByName('head');
+      if (head) head.isVisible = false;
+
       arcCamera.detachControl();
-      thirdPersonCamera.attachControl(canvas, true);
-      scene.activeCamera = thirdPersonCamera;
+      fpsCamera.attachControl(canvas, true);
+      scene.activeCamera = fpsCamera;
 
-      // Character movement controls
-      const inputMap: { [key: string]: boolean } = {};
-      const onKeyDown = (evt: KeyboardEvent) => {
-        inputMap[evt.key.toLowerCase()] = true;
-      };
-      const onKeyUp = (evt: KeyboardEvent) => {
-        inputMap[evt.key.toLowerCase()] = false;
-      };
-
-      window.addEventListener('keydown', onKeyDown);
-      window.addEventListener('keyup', onKeyUp);
-
-      // Movement logic in render loop
+      // Sync character with camera movement
       const moveSpeed = 0.05; // 5cm per frame
-      const rotateSpeed = 0.03;
+      let lastCameraPos = fpsCamera.position.clone();
 
       scene.onBeforeRenderObservable.add(() => {
-        if (!character) return;
+        if (!fpsCamera || !character) return;
 
-        let moved = false;
+        // Update character position to follow camera (for collision)
+        const cameraDelta = fpsCamera.position.subtract(lastCameraPos);
+        character.position.addInPlace(cameraDelta);
 
-        // Rotation (A/D keys)
-        if (inputMap['a']) {
-          character.rotation.y += rotateSpeed;
-        }
-        if (inputMap['d']) {
-          character.rotation.y -= rotateSpeed;
-        }
+        // Match character rotation to camera rotation
+        character.rotation.y = fpsCamera.rotation.y;
 
-        // Calculate forward direction based on character rotation
-        const forward = new Vector3(
-          Math.sin(character.rotation.y),
-          0,
-          Math.cos(character.rotation.y)
-        );
+        lastCameraPos = fpsCamera.position.clone();
 
-        // Forward/Backward (W/S keys)
-        if (inputMap['w']) {
-          character.position.addInPlace(forward.scale(moveSpeed));
-          moved = true;
-        }
-        if (inputMap['s']) {
-          character.position.addInPlace(forward.scale(-moveSpeed));
-          moved = true;
-        }
+        // Walking animation (bob camera slightly)
+        const keys = (fpsCamera as any)._keys;
+        const isMoving = keys && (keys.forward || keys.backward || keys.left || keys.right);
 
-        // Simple walking animation (bob head up/down)
-        if (moved) {
-          const head = scene.getMeshByName('head');
-          if (head) {
-            const time = performance.now() * 0.005;
-            head.position.y = 1.62 + Math.sin(time) * 0.02; // Bob 2cm
-          }
+        if (isMoving) {
+          const time = performance.now() * 0.01;
+          fpsCamera.position.y = DEFAULT_CAMERA_HEIGHT + Math.sin(time) * 0.015; // Bob 1.5cm
         }
       });
 
       // Cleanup
       return () => {
-        window.removeEventListener('keydown', onKeyDown);
-        window.removeEventListener('keyup', onKeyUp);
         scene.onBeforeRenderObservable.clear();
+        if (head) head.isVisible = true; // Show head again when exiting play mode
       };
     } else {
       // Switch back to ArcRotate camera
       console.log('[Babylon3DCanvas] Switching to ArcRotate camera (3D View)');
-      thirdPersonCamera.detachControl();
+      fpsCamera.detachControl();
       arcCamera.attachControl(canvas, true);
       scene.activeCamera = arcCamera;
       scene.onBeforeRenderObservable.clear();
+
+      // Show character head again
+      const head = scene.getMeshByName('head');
+      if (head) head.isVisible = true;
     }
   }, [playMode, floorplanData]);
 
