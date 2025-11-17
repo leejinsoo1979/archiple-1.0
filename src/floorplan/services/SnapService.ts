@@ -43,13 +43,13 @@ export class SnapService {
     this.config = {
       enabled: true,
       pointSnapEnabled: true,
-      gridSnapEnabled: true, // ENABLED - grid snap
+      gridSnapEnabled: false, // DISABLED - free drawing with 1mm precision
       angleSnapEnabled: true, // ENABLED - angle guides (0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°)
       orthogonalSnapEnabled: false, // DISABLED by default - enable with Shift key
       perpendicularSnapEnabled: false, // DISABLED - free drawing
       midpointSnapEnabled: false, // DISABLED - free drawing
       pointSnapThreshold: 150, // 150mm default (15px at scale 0.1)
-      gridSize: 50, // 50mm grid precision (default)
+      gridSize: 100, // 100mm grid display only
       angleSnapDegrees: [0, 45, 90, 135, 180, 225, 270, 315], // 8-direction angle snap
       orthogonalAngles: [0, 90, 180, 270], // Orthogonal angles for Shift key
       ...config,
@@ -78,11 +78,11 @@ export class SnapService {
   }
 
   /**
-   * Snap coordinate to grid precision
-   * Uses config.gridSize for snapping precision
+   * Snap coordinate to 1mm precision
+   * Always use 1mm precision for accurate drawing
    */
   private snapToPrecision(value: number): number {
-    const precision = this.config.gridSize;
+    const precision = 1; // 1mm precision
     return Math.round(value / precision) * precision;
   }
 
@@ -127,7 +127,14 @@ export class SnapService {
       return this.snapToGrid(position);
     }
 
-    return { position, snappedTo: 'none' };
+    // No snap - return position with 1mm precision
+    return {
+      position: new Vector2(
+        this.snapToPrecision(position.x),
+        this.snapToPrecision(position.y)
+      ),
+      snappedTo: 'none'
+    };
   }
 
   /**

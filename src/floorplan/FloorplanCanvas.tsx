@@ -71,7 +71,7 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     // Units: mm (millimeters) - 모든 내부 좌표는 mm 단위
     // Scale: scalePxPerMm = 0.1 means 1mm = 0.1px (4800mm = 480px)
     const config: EditorConfig = {
-      gridSize: 1, // 1mm precision
+      gridSize: 100, // 100mm = 10cm grid display
       snapEnabled: true,
       snapThreshold: 15, // 15px snap threshold (screen space)
       wallThickness: 150, // 150mm = 15cm
@@ -93,9 +93,9 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
 
     // 4. Create Layers
     const gridLayer = new GridLayer({
-      gridSize: config.gridSize,
+      gridSize: config.gridSize, // 100mm minor grid
       majorGridSize: 1000, // 1000mm = 1m major grid
-      minorColor: '#f5f5f5', // 매우 연한 회색 (1mm 그리드)
+      minorColor: '#f0f0f0', // 연한 회색 (100mm 그리드)
       majorColor: '#666666', // 진한 회색 (1m 그리드)
       backgroundColor: '#ffffff', // 순백색 배경
     });
