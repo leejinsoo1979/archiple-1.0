@@ -69,7 +69,7 @@ const computePlanMetrics = (points?: any[] | null): PlanMetrics | null => {
 
   points.forEach((point) => {
     const worldX = point.x * MM_TO_METERS;
-    const worldZ = point.y * MM_TO_METERS;
+    const worldZ = -(point.y * MM_TO_METERS); // Flip Z axis
 
     if (worldX < minX) minX = worldX;
     if (worldX > maxX) maxX = worldX;
@@ -469,11 +469,11 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         });
       }
 
-      // Convert to meters
+      // Convert to meters (flip Z axis for correct orientation)
       const startX = startPoint.x * MM_TO_METERS - centerX;
-      const startZ = startPoint.y * MM_TO_METERS - centerZ;
+      const startZ = -(startPoint.y * MM_TO_METERS) - centerZ;
       const endX = endPoint.x * MM_TO_METERS - centerX;
-      const endZ = endPoint.y * MM_TO_METERS - centerZ;
+      const endZ = -(endPoint.y * MM_TO_METERS) - centerZ;
 
       const dx = endX - startX;
       const dz = endZ - startZ;
@@ -632,14 +632,14 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     const { rooms } = floorplanData;
     if (rooms && rooms.length > 0) {
       rooms.forEach((room, roomIndex) => {
-        // Get room boundary points in 3D space
+        // Get room boundary points in 3D space (flip Z axis)
         const roomPoints = room.points.map((pid: string) => {
           const p = pointMap.get(pid);
           if (!p) return null;
           return new Vector3(
             p.x * MM_TO_METERS - centerX,
             0.01, // Slightly above Y=0 to prevent z-fighting
-            p.y * MM_TO_METERS - centerZ
+            -(p.y * MM_TO_METERS) - centerZ
           );
         }).filter((p: any) => p !== null);
 
@@ -801,9 +801,12 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       scene.onBeforeRenderObservable.add(() => {
         if (!fpsCamera || !character) return;
 
-        // Update character position to follow camera (for collision)
+        // Update character XZ position to follow camera (for collision)
+        // Keep Y=0 so character stays on ground
         const cameraDelta = fpsCamera.position.subtract(lastCameraPos);
-        character.position.addInPlace(cameraDelta);
+        character.position.x += cameraDelta.x;
+        character.position.z += cameraDelta.z;
+        // character.position.y stays at 0 (on ground)
 
         // Match character rotation to camera rotation
         character.rotation.y = fpsCamera.rotation.y;
@@ -817,6 +820,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         if (isMoving) {
           const time = performance.now() * 0.01;
           fpsCamera.position.y = DEFAULT_CAMERA_HEIGHT + Math.sin(time) * 0.015; // Bob 1.5cm
+        } else {
+          // Reset camera height when not moving
+          fpsCamera.position.y = DEFAULT_CAMERA_HEIGHT;
         }
       });
 
