@@ -27,7 +27,7 @@ if (typeof window !== 'undefined') {
 (PolygonMeshBuilder as any).earcut = earcut;
 
 interface Babylon3DCanvasProps {
-  floorplanData?: { points: any[]; walls: any[]; rooms: any[]; floorplan?: any } | null;
+  floorplanData?: { points: any[]; walls: any[]; rooms: any[]; doors?: any[]; floorplan?: any } | null;
   visible?: boolean;
   sunSettings?: {
     intensity: number;
@@ -121,6 +121,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       const scene = new Scene(engine);
       scene.clearColor = new Color3(0.95, 0.95, 0.97).toColor4(1);
       scene.ambientColor = new Color3(0.3, 0.3, 0.3);
+      scene.collisionsEnabled = true; // Enable collisions for FPS mode
+      scene.gravity = new Vector3(0, 0, 0); // No gravity in FPS mode
       sceneRef.current = scene;
 
       // Enable glow layer for better visuals
@@ -244,8 +246,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       mesh.dispose();
     });
 
-    const { points, walls, floorplan: _floorplan } = floorplanData;
-    console.log('[Babylon3DCanvas] Points:', points?.length, 'Walls:', walls?.length);
+    const { points, walls, doors = [], floorplan: _floorplan } = floorplanData;
+    console.log('[Babylon3DCanvas] Points:', points?.length, 'Walls:', walls?.length, 'Doors:', doors?.length);
     if (!walls || walls.length === 0) return;
 
     const planMetrics = computePlanMetrics(points);
@@ -484,6 +486,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
         floor.material = roomFloorMat;
         floor.receiveShadows = true;
+        floor.checkCollisions = true; // Enable collision for FPS mode
 
         console.log(`[Babylon3DCanvas] ✅ Custom floor ${roomIndex} created on XZ plane:`, {
           points: roomPoints.length,
