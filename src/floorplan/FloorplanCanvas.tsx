@@ -68,9 +68,8 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     // 1. Initialize SceneManager
     // Units: mm (millimeters)
     // Conversion: 1 pixel = 10mm for display
-    // Grid: 100 pixels = 1000mm = 1m
     const config: EditorConfig = {
-      gridSize: 100, // 100 pixels = 1000mm = 1m
+      gridSize: 20,
       snapEnabled: true,
       snapThreshold: 15,
       wallThickness: 200, // 200mm = 20cm
