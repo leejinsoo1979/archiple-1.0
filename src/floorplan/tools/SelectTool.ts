@@ -132,7 +132,7 @@ export class SelectTool extends BaseTool {
         point: this.selectedPoint,
       });
     }
-    // Handle wall dragging
+    // Handle wall dragging with axis constraints
     else if (this.selectedWall && this.dragStartPos) {
       const allPoints = this.sceneManager.objectManager.getAllPoints();
 
@@ -142,15 +142,24 @@ export class SelectTool extends BaseTool {
 
       if (!startPoint || !endPoint) return;
 
-      // Calculate drag delta
-      const dx = position.x - this.dragStartPos.x;
-      const dy = position.y - this.dragStartPos.y;
+      // Determine if wall is horizontal or vertical
+      const dx = endPoint.x - startPoint.x;
+      const dy = endPoint.y - startPoint.y;
+      const isHorizontal = Math.abs(dx) > Math.abs(dy);
 
-      // Move both points by the same delta
-      startPoint.x += dx;
-      startPoint.y += dy;
-      endPoint.x += dx;
-      endPoint.y += dy;
+      // Calculate drag delta
+      const dragDx = position.x - this.dragStartPos.x;
+      const dragDy = position.y - this.dragStartPos.y;
+
+      if (isHorizontal) {
+        // Horizontal wall - only move Y axis (상하)
+        startPoint.y += dragDy;
+        endPoint.y += dragDy;
+      } else {
+        // Vertical wall - only move X axis (좌우)
+        startPoint.x += dragDx;
+        endPoint.x += dragDx;
+      }
 
       // Update drag start position for next frame
       this.dragStartPos = position.clone();

@@ -29,6 +29,7 @@ export class WallLayer extends BaseLayer {
   private points: Map<string, Point> = new Map();
   private previewWall: { start: Point; end: Point } | null = null;
   private hoveredWallId: string | null = null;
+  private selectedWallId: string | null = null;
   private camera: Camera2D | null = null;
 
   private config: Required<WallLayerConfig>;
@@ -65,6 +66,10 @@ export class WallLayer extends BaseLayer {
     this.hoveredWallId = wallId;
   }
 
+  setSelectedWall(wallId: string | null): void {
+    this.selectedWallId = wallId;
+  }
+
   setCamera(camera: Camera2D): void {
     this.camera = camera;
   }
@@ -77,7 +82,8 @@ export class WallLayer extends BaseLayer {
     // Render confirmed walls
     this.walls.forEach((wall) => {
       const isHovered = wall.id === this.hoveredWallId;
-      this.renderWall(ctx, wall, isHovered);
+      const isSelected = wall.id === this.selectedWallId;
+      this.renderWall(ctx, wall, isHovered, isSelected);
     });
 
     // Render wall dimensions
@@ -93,7 +99,7 @@ export class WallLayer extends BaseLayer {
     this.resetOpacity(ctx);
   }
 
-  private renderWall(ctx: CanvasRenderingContext2D, wall: Wall, isHovered: boolean): void {
+  private renderWall(ctx: CanvasRenderingContext2D, wall: Wall, isHovered: boolean, isSelected: boolean): void {
     const startPoint = this.points.get(wall.startPointId);
     const endPoint = this.points.get(wall.endPointId);
 
@@ -103,7 +109,15 @@ export class WallLayer extends BaseLayer {
     const thickness = this.config.wallThickness; // Always 100mm
 
     // Use stroke with square linecap and linejoin for sharp corners
-    ctx.strokeStyle = isHovered ? '#e74c3c' : this.config.wallColor;
+    // Priority: selected > hovered > normal
+    let color = this.config.wallColor;
+    if (isSelected) {
+      color = '#3498db'; // Blue for selected
+    } else if (isHovered) {
+      color = '#e74c3c'; // Red for hovered
+    }
+
+    ctx.strokeStyle = color;
     ctx.lineWidth = thickness;
     ctx.lineCap = 'square';
     ctx.lineJoin = 'miter';

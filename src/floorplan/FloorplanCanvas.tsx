@@ -17,12 +17,14 @@ import { WallLayer } from './renderer/layers/WallLayer';
 import { PointLayer } from './renderer/layers/PointLayer';
 import { GuideLayer } from './renderer/layers/GuideLayer';
 import { SelectionLayer } from './renderer/layers/SelectionLayer';
+import { DoorLayer } from './renderer/layers/DoorLayer';
 
 // Tools
 import { ToolManager } from './tools/ToolManager';
 import { WallTool } from './tools/WallTool';
 import { RectangleTool } from './tools/RectangleTool';
 import { SelectTool } from './tools/SelectTool';
+import { DoorTool } from './tools/DoorTool';
 
 // Services
 import { SnapService } from './services/SnapService';
@@ -129,10 +131,13 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     const selectionLayer = new SelectionLayer();
     selectionLayerRef.current = selectionLayer;
 
-    // Add layers to renderer (z-index order: Grid→Room→Wall→Point→Guide→Selection)
+    const doorLayer = new DoorLayer();
+
+    // Add layers to renderer (z-index order: Grid→Room→Wall→Door→Point→Guide→Selection)
     renderer.addLayer(gridLayer);
     renderer.addLayer(roomLayer);
     renderer.addLayer(wallLayer);
+    renderer.addLayer(doorLayer);
     renderer.addLayer(pointLayer);
     renderer.addLayer(guideLayer);
     renderer.addLayer(selectionLayer);
@@ -163,6 +168,9 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     const rectangleTool = new RectangleTool(sceneManager, snapService);
     toolManager.registerTool(ToolType.RECTANGLE, rectangleTool);
 
+    const doorTool = new DoorTool(sceneManager);
+    toolManager.registerTool(ToolType.DOOR, doorTool);
+
     // Set default tool to SELECT
     toolManager.setActiveTool(ToolType.SELECT);
     sceneManager.setTool(ToolType.SELECT);
@@ -181,8 +189,9 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
       const points = sceneManager.objectManager.getAllPoints();
       const walls = sceneManager.objectManager.getAllWalls();
       const rooms = sceneManager.objectManager.getAllRooms();
+      const doors = sceneManager.objectManager.getAllDoors();
 
-      console.log('[FloorplanCanvas] updateLayers called:', points.length, 'points', walls.length, 'walls');
+      console.log('[FloorplanCanvas] updateLayers called:', points.length, 'points', walls.length, 'walls', doors.length, 'doors');
 
       // Update layer data
       wallLayer.setWalls(walls);
@@ -192,6 +201,10 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
 
       roomLayer.setRooms(rooms);
       roomLayer.setPoints(points);
+
+      doorLayer.setDoors(doors);
+      doorLayer.setWalls(walls);
+      doorLayer.setPoints(points);
 
       // Update stats
       setStats({
@@ -250,6 +263,7 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     // Point selection/hover events
     eventBus.on(FloorEvents.POINT_SELECTED, (data: any) => {
       pointLayer.setSelectedPoints([data.point.id]);
+      wallLayer.setSelectedWall(null); // Clear wall selection when point selected
     });
 
     eventBus.on(FloorEvents.POINT_HOVERED, (data: any) => {
@@ -258,6 +272,13 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
 
     eventBus.on(FloorEvents.POINT_SELECTION_CLEARED, () => {
       pointLayer.setSelectedPoints([]);
+      wallLayer.setSelectedWall(null); // Also clear wall selection
+    });
+
+    // Wall selection events
+    eventBus.on(FloorEvents.WALL_SELECTED, (data: any) => {
+      wallLayer.setSelectedWall(data.wall.id);
+      pointLayer.setSelectedPoints([]); // Clear point selection when wall selected
     });
 
     eventBus.on(FloorEvents.POINT_HOVER_CLEARED, () => {
@@ -333,6 +354,24 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
 
     eventBus.on(FloorEvents.HORIZONTAL_GUIDE_CLEARED, () => {
       guideLayer.clearHorizontalGuide();
+    });
+
+    // Door preview events
+    eventBus.on(FloorEvents.DOOR_PREVIEW_UPDATED, (data: any) => {
+      doorLayer.setPreview(data);
+    });
+
+    eventBus.on(FloorEvents.DOOR_PREVIEW_CLEARED, () => {
+      doorLayer.clearPreview();
+    });
+
+    // Door add/remove events
+    eventBus.on(FloorEvents.DOOR_ADDED, () => {
+      updateLayers();
+    });
+
+    eventBus.on(FloorEvents.DOOR_REMOVED, () => {
+      updateLayers();
     });
 
     // Wall added event - just update layers, NO automatic room detection
