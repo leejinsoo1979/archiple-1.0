@@ -70,7 +70,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
       camera.upperRadiusLimit = 150;
       camera.upperBetaLimit = Math.PI / 2.05;
       camera.wheelPrecision = 20;
-      camera.panningSensibility = 100;
+      camera.panningSensibility = 200; // Slower panning (higher = slower)
       camera.inertia = 0.9;
       camera.angularSensibilityX = 1000;
       camera.angularSensibilityY = 1000;
@@ -365,14 +365,13 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
         floor.material = floorMaterial;
         floor.receiveShadows = true;
 
-        // Create ceiling
+        // Create ceiling (without rotation - winding order is already reversed)
         const ceiling = MeshBuilder.CreateGround(
           `ceiling_${roomIndex}`,
           { width, height: depth, subdivisions: 1 },
           scene
         );
-        ceiling.position.set(centerX, ceilingHeight, centerZ);
-        ceiling.rotation.z = Math.PI; // Flip upside down
+        ceiling.position.set(centerX, ceilingHeight - 0.01, centerZ);
         ceiling.material = ceilingMaterial;
         ceiling.receiveShadows = true;
       });
