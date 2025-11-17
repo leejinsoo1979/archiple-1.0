@@ -17,7 +17,7 @@ import {
 import styles from './Babylon3DCanvas.module.css';
 
 interface Babylon3DCanvasProps {
-  floorplanData?: { points: any[]; walls: any[]; rooms: any[]; floorplan?: any } | null;
+  floorplanData?: { points: any[]; walls: any[]; rooms: any[] } | null;
   visible?: boolean;
   sunSettings?: {
     intensity: number;
@@ -50,8 +50,8 @@ const computePlanMetrics = (points?: any[] | null): PlanMetrics | null => {
   let maxZ = -Infinity;
 
   points.forEach((point) => {
-    const worldX = point.x * MM_TO_METERS;
-    const worldZ = point.y * MM_TO_METERS;
+    const worldX = point.x * PIXELS_TO_METERS;
+    const worldZ = point.y * PIXELS_TO_METERS;
 
     if (worldX < minX) minX = worldX;
     if (worldX > maxX) maxX = worldX;
@@ -230,7 +230,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       const targetY = Math.max((maxWallHeight * MM_TO_METERS) / 2, DEFAULT_CAMERA_HEIGHT);
 
       // CRITICAL FIX: 카메라가 floorplan의 실제 중심을 봐야 함!
-      // centerX와 centerZ는 이미 미터 단위 (MM_TO_METERS 곱해진 값)
+      // centerX와 centerZ는 이미 미터 단위 (PIXELS_TO_METERS 곱해진 값)
       arcCamera.setTarget(new Vector3(0, targetY, 0));
 
       // CRITICAL FIX: 작은 방(< 1m)을 위한 카메라 거리 자동 조정
@@ -299,62 +299,148 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       const startPoint = pointMap.get(wall.startPointId);
       const endPoint = pointMap.get(wall.endPointId);
 
-      if (!startPoint || !endPoint) {
-        console.error('[Babylon3DCanvas] Wall points not found:', wall);
-        return;
-      }
+      if (startPoint && endPoint) {
+        // Convert 2D coordinates to 3D (1px = 1mm = 1 Babylon unit)
+        const x1 = startPoint.x * PIXELS_TO_METERS - centerX;
+        const z1 = startPoint.y * PIXELS_TO_METERS - centerZ;
+        const x2 = endPoint.x * PIXELS_TO_METERS - centerX;
+        const z2 = endPoint.y * PIXELS_TO_METERS - centerZ;
 
-      const wallThicknessMM = wall.thickness;
-      const wallHeightMM = wall.height || 2800;
+        // Calculate wall dimensions (all in mm)
+        const length = Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
+        const midX = (x1 + x2) / 2;
+        const midZ = (z1 + z2) / 2;
+        const angle = Math.atan2(z2 - z1, x2 - x1);
 
-      // Convert to meters
-      const start = new Vector3(
-        startPoint.x * MM_TO_METERS - centerX,
-        wallHeightMM * MM_TO_METERS / 2, // Center height
-        startPoint.y * MM_TO_METERS - centerZ
-      );
-      const end = new Vector3(
-        endPoint.x * MM_TO_METERS - centerX,
-        wallHeightMM * MM_TO_METERS / 2,
-        endPoint.y * MM_TO_METERS - centerZ
-      );
+        // wall.height와 wall.thickness는 mm 단위
+        const wallHeightMM = wall.height || 2800;
+        const thicknessMM = wall.thickness || 200;
 
-      const wallDirection = end.subtract(start);
-      const wallLength = wallDirection.length();
-      const wallThickness = wallThicknessMM * MM_TO_METERS;
-      const wallHeight = wallHeightMM * MM_TO_METERS;
+        // mm를 미터로 변환
+        const wallHeight = wallHeightMM * MM_TO_METERS;
+        const thickness = thicknessMM * MM_TO_METERS;
 
-      const wallMesh = MeshBuilder.CreateBox(
-        `wall_${index}`,
-        {
-          width: wallLength,
-          height: wallHeight,
-          depth: wallThickness,
-        },
-        scene
-      );
+        console.log('[DEBUG] Wall dimensions:', {
+          'input': { height: wall.height, thickness: wall.thickness },
+          'converted_m': { height: wallHeight, thickness },
+          'expected_m': { height: 2.8, thickness: 0.2 },
+          'match': wallHeight === 2.8 ? '✅' : `❌ ${wallHeight}m`,
+        });
 
-      // Calculate rotation
-      const angle = Math.atan2(wallDirection.z, wallDirection.x);
-      wallMesh.rotation.y = -angle;
+        // 2D와 3D 스케일 비교 로그
+        const length2D_mm = Math.sqrt(
+          (endPoint.x - startPoint.x) ** 2 + (endPoint.y - startPoint.y) ** 2
+        );
+        const length3D_m = length;
 
-      // Position at center
-      wallMesh.position = start.add(end).scale(0.5);
+        console.log(`[Babylon3DCanvas] Wall ${index} SCALE CHECK:`, {
+          '2D_좌표_mm': {
+            start: { x: startPoint.x, y: startPoint.y },
+            end: { x: endPoint.x, y: endPoint.y }
+          },
+          '2D_길이_mm': length2D_mm,
+          '3D_좌표_m': { x1, z1, x2, z2 },
+          '3D_길이_m': length3D_m,
+          '변환_체크': length2D_mm * 0.001 === length3D_m ? '✅ 정확함' : '❌ 틀림',
+          '벽_높이_m': wallHeight,
+          '벽_두께_m': thickness,
+        });
 
-      wallMesh.material = wallMaterial;
-      wallMesh.receiveShadows = true;
-      wallMesh.checkCollisions = true;
+        // Create wall mesh (meters)
+        const wallMesh = MeshBuilder.CreateBox(
+          `wall_${index}`,
+          { width: length, height: wallHeight, depth: thickness },
+          scene
+        );
 
-      if (shadowGenerator) {
-        shadowGenerator.addShadowCaster(wallMesh);
+        // Position and rotate
+        const posY = wallHeight / 2;
+        wallMesh.position.set(midX, posY, midZ);
+
+        console.log(`[CRITICAL] Wall ${index} FINAL:`, {
+          'Box dimensions': { width: length, height: wallHeight, depth: thickness },
+          'Position': { x: midX, y: posY, z: midZ },
+          'Expected': { width: '~0.4m', height: '2.8m', depth: '0.2m', y: '1.4m' },
+        });
+        wallMesh.rotation.y = angle;
+        wallMesh.material = wallMaterial;
+        wallMesh.receiveShadows = true;
+
+        // Enable collision detection
+        wallMesh.checkCollisions = true;
+
+        // Add to shadow casters
+        if (shadowGenerator) {
+          shadowGenerator.addShadowCaster(wallMesh);
+        }
+      } else {
+        console.warn(`[Babylon3DCanvas] Missing point for wall ${index}:`, {
+          startId: wall.startPointId,
+          endId: wall.endPointId,
+          hasStart: !!startPoint,
+          hasEnd: !!endPoint,
+        });
       }
     });
 
     console.log('[Babylon3DCanvas] Created', walls.length, '3D walls from 2D data');
 
-    // Corner joints are NOT needed with proper wall modeling
-    // Blueprint3d uses centerline walls, so corners should connect seamlessly
-    // If gaps appear, the issue is with wall positioning, not missing corner boxes
+    // Create wall corner joints (boxes at connection points) for clean 3D corners
+    const connectedPoints = new Map<string, any>();
+    walls.forEach((wall) => {
+      const startPoint = pointMap.get(wall.startPointId);
+      const endPoint = pointMap.get(wall.endPointId);
+
+      if (startPoint && startPoint.connectedWalls && startPoint.connectedWalls.length > 1) {
+        connectedPoints.set(startPoint.id, startPoint);
+      }
+      if (endPoint && endPoint.connectedWalls && endPoint.connectedWalls.length > 1) {
+        connectedPoints.set(endPoint.id, endPoint);
+      }
+    });
+
+    connectedPoints.forEach((point) => {
+      // Find the thickest wall connected to this point
+      let maxThickness = 200; // default 200mm
+      let maxHeight = 2800; // default 2800mm
+
+      if (point.connectedWalls) {
+        point.connectedWalls.forEach((wallId: string) => {
+          const wall = walls.find((w) => w.id === wallId);
+          if (wall) {
+            maxThickness = Math.max(maxThickness, wall.thickness || 200);
+            maxHeight = Math.max(maxHeight, wall.height || 2800);
+          }
+        });
+      }
+
+      const thickness = maxThickness * MM_TO_METERS;
+      const height = maxHeight * MM_TO_METERS;
+
+      // Convert point position to 3D (1px = 1mm)
+      const x = point.x * PIXELS_TO_METERS - centerX;
+      const z = point.y * PIXELS_TO_METERS - centerZ;
+
+      // Create a box at the corner (meters)
+      const cornerJoint = MeshBuilder.CreateBox(
+        `corner_${point.id}`,
+        { width: thickness, height: height, depth: thickness },
+        scene
+      );
+
+      cornerJoint.position.set(x, height / 2, z);
+      cornerJoint.material = wallMaterial;
+      cornerJoint.receiveShadows = true;
+
+      // Enable collision detection
+      cornerJoint.checkCollisions = true;
+
+      if (shadowGenerator) {
+        shadowGenerator.addShadowCaster(cornerJoint);
+      }
+    });
+
+    console.log('[Babylon3DCanvas] Created', connectedPoints.size, 'corner joints');
 
     // Create floors for each room
     const { rooms } = floorplanData;
@@ -365,8 +451,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
           const p = pointMap.get(pid);
           if (!p) return null;
           return {
-            x: p.x * MM_TO_METERS - centerX,
-            z: p.y * MM_TO_METERS - centerZ,
+            x: p.x * PIXELS_TO_METERS - centerX,
+            z: p.y * PIXELS_TO_METERS - centerZ,
           };
         }).filter((p: any) => p !== null);
 

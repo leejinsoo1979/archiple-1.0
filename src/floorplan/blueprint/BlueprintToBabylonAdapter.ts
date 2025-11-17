@@ -5,19 +5,21 @@ import type { Room } from './room';
 
 /**
  * Adapter to convert blueprint Floorplan data to Babylon3DCanvas format
- * All units in mm, Babylon3DCanvas will convert to meters with * 0.001
+ * 2D coordinates are in pixels, need to convert to mm for 3D
+ * Scale: 1 pixel = 10mm = 1cm
+ * Babylon3DCanvas will convert mm to meters with * 0.001
  */
 
 export interface BabylonPoint {
   id: string;
-  x: number; // mm
-  y: number; // mm
+  x: number; // mm (converted from pixels)
+  y: number; // mm (converted from pixels)
 }
 
 export interface BabylonWall {
   id: string;
-  start: string; // point id
-  end: string; // point id
+  startPointId: string; // point id
+  endPointId: string; // point id
   thickness: number; // mm
   height: number; // mm
 }
@@ -26,44 +28,48 @@ export interface BabylonRoom {
   id: string;
   name: string;
   points: string[]; // point ids (CCW order)
-  area: number; // mm²
+  area: number; // mmï¿½
 }
 
 export interface BabylonFloorplanData {
   points: BabylonPoint[];
   walls: BabylonWall[];
   rooms: BabylonRoom[];
+  floorplan: Floorplan; // Blueprint floorplan object for HalfEdge geometry
 }
 
 /**
  * Convert blueprint Floorplan to Babylon3DCanvas data format
+ * Converts pixels to mm: 1 pixel = 10mm
  */
 export function convertFloorplanToBabylon(floorplan: Floorplan): BabylonFloorplanData {
   const corners = floorplan.getCorners();
   const walls = floorplan.getWalls();
   const rooms = floorplan.getRooms();
 
-  // Convert corners to points
+  const PIXELS_TO_MM = 10; // 1 pixel = 10mm = 1cm
+
+  // Convert corners to points (pixels â†’ mm)
   const points: BabylonPoint[] = corners.map(corner => ({
     id: corner.id,
-    x: corner.x, // Already in mm
-    y: corner.y, // Already in mm
+    x: corner.x * PIXELS_TO_MM, // pixels â†’ mm
+    y: corner.y * PIXELS_TO_MM, // pixels â†’ mm
   }));
 
-  // Convert walls
+  // Convert walls (thickness: pixels â†’ mm, height: already mm)
   const babylonWalls: BabylonWall[] = walls.map(wall => ({
     id: wall.id,
-    start: wall.getStart().id,
-    end: wall.getEnd().id,
-    thickness: wall.thickness, // mm
-    height: wall.height, // mm
+    startPointId: wall.getStart().id,
+    endPointId: wall.getEnd().id,
+    thickness: wall.thickness * PIXELS_TO_MM, // pixels â†’ mm (20px â†’ 200mm)
+    height: wall.height, // Already in mm (2800mm)
   }));
 
   // Convert rooms
   const babylonRooms: BabylonRoom[] = rooms.map((room, index) => {
     const roomPoints = room.corners.map(c => c.id);
 
-    // Calculate area (mm²)
+    // Calculate area (mmï¿½)
     const area = calculateRoomArea(room.corners);
 
     return {
@@ -78,13 +84,14 @@ export function convertFloorplanToBabylon(floorplan: Floorplan): BabylonFloorpla
     points,
     walls: babylonWalls,
     rooms: babylonRooms,
+    floorplan, // Pass blueprint floorplan for HalfEdge geometry
   };
 }
 
 /**
  * Calculate room area using Shoelace formula
  * @param corners Room corners in CCW order
- * @returns Area in mm²
+ * @returns Area in mmï¿½
  */
 function calculateRoomArea(corners: Corner[]): number {
   if (corners.length < 3) return 0;
@@ -112,17 +119,17 @@ export function createTestRoom(): BabylonFloorplanData {
       { id: 'p4', x: 0, y: 2800 },
     ],
     walls: [
-      { id: 'w1', start: 'p1', end: 'p2', thickness: 200, height: 2800 },
-      { id: 'w2', start: 'p2', end: 'p3', thickness: 200, height: 2800 },
-      { id: 'w3', start: 'p3', end: 'p4', thickness: 200, height: 2800 },
-      { id: 'w4', start: 'p4', end: 'p1', thickness: 200, height: 2800 },
+      { id: 'w1', startPointId: 'p1', endPointId: 'p2', thickness: 200, height: 2800 },
+      { id: 'w2', startPointId: 'p2', endPointId: 'p3', thickness: 200, height: 2800 },
+      { id: 'w3', startPointId: 'p3', endPointId: 'p4', thickness: 200, height: 2800 },
+      { id: 'w4', startPointId: 'p4', endPointId: 'p1', thickness: 200, height: 2800 },
     ],
     rooms: [
       {
         id: 'room-1',
         name: 'Test Room',
         points: ['p1', 'p2', 'p3', 'p4'],
-        area: 2800 * 2800, // mm²
+        area: 2800 * 2800, // mmï¿½
       },
     ],
   };

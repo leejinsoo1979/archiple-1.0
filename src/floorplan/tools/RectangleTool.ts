@@ -25,9 +25,9 @@ export class RectangleTool extends BaseTool {
   private startPoint: Point | null = null;
   private currentPreviewEnd: Vector2 | null = null;
 
-  // Config (units: mm)
-  private defaultWallThickness = 200; // 200mm = 20cm
-  private defaultWallHeight = 2800; // 2800mm = 2.8m
+  // Config (units: pixels for 2D, mm for 3D)
+  private defaultWallThickness = 20; // 20 pixels = 20cm visually
+  private defaultWallHeight = 2800; // 2800mm = 2.8m for 3D
 
   constructor(sceneManager: SceneManager, snapService: SnapService) {
     super('rectangle');
@@ -114,33 +114,29 @@ export class RectangleTool extends BaseTool {
   }
 
   private startDrawing(position: Vector2): void {
-    console.log('[RectangleTool] Start drawing at', position);
-
     this.startPoint = this.createPoint(position);
     this.isDrawing = true;
   }
 
   private createRectangle(start: Point, end: Vector2): void {
-    console.log('[RectangleTool] Creating rectangle from', start, 'to', end);
-
     // Create 4 corner points
-    const topLeft = start;
-    const topRight = this.createPoint(new Vector2(end.x, start.y));
-    const bottomRight = this.createPoint(end);
-    const bottomLeft = this.createPoint(new Vector2(start.x, end.y));
+    const topLeftTemp = start;
+    const topRightTemp = this.createPoint(new Vector2(end.x, start.y));
+    const bottomRightTemp = this.createPoint(end);
+    const bottomLeftTemp = this.createPoint(new Vector2(start.x, end.y));
 
-    // Add all points
-    this.sceneManager.objectManager.addPoint(topLeft);
-    this.sceneManager.objectManager.addPoint(topRight);
-    this.sceneManager.objectManager.addPoint(bottomRight);
-    this.sceneManager.objectManager.addPoint(bottomLeft);
+    // Add all points and get actual IDs from blueprint
+    const topLeft = this.sceneManager.objectManager.addPoint(topLeftTemp);
+    const topRight = this.sceneManager.objectManager.addPoint(topRightTemp);
+    const bottomRight = this.sceneManager.objectManager.addPoint(bottomRightTemp);
+    const bottomLeft = this.sceneManager.objectManager.addPoint(bottomLeftTemp);
 
     eventBus.emit(FloorEvents.POINT_ADDED, { point: topLeft });
     eventBus.emit(FloorEvents.POINT_ADDED, { point: topRight });
     eventBus.emit(FloorEvents.POINT_ADDED, { point: bottomRight });
     eventBus.emit(FloorEvents.POINT_ADDED, { point: bottomLeft });
 
-    // Create 4 walls
+    // Create 4 walls using actual blueprint IDs
     const walls: Wall[] = [
       this.createWall(topLeft, topRight), // Top
       this.createWall(topRight, bottomRight), // Right
@@ -155,8 +151,6 @@ export class RectangleTool extends BaseTool {
 
     // Clear preview
     eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
-
-    console.log('[RectangleTool] Rectangle created with 4 walls');
   }
 
   private emitPreview(): void {

@@ -22,17 +22,19 @@ export class BlueprintObjectManager {
         x: corner.x,
         y: corner.y,
       };
+      console.log('[BlueprintObjectManager] Blueprint corner created, emitting POINT_ADDED:', point);
       eventBus.emit(FloorEvents.POINT_ADDED, { point });
     });
 
     this.floorplan.fireOnNewWall((wall) => {
       const wallData: Wall = {
         id: wall.id,
-        start: wall.getStart().id,
-        end: wall.getEnd().id,
+        startPointId: wall.getStart().id,
+        endPointId: wall.getEnd().id,
         thickness: wall.thickness,
         height: wall.height,
       };
+      console.log('[BlueprintObjectManager] Blueprint wall created, emitting WALL_ADDED:', wallData);
       eventBus.emit(FloorEvents.WALL_ADDED, { wall: wallData });
     });
 
@@ -49,10 +51,16 @@ export class BlueprintObjectManager {
   }
 
   // Point management (maps to blueprint Corner)
-  addPoint(point: Point): void {
+  addPoint(point: Point): Point {
+    console.log('[BlueprintObjectManager] addPoint called:', point);
     const existing = this.floorplan.overlappedCorner(point.x, point.y, 1);
     if (!existing) {
-      this.floorplan.newCorner(point.x, point.y, point.id);
+      const corner = this.floorplan.newCorner(point.x, point.y, point.id);
+      console.log('[BlueprintObjectManager] Created corner:', corner.id, 'at', corner.x, corner.y);
+      return { id: corner.id, x: corner.x, y: corner.y };
+    } else {
+      console.log('[BlueprintObjectManager] Using existing corner:', existing.id);
+      return { id: existing.id, x: existing.x, y: existing.y };
     }
   }
 
@@ -96,21 +104,27 @@ export class BlueprintObjectManager {
 
   // Wall management
   addWall(wall: Wall): void {
-    const start = this.floorplan.getCorners().find(c => c.id === wall.start);
-    const end = this.floorplan.getCorners().find(c => c.id === wall.end);
+    console.log('[BlueprintObjectManager] addWall called:', wall);
+    console.log('[BlueprintObjectManager] Available corners:', this.floorplan.getCorners().map(c => c.id));
+
+    const start = this.floorplan.getCorners().find(c => c.id === wall.startPointId);
+    const end = this.floorplan.getCorners().find(c => c.id === wall.endPointId);
+
+    console.log('[BlueprintObjectManager] Found corners:', { start: start?.id, end: end?.id });
 
     if (!start) {
-      console.error('[BlueprintObjectManager] Wall start corner not found:', wall.start);
+      console.error('[BlueprintObjectManager] Wall start corner not found:', wall.startPointId);
       return;
     }
     if (!end) {
-      console.error('[BlueprintObjectManager] Wall end corner not found:', wall.end);
+      console.error('[BlueprintObjectManager] Wall end corner not found:', wall.endPointId);
       return;
     }
 
     const blueprintWall = this.floorplan.newWall(start, end);
     blueprintWall.thickness = wall.thickness;
     blueprintWall.height = wall.height;
+    console.log('[BlueprintObjectManager] Created wall:', blueprintWall.id, 'from', start.id, 'to', end.id);
   }
 
   getWall(id: string): Wall | undefined {
@@ -118,8 +132,8 @@ export class BlueprintObjectManager {
     if (!wall) return undefined;
     return {
       id: wall.id,
-      start: wall.getStart().id,
-      end: wall.getEnd().id,
+      startPointId: wall.getStart().id,
+      endPointId: wall.getEnd().id,
       thickness: wall.thickness,
       height: wall.height,
     };
@@ -128,8 +142,8 @@ export class BlueprintObjectManager {
   getAllWalls(): Wall[] {
     return this.floorplan.getWalls().map(wall => ({
       id: wall.id,
-      start: wall.getStart().id,
-      end: wall.getEnd().id,
+      startPointId: wall.getStart().id,
+      endPointId: wall.getEnd().id,
       thickness: wall.thickness,
       height: wall.height,
     }));

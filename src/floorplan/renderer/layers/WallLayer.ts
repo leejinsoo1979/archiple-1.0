@@ -18,8 +18,11 @@ export interface WallLayerConfig {
  * - Thickness visualization
  * - Hover highlight
  *
- * Units: Wall thickness and height are stored in mm (world space)
- * Rendering: 1 pixel = 10mm for display (1mm thickness → 0.1px)
+ * Units:
+ * - Point coordinates are in pixels (world space)
+ * - Wall thickness: pixels (20 pixels = 20cm = 200mm visually)
+ * - Camera transforms pixel coordinates to screen
+ * - Scale: 1 pixel = 10mm = 1cm (visual interpretation)
  */
 export class WallLayer extends BaseLayer {
   private walls: Wall[] = [];
@@ -28,14 +31,13 @@ export class WallLayer extends BaseLayer {
   private hoveredWallId: string | null = null;
 
   private config: Required<WallLayerConfig>;
-  private readonly MM_TO_PIXELS = 0.1; // Visual scale: 1mm thickness → 0.1px
 
   constructor(config?: WallLayerConfig) {
     super(2); // z-index: 2
 
     this.config = {
       wallColor: config?.wallColor || '#2c3e50',
-      wallThickness: config?.wallThickness || 200, // 200mm = 20cm
+      wallThickness: config?.wallThickness || 20, // 20 pixels = 20cm visually
       previewColor: config?.previewColor || '#3498db',
       previewStyle: config?.previewStyle || 'dashed',
     };
@@ -92,13 +94,12 @@ export class WallLayer extends BaseLayer {
 
     if (!startPoint || !endPoint) return;
 
-    // Convert mm to pixels for rendering
-    const thicknessMm = wall.thickness || this.config.wallThickness;
-    const thicknessPixels = thicknessMm * this.MM_TO_PIXELS;
+    // Thickness is already in pixels
+    const thickness = wall.thickness || this.config.wallThickness;
 
     // Use stroke with square linecap and linejoin for sharp corners
     ctx.strokeStyle = isHovered ? '#e74c3c' : this.config.wallColor;
-    ctx.lineWidth = thicknessPixels;
+    ctx.lineWidth = thickness;
     ctx.lineCap = 'square';
     ctx.lineJoin = 'miter';
     ctx.miterLimit = 10;
@@ -112,12 +113,12 @@ export class WallLayer extends BaseLayer {
   private renderPreviewWall(ctx: CanvasRenderingContext2D, start: Point, end: Point): void {
     ctx.save();
 
-    // Convert mm to pixels for rendering
-    const thicknessPixels = this.config.wallThickness * this.MM_TO_PIXELS;
+    // Thickness is already in pixels
+    const thickness = this.config.wallThickness;
 
     // Draw background glow for better visibility
     ctx.strokeStyle = 'rgba(52, 152, 219, 0.3)';
-    ctx.lineWidth = thicknessPixels + 4;
+    ctx.lineWidth = thickness + 4;
     ctx.lineCap = 'butt'; // Square corners
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
@@ -152,10 +153,10 @@ export class WallLayer extends BaseLayer {
 
     const dx = endPoint.x - startPoint.x;
     const dy = endPoint.y - startPoint.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    const distancePixels = Math.sqrt(dx * dx + dy * dy);
 
-    // 1 pixel = 1mm → distance already equals millimeters
-    const millimeters = distance;
+    // 1 pixel = 10mm, so multiply by 10 to get millimeters
+    const millimeters = distancePixels * 10;
 
     // Calculate label position (midpoint, offset perpendicular to wall)
     const midX = (startPoint.x + endPoint.x) / 2;
