@@ -158,11 +158,10 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
 
     console.log('[Babylon3DCanvas] Updating 3D scene from 2D data...', floorplanData);
 
-    // Remove ALL old meshes (walls, floors, ceilings, corners)
+    // Remove ALL old meshes (walls, floors, corners)
     const meshesToRemove = scene.meshes.filter(mesh =>
       mesh.name.startsWith('wall') ||
       mesh.name.startsWith('floor_') ||
-      mesh.name.startsWith('ceiling_') ||
       mesh.name.startsWith('corner_')
     );
     meshesToRemove.forEach((mesh) => {
@@ -195,13 +194,6 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
     floorMaterial.metallic = 0.0;
     floorMaterial.roughness = 0.7;
     floorMaterial.environmentIntensity = 0.5;
-
-    // Create ceiling material
-    const ceilingMaterial = new PBRMaterial('ceilingMat_2d', scene);
-    ceilingMaterial.albedoColor = new Color3(0.98, 0.98, 0.98);
-    ceilingMaterial.metallic = 0.0;
-    ceilingMaterial.roughness = 0.9;
-    ceilingMaterial.environmentIntensity = 0.3;
 
     // Create walls from 2D data
     // Units: wall.thickness and wall.height are in mm
@@ -324,7 +316,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
 
     console.log('[Babylon3DCanvas] Created', connectedPoints.size, 'corner joints');
 
-    // Create floors and ceilings for each room
+    // Create floors for each room
     const { rooms } = floorplanData;
     if (rooms && rooms.length > 0) {
       rooms.forEach((room, roomIndex) => {
@@ -340,7 +332,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
 
         if (roomPoints.length < 3) return;
 
-        // Calculate bounding box for floor/ceiling
+        // Calculate bounding box for floor
         const minX = Math.min(...roomPoints.map((p: any) => p.x));
         const maxX = Math.max(...roomPoints.map((p: any) => p.x));
         const minZ = Math.min(...roomPoints.map((p: any) => p.z));
@@ -351,10 +343,6 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
         const centerX = (minX + maxX) / 2;
         const centerZ = (minZ + maxZ) / 2;
 
-        // Use first wall's height for ceiling (assume all walls have same height)
-        const firstWall = walls[0];
-        const ceilingHeight = firstWall ? (firstWall.height || 2800) * MM_TO_METERS : 2.8;
-
         // Create floor
         const floor = MeshBuilder.CreateGround(
           `floor_${roomIndex}`,
@@ -364,19 +352,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
         floor.position.set(centerX, 0.01, centerZ);
         floor.material = floorMaterial;
         floor.receiveShadows = true;
-
-        // Create ceiling (without rotation - winding order is already reversed)
-        const ceiling = MeshBuilder.CreateGround(
-          `ceiling_${roomIndex}`,
-          { width, height: depth, subdivisions: 1 },
-          scene
-        );
-        ceiling.position.set(centerX, ceilingHeight - 0.01, centerZ);
-        ceiling.material = ceilingMaterial;
-        ceiling.receiveShadows = true;
       });
 
-      console.log('[Babylon3DCanvas] Created floors and ceilings for', rooms.length, 'rooms');
+      console.log('[Babylon3DCanvas] Created floors for', rooms.length, 'rooms');
     }
   }, [floorplanData]);
 
