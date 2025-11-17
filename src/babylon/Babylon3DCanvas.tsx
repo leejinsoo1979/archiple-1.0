@@ -386,17 +386,20 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
 
         if (roomPoints.length < 3) return;
 
-        // Create polygon floor using PolygonMeshBuilder
-        const floorShape = roomPoints.map((p: Vector3) => new Vector2(p.x, p.z));
+        // Create polygon floor using ExtrudePolygon (more reliable)
+        const floorShape = roomPoints.map((p: Vector3) => new Vector3(p.x, 0, p.z));
 
-        const polygonBuilder = new PolygonMeshBuilder(
+        const floor = MeshBuilder.ExtrudePolygon(
           `floor_${roomIndex}`,
-          floorShape,
-          scene
+          {
+            shape: floorShape,
+            depth: 0.01, // Very thin extrusion
+            sideOrientation: 2 // DOUBLESIDE
+          },
+          scene,
+          earcut
         );
-        const floor = polygonBuilder.build(false, 0.001);
-        floor.position.y = 0.01;
-        floor.rotation.x = -Math.PI / 2; // Rotate to be horizontal (face up)
+        floor.position.y = 0; // At ground level
 
         // Calculate texture scale based on room size
         const minX = Math.min(...roomPoints.map((p: any) => p.x));
