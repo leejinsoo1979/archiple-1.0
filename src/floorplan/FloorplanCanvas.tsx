@@ -7,6 +7,7 @@ import type { EditorConfig } from '../core/types/EditorState';
 import { ToolType } from '../core/types/EditorState';
 import { eventBus } from '../core/events/EventBus';
 import { FloorEvents } from '../core/events/FloorEvents';
+import { EditorEvents } from '../core/events/EditorEvents';
 import { convertFloorplanToBabylon } from './blueprint/BlueprintToBabylonAdapter';
 
 // Rendering
@@ -218,7 +219,8 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
       // Convert blueprint Floorplan to Babylon format
       if (onDataChange) {
         const floorplan = sceneManager.objectManager.getFloorplan();
-        const babylonData = convertFloorplanToBabylon(floorplan);
+        const doors = sceneManager.objectManager.getAllDoors();
+        const babylonData = convertFloorplanToBabylon(floorplan, doors);
         console.log('[FloorplanCanvas] Sending blueprint data to Babylon:', babylonData);
         onDataChange(babylonData);
       }
@@ -259,6 +261,14 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     });
     eventBus.on(FloorEvents.WALL_ADDED, updateLayers);
     eventBus.on(FloorEvents.ROOM_DETECTED, updateLayers);
+
+    // Camera reset event
+    eventBus.on(EditorEvents.CAMERA_RESET, () => {
+      console.log('[FloorplanCanvas] Camera reset requested');
+      const camera = renderer.getCamera();
+      camera.reset();
+      console.log('[FloorplanCanvas] Camera reset to center');
+    });
 
     // Point selection/hover events
     eventBus.on(FloorEvents.POINT_SELECTED, (data: any) => {

@@ -21,6 +21,8 @@ export const ToolType = {
   WALL: 'wall',
   RECTANGLE: 'rectangle',
   DRAW_WALL: 'draw_wall',
+  DOOR: 'door',
+  WINDOW: 'window',
   MOVE: 'move',
   ERASE: 'erase',
 } as const;

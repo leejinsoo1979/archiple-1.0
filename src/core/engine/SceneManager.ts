@@ -98,6 +98,13 @@ export class SceneManager {
   }
 
   /**
+   * Camera management
+   */
+  resetCamera(): void {
+    eventBus.emit(EditorEvents.CAMERA_RESET, {});
+  }
+
+  /**
    * Export/Import
    */
   exportState(): string {

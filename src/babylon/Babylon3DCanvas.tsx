@@ -24,6 +24,8 @@ import {
 import '@babylonjs/loaders/glTF';
 import earcut from 'earcut';
 import styles from './Babylon3DCanvas.module.css';
+import { eventBus } from '../core/events/EventBus';
+import { EditorEvents } from '../core/events/EditorEvents';
 
 // Make earcut available globally for Babylon.js polygon operations
 if (typeof window !== 'undefined') {
@@ -877,6 +879,46 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       }, 100);
     }
   }, [visible]);
+
+  // Camera reset event
+  useEffect(() => {
+    const handleCameraReset = () => {
+      console.log('[Babylon3DCanvas] Camera reset requested');
+      const arcCamera = arcCameraRef.current;
+      const planMetrics = computePlanMetrics(floorplanData?.points);
+
+      if (arcCamera && planMetrics) {
+        const centerX = planMetrics.centerX;
+        const centerZ = planMetrics.centerZ;
+        const roomSize = Math.max(planMetrics.extentX, planMetrics.extentZ);
+        const optimalRadius = roomSize * 1.5;
+
+        // Reset camera position and target
+        arcCamera.setTarget(new Vector3(centerX, DEFAULT_CAMERA_HEIGHT, centerZ));
+        arcCamera.radius = optimalRadius;
+        arcCamera.alpha = -Math.PI / 4; // Default horizontal angle
+        arcCamera.beta = Math.PI / 3.5; // Default vertical angle
+
+        console.log('[Babylon3DCanvas] Camera reset to center:', {
+          target: `(${centerX.toFixed(2)}, ${DEFAULT_CAMERA_HEIGHT.toFixed(2)}, ${centerZ.toFixed(2)})`,
+          radius: optimalRadius.toFixed(2),
+        });
+      } else if (arcCamera) {
+        // No floorplan data - reset to default
+        arcCamera.setTarget(new Vector3(0, DEFAULT_CAMERA_HEIGHT, 0));
+        arcCamera.radius = DEFAULT_CAMERA_RADIUS;
+        arcCamera.alpha = -Math.PI / 4;
+        arcCamera.beta = Math.PI / 3.5;
+        console.log('[Babylon3DCanvas] Camera reset to default position');
+      }
+    };
+
+    eventBus.on(EditorEvents.CAMERA_RESET, handleCameraReset);
+
+    return () => {
+      eventBus.off(EditorEvents.CAMERA_RESET, handleCameraReset);
+    };
+  }, [floorplanData]);
 
   return (
     <div className={styles.container}>

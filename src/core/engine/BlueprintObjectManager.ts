@@ -1,6 +1,7 @@
 import type { Point } from '../types/Point';
 import type { Wall } from '../types/Wall';
 import type { Room } from '../types/Room';
+import type { Door } from '../types/Door';
 import { Floorplan } from '../../floorplan/blueprint/floorplan';
 import { eventBus } from '../events/EventBus';
 import { FloorEvents } from '../events/FloorEvents';
@@ -11,6 +12,7 @@ import { FloorEvents } from '../events/FloorEvents';
  */
 export class BlueprintObjectManager {
   private floorplan: Floorplan;
+  private doors: Map<string, Door> = new Map();
 
   constructor() {
     this.floorplan = new Floorplan();
@@ -231,18 +233,51 @@ export class BlueprintObjectManager {
     console.log('[BlueprintObjectManager] Rooms are auto-managed by blueprint');
   }
 
+  // Door management
+  addDoor(door: Door): void {
+    console.log('[BlueprintObjectManager] addDoor called:', door);
+    this.doors.set(door.id, door);
+    eventBus.emit(FloorEvents.DOOR_ADDED, { door });
+  }
+
+  getDoor(id: string): Door | undefined {
+    return this.doors.get(id);
+  }
+
+  getAllDoors(): Door[] {
+    return Array.from(this.doors.values());
+  }
+
+  updateDoor(id: string, updates: Partial<Door>): void {
+    const door = this.doors.get(id);
+    if (door) {
+      Object.assign(door, updates);
+      eventBus.emit(FloorEvents.DOOR_MODIFIED, { door });
+    }
+  }
+
+  removeDoor(id: string): void {
+    const door = this.doors.get(id);
+    if (door) {
+      this.doors.delete(id);
+      eventBus.emit(FloorEvents.DOOR_REMOVED, { door });
+    }
+  }
+
   clear(): void {
     const corners = [...this.floorplan.getCorners()];
     const walls = [...this.floorplan.getWalls()];
     corners.forEach(c => c.remove());
     walls.forEach(w => w.remove());
+    this.doors.clear();
   }
 
-  getCounts(): { points: number; walls: number; rooms: number } {
+  getCounts(): { points: number; walls: number; rooms: number; doors: number } {
     return {
       points: this.floorplan.getCorners().length,
       walls: this.floorplan.getWalls().length,
       rooms: this.floorplan.getRooms().length,
+      doors: this.doors.size,
     };
   }
 }

@@ -1,6 +1,7 @@
 import { BaseLayer } from './Layer';
 import type { Wall } from '../../../core/types/Wall';
 import type { Point } from '../../../core/types/Point';
+import type { Door } from '../../../core/types/Door';
 import type { Camera2D } from '../Camera2D';
 
 export interface WallLayerConfig {
@@ -27,6 +28,7 @@ export interface WallLayerConfig {
 export class WallLayer extends BaseLayer {
   private walls: Wall[] = [];
   private points: Map<string, Point> = new Map();
+  private doors: Door[] = [];
   private previewWall: { start: Point; end: Point } | null = null;
   private hoveredWallId: string | null = null;
   private selectedWallId: string | null = null;
@@ -52,6 +54,10 @@ export class WallLayer extends BaseLayer {
   setPoints(points: Point[]): void {
     this.points.clear();
     points.forEach((p) => this.points.set(p.id, p));
+  }
+
+  setDoors(doors: Door[]): void {
+    this.doors = doors;
   }
 
   setPreviewWall(start: Point | null, end: Point | null): void {
@@ -123,10 +129,82 @@ export class WallLayer extends BaseLayer {
     ctx.lineJoin = 'miter';
     ctx.miterLimit = 10;
 
-    ctx.beginPath();
-    ctx.moveTo(startPoint.x, startPoint.y);
-    ctx.lineTo(endPoint.x, endPoint.y);
-    ctx.stroke();
+    // Find all doors on this wall
+    const wallDoors = this.doors.filter(door => door.wallId === wall.id);
+
+    if (wallDoors.length === 0) {
+      // No doors - render full wall
+      ctx.beginPath();
+      ctx.moveTo(startPoint.x, startPoint.y);
+      ctx.lineTo(endPoint.x, endPoint.y);
+      ctx.stroke();
+      return;
+    }
+
+    // Calculate wall length and direction
+    const dx = endPoint.x - startPoint.x;
+    const dy = endPoint.y - startPoint.y;
+    const wallLength = Math.sqrt(dx * dx + dy * dy);
+
+    // Create door openings with normalized positions
+    const openings: Array<{ start: number; end: number }> = [];
+
+    wallDoors.forEach(door => {
+      const halfWidth = door.width / 2;
+      const openingStart = Math.max(0, door.position - halfWidth / wallLength);
+      const openingEnd = Math.min(1, door.position + halfWidth / wallLength);
+      openings.push({ start: openingStart, end: openingEnd });
+    });
+
+    // Sort openings by start position
+    openings.sort((a, b) => a.start - b.start);
+
+    // Merge overlapping openings
+    const mergedOpenings: Array<{ start: number; end: number }> = [];
+    openings.forEach(opening => {
+      if (mergedOpenings.length === 0) {
+        mergedOpenings.push(opening);
+      } else {
+        const last = mergedOpenings[mergedOpenings.length - 1];
+        if (opening.start <= last.end) {
+          // Overlapping - merge
+          last.end = Math.max(last.end, opening.end);
+        } else {
+          // Non-overlapping - add new
+          mergedOpenings.push(opening);
+        }
+      }
+    });
+
+    // Render wall segments between openings
+    let currentPos = 0;
+
+    mergedOpenings.forEach(opening => {
+      if (currentPos < opening.start) {
+        // Render segment before opening
+        const segStartX = startPoint.x + dx * currentPos;
+        const segStartY = startPoint.y + dy * currentPos;
+        const segEndX = startPoint.x + dx * opening.start;
+        const segEndY = startPoint.y + dy * opening.start;
+
+        ctx.beginPath();
+        ctx.moveTo(segStartX, segStartY);
+        ctx.lineTo(segEndX, segEndY);
+        ctx.stroke();
+      }
+      currentPos = opening.end;
+    });
+
+    // Render final segment after last opening
+    if (currentPos < 1) {
+      const segStartX = startPoint.x + dx * currentPos;
+      const segStartY = startPoint.y + dy * currentPos;
+
+      ctx.beginPath();
+      ctx.moveTo(segStartX, segStartY);
+      ctx.lineTo(endPoint.x, endPoint.y);
+      ctx.stroke();
+    }
   }
 
   private renderPreviewWall(ctx: CanvasRenderingContext2D, start: Point, end: Point): void {

@@ -29,10 +29,20 @@ export interface BabylonRoom {
   area: number; // mm�
 }
 
+export interface BabylonDoor {
+  id: string;
+  wallId: string;
+  position: number; // 0-1 along wall
+  width: number; // mm
+  height: number; // mm
+  swing: 'left' | 'right' | 'double';
+}
+
 export interface BabylonFloorplanData {
   points: BabylonPoint[];
   walls: BabylonWall[];
   rooms: BabylonRoom[];
+  doors: BabylonDoor[];
   floorplan: Floorplan; // Blueprint floorplan object for HalfEdge geometry
 }
 
@@ -40,7 +50,7 @@ export interface BabylonFloorplanData {
  * Convert blueprint Floorplan to Babylon3DCanvas data format
  * All coordinates are already in mm - pass through directly
  */
-export function convertFloorplanToBabylon(floorplan: Floorplan): BabylonFloorplanData {
+export function convertFloorplanToBabylon(floorplan: Floorplan, doors: any[] = []): BabylonFloorplanData {
   const corners = floorplan.getCorners();
   const walls = floorplan.getWalls();
   const rooms = floorplan.getRooms();
@@ -76,10 +86,29 @@ export function convertFloorplanToBabylon(floorplan: Floorplan): BabylonFloorpla
     };
   });
 
+  // Pass through doors (already in correct format)
+  const babylonDoors: BabylonDoor[] = doors.map(door => ({
+    id: door.id,
+    wallId: door.wallId,
+    position: door.position,
+    width: door.width,
+    height: door.height,
+    swing: door.swing,
+  }));
+
+  console.log('[BlueprintToBabylonAdapter] Converting to Babylon:', {
+    points: points.length,
+    walls: babylonWalls.length,
+    rooms: babylonRooms.length,
+    doors: babylonDoors.length,
+    doorData: babylonDoors
+  });
+
   return {
     points,
     walls: babylonWalls,
     rooms: babylonRooms,
+    doors: babylonDoors,
     floorplan, // Pass blueprint floorplan for HalfEdge geometry
   };
 }
@@ -128,6 +157,7 @@ export function createTestRoom(): BabylonFloorplanData {
         area: 2800 * 2800, // mm�
       },
     ],
+    doors: [],
     floorplan: null as any, // Test room doesn't have a real floorplan object
   };
 }

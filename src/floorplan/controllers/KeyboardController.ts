@@ -99,6 +99,13 @@ export class KeyboardController {
           this.toolManager.setActiveTool(ToolType.SELECT);
           this.sceneManager.setTool(ToolType.SELECT);
           break;
+
+        case ' ':
+          // Space: Reset camera to center
+          event.preventDefault();
+          this.sceneManager.resetCamera();
+          console.log('[KeyboardController] Camera reset to center');
+          break;
       }
     }
 

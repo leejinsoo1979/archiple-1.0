@@ -22,6 +22,9 @@ export const EditorEvents = {
   CANVAS_RESIZED: 'editor:canvas:resized',
   VIEWPORT_CHANGED: 'editor:viewport:changed',
 
+  // Camera events
+  CAMERA_RESET: 'editor:camera:reset',
+
   // Grid & snap events
   GRID_TOGGLED: 'editor:grid:toggled',
   SNAP_TOGGLED: 'editor:snap:toggled',
