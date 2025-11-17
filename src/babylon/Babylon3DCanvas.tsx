@@ -14,7 +14,11 @@ import {
   HemisphericLight,
   GlowLayer
 } from '@babylonjs/core';
+import earcut from 'earcut';
 import styles from './Babylon3DCanvas.module.css';
+
+// Make earcut available for ExtrudePolygon
+(window as any).earcut = earcut;
 
 interface Babylon3DCanvasProps {
   floorplanData?: { points: any[]; walls: any[]; rooms: any[]; floorplan?: any } | null;
@@ -215,9 +219,15 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       mesh.dispose();
     });
 
-    const { points, walls } = floorplanData;
+    const { points, walls, floorplan } = floorplanData;
     console.log('[Babylon3DCanvas] Points:', points?.length, 'Walls:', walls?.length);
     if (!walls || walls.length === 0) return;
+
+    // Force floorplan update to generate HalfEdges for miter joints
+    if (floorplan) {
+      floorplan.update();
+      console.log('[Babylon3DCanvas] Forced floorplan.update() for HalfEdge generation');
+    }
 
     const planMetrics = computePlanMetrics(points);
     const centerX = planMetrics?.centerX ?? 0;
@@ -292,54 +302,59 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       console.warn('[Babylon3DCanvas] Grid texture failed, using solid color');
     }
 
-    // Create walls from 2D data
+    // Create walls from 2D data using HalfEdge for 45° miter joints
     // Units: wall.thickness and wall.height are in mm
 
-    walls.forEach((wall, index) => {
-      const startPoint = pointMap.get(wall.startPointId);
-      const endPoint = pointMap.get(wall.endPointId);
+    if (!floorplan) {
+      console.error('[Babylon3DCanvas] No floorplan available for HalfEdge rendering');
+      return;
+    }
 
-      if (!startPoint || !endPoint) {
-        console.error('[Babylon3DCanvas] Wall points not found:', wall);
+    const blueprintWalls = floorplan.getWalls();
+    console.log('[Babylon3DCanvas] Blueprint walls:', blueprintWalls.length);
+
+    blueprintWalls.forEach((blueprintWall, index) => {
+      const frontEdge = blueprintWall.frontEdge;
+
+      if (!frontEdge) {
+        console.warn('[Babylon3DCanvas] Wall missing frontEdge:', blueprintWall.id);
         return;
       }
 
-      const wallThicknessMM = wall.thickness;
-      const wallHeightMM = wall.height || 2800;
+      // Get 4 corners with 45° miter joints from HalfEdge
+      const corners = frontEdge.corners();
 
-      // Convert to meters
-      const start = new Vector3(
-        startPoint.x * MM_TO_METERS - centerX,
-        wallHeightMM * MM_TO_METERS / 2, // Center height
-        startPoint.y * MM_TO_METERS - centerZ
-      );
-      const end = new Vector3(
-        endPoint.x * MM_TO_METERS - centerX,
-        wallHeightMM * MM_TO_METERS / 2,
-        endPoint.y * MM_TO_METERS - centerZ
-      );
+      if (corners.length !== 4) {
+        console.warn('[Babylon3DCanvas] Invalid corners:', corners.length);
+        return;
+      }
 
-      const wallDirection = end.subtract(start);
-      const wallLength = wallDirection.length();
-      const wallThickness = wallThicknessMM * MM_TO_METERS;
+      const wallHeightMM = blueprintWall.height || 2800;
       const wallHeight = wallHeightMM * MM_TO_METERS;
 
-      const wallMesh = MeshBuilder.CreateBox(
+      // Convert corners to 3D (corners are in pixels, need to convert to mm first)
+      const PIXELS_TO_MM = 10;
+      const shape = corners.map(c => new Vector3(
+        (c.x * PIXELS_TO_MM * MM_TO_METERS) - centerX,
+        0,
+        (c.y * PIXELS_TO_MM * MM_TO_METERS) - centerZ
+      ));
+
+      // Create CSG for proper wall geometry with miter joints
+      const path = [
+        new Vector3(0, 0, 0),
+        new Vector3(0, wallHeight, 0)
+      ];
+
+      const wallMesh = MeshBuilder.ExtrudePolygon(
         `wall_${index}`,
         {
-          width: wallLength,
-          height: wallHeight,
-          depth: wallThickness,
+          shape: shape,
+          depth: wallHeight,
+          sideOrientation: 2
         },
         scene
       );
-
-      // Calculate rotation
-      const angle = Math.atan2(wallDirection.z, wallDirection.x);
-      wallMesh.rotation.y = -angle;
-
-      // Position at center
-      wallMesh.position = start.add(end).scale(0.5);
 
       wallMesh.material = wallMaterial;
       wallMesh.receiveShadows = true;
@@ -350,65 +365,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       }
     });
 
-    console.log('[Babylon3DCanvas] Created', walls.length, '3D walls from 2D data');
-
-    // Create corner joints to fill gaps between walls
-    const cornerPoints = new Map<string, { x: number; z: number; height: number; thickness: number }>();
-
-    walls.forEach(wall => {
-      const startPoint = pointMap.get(wall.startPointId);
-      const endPoint = pointMap.get(wall.endPointId);
-      if (!startPoint || !endPoint) return;
-
-      const wallHeightMM = wall.height || 2800;
-      const wallThicknessMM = wall.thickness;
-
-      // Track corner points with max height and thickness
-      [startPoint, endPoint].forEach(point => {
-        const existing = cornerPoints.get(point.id);
-        if (!existing) {
-          cornerPoints.set(point.id, {
-            x: point.x * MM_TO_METERS - centerX,
-            z: point.y * MM_TO_METERS - centerZ,
-            height: wallHeightMM * MM_TO_METERS,
-            thickness: wallThicknessMM * MM_TO_METERS
-          });
-        } else {
-          // Use max height and thickness at this corner
-          existing.height = Math.max(existing.height, wallHeightMM * MM_TO_METERS);
-          existing.thickness = Math.max(existing.thickness, wallThicknessMM * MM_TO_METERS);
-        }
-      });
-    });
-
-    // Create corner joint boxes
-    cornerPoints.forEach((corner, pointId) => {
-      const cornerBox = MeshBuilder.CreateBox(
-        `corner_${pointId}`,
-        {
-          width: corner.thickness,
-          height: corner.height,
-          depth: corner.thickness
-        },
-        scene
-      );
-
-      cornerBox.position = new Vector3(
-        corner.x,
-        corner.height / 2,
-        corner.z
-      );
-
-      cornerBox.material = wallMaterial;
-      cornerBox.receiveShadows = true;
-      cornerBox.checkCollisions = true;
-
-      if (shadowGenerator) {
-        shadowGenerator.addShadowCaster(cornerBox);
-      }
-    });
-
-    console.log('[Babylon3DCanvas] Created', cornerPoints.size, 'corner joints');
+    console.log('[Babylon3DCanvas] Created', blueprintWalls.length, '3D walls with miter joints');
 
     // Create floors for each room
     const { rooms } = floorplanData;
