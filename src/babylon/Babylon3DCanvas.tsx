@@ -469,8 +469,23 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
           scene
         );
         floor.position.set(floorCenterX, 0.01, floorCenterZ);
-        floor.material = floorMaterial;
+
+        // Clone material for each floor to have independent texture scaling
+        const roomFloorMat = floorMaterial.clone(`floorMat_room_${roomIndex}`);
+        if (roomFloorMat.albedoTexture) {
+          // Scale texture: 1 repeat = 1 meter
+          roomFloorMat.albedoTexture.uScale = width; // width in meters
+          roomFloorMat.albedoTexture.vScale = depth; // depth in meters
+        }
+        floor.material = roomFloorMat;
         floor.receiveShadows = true;
+
+        console.log(`[Babylon3DCanvas] Floor ${roomIndex} size:`, {
+          width_m: width,
+          depth_m: depth,
+          width_mm: width * 1000,
+          depth_mm: depth * 1000,
+        });
       });
 
       console.log('[Babylon3DCanvas] Created floors for', rooms.length, 'rooms');
