@@ -25,9 +25,9 @@ export class RectangleTool extends BaseTool {
   private startPoint: Point | null = null;
   private currentPreviewEnd: Vector2 | null = null;
 
-  // Config (units: pixels for 2D, mm for 3D)
-  private defaultWallThickness = 20; // 20 pixels = 20cm visually
-  private defaultWallHeight = 2800; // 2800mm = 2.8m for 3D
+  // Config (units: mm)
+  private defaultWallThickness = 200; // 200mm = 20cm
+  private defaultWallHeight = 2800; // 2800mm = 2.8m
 
   constructor(sceneManager: SceneManager, snapService: SnapService) {
     super('rectangle');

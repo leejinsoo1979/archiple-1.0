@@ -78,10 +78,11 @@ export class SnapService {
   }
 
   /**
-   * Snap coordinate to 0.1 pixel (1mm) precision
+   * Snap coordinate to 1mm precision
+   * All coordinates are in mm, so we round to nearest 1mm
    */
   private snapToPrecision(value: number): number {
-    const precision = 0.1; // 0.1 pixel = 1mm
+    const precision = 1; // 1mm precision
     return Math.round(value / precision) * precision;
   }
 
@@ -161,8 +162,8 @@ export class SnapService {
    * Snap to grid
    */
   private snapToGrid(position: Vector2): SnapResult {
-    // Snap to 1mm precision (0.1 pixels, since 1 pixel = 10mm)
-    const snapPrecision = 0.1; // 0.1 pixel = 1mm
+    // Snap to 1mm precision (coordinates are already in mm)
+    const snapPrecision = 1; // 1mm precision
     const snappedX = Math.round(position.x / snapPrecision) * snapPrecision;
     const snappedY = Math.round(position.y / snapPrecision) * snapPrecision;
 

@@ -19,10 +19,9 @@ export interface WallLayerConfig {
  * - Hover highlight
  *
  * Units:
- * - Point coordinates are in pixels (world space)
- * - Wall thickness: pixels (20 pixels = 20cm = 200mm visually)
- * - Camera transforms pixel coordinates to screen
- * - Scale: 1 pixel = 10mm = 1cm (visual interpretation)
+ * - Point coordinates are in mm (world space)
+ * - Wall thickness: mm (200mm = 20cm)
+ * - Camera transforms mm coordinates to screen px
  */
 export class WallLayer extends BaseLayer {
   private walls: Wall[] = [];
@@ -37,7 +36,7 @@ export class WallLayer extends BaseLayer {
 
     this.config = {
       wallColor: config?.wallColor || '#2c3e50',
-      wallThickness: config?.wallThickness || 20, // 20 pixels = 20cm visually
+      wallThickness: config?.wallThickness || 200, // 200mm = 20cm
       previewColor: config?.previewColor || '#3498db',
       previewStyle: config?.previewStyle || 'dashed',
     };
@@ -153,10 +152,10 @@ export class WallLayer extends BaseLayer {
 
     const dx = endPoint.x - startPoint.x;
     const dy = endPoint.y - startPoint.y;
-    const distancePixels = Math.sqrt(dx * dx + dy * dy);
+    const distanceMm = Math.sqrt(dx * dx + dy * dy);
 
-    // 1 pixel = 10mm, so multiply by 10 to get millimeters
-    const millimeters = distancePixels * 10;
+    // Coordinates are already in mm, no conversion needed
+    // Just display the raw mm value
 
     // Calculate label position (midpoint, offset perpendicular to wall)
     const midX = (startPoint.x + endPoint.x) / 2;
@@ -169,8 +168,7 @@ export class WallLayer extends BaseLayer {
     const labelY = midY + Math.cos(angle) * offsetDistance;
 
     // Format label: show whole mm without decimals for cleaner display
-    // Round to nearest 1mm for accurate measurement
-    const label = `${millimeters.toFixed(0)}mm`;
+    const label = `${distanceMm.toFixed(0)}mm`;
 
     ctx.save();
     ctx.font = 'bold 11px system-ui';

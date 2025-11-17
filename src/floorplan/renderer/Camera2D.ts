@@ -1,158 +1,155 @@
 import { Vector2 } from '../../core/math/Vector2';
+import type { ViewportState, PointMM, PointPX } from '../../editor/core/units';
+import {
+  createViewport,
+  worldToScreen,
+  screenToWorld,
+  applyZoom,
+  applyPan,
+} from '../../editor/core/units';
 
 /**
- * Camera2D - CAD-style viewport camera
+ * Camera2D - mm 기반 뷰포트 카메라
+ *
+ * 핵심 원칙:
+ * 1. 내부 좌표는 항상 mm 단위
+ * 2. ViewportState로 줌/팬 상태 관리
+ * 3. 화면 렌더링 시에만 mm → px 변환
+ * 4. 줌/팬은 world 좌표에 영향 없음
  *
  * Features:
  * - Zoom in/out (mouse wheel)
  * - Pan (middle mouse drag or space + drag)
- * - Screen to world coordinate conversion
- * - World to screen coordinate conversion
- *
- * Coordinate system:
- * - Canvas coordinates are in pixels
- * - World coordinates are in pixels (NOT mm - simplified)
- * - Display scale: 1 pixel = 10mm = 1cm (only for display/rendering)
- * - Grid: gridSize (20px) = 20cm, major (100px) = 1m
+ * - Screen to world coordinate conversion (px → mm)
+ * - World to screen coordinate conversion (mm → px)
  */
 export class Camera2D {
-  private position: Vector2; // Camera center position in pixels
-  private zoom: number; // Zoom level (1.0 = normal, 2.0 = 2x zoom in)
-  private canvasWidth: number;
-  private canvasHeight: number;
+  private viewport: ViewportState;
 
-  // Display scale: 1 pixel = 10mm = 1cm (for rendering/display only)
-  // Grid: gridSize=20px = 200mm = 20cm, major grid (100px) = 1m
-  private static readonly PIXELS_TO_MM = 10; // 1 pixel = 10mm = 1cm
-  private static readonly MM_TO_PIXELS = 1 / 10; // 1mm = 0.1 pixels
-
-  // Zoom constraints
-  private minZoom = 0.1; // 10% (far out)
-  private maxZoom = 10.0; // 1000% (close in)
-
-  constructor(canvasWidth: number, canvasHeight: number) {
-    // Camera starts at center in pixels
-    this.position = new Vector2(canvasWidth / 2, canvasHeight / 2);
-    this.zoom = 1.0;
-    this.canvasWidth = canvasWidth;
-    this.canvasHeight = canvasHeight;
+  constructor(canvasWidth: number, canvasHeight: number, initialScale: number = 0.1) {
+    // ViewportState 생성 (scalePxPerMm = 0.1 means 1mm = 0.1px, so 4800mm = 480px)
+    this.viewport = createViewport(canvasWidth, canvasHeight, initialScale);
   }
 
   /**
    * Set canvas size
    */
   setSize(width: number, height: number): void {
-    this.canvasWidth = width;
-    this.canvasHeight = height;
+    this.viewport.canvasWidth = width;
+    this.viewport.canvasHeight = height;
   }
 
   /**
-   * Get current zoom level
+   * Get viewport state (for direct access)
+   */
+  getViewport(): ViewportState {
+    return this.viewport;
+  }
+
+  /**
+   * Get current zoom level (scalePxPerMm)
    */
   getZoom(): number {
-    return this.zoom;
+    return this.viewport.scalePxPerMm;
   }
 
   /**
-   * Set zoom level
+   * Get current scale in legacy format (zoom * 10 for compatibility)
+   * Legacy code expects zoom where 1.0 = normal
    */
-  setZoom(zoom: number): void {
-    this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, zoom));
+  getLegacyZoom(): number {
+    // Convert scalePxPerMm to legacy zoom format
+    // scalePxPerMm = 0.1 should map to legacy zoom = 1.0
+    return this.viewport.scalePxPerMm * 10;
   }
 
   /**
    * Zoom in/out at a specific screen point (for mouse wheel zoom)
+   * @param screenX - Screen X coordinate (px)
+   * @param screenY - Screen Y coordinate (px)
+   * @param zoomDelta - Zoom change amount (-0.1 to 0.1)
    */
   zoomAt(screenX: number, screenY: number, zoomDelta: number): void {
-    // Get world position before zoom
-    const worldPosBefore = this.screenToWorld(screenX, screenY);
-
-    // Apply zoom
-    const newZoom = this.zoom * (1 + zoomDelta);
-    this.setZoom(newZoom);
-
-    // Get world position after zoom (it will have shifted)
-    const worldPosAfter = this.screenToWorld(screenX, screenY);
-
-    // Adjust camera position to keep the point under cursor stationary
-    const dx = worldPosAfter.x - worldPosBefore.x;
-    const dy = worldPosAfter.y - worldPosBefore.y;
-    this.position.x -= dx;
-    this.position.y -= dy;
+    const centerPx: PointPX = { x: screenX, y: screenY };
+    this.viewport = applyZoom(this.viewport, zoomDelta, centerPx);
   }
 
   /**
    * Pan camera by screen space delta
+   * @param screenDx - Screen X delta (px)
+   * @param screenDy - Screen Y delta (px)
    */
   pan(screenDx: number, screenDy: number): void {
-    // Convert screen delta to world delta (account for zoom)
-    const worldDx = screenDx / this.zoom;
-    const worldDy = screenDy / this.zoom;
-
-    this.position.x -= worldDx;
-    this.position.y -= worldDy;
+    this.viewport = applyPan(this.viewport, screenDx, screenDy);
   }
 
   /**
-   * Set camera position
+   * Set camera position (mm units)
    */
   setPosition(x: number, y: number): void {
-    this.position.x = x;
-    this.position.y = y;
+    // Convert mm position to offset in px
+    // Note: This is a simplified mapping, adjust if needed
+    this.viewport.offsetX = -x * this.viewport.scalePxPerMm;
+    this.viewport.offsetY = -y * this.viewport.scalePxPerMm;
   }
 
   /**
-   * Get camera position
+   * Get camera position (mm units)
    */
   getPosition(): Vector2 {
-    return this.position.clone();
+    // Convert offset back to mm position
+    const x = -this.viewport.offsetX / this.viewport.scalePxPerMm;
+    const y = -this.viewport.offsetY / this.viewport.scalePxPerMm;
+    return new Vector2(x, y);
   }
 
   /**
-   * Convert screen coordinates (pixels) to world coordinates (pixels)
+   * Convert screen coordinates (px) to world coordinates (mm)
    */
   screenToWorld(screenX: number, screenY: number): Vector2 {
-    // Convert screen pixels to world pixels (accounting for zoom and camera position)
-    const worldX = (screenX - this.canvasWidth / 2) / this.zoom + this.position.x;
-    const worldY = (screenY - this.canvasHeight / 2) / this.zoom + this.position.y;
-
-    return new Vector2(worldX, worldY);
+    const pointPx: PointPX = { x: screenX, y: screenY };
+    const pointMm = screenToWorld(pointPx, this.viewport);
+    return new Vector2(pointMm.x, pointMm.y);
   }
 
   /**
-   * Convert world coordinates (pixels) to screen coordinates (pixels)
+   * Convert world coordinates (mm) to screen coordinates (px)
    */
   worldToScreen(worldX: number, worldY: number): Vector2 {
-    // Convert world pixels to screen pixels (accounting for zoom and camera position)
-    const screenX = (worldX - this.position.x) * this.zoom + this.canvasWidth / 2;
-    const screenY = (worldY - this.position.y) * this.zoom + this.canvasHeight / 2;
-
-    return new Vector2(screenX, screenY);
+    const pointMm: PointMM = { x: worldX, y: worldY };
+    const pointPx = worldToScreen(pointMm, this.viewport);
+    return new Vector2(pointPx.x, pointPx.y);
   }
 
   /**
    * Apply camera transform to canvas context
+   * Transforms canvas so that drawing in mm units renders correctly on screen
    */
   applyTransform(ctx: CanvasRenderingContext2D): void {
+    const { scalePxPerMm, offsetX, offsetY, canvasWidth, canvasHeight } = this.viewport;
+
     // Reset transform
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-    // Translate to center
-    ctx.translate(this.canvasWidth / 2, this.canvasHeight / 2);
+    // 1. Translate to canvas center
+    ctx.translate(canvasWidth / 2, canvasHeight / 2);
 
-    // Apply zoom
-    ctx.scale(this.zoom, this.zoom);
+    // 2. Apply offset (pan)
+    ctx.translate(offsetX, offsetY);
 
-    // Translate to camera position (already in pixels)
-    ctx.translate(-this.position.x, -this.position.y);
+    // 3. Apply scale (zoom) - converts mm to px
+    ctx.scale(scalePxPerMm, scalePxPerMm);
   }
 
   /**
-   * Get visible world bounds
+   * Get visible world bounds (mm units)
    */
   getVisibleBounds(): { minX: number; minY: number; maxX: number; maxY: number } {
     const topLeft = this.screenToWorld(0, 0);
-    const bottomRight = this.screenToWorld(this.canvasWidth, this.canvasHeight);
+    const bottomRight = this.screenToWorld(
+      this.viewport.canvasWidth,
+      this.viewport.canvasHeight
+    );
 
     return {
       minX: topLeft.x,
@@ -166,8 +163,8 @@ export class Camera2D {
    * Reset camera to default state
    */
   reset(): void {
-    this.position.x = this.canvasWidth / 2;
-    this.position.y = this.canvasHeight / 2;
-    this.zoom = 1.0;
+    this.viewport.scalePxPerMm = 0.1; // Default scale
+    this.viewport.offsetX = 0;
+    this.viewport.offsetY = 0;
   }
 }
