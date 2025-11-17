@@ -16,11 +16,14 @@ import {
   HemisphericLight,
   GlowLayer
 } from '@babylonjs/core';
-import earcut from 'earcut';
+import * as earcut from 'earcut';
 import styles from './Babylon3DCanvas.module.css';
 
-// Make earcut available for ExtrudePolygon
-(window as any).earcut = earcut;
+// Make earcut available globally for Babylon.js polygon operations
+if (typeof window !== 'undefined') {
+  (window as any).earcut = earcut;
+}
+(PolygonMeshBuilder as any).earcut = earcut;
 
 interface Babylon3DCanvasProps {
   floorplanData?: { points: any[]; walls: any[]; rooms: any[]; floorplan?: any } | null;
