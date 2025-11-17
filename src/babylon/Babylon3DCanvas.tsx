@@ -158,10 +158,11 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
 
     console.log('[Babylon3DCanvas] Updating 3D scene from 2D data...', floorplanData);
 
-    // Remove ALL old meshes (walls, floors, corners)
+    // Remove ALL old meshes (walls, floors, ceilings, corners, ceiling edges)
     const meshesToRemove = scene.meshes.filter(mesh =>
       mesh.name.startsWith('wall') ||
       mesh.name.startsWith('floor_') ||
+      mesh.name.startsWith('ceiling_') ||
       mesh.name.startsWith('corner_')
     );
     meshesToRemove.forEach((mesh) => {
@@ -194,6 +195,20 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
     floorMaterial.metallic = 0.0;
     floorMaterial.roughness = 0.7;
     floorMaterial.environmentIntensity = 0.5;
+
+    // Create ceiling material (white with black cross-section)
+    const ceilingMaterial = new PBRMaterial('ceilingMat_2d', scene);
+    ceilingMaterial.albedoColor = new Color3(1.0, 1.0, 1.0); // White top
+    ceilingMaterial.metallic = 0.0;
+    ceilingMaterial.roughness = 0.9;
+    ceilingMaterial.environmentIntensity = 0.3;
+    ceilingMaterial.backFaceCulling = false; // Show both sides
+
+    // Create ceiling edge material (black for cross-section)
+    const ceilingEdgeMaterial = new PBRMaterial('ceilingEdgeMat_2d', scene);
+    ceilingEdgeMaterial.albedoColor = new Color3(0.0, 0.0, 0.0); // Black edges
+    ceilingEdgeMaterial.metallic = 0.0;
+    ceilingEdgeMaterial.roughness = 1.0;
 
     // Create walls from 2D data
     // Units: wall.thickness and wall.height are in mm
@@ -352,9 +367,57 @@ const Babylon3DCanvas = ({ floorplanData, visible = true }: Babylon3DCanvasProps
         floor.position.set(centerX, 0.01, centerZ);
         floor.material = floorMaterial;
         floor.receiveShadows = true;
+
+        // Create ceiling (at wall height, typically 2.8m)
+        const ceilingHeight = 2.8; // meters
+        const ceiling = MeshBuilder.CreateGround(
+          `ceiling_${roomIndex}`,
+          { width, height: depth, subdivisions: 1 },
+          scene
+        );
+        ceiling.position.set(centerX, ceilingHeight, centerZ);
+        ceiling.rotation.x = Math.PI; // Flip upside down
+        ceiling.material = ceilingMaterial;
+
+        // Create ceiling edge rim (black cross-section border)
+        const edgeThickness = 0.05; // 5cm thick edge
+        const edgeHeight = 0.02; // 2cm height
+
+        // Create 4 edge pieces (top, bottom, left, right)
+        const edgeTop = MeshBuilder.CreateBox(
+          `ceiling_edge_top_${roomIndex}`,
+          { width, height: edgeHeight, depth: edgeThickness },
+          scene
+        );
+        edgeTop.position.set(centerX, ceilingHeight - edgeHeight/2, maxZ + edgeThickness/2);
+        edgeTop.material = ceilingEdgeMaterial;
+
+        const edgeBottom = MeshBuilder.CreateBox(
+          `ceiling_edge_bottom_${roomIndex}`,
+          { width, height: edgeHeight, depth: edgeThickness },
+          scene
+        );
+        edgeBottom.position.set(centerX, ceilingHeight - edgeHeight/2, minZ - edgeThickness/2);
+        edgeBottom.material = ceilingEdgeMaterial;
+
+        const edgeLeft = MeshBuilder.CreateBox(
+          `ceiling_edge_left_${roomIndex}`,
+          { width: edgeThickness, height: edgeHeight, depth: depth },
+          scene
+        );
+        edgeLeft.position.set(minX - edgeThickness/2, ceilingHeight - edgeHeight/2, centerZ);
+        edgeLeft.material = ceilingEdgeMaterial;
+
+        const edgeRight = MeshBuilder.CreateBox(
+          `ceiling_edge_right_${roomIndex}`,
+          { width: edgeThickness, height: edgeHeight, depth: depth },
+          scene
+        );
+        edgeRight.position.set(maxX + edgeThickness/2, ceilingHeight - edgeHeight/2, centerZ);
+        edgeRight.material = ceilingEdgeMaterial;
       });
 
-      console.log('[Babylon3DCanvas] Created floors for', rooms.length, 'rooms');
+      console.log('[Babylon3DCanvas] Created floors and ceilings for', rooms.length, 'rooms');
     }
   }, [floorplanData]);
 
