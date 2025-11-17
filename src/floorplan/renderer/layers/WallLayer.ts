@@ -99,8 +99,8 @@ export class WallLayer extends BaseLayer {
 
     if (!startPoint || !endPoint) return;
 
-    // Thickness in mm (world space) - camera transform is already applied by renderer
-    const thickness = wall.thickness || this.config.wallThickness;
+    // FORCE same thickness for ALL walls (ignore wall.thickness)
+    const thickness = this.config.wallThickness; // Always 100mm
 
     // Use stroke with square linecap and linejoin for sharp corners
     ctx.strokeStyle = isHovered ? '#e74c3c' : this.config.wallColor;
@@ -121,15 +121,18 @@ export class WallLayer extends BaseLayer {
     // EXACT SAME thickness as confirmed walls (100mm)
     const thickness = this.config.wallThickness;
 
-    // Draw preview with IDENTICAL settings to confirmed walls
-    ctx.strokeStyle = this.config.previewColor;
+    // Draw preview with SAME thickness but different style for visibility
+    ctx.strokeStyle = this.config.wallColor; // Same color as confirmed walls
+    ctx.globalAlpha = 0.5; // 50% transparent for preview
     ctx.lineWidth = thickness;
     ctx.lineCap = 'square';
     ctx.lineJoin = 'miter';
     ctx.miterLimit = 10;
 
-    // NO DASH - solid line like confirmed walls (only different color)
-    ctx.setLineDash([]);
+    // Dash pattern to differentiate from confirmed walls
+    const dashLength = thickness * 2;
+    const gapLength = thickness * 1;
+    ctx.setLineDash([dashLength, gapLength]);
 
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);

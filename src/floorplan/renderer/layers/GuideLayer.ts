@@ -364,13 +364,16 @@ export class GuideLayer extends BaseLayer {
     ctx.save();
 
     // EXACT SAME thickness as confirmed walls (100mm)
-    ctx.strokeStyle = '#3498db';
+    ctx.strokeStyle = '#2c3e50'; // Same color as confirmed walls
+    ctx.globalAlpha = 0.5; // 50% transparent for preview
     ctx.lineWidth = this.wallThickness; // Use actual wall thickness
     ctx.lineCap = 'square';
     ctx.lineJoin = 'miter';
 
-    // NO DASH - solid line like confirmed walls (only different color)
-    ctx.setLineDash([]);
+    // Dash pattern to differentiate from confirmed walls
+    const dashLength = this.wallThickness * 2;
+    const gapLength = this.wallThickness * 1;
+    ctx.setLineDash([dashLength, gapLength]);
 
     ctx.beginPath();
     ctx.moveTo(corners[0].x, corners[0].y);
