@@ -46,6 +46,7 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
   // Pan state
   const isPanningRef = useRef(false);
   const lastPanPosRef = useRef<{ x: number; y: number } | null>(null);
+  const spaceKeyPressedRef = useRef(false);
 
   // Refs for cleanup
   const sceneManagerRef = useRef<SceneManager | null>(null);
@@ -181,6 +182,8 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
       const walls = sceneManager.objectManager.getAllWalls();
       const rooms = sceneManager.objectManager.getAllRooms();
 
+      console.log('[FloorplanCanvas] updateLayers called:', points.length, 'points', walls.length, 'walls');
+
       // Update layer data
       wallLayer.setWalls(walls);
       wallLayer.setPoints(points);
@@ -209,9 +212,38 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     };
 
     // Listen to floorplan events
-    eventBus.on(FloorEvents.POINT_ADDED, updateLayers);
-    eventBus.on(FloorEvents.POINT_MOVED, updateLayers);
-    eventBus.on(FloorEvents.POINT_UPDATED, updateLayers);
+    eventBus.on(FloorEvents.POINT_ADDED, () => {
+      console.log('[FloorplanCanvas] POINT_ADDED event received');
+      try {
+        updateLayers();
+      } catch (e) {
+        console.error('[FloorplanCanvas] Error in updateLayers:', e);
+      }
+    });
+    eventBus.on(FloorEvents.POINT_MOVED, () => {
+      console.log('[FloorplanCanvas] POINT_MOVED - updating layers directly');
+      const points = sceneManager.objectManager.getAllPoints();
+      const walls = sceneManager.objectManager.getAllWalls();
+      const rooms = sceneManager.objectManager.getAllRooms();
+
+      console.log('[FloorplanCanvas] Got data:', points.length, 'points', walls.length, 'walls');
+
+      wallLayer.setWalls(walls);
+      wallLayer.setPoints(points);
+      pointLayer.setPoints(points);
+      roomLayer.setRooms(rooms);
+      roomLayer.setPoints(points);
+
+      console.log('[FloorplanCanvas] Layers updated');
+    });
+    eventBus.on(FloorEvents.POINT_UPDATED, () => {
+      console.log('[FloorplanCanvas] POINT_UPDATED event received');
+      try {
+        updateLayers();
+      } catch (e) {
+        console.error('[FloorplanCanvas] Error in updateLayers:', e);
+      }
+    });
     eventBus.on(FloorEvents.WALL_ADDED, updateLayers);
     eventBus.on(FloorEvents.ROOM_DETECTED, updateLayers);
 
@@ -456,17 +488,21 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     if (!canvas || !renderer) return;
 
     const handleMouseDown = (event: MouseEvent) => {
-      // Middle mouse button (button 1) or Right mouse button (button 2)
-      if (event.button === 1 || event.button === 2) {
+      // Pan only with Space + Left mouse, or Middle mouse button
+      if ((spaceKeyPressedRef.current && event.button === 0) || event.button === 1) {
         event.preventDefault();
+        event.stopPropagation(); // Prevent MouseController from getting this event
         isPanningRef.current = true;
         lastPanPosRef.current = { x: event.clientX, y: event.clientY };
-        canvas.style.cursor = 'grab';
+        canvas.style.cursor = 'grabbing';
       }
     };
 
     const handleMouseMove = (event: MouseEvent) => {
       if (isPanningRef.current && lastPanPosRef.current) {
+        event.preventDefault();
+        event.stopPropagation(); // Prevent MouseController from getting this event
+
         const dx = event.clientX - lastPanPosRef.current.x;
         const dy = event.clientY - lastPanPosRef.current.y;
 
@@ -479,30 +515,44 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     };
 
     const handleMouseUp = (event: MouseEvent) => {
-      if (event.button === 1 || event.button === 2) {
+      if (event.button === 0 || event.button === 1) {
         isPanningRef.current = false;
         lastPanPosRef.current = null;
-        canvas.style.cursor = 'default';
+        canvas.style.cursor = spaceKeyPressedRef.current ? 'grab' : 'default';
       }
     };
 
-    const handleContextMenu = (event: MouseEvent) => {
-      // Prevent context menu on right-click when used for panning
-      if (isPanningRef.current) {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code === 'Space' && !spaceKeyPressedRef.current) {
+        spaceKeyPressedRef.current = true;
+        canvas.style.cursor = 'grab';
         event.preventDefault();
       }
     };
 
-    canvas.addEventListener('mousedown', handleMouseDown);
-    canvas.addEventListener('mousemove', handleMouseMove);
-    canvas.addEventListener('mouseup', handleMouseUp);
-    canvas.addEventListener('contextmenu', handleContextMenu);
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Space') {
+        spaceKeyPressedRef.current = false;
+        if (!isPanningRef.current) {
+          canvas.style.cursor = 'default';
+        }
+        event.preventDefault();
+      }
+    };
+
+    // Use capture phase to intercept events before MouseController
+    canvas.addEventListener('mousedown', handleMouseDown, true);
+    canvas.addEventListener('mousemove', handleMouseMove, true);
+    canvas.addEventListener('mouseup', handleMouseUp, true);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
 
     return () => {
-      canvas.removeEventListener('mousedown', handleMouseDown);
-      canvas.removeEventListener('mousemove', handleMouseMove);
-      canvas.removeEventListener('mouseup', handleMouseUp);
-      canvas.removeEventListener('contextmenu', handleContextMenu);
+      canvas.removeEventListener('mousedown', handleMouseDown, true);
+      canvas.removeEventListener('mousemove', handleMouseMove, true);
+      canvas.removeEventListener('mouseup', handleMouseUp, true);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
     };
   }, []);
 
