@@ -538,22 +538,22 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     return () => canvas.removeEventListener('wheel', handleWheel);
   }, []);
 
-  // Handle canvas panning (middle mouse button only - don't interfere with left-click)
+  // Handle canvas panning (middle or right mouse button - don't interfere with left-click)
   useEffect(() => {
     const canvas = canvasRef.current;
     const renderer = rendererRef.current;
     if (!canvas || !renderer) return;
 
     const handleMouseDown = (event: MouseEvent) => {
-      // Pan ONLY with middle mouse button (button 1)
-      // DO NOT use left-click to avoid interfering with MouseController
-      if (event.button === 1) {
+      // Pan with middle mouse (button 1) or right mouse (button 2)
+      // DO NOT use left-click (button 0) to avoid interfering with MouseController
+      if (event.button === 1 || event.button === 2) {
         event.preventDefault();
         event.stopPropagation();
         isPanningRef.current = true;
         lastPanPosRef.current = { x: event.clientX, y: event.clientY };
         canvas.style.cursor = 'grabbing';
-        console.log('[FloorplanCanvas] Started panning with middle mouse');
+        console.log('[FloorplanCanvas] Started panning with button', event.button);
       }
     };
 
@@ -574,7 +574,7 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     };
 
     const handleMouseUp = (event: MouseEvent) => {
-      if (event.button === 1) {
+      if (event.button === 1 || event.button === 2) {
         isPanningRef.current = false;
         lastPanPosRef.current = null;
         canvas.style.cursor = 'default';
@@ -582,15 +582,22 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
       }
     };
 
-    // Use capture phase to intercept middle-click before MouseController
+    const handleContextMenu = (event: MouseEvent) => {
+      // Prevent context menu when right-click is used for panning
+      event.preventDefault();
+    };
+
+    // Use capture phase to intercept middle/right-click before MouseController
     canvas.addEventListener('mousedown', handleMouseDown, true);
     canvas.addEventListener('mousemove', handleMouseMove, true);
     canvas.addEventListener('mouseup', handleMouseUp, true);
+    canvas.addEventListener('contextmenu', handleContextMenu);
 
     return () => {
       canvas.removeEventListener('mousedown', handleMouseDown, true);
       canvas.removeEventListener('mousemove', handleMouseMove, true);
       canvas.removeEventListener('mouseup', handleMouseUp, true);
+      canvas.removeEventListener('contextmenu', handleContextMenu);
     };
   }, []);
 
