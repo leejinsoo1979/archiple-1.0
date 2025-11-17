@@ -6,6 +6,7 @@ import {
   Vector3,
   Vector2,
   MeshBuilder,
+  PolygonMeshBuilder,
   PBRMaterial,
   Color3,
   Texture,
@@ -382,16 +383,17 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
 
         if (roomPoints.length < 3) return;
 
-        // Create polygon floor using the actual room shape
+        // Create polygon floor using PolygonMeshBuilder
         const floorShape = roomPoints.map((p: Vector3) => new Vector2(p.x, p.z));
 
-        const floor = MeshBuilder.CreatePolygon(
+        const polygonBuilder = new PolygonMeshBuilder(
           `floor_${roomIndex}`,
-          { shape: floorShape, depth: 0.001 }, // Very thin polygon
+          floorShape,
           scene
         );
+        const floor = polygonBuilder.build(false, 0.001);
         floor.position.y = 0.01;
-        floor.rotation.x = Math.PI / 2; // Rotate to be horizontal
+        floor.rotation.x = -Math.PI / 2; // Rotate to be horizontal (face up)
 
         // Calculate texture scale based on room size
         const minX = Math.min(...roomPoints.map((p: any) => p.x));
