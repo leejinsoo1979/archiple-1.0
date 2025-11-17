@@ -168,13 +168,8 @@ export class WallLayer extends BaseLayer {
     const labelX = midX - Math.sin(angle) * offsetDistance;
     const labelY = midY + Math.cos(angle) * offsetDistance;
 
-    // Format label based on size
-    let label: string;
-    if (millimeters >= 1000) {
-      label = `${(millimeters / 1000).toFixed(2)}m`;
-    } else {
-      label = `${Math.round(millimeters)}mm`;
-    }
+    // Format label in mm only
+    const label = `${Math.round(millimeters)}mm`;
 
     ctx.save();
     ctx.font = 'bold 11px system-ui';
