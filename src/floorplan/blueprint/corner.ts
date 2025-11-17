@@ -86,6 +86,20 @@ export class Corner {
     return neighbours;
   }
 
+  wallTo(corner: Corner): Wall | null {
+    for (const wall of this.wallStarts) {
+      if (wall.getEnd() === corner) return wall;
+    }
+    return null;
+  }
+
+  wallFrom(corner: Corner): Wall | null {
+    for (const wall of this.wallEnds) {
+      if (wall.getStart() === corner) return wall;
+    }
+    return null;
+  }
+
   distanceFrom(x: number, y: number): number {
     return distance(x, y, this.x, this.y);
   }

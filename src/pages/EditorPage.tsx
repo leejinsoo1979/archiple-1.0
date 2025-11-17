@@ -563,7 +563,6 @@ const EditorPage = () => {
           <Babylon3DCanvas
             floorplanData={floorplanData}
             visible={viewMode === '3D'}
-            playMode={playMode}
             sunSettings={sunSettings}
           />
         </div>

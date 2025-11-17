@@ -1,7 +1,8 @@
 import { CallbackList } from './callbacks';
 import { Corner } from './corner';
 import { Wall } from './wall';
-import { Room, RoomTexture } from './room';
+import { Room } from './room';
+import type { RoomTexture } from './room';
 import { HalfEdge } from './half_edge';
 import { removeValue, cycle, removeIf, isClockwise, hasValue, map, angle2pi } from './utils';
 

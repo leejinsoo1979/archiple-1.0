@@ -154,9 +154,8 @@ export class WallLayer extends BaseLayer {
     const dy = endPoint.y - startPoint.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    // Convert pixels to mm (1 pixel = 10mm)
-    const PIXELS_TO_MM = 10;
-    const millimeters = distance * PIXELS_TO_MM;
+    // 1 pixel = 1mm → distance already equals millimeters
+    const millimeters = distance;
 
     // Calculate label position (midpoint, offset perpendicular to wall)
     const midX = (startPoint.x + endPoint.x) / 2;
