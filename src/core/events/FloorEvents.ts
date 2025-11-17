@@ -26,6 +26,14 @@ export const FloorEvents = {
   DISTANCE_MEASUREMENT_UPDATED: 'floor:measurement:distance:updated',
   DISTANCE_MEASUREMENT_CLEARED: 'floor:measurement:distance:cleared',
 
+  // Rectangle tool events
+  RECTANGLE_PREVIEW_UPDATED: 'floor:rectangle:preview:updated',
+  RECTANGLE_PREVIEW_CLEARED: 'floor:rectangle:preview:cleared',
+  VERTICAL_GUIDE_UPDATED: 'floor:guide:vertical:updated',
+  VERTICAL_GUIDE_CLEARED: 'floor:guide:vertical:cleared',
+  HORIZONTAL_GUIDE_UPDATED: 'floor:guide:horizontal:updated',
+  HORIZONTAL_GUIDE_CLEARED: 'floor:guide:horizontal:cleared',
+
   // Room events
   ROOM_DETECTED: 'floor:room:detected',
   ROOM_CREATED: 'floor:room:created',

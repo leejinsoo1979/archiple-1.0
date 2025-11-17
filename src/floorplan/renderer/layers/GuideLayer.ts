@@ -24,6 +24,7 @@ export class GuideLayer extends BaseLayer {
   private gridSnapPoint: Point | null = null;
   private distanceMeasurement: { from: Point; to: Point; distance: number } | null = null;
   private orthogonalGuides: { from: Point; to: Point; type: 'horizontal' | 'vertical' } | null = null;
+  private rectanglePreview: Point[] | null = null;
 
   private config: Required<GuideLayerConfig>;
 
@@ -75,10 +76,19 @@ export class GuideLayer extends BaseLayer {
     }
   }
 
+  setRectanglePreview(corners: Point[] | null): void {
+    this.rectanglePreview = corners;
+  }
+
   render(ctx: CanvasRenderingContext2D): void {
     if (!this.visible) return;
 
     this.applyOpacity(ctx);
+
+    // Render rectangle preview
+    if (this.rectanglePreview && this.rectanglePreview.length === 4) {
+      this.renderRectanglePreview(ctx, this.rectanglePreview);
+    }
 
     // Render orthogonal guides first (background)
     if (this.orthogonalGuides) {
@@ -263,6 +273,29 @@ export class GuideLayer extends BaseLayer {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(label, labelX, labelY);
+
+    ctx.restore();
+  }
+
+  private renderRectanglePreview(ctx: CanvasRenderingContext2D, corners: Point[]): void {
+    ctx.save();
+
+    // Draw dashed rectangle outline
+    ctx.strokeStyle = '#3498db';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 4]);
+
+    ctx.beginPath();
+    ctx.moveTo(corners[0].x, corners[0].y);
+    ctx.lineTo(corners[1].x, corners[1].y);
+    ctx.lineTo(corners[2].x, corners[2].y);
+    ctx.lineTo(corners[3].x, corners[3].y);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Fill with semi-transparent blue
+    ctx.fillStyle = 'rgba(52, 152, 219, 0.1)';
+    ctx.fill();
 
     ctx.restore();
   }

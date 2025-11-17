@@ -66,9 +66,30 @@ export class RectangleTool extends BaseTool {
     let snappedPos = snapResult.position;
 
     // Rectangle-specific snap: align X or Y with existing points
-    const alignedPos = this.snapToRectangleAlignment(snappedPos);
-    if (alignedPos) {
-      snappedPos = alignedPos;
+    const alignmentResult = this.snapToRectangleAlignment(snappedPos);
+    if (alignmentResult) {
+      snappedPos = alignmentResult.position;
+
+      // Emit guide lines for visual feedback
+      if (alignmentResult.verticalGuide) {
+        eventBus.emit(FloorEvents.VERTICAL_GUIDE_UPDATED, {
+          x: alignmentResult.verticalGuide.x,
+          fromY: -10000,
+          toY: 10000,
+        });
+      }
+
+      if (alignmentResult.horizontalGuide) {
+        eventBus.emit(FloorEvents.HORIZONTAL_GUIDE_UPDATED, {
+          y: alignmentResult.horizontalGuide.y,
+          fromX: -10000,
+          toX: 10000,
+        });
+      }
+    } else {
+      // Clear guides if no alignment
+      eventBus.emit(FloorEvents.VERTICAL_GUIDE_CLEARED, {});
+      eventBus.emit(FloorEvents.HORIZONTAL_GUIDE_CLEARED, {});
     }
 
     this.currentPreviewEnd = snappedPos;
@@ -160,8 +181,15 @@ export class RectangleTool extends BaseTool {
 
   /**
    * Snap rectangle corners to existing points' X or Y coordinates
+   * Returns position and guide line info
    */
-  private snapToRectangleAlignment(position: Vector2): Vector2 | null {
+  private snapToRectangleAlignment(
+    position: Vector2
+  ): {
+    position: Vector2;
+    verticalGuide?: { x: number };
+    horizontalGuide?: { y: number };
+  } | null {
     if (!this.startPoint) return null;
 
     const threshold = 15; // Snap tolerance
@@ -193,23 +221,11 @@ export class RectangleTool extends BaseTool {
       const resultX = snapX ?? position.x;
       const resultY = snapY ?? position.y;
 
-      // Emit guide for vertical alignment (same X)
-      if (snapX !== null) {
-        eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, {
-          from: { id: 'rect-vertical-guide', x: snapX, y: this.startPoint.y },
-          angle: 90, // Vertical line
-        });
-      }
-
-      // Emit guide for horizontal alignment (same Y)
-      if (snapY !== null) {
-        eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, {
-          from: { id: 'rect-horizontal-guide', x: this.startPoint.x, y: snapY },
-          angle: 0, // Horizontal line
-        });
-      }
-
-      return new Vector2(resultX, resultY);
+      return {
+        position: new Vector2(resultX, resultY),
+        verticalGuide: snapX !== null ? { x: snapX } : undefined,
+        horizontalGuide: snapY !== null ? { y: snapY } : undefined,
+      };
     }
 
     return null;

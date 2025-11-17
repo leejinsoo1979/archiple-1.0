@@ -236,6 +236,15 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
       guideLayer.setDistanceMeasurement(null, null);
     });
 
+    // Rectangle preview
+    eventBus.on(FloorEvents.RECTANGLE_PREVIEW_UPDATED, (data: any) => {
+      guideLayer.setRectanglePreview(data.corners);
+    });
+
+    eventBus.on(FloorEvents.RECTANGLE_PREVIEW_CLEARED, () => {
+      guideLayer.setRectanglePreview(null);
+    });
+
     // Room detection on wall added (detect rooms automatically)
     eventBus.on(FloorEvents.WALL_ADDED, () => {
       console.log('[FloorplanCanvas] Wall added, detecting rooms...');
