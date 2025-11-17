@@ -47,8 +47,11 @@ export interface Layer {
 export abstract class BaseLayer implements Layer {
   public visible = true;
   protected opacity = 1.0;
+  public readonly zIndex: number;
 
-  constructor(public readonly zIndex: number) {}
+  constructor(zIndex: number) {
+    this.zIndex = zIndex;
+  }
 
   abstract render(ctx: CanvasRenderingContext2D): void;
 

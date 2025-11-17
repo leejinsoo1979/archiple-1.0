@@ -21,11 +21,15 @@ export class Room {
   interiorCorners: { x: number; y: number }[] = [];
   private edgePointer: HalfEdge | null = null;
   private floorChangeCallbacks = new CallbackList();
+  private floorplan: Floorplan;
+  corners: Corner[];
 
   constructor(
-    private floorplan: Floorplan,
-    public corners: Corner[]
+    floorplan: Floorplan,
+    corners: Corner[]
   ) {
+    this.floorplan = floorplan;
+    this.corners = corners;
     this.updateWalls();
     this.updateInteriorCorners();
   }
@@ -52,7 +56,7 @@ export class Room {
     this.floorChangeCallbacks.fire();
   }
 
-  private cycleIndex(index: number): number {
+  private _cycleIndex(index: number): number {
     if (index < 0) {
       return index + this.corners.length;
     }

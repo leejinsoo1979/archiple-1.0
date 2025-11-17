@@ -70,8 +70,11 @@ export interface Tool {
  */
 export abstract class BaseTool implements Tool {
   protected _isActive = false;
+  public readonly name: string;
 
-  constructor(public readonly name: string) {}
+  constructor(name: string) {
+    this.name = name;
+  }
 
   get isActive(): boolean {
     return this._isActive;

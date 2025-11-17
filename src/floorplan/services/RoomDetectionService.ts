@@ -226,7 +226,7 @@ export class RoomDetectionService {
   /**
    * Order points in clockwise direction
    */
-  private orderPointsClockwise(points: Point[]): Point[] {
+  private _orderPointsClockwise(points: Point[]): Point[] {
     // Calculate centroid
     const centroid = {
       x: points.reduce((sum, p) => sum + p.x, 0) / points.length,

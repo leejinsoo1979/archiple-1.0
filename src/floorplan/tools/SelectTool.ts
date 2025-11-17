@@ -22,7 +22,7 @@ export class SelectTool extends BaseTool {
   // Selection and drag state
   private selectedPoint: Point | null = null;
   private isDragging = false;
-  private dragStartPos: Vector2 | null = null;
+  private _dragStartPos: Vector2 | null = null;
 
   // Config
   private pointSelectRadius = 200; // 200mm selection radius (easier to click)
@@ -55,7 +55,7 @@ export class SelectTool extends BaseTool {
       // Select point and start dragging
       this.selectedPoint = clickedPoint;
       this.isDragging = true;
-      this.dragStartPos = position;
+      this._dragStartPos = position;
 
       console.log('[SelectTool] Selected point:', clickedPoint.id, 'at', clickedPoint.x, clickedPoint.y);
 
@@ -70,7 +70,7 @@ export class SelectTool extends BaseTool {
     }
   }
 
-  handleMouseMove(position: Vector2, event: MouseEvent): void {
+  handleMouseMove(position: Vector2, _event: MouseEvent): void {
     if (!this.isDragging || !this.selectedPoint) {
       // Hover feedback - highlight point under cursor
       const allPoints = this.sceneManager.objectManager.getAllPoints();
@@ -152,7 +152,7 @@ export class SelectTool extends BaseTool {
   private resetState(): void {
     this.selectedPoint = null;
     this.isDragging = false;
-    this.dragStartPos = null;
+    this._dragStartPos = null;
 
     // Clear selection events
     eventBus.emit(FloorEvents.POINT_SELECTION_CLEARED, {});

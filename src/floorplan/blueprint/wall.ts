@@ -34,13 +34,17 @@ export class Wall {
   private movedCallbacks = new CallbackList();
   private deletedCallbacks = new CallbackList<[Wall]>();
   private actionCallbacks = new CallbackList<[string]>();
+  private start: Corner;
+  private end: Corner;
 
   constructor(
-    private start: Corner,
-    private end: Corner,
+    start: Corner,
+    end: Corner,
     thickness = 200,
     height = 2800
   ) {
+    this.start = start;
+    this.end = end;
     this.id = this.getUuid();
     this.thickness = thickness;
     this.height = height;

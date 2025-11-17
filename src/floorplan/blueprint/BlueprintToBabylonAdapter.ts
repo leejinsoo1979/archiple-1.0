@@ -1,7 +1,5 @@
 import type { Floorplan } from './floorplan';
 import type { Corner } from './corner';
-import type { Wall } from './wall';
-import type { Room } from './room';
 
 /**
  * Adapter to convert blueprint Floorplan data to Babylon3DCanvas format
@@ -130,5 +128,6 @@ export function createTestRoom(): BabylonFloorplanData {
         area: 2800 * 2800, // mm�
       },
     ],
+    floorplan: null as any, // Test room doesn't have a real floorplan object
   };
 }

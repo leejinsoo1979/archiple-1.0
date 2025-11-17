@@ -75,7 +75,7 @@ export function angle2pi(x1: number, y1: number, x2: number, y2: number): number
 }
 
 export function map<T, R>(arr: T[], fn: (value: T) => R): R[] {
-  return Array.prototype.map.call(arr, fn);
+  return Array.prototype.map.call(arr, fn) as R[];
 }
 
 export function lineLineIntersect(

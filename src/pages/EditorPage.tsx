@@ -8,7 +8,7 @@ import { createTestRoom } from '../floorplan/blueprint/BlueprintToBabylonAdapter
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 
 const EditorPage = () => {
-  const [activeCategory, setActiveCategory] = useState<ToolCategory>('walls');
+  const [_activeCategory, _setActiveCategory] = useState<ToolCategory>('walls');
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [activeTool, setActiveTool] = useState<ToolType>(ToolType.SELECT);

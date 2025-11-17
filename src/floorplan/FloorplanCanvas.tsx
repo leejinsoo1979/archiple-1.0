@@ -40,8 +40,8 @@ interface FloorplanCanvasProps {
 const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
-  const [stats, setStats] = useState({ points: 0, walls: 0, rooms: 0, fps: 0 });
+  const [_mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
+  const [_stats, setStats] = useState({ points: 0, walls: 0, rooms: 0, fps: 0 });
 
   // Pan state
   const isPanningRef = useRef(false);
@@ -351,6 +351,7 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
       }
 
       const points = sceneManager.objectManager.getAllPoints();
+      const walls = sceneManager.objectManager.getAllWalls();
       const rooms = sceneManager.objectManager.getAllRooms();
 
       // Create room ONLY from the user-defined loop (data.points)
@@ -374,7 +375,7 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
         const currId = roomPointIds[i];
         const nextId = roomPointIds[(i + 1) % roomPointIds.length];
 
-        const wall = walls.find(w =>
+        const wall = walls.find((w: any) =>
           (w.startPointId === currId && w.endPointId === nextId) ||
           (w.startPointId === nextId && w.endPointId === currId)
         );

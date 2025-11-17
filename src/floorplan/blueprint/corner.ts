@@ -16,8 +16,10 @@ export class Corner {
   private movedCallbacks = new CallbackList<[Corner]>();
   private deletedCallbacks = new CallbackList<[Corner]>();
   private actionCallbacks = new CallbackList<[string]>();
+  private floorplan: Floorplan;
 
-  constructor(private floorplan: Floorplan, x: number, y: number, id?: string) {
+  constructor(floorplan: Floorplan, x: number, y: number, id?: string) {
+    this.floorplan = floorplan;
     this.id = id ?? guid();
     this.x = x;
     this.y = y;

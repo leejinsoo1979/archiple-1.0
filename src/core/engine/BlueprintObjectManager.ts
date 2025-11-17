@@ -166,7 +166,7 @@ export class BlueprintObjectManager {
   }
 
   // Room management
-  addRoom(room: Room): void {
+  addRoom(_room: Room): void {
     // Rooms are auto-detected by blueprint, no manual add needed
     console.log('[BlueprintObjectManager] Rooms are auto-detected, skipping manual add');
   }
@@ -221,12 +221,12 @@ export class BlueprintObjectManager {
     });
   }
 
-  updateRoom(id: string, updates: Partial<Room>): void {
+  updateRoom(_id: string, _updates: Partial<Room>): void {
     // Rooms are managed by blueprint, can't update directly
     console.log('[BlueprintObjectManager] Rooms are auto-managed by blueprint');
   }
 
-  removeRoom(id: string): void {
+  removeRoom(_id: string): void {
     // Rooms are auto-managed by blueprint
     console.log('[BlueprintObjectManager] Rooms are auto-managed by blueprint');
   }

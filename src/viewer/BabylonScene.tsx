@@ -40,7 +40,7 @@ const BabylonScene = () => {
     box.position.y = 1;
 
     // Create ground
-    const ground = MeshBuilder.CreateGround('ground1', { width: 10, height: 10 }, scene);
+    const _ground = MeshBuilder.CreateGround('ground1', { width: 10, height: 10 }, scene);
 
     // Run the render loop
     engine.runRenderLoop(() => {
