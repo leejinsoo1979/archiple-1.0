@@ -360,27 +360,24 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
         y: startPoint.y - perpY * halfThick
       };
 
-      // Convert to 3D meters
+      const wallHeight = wallHeightMM * MM_TO_METERS;
+
+      // Shape at top (Y = wallHeight), extrude downward to Y = 0
       const shape = [c0, c1, c2, c3].map(c => new Vector3(
         (c.x * MM_TO_METERS) - centerX,
-        0,
+        wallHeight,
         (c.y * MM_TO_METERS) - centerZ
       ));
-
-      const wallHeight = wallHeightMM * MM_TO_METERS;
 
       const wallMesh = MeshBuilder.ExtrudePolygon(
         `wall_${index}`,
         {
           shape: shape,
-          depth: wallHeight,
+          depth: -wallHeight, // Negative depth extrudes downward
           sideOrientation: 2
         },
         scene
       );
-
-      // ExtrudePolygon extrudes upward (Y+), so mesh is already at correct height
-      // No position adjustment needed
 
       wallMesh.material = wallMaterial;
       wallMesh.receiveShadows = true;
