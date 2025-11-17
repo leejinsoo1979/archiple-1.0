@@ -352,9 +352,63 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
 
     console.log('[Babylon3DCanvas] Created', walls.length, '3D walls from 2D data');
 
-    // Corner joints are NOT needed with proper wall modeling
-    // Blueprint3d uses centerline walls, so corners should connect seamlessly
-    // If gaps appear, the issue is with wall positioning, not missing corner boxes
+    // Create corner joints to fill gaps between walls
+    const cornerPoints = new Map<string, { x: number; z: number; height: number; thickness: number }>();
+
+    walls.forEach(wall => {
+      const startPoint = pointMap.get(wall.startPointId);
+      const endPoint = pointMap.get(wall.endPointId);
+      if (!startPoint || !endPoint) return;
+
+      const wallHeightMM = wall.height || 2800;
+      const wallThicknessMM = wall.thickness;
+
+      // Track corner points with max height and thickness
+      [startPoint, endPoint].forEach(point => {
+        const existing = cornerPoints.get(point.id);
+        if (!existing) {
+          cornerPoints.set(point.id, {
+            x: point.x * MM_TO_METERS - centerX,
+            z: point.y * MM_TO_METERS - centerZ,
+            height: wallHeightMM * MM_TO_METERS,
+            thickness: wallThicknessMM * MM_TO_METERS
+          });
+        } else {
+          // Use max height and thickness at this corner
+          existing.height = Math.max(existing.height, wallHeightMM * MM_TO_METERS);
+          existing.thickness = Math.max(existing.thickness, wallThicknessMM * MM_TO_METERS);
+        }
+      });
+    });
+
+    // Create corner joint boxes
+    cornerPoints.forEach((corner, pointId) => {
+      const cornerBox = MeshBuilder.CreateBox(
+        `corner_${pointId}`,
+        {
+          width: corner.thickness,
+          height: corner.height,
+          depth: corner.thickness
+        },
+        scene
+      );
+
+      cornerBox.position = new Vector3(
+        corner.x,
+        corner.height / 2,
+        corner.z
+      );
+
+      cornerBox.material = wallMaterial;
+      cornerBox.receiveShadows = true;
+      cornerBox.checkCollisions = true;
+
+      if (shadowGenerator) {
+        shadowGenerator.addShadowCaster(cornerBox);
+      }
+    });
+
+    console.log('[Babylon3DCanvas] Created', cornerPoints.size, 'corner joints');
 
     // Create floors for each room
     const { rooms } = floorplanData;
