@@ -25,7 +25,7 @@ export class SelectTool extends BaseTool {
   private dragStartPos: Vector2 | null = null;
 
   // Config
-  private pointSelectRadius = 20; // 20mm selection radius
+  private pointSelectRadius = 200; // 200mm selection radius (easier to click)
 
   constructor(sceneManager: SceneManager, snapService: SnapService) {
     super('select');
@@ -48,6 +48,7 @@ export class SelectTool extends BaseTool {
 
     // Find point near cursor
     const allPoints = this.sceneManager.objectManager.getAllPoints();
+    console.log('[SelectTool] Looking for point near', position, 'from', allPoints.length, 'points');
     const clickedPoint = this.findPointNear(position, allPoints);
 
     if (clickedPoint) {
@@ -56,13 +57,14 @@ export class SelectTool extends BaseTool {
       this.isDragging = true;
       this.dragStartPos = position;
 
-      console.log('[SelectTool] Selected point:', clickedPoint.id);
+      console.log('[SelectTool] Selected point:', clickedPoint.id, 'at', clickedPoint.x, clickedPoint.y);
 
       // Emit selection event
       eventBus.emit(FloorEvents.POINT_SELECTED, {
         point: clickedPoint,
       });
     } else {
+      console.log('[SelectTool] No point found near click');
       // Clicked empty space - deselect
       this.resetState();
     }
@@ -92,6 +94,8 @@ export class SelectTool extends BaseTool {
     // Snap position
     const snapResult = this.snapService.snap(position);
     const snappedPos = snapResult.position;
+
+    console.log('[SelectTool] Moving point from', this.selectedPoint.x, this.selectedPoint.y, 'to', snappedPos.x, snappedPos.y);
 
     // Move point to snapped position
     this.selectedPoint.x = snappedPos.x;
