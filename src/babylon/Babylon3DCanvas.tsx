@@ -311,14 +311,13 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
         const midZ = (z1 + z2) / 2;
         const angle = Math.atan2(z2 - z1, x2 - x1);
 
-        // FIX: wall.height가 이미 미터 단위일 가능성 체크
-        // UI는 mm로 표시하지만 실제 저장은 m 단위일 수 있음
+        // wall.height와 wall.thickness는 mm 단위
         const wallHeightMM = wall.height || 2800;
         const thicknessMM = wall.thickness || 200;
 
-        // CRITICAL FIX: wall.height > 100이면 mm 단위, 아니면 이미 m 단위
-        const wallHeight = wallHeightMM > 100 ? wallHeightMM * MM_TO_METERS : wallHeightMM;
-        const thickness = thicknessMM > 10 ? thicknessMM * MM_TO_METERS : thicknessMM;
+        // mm를 미터로 변환
+        const wallHeight = wallHeightMM * MM_TO_METERS;
+        const thickness = thicknessMM * MM_TO_METERS;
 
         console.log('[DEBUG] Wall dimensions:', {
           'input': { height: wall.height, thickness: wall.thickness },
@@ -354,7 +353,14 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
         );
 
         // Position and rotate
-        wallMesh.position.set(midX, wallHeight / 2, midZ);
+        const posY = wallHeight / 2;
+        wallMesh.position.set(midX, posY, midZ);
+
+        console.log(`[CRITICAL] Wall ${index} FINAL:`, {
+          'Box dimensions': { width: length, height: wallHeight, depth: thickness },
+          'Position': { x: midX, y: posY, z: midZ },
+          'Expected': { width: '~0.4m', height: '2.8m', depth: '0.2m', y: '1.4m' },
+        });
         wallMesh.rotation.y = angle;
         wallMesh.material = wallMaterial;
         wallMesh.receiveShadows = true;
