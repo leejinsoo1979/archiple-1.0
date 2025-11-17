@@ -19,6 +19,7 @@ const EditorPage = () => {
     azimuth: 45, // 방위각 0-360도
     altitude: 45, // 고도 0-90도
   });
+  const [playMode, setPlayMode] = useState(false); // FPS mode toggle
 
   return (
     <div className={styles.editorContainer}>
@@ -492,16 +493,39 @@ const EditorPage = () => {
         <div className={styles.viewModeToggle}>
           <button
             className={`${styles.viewModeBtn} ${viewMode === '2D' ? styles.viewModeBtnActive : ''}`}
-            onClick={() => setViewMode('2D')}
+            onClick={() => {
+              setViewMode('2D');
+              setPlayMode(false);
+            }}
           >
             2D
           </button>
           <button
             className={`${styles.viewModeBtn} ${viewMode === '3D' ? styles.viewModeBtnActive : ''}`}
-            onClick={() => setViewMode('3D')}
+            onClick={() => {
+              setViewMode('3D');
+              setPlayMode(false);
+            }}
           >
             3D
           </button>
+          {viewMode === '3D' && (
+            <button
+              className={`${styles.playModeBtn} ${playMode ? styles.playModeBtnActive : ''}`}
+              onClick={() => setPlayMode(!playMode)}
+              title="Play Mode (WASD)"
+            >
+              {playMode ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+              )}
+            </button>
+          )}
         </div>
 
         <div style={{
@@ -527,6 +551,7 @@ const EditorPage = () => {
           <Babylon3DCanvas
             floorplanData={floorplanData}
             visible={viewMode === '3D'}
+            playMode={playMode}
             sunSettings={sunSettings}
           />
         </div>

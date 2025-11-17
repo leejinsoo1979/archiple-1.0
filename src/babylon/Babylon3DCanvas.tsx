@@ -3,6 +3,7 @@ import {
   Engine,
   Scene,
   ArcRotateCamera,
+  UniversalCamera,
   Vector3,
   MeshBuilder,
   PBRMaterial,
@@ -19,6 +20,7 @@ import styles from './Babylon3DCanvas.module.css';
 interface Babylon3DCanvasProps {
   floorplanData?: { points: any[]; walls: any[]; rooms: any[] } | null;
   visible?: boolean;
+  playMode?: boolean; // FPS mode toggle
   sunSettings?: {
     intensity: number;
     azimuth: number;
@@ -26,11 +28,13 @@ interface Babylon3DCanvasProps {
   };
 }
 
-const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon3DCanvasProps) => {
+const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunSettings }: Babylon3DCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const sceneRef = useRef<Scene | null>(null);
   const sunLightRef = useRef<DirectionalLight | null>(null);
+  const arcCameraRef = useRef<ArcRotateCamera | null>(null);
+  const fpsCameraRef = useRef<UniversalCamera | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -62,24 +66,48 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       const glowLayer = new GlowLayer('glow', scene);
       glowLayer.intensity = 0.3;
 
-      // Create camera with smooth controls
-      const camera = new ArcRotateCamera(
-        'camera',
+      // Create ArcRotate camera (default 3D view)
+      const arcCamera = new ArcRotateCamera(
+        'arcCamera',
         -Math.PI / 4,
         Math.PI / 3.5,
         20,
         new Vector3(0, 1.5, 0),
         scene
       );
-      camera.attachControl(canvas, true);
-      camera.lowerRadiusLimit = 5;
-      camera.upperRadiusLimit = 150;
-      camera.upperBetaLimit = Math.PI / 2.05;
-      camera.wheelPrecision = 20;
-      camera.panningSensibility = 200; // Slower panning (higher = slower)
-      camera.inertia = 0.9;
-      camera.angularSensibilityX = 1000;
-      camera.angularSensibilityY = 1000;
+      arcCamera.attachControl(canvas, true);
+      arcCamera.lowerRadiusLimit = 5;
+      arcCamera.upperRadiusLimit = 150;
+      arcCamera.upperBetaLimit = Math.PI / 2.05;
+      arcCamera.wheelPrecision = 20;
+      arcCamera.panningSensibility = 200;
+      arcCamera.inertia = 0.9;
+      arcCamera.angularSensibilityX = 1000;
+      arcCamera.angularSensibilityY = 1000;
+      arcCameraRef.current = arcCamera;
+
+      // Create FPS camera (first-person WASD mode)
+      const fpsCamera = new UniversalCamera(
+        'fpsCamera',
+        new Vector3(0, 1.7, 0), // Eye height ~1.7m
+        scene
+      );
+      fpsCamera.speed = 0.5; // Movement speed
+      fpsCamera.angularSensibility = 2000;
+      fpsCamera.keysUp = [87]; // W
+      fpsCamera.keysDown = [83]; // S
+      fpsCamera.keysLeft = [65]; // A
+      fpsCamera.keysRight = [68]; // D
+      fpsCamera.minZ = 0.1; // Near clipping plane
+
+      // Collision detection
+      fpsCamera.checkCollisions = true;
+      fpsCamera.applyGravity = false; // Keep at constant height
+      fpsCamera.ellipsoid = new Vector3(0.3, 0.85, 0.3); // Collision capsule (radius, half-height, radius)
+      fpsCameraRef.current = fpsCamera;
+
+      // Set default camera
+      scene.activeCamera = arcCamera;
 
       // Advanced lighting setup
       // 1. Ambient light
@@ -186,7 +214,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
 
     // Create walls from 2D data
     // Units: wall.thickness and wall.height are in mm
-    const PIXELS_PER_METER = 20;
+    const PIXELS_PER_METER = 1000; // 1px = 1mm
     const MM_TO_METERS = 0.001; // 1mm = 0.001m
 
     walls.forEach((wall, index) => {
@@ -234,6 +262,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
         wallMesh.rotation.y = angle;
         wallMesh.material = wallMaterial;
         wallMesh.receiveShadows = true;
+
+        // Enable collision detection
+        wallMesh.checkCollisions = true;
 
         // Add to shadow casters
         if (shadowGenerator) {
@@ -297,6 +328,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       cornerJoint.position.set(x, heightMeters / 2, z);
       cornerJoint.material = wallMaterial;
       cornerJoint.receiveShadows = true;
+
+      // Enable collision detection
+      cornerJoint.checkCollisions = true;
 
       if (shadowGenerator) {
         shadowGenerator.addShadowCaster(cornerJoint);
@@ -366,6 +400,32 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
     sunLight.position.set(x, y, z);
     sunLight.intensity = intensity;
   }, [sunSettings]);
+
+  // Switch between ArcRotate and FPS camera
+  useEffect(() => {
+    const scene = sceneRef.current;
+    const canvas = canvasRef.current;
+    const arcCamera = arcCameraRef.current;
+    const fpsCamera = fpsCameraRef.current;
+
+    if (!scene || !canvas || !arcCamera || !fpsCamera) return;
+
+    if (playMode) {
+      console.log('[Babylon3DCanvas] Switching to FPS camera (WASD mode)');
+      // Detach arc camera
+      arcCamera.detachControl();
+      // Attach FPS camera
+      fpsCamera.attachControl(canvas, true);
+      scene.activeCamera = fpsCamera;
+    } else {
+      console.log('[Babylon3DCanvas] Switching to ArcRotate camera');
+      // Detach FPS camera
+      fpsCamera.detachControl();
+      // Attach arc camera
+      arcCamera.attachControl(canvas, true);
+      scene.activeCamera = arcCamera;
+    }
+  }, [playMode]);
 
   // Resize engine when visibility changes
   useEffect(() => {
