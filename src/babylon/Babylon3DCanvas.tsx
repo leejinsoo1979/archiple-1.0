@@ -186,7 +186,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
 
     // Create walls from 2D data
     // Units: wall.thickness and wall.height are in mm
-    const PIXELS_PER_METER = 20;
+    const PIXELS_PER_METER = 1000; // 1px = 1mm
     const MM_TO_METERS = 0.001; // 1mm = 0.001m
 
     walls.forEach((wall, index) => {

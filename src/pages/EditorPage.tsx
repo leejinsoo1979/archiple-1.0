@@ -40,15 +40,78 @@ const EditorPage = () => {
                 <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
               </svg>
             </button>
-            <button
-              className={`${styles.topBtn} ${sunPanelOpen ? styles.active : ''}`}
-              title="Sun"
-              onClick={() => setSunPanelOpen(!sunPanelOpen)}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2v2.95zm-7.45-3.91l1.41 1.41 1.79-1.8-1.41-1.41-1.79 1.8z"/>
-              </svg>
-            </button>
+            <div style={{ position: 'relative' }}>
+              <button
+                className={`${styles.topBtn} ${sunPanelOpen ? styles.active : ''}`}
+                title="Sun"
+                onClick={() => setSunPanelOpen(!sunPanelOpen)}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2v2.95zm-7.45-3.91l1.41 1.41 1.79-1.8-1.41-1.41-1.79 1.8z"/>
+                </svg>
+              </button>
+
+              {sunPanelOpen && (
+                <div className={styles.sunDropdown}>
+                  <div className={styles.dropdownHeader}>
+                    <span>Sun Settings</span>
+                    <button onClick={() => setSunPanelOpen(false)} className={styles.closeBtn}>×</button>
+                  </div>
+                  <div className={styles.dropdownBody}>
+                    {/* Intensity */}
+                    <div className={styles.controlGroup}>
+                      <label>Intensity</label>
+                      <div className={styles.controlInput}>
+                        <input
+                          type="range"
+                          min="0"
+                          max="3"
+                          step="0.1"
+                          value={sunSettings.intensity}
+                          onChange={(e) => setSunSettings({...sunSettings, intensity: parseFloat(e.target.value)})}
+                          className={styles.rangeSlider}
+                        />
+                        <span className={styles.valueDisplay}>{sunSettings.intensity.toFixed(1)}</span>
+                      </div>
+                    </div>
+
+                    {/* Azimuth */}
+                    <div className={styles.controlGroup}>
+                      <label>Azimuth</label>
+                      <div className={styles.controlInput}>
+                        <input
+                          type="range"
+                          min="0"
+                          max="360"
+                          step="1"
+                          value={sunSettings.azimuth}
+                          onChange={(e) => setSunSettings({...sunSettings, azimuth: parseFloat(e.target.value)})}
+                          className={styles.rangeSlider}
+                        />
+                        <span className={styles.valueDisplay}>{sunSettings.azimuth}°</span>
+                      </div>
+                    </div>
+
+                    {/* Altitude */}
+                    <div className={styles.controlGroup}>
+                      <label>Altitude</label>
+                      <div className={styles.controlInput}>
+                        <input
+                          type="range"
+                          min="0"
+                          max="90"
+                          step="1"
+                          value={sunSettings.altitude}
+                          onChange={(e) => setSunSettings({...sunSettings, altitude: parseFloat(e.target.value)})}
+                          className={styles.rangeSlider}
+                        />
+                        <span className={styles.valueDisplay}>{sunSettings.altitude}°</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <button className={styles.topBtn} title="Ambient">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/>
@@ -513,58 +576,6 @@ const EditorPage = () => {
             </div>
             <button className={styles.editBtn}>Edit Floor ›</button>
           </div>
-
-          {/* Sun Settings */}
-          {sunPanelOpen && (
-            <div className={styles.settingsSection}>
-              <h4>Sun Settings</h4>
-
-              {/* Intensity */}
-              <div className={styles.settingRow}>
-                <label>Intensity</label>
-                <input
-                  type="range"
-                  min="0"
-                  max="3"
-                  step="0.1"
-                  value={sunSettings.intensity}
-                  onChange={(e) => setSunSettings({...sunSettings, intensity: parseFloat(e.target.value)})}
-                  className={styles.slider}
-                />
-                <span className={styles.sliderValue}>{sunSettings.intensity.toFixed(1)}</span>
-              </div>
-
-              {/* Azimuth (방위각) */}
-              <div className={styles.settingRow}>
-                <label>Azimuth (°)</label>
-                <input
-                  type="range"
-                  min="0"
-                  max="360"
-                  step="1"
-                  value={sunSettings.azimuth}
-                  onChange={(e) => setSunSettings({...sunSettings, azimuth: parseFloat(e.target.value)})}
-                  className={styles.slider}
-                />
-                <span className={styles.sliderValue}>{sunSettings.azimuth}°</span>
-              </div>
-
-              {/* Altitude (고도) */}
-              <div className={styles.settingRow}>
-                <label>Altitude (°)</label>
-                <input
-                  type="range"
-                  min="0"
-                  max="90"
-                  step="1"
-                  value={sunSettings.altitude}
-                  onChange={(e) => setSunSettings({...sunSettings, altitude: parseFloat(e.target.value)})}
-                  className={styles.slider}
-                />
-                <span className={styles.sliderValue}>{sunSettings.altitude}°</span>
-              </div>
-            </div>
-          )}
         </div>
       )}
       </div>
