@@ -403,9 +403,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
 
         // Clone material for each floor
         const roomFloorMat = floorMaterial.clone(`floorMat_room_${roomIndex}`);
-        if (roomFloorMat.albedoTexture) {
-          roomFloorMat.albedoTexture.uScale = width; // width in meters
-          roomFloorMat.albedoTexture.vScale = depth; // depth in meters
+        if (roomFloorMat.albedoTexture && roomFloorMat.albedoTexture instanceof Texture) {
+          (roomFloorMat.albedoTexture as Texture).uScale = width; // width in meters
+          (roomFloorMat.albedoTexture as Texture).vScale = depth; // depth in meters
         }
         floor.material = roomFloorMat;
         floor.receiveShadows = true;
