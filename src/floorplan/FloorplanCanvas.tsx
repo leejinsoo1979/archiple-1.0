@@ -71,10 +71,10 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     // Units: mm (millimeters) - 모든 내부 좌표는 mm 단위
     // Scale: scalePxPerMm = 0.1 means 1mm = 0.1px (4800mm = 480px)
     const config: EditorConfig = {
-      gridSize: 500, // 500mm = 50cm grid
+      gridSize: 250, // 250mm = 25cm grid
       snapEnabled: true,
       snapThreshold: 15, // 15px snap threshold (screen space)
-      wallThickness: 100, // 100mm = 10cm
+      wallThickness: 50, // 50mm = 5cm
       wallHeight: 2800, // 2800mm = 2.8m
       canvasWidth: container.clientWidth,
       canvasHeight: container.clientHeight,

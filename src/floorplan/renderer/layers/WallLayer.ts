@@ -38,7 +38,7 @@ export class WallLayer extends BaseLayer {
 
     this.config = {
       wallColor: config?.wallColor || '#2c3e50',
-      wallThickness: config?.wallThickness || 100, // 100mm = 10cm
+      wallThickness: config?.wallThickness || 50, // 50mm = 5cm
       previewColor: config?.previewColor || '#3498db',
       previewStyle: config?.previewStyle || 'dashed',
     };
