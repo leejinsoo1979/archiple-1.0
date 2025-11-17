@@ -28,7 +28,7 @@ export class SelectTool extends BaseTool {
 
   // Config
   private pointSelectRadius = 200; // 200mm selection radius (easier to click)
-  private wallSelectDistance = 300; // 300mm distance from wall to select (increased for easier selection)
+  private wallSelectDistance = 500; // 500mm distance from wall to select (increased for easier selection)
 
   constructor(sceneManager: SceneManager, snapService: SnapService) {
     super('select');
@@ -99,6 +99,11 @@ export class SelectTool extends BaseTool {
   }
 
   handleMouseMove(position: Vector2, _event: MouseEvent): void {
+    // Debug: log mouse move with dragging state
+    if (this.isDragging) {
+      console.log('[SelectTool] Mouse move WHILE DRAGGING - selectedPoint:', !!this.selectedPoint, 'selectedWall:', !!this.selectedWall);
+    }
+
     if (!this.isDragging) {
       // Hover feedback - highlight point or wall under cursor
       const allPoints = this.sceneManager.objectManager.getAllPoints();
