@@ -260,12 +260,32 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
     wallMaterial.roughness = 0.6;
     wallMaterial.environmentIntensity = 0.7;
 
-    // Create floor material (wood texture)
+    // Create floor material with grid for scale reference
     const floorMaterial = new PBRMaterial('floorMat_2d', scene);
-    floorMaterial.albedoColor = new Color3(0.8, 0.65, 0.45);
+    floorMaterial.albedoColor = new Color3(0.9, 0.9, 0.9); // 밝은 회색
     floorMaterial.metallic = 0.0;
-    floorMaterial.roughness = 0.7;
+    floorMaterial.roughness = 0.8;
     floorMaterial.environmentIntensity = 0.5;
+
+    // Add 1m grid lines for scale reference
+    try {
+      const gridTexture = new Texture('data:image/svg+xml;base64,' + btoa(`
+        <svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100" height="100" fill="white"/>
+          <line x1="0" y1="0" x2="100" y2="0" stroke="#ddd" stroke-width="1"/>
+          <line x1="0" y1="0" x2="0" y2="100" stroke="#ddd" stroke-width="1"/>
+          <line x1="0" y1="100" x2="100" y2="100" stroke="#ccc" stroke-width="2"/>
+          <line x1="100" y1="0" x2="100" y2="100" stroke="#ccc" stroke-width="2"/>
+        </svg>
+      `), scene);
+      gridTexture.uScale = 1; // 1 texture = 1m
+      gridTexture.vScale = 1;
+      gridTexture.wrapU = Texture.WRAP_ADDRESSMODE;
+      gridTexture.wrapV = Texture.WRAP_ADDRESSMODE;
+      floorMaterial.albedoTexture = gridTexture;
+    } catch (e) {
+      console.warn('[Babylon3DCanvas] Grid texture failed, using solid color');
+    }
 
     // Create walls from 2D data
     // Units: wall.thickness and wall.height are in mm
