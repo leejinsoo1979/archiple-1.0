@@ -368,7 +368,11 @@ export class GuideLayer extends BaseLayer {
     ctx.lineWidth = this.wallThickness; // Use actual wall thickness
     ctx.lineCap = 'square';
     ctx.lineJoin = 'miter';
-    ctx.setLineDash([12, 6]);
+
+    // Use world-space dash pattern based on wall thickness
+    const dashLength = this.wallThickness * 1.5;
+    const gapLength = this.wallThickness * 0.75;
+    ctx.setLineDash([dashLength, gapLength]);
 
     ctx.beginPath();
     ctx.moveTo(corners[0].x, corners[0].y);

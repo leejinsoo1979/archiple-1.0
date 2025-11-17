@@ -218,4 +218,12 @@ export class BlueprintObjectManager {
     corners.forEach(c => c.remove());
     walls.forEach(w => w.remove());
   }
+
+  getCounts(): { points: number; walls: number; rooms: number } {
+    return {
+      points: this.floorplan.getCorners().length,
+      walls: this.floorplan.getWalls().length,
+      rooms: this.floorplan.getRooms().length,
+    };
+  }
 }

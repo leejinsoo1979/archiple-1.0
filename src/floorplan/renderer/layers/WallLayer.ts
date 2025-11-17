@@ -121,15 +121,18 @@ export class WallLayer extends BaseLayer {
     // Thickness in mm (world space) - camera transform is already applied by renderer
     const thickness = this.config.wallThickness;
 
-    // Draw preview with SAME thickness as confirmed walls
+    // Draw preview with SAME thickness and style as confirmed walls
     ctx.strokeStyle = this.config.previewColor;
     ctx.lineWidth = thickness;
     ctx.lineCap = 'square';
     ctx.lineJoin = 'miter';
     ctx.miterLimit = 10;
 
+    // Use world-space dash pattern based on wall thickness
     if (this.config.previewStyle === 'dashed') {
-      ctx.setLineDash([12, 6]);
+      const dashLength = thickness * 1.5; // 1.5x wall thickness
+      const gapLength = thickness * 0.75; // 0.75x wall thickness
+      ctx.setLineDash([dashLength, gapLength]);
     }
 
     ctx.beginPath();
