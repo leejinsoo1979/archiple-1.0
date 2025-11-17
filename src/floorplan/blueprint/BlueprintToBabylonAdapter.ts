@@ -60,7 +60,7 @@ export function convertFloorplanToBabylon(floorplan: Floorplan): BabylonFloorpla
     startPointId: wall.getStart().id,
     endPointId: wall.getEnd().id,
     thickness: wall.thickness, // Already in mm (100mm = 10cm)
-    height: wall.height, // Already in mm (2800mm = 2.8m)
+    height: wall.height, // Already in mm (2400mm = 2.4m)
   }));
 
   // Convert rooms
@@ -106,7 +106,7 @@ function calculateRoomArea(corners: Corner[]): number {
 
 /**
  * Create a simple test floorplan for verification
- * Creates a 2800mm x 2800mm room with 100mm thick walls
+ * Creates a 2800mm x 2800mm room with 100mm thick walls and 2400mm height
  */
 export function createTestRoom(): BabylonFloorplanData {
   return {
@@ -117,10 +117,10 @@ export function createTestRoom(): BabylonFloorplanData {
       { id: 'p4', x: 0, y: 2800 },
     ],
     walls: [
-      { id: 'w1', startPointId: 'p1', endPointId: 'p2', thickness: 100, height: 2800 },
-      { id: 'w2', startPointId: 'p2', endPointId: 'p3', thickness: 100, height: 2800 },
-      { id: 'w3', startPointId: 'p3', endPointId: 'p4', thickness: 100, height: 2800 },
-      { id: 'w4', startPointId: 'p4', endPointId: 'p1', thickness: 100, height: 2800 },
+      { id: 'w1', startPointId: 'p1', endPointId: 'p2', thickness: 100, height: 2400 },
+      { id: 'w2', startPointId: 'p2', endPointId: 'p3', thickness: 100, height: 2400 },
+      { id: 'w3', startPointId: 'p3', endPointId: 'p4', thickness: 100, height: 2400 },
+      { id: 'w4', startPointId: 'p4', endPointId: 'p1', thickness: 100, height: 2400 },
     ],
     rooms: [
       {

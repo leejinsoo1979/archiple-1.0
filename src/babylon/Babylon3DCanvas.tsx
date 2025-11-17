@@ -230,7 +230,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
 
     if (planMetrics && arcCameraRef.current) {
       const arcCamera = arcCameraRef.current;
-      const maxWallHeight = walls.reduce((max, wall) => Math.max(max, wall.height || 2800), 2800);
+      const maxWallHeight = walls.reduce((max, wall) => Math.max(max, wall.height || 2400), 2400);
       const targetY = Math.max((maxWallHeight * MM_TO_METERS) / 2, DEFAULT_CAMERA_HEIGHT);
 
       // Camera target at floor level (Y=0) to see room properly
@@ -305,7 +305,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       if (!startPoint || !endPoint) return;
 
       const wallThicknessMM = wall.thickness;
-      const wallHeightMM = wall.height || 2800;
+      const wallHeightMM = wall.height || 2400;
 
       if (index === 0) {
         console.log('[Babylon3DCanvas] Wall height check:', {

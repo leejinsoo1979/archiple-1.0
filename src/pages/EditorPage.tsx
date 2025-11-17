@@ -594,7 +594,7 @@ const EditorPage = () => {
             </div>
             <div className={styles.settingRow}>
               <label>Wall Height</label>
-              <input type="text" defaultValue="2800 mm" />
+              <input type="text" defaultValue="2400 mm" />
             </div>
             <div className={styles.settingRow}>
               <label>Wall Thickness</label>

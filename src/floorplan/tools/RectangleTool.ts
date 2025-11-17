@@ -27,7 +27,7 @@ export class RectangleTool extends BaseTool {
 
   // Config (units: mm)
   private defaultWallThickness = 100; // 100mm = 10cm
-  private defaultWallHeight = 2800; // 2800mm = 2.8m
+  private defaultWallHeight = 2400; // 2400mm = 2.4m
 
   constructor(sceneManager: SceneManager, snapService: SnapService) {
     super('rectangle');

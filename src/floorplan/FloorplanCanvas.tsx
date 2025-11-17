@@ -75,7 +75,7 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
       snapEnabled: true,
       snapThreshold: 15, // 15px snap threshold (screen space)
       wallThickness: 100, // 100mm = 10cm
-      wallHeight: 2800, // 2800mm = 2.8m
+      wallHeight: 2400, // 2400mm = 2.4m
       canvasWidth: container.clientWidth,
       canvasHeight: container.clientHeight,
     };
