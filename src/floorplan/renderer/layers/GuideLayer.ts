@@ -25,6 +25,8 @@ export class GuideLayer extends BaseLayer {
   private distanceMeasurement: { from: Point; to: Point; distance: number } | null = null;
   private orthogonalGuides: { from: Point; to: Point; type: 'horizontal' | 'vertical' } | null = null;
   private rectanglePreview: Point[] | null = null;
+  private verticalGuide: { x: number; fromY: number; toY: number } | null = null;
+  private horizontalGuide: { y: number; fromX: number; toX: number } | null = null;
 
   private config: Required<GuideLayerConfig>;
 
@@ -80,10 +82,35 @@ export class GuideLayer extends BaseLayer {
     this.rectanglePreview = corners;
   }
 
+  setVerticalGuide(x: number, fromY: number, toY: number): void {
+    this.verticalGuide = { x, fromY, toY };
+  }
+
+  clearVerticalGuide(): void {
+    this.verticalGuide = null;
+  }
+
+  setHorizontalGuide(y: number, fromX: number, toX: number): void {
+    this.horizontalGuide = { y, fromX, toX };
+  }
+
+  clearHorizontalGuide(): void {
+    this.horizontalGuide = null;
+  }
+
   render(ctx: CanvasRenderingContext2D): void {
     if (!this.visible) return;
 
     this.applyOpacity(ctx);
+
+    // Render vertical/horizontal guide lines (축 정렬 가이드)
+    if (this.verticalGuide) {
+      this.renderVerticalGuideLine(ctx, this.verticalGuide);
+    }
+
+    if (this.horizontalGuide) {
+      this.renderHorizontalGuideLine(ctx, this.horizontalGuide);
+    }
 
     // Render rectangle preview
     if (this.rectanglePreview && this.rectanglePreview.length === 4) {
@@ -273,6 +300,44 @@ export class GuideLayer extends BaseLayer {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(label, labelX, labelY);
+
+    ctx.restore();
+  }
+
+  private renderVerticalGuideLine(
+    ctx: CanvasRenderingContext2D,
+    guide: { x: number; fromY: number; toY: number }
+  ): void {
+    ctx.save();
+
+    // Draw vertical guide line (수직 가이드)
+    ctx.strokeStyle = '#e74c3c'; // 빨간색으로 명확하게 표시
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([10, 5]);
+
+    ctx.beginPath();
+    ctx.moveTo(guide.x, guide.fromY);
+    ctx.lineTo(guide.x, guide.toY);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  private renderHorizontalGuideLine(
+    ctx: CanvasRenderingContext2D,
+    guide: { y: number; fromX: number; toX: number }
+  ): void {
+    ctx.save();
+
+    // Draw horizontal guide line (수평 가이드)
+    ctx.strokeStyle = '#e74c3c'; // 빨간색으로 명확하게 표시
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([10, 5]);
+
+    ctx.beginPath();
+    ctx.moveTo(guide.fromX, guide.y);
+    ctx.lineTo(guide.toX, guide.y);
+    ctx.stroke();
 
     ctx.restore();
   }

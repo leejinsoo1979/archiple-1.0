@@ -237,7 +237,8 @@ export class RectangleTool extends BaseTool {
     this.currentPreviewEnd = null;
 
     eventBus.emit(FloorEvents.RECTANGLE_PREVIEW_CLEARED, {});
-    eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, { from: null, angle: null });
+    eventBus.emit(FloorEvents.VERTICAL_GUIDE_CLEARED, {});
+    eventBus.emit(FloorEvents.HORIZONTAL_GUIDE_CLEARED, {});
   }
 
   private createPoint(position: Vector2): Point {

@@ -245,6 +245,23 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
       guideLayer.setRectanglePreview(null);
     });
 
+    // Vertical/Horizontal guide lines for rectangle alignment
+    eventBus.on(FloorEvents.VERTICAL_GUIDE_UPDATED, (data: any) => {
+      guideLayer.setVerticalGuide(data.x, data.fromY, data.toY);
+    });
+
+    eventBus.on(FloorEvents.VERTICAL_GUIDE_CLEARED, () => {
+      guideLayer.clearVerticalGuide();
+    });
+
+    eventBus.on(FloorEvents.HORIZONTAL_GUIDE_UPDATED, (data: any) => {
+      guideLayer.setHorizontalGuide(data.y, data.fromX, data.toX);
+    });
+
+    eventBus.on(FloorEvents.HORIZONTAL_GUIDE_CLEARED, () => {
+      guideLayer.clearHorizontalGuide();
+    });
+
     // Room detection on wall added (detect rooms automatically)
     eventBus.on(FloorEvents.WALL_ADDED, () => {
       console.log('[FloorplanCanvas] Wall added, detecting rooms...');
