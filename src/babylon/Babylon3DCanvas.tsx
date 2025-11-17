@@ -287,8 +287,25 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
         const midZ = (z1 + z2) / 2;
         const angle = Math.atan2(z2 - z1, x2 - x1);
 
-        const wallHeight = (wall.height || 2800) * MM_TO_METERS;
-        const thickness = (wall.thickness || 200) * MM_TO_METERS;
+        // CRITICAL DEBUG: wall.height 값 확인
+        const wallHeightMM = wall.height || 2800;
+        const thicknessMM = wall.thickness || 200;
+
+        console.log('[DEBUG] Wall dimensions INPUT:', {
+          'wall.height': wall.height,
+          'wall.thickness': wall.thickness,
+          'wallHeightMM': wallHeightMM,
+          'thicknessMM': thicknessMM,
+        });
+
+        const wallHeight = wallHeightMM * MM_TO_METERS;
+        const thickness = thicknessMM * MM_TO_METERS;
+
+        console.log('[DEBUG] Wall dimensions CONVERTED:', {
+          'wallHeight_m': wallHeight,
+          'thickness_m': thickness,
+          'MM_TO_METERS': MM_TO_METERS,
+        });
 
         // 2D와 3D 스케일 비교 로그
         const length2D_mm = Math.sqrt(
