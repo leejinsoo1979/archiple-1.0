@@ -231,25 +231,25 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
     if (planMetrics && arcCameraRef.current) {
       const arcCamera = arcCameraRef.current;
       const maxWallHeight = walls.reduce((max, wall) => Math.max(max, wall.height || 2400), 2400);
-      const targetY = Math.max((maxWallHeight * MM_TO_METERS) / 2, DEFAULT_CAMERA_HEIGHT);
+      const targetY = (maxWallHeight * MM_TO_METERS) / 2; // Center of wall height
 
-      // Camera target at floor level (Y=0) to see room properly
-      arcCamera.setTarget(new Vector3(0, 0, 0));
+      // CRITICAL: Camera must look at actual room center
+      arcCamera.setTarget(new Vector3(centerX, targetY, centerZ));
 
-      // CRITICAL FIX: 작은 방(< 1m)을 위한 카메라 거리 자동 조정
+      // Calculate optimal viewing distance based on room size
       const roomSize = Math.max(planMetrics.extentX, planMetrics.extentZ);
-      const optimalRadius = roomSize < 2 ? roomSize * 3 : boundingRadius;
+      const optimalRadius = roomSize * 1.5; // 1.5x room size for good view
 
-      const minRadius = Math.max(0.5, optimalRadius * 0.6);
-      const maxRadius = Math.max(minRadius * 4, optimalRadius * 2.5);
+      const minRadius = Math.max(0.5, roomSize * 0.8);
+      const maxRadius = Math.max(minRadius * 5, roomSize * 3);
       arcCamera.lowerRadiusLimit = minRadius;
       arcCamera.upperRadiusLimit = maxRadius;
       arcCamera.radius = optimalRadius;
 
-      console.log('[Babylon3DCanvas] Camera setup:', {
-        target: arcCamera.target,
-        radius: arcCamera.radius,
-        planMetrics: { centerX, centerZ, boundingRadius },
+      console.log('[Babylon3DCanvas] Camera optimized:', {
+        target: `(${centerX.toFixed(2)}, ${targetY.toFixed(2)}, ${centerZ.toFixed(2)})`,
+        radius: optimalRadius.toFixed(2),
+        roomSize: roomSize.toFixed(2),
       });
     }
 
