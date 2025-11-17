@@ -272,7 +272,11 @@ const EditorPage = () => {
                 </svg>
                 <span>Draw Arc Walls</span>
               </button>
-              <button className={styles.toolBtn} title="Draw Rooms">
+              <button
+                className={`${styles.toolBtn} ${activeTool === ToolType.RECTANGLE ? styles.toolBtnActive : ''}`}
+                title="Draw Rooms"
+                onClick={() => setActiveTool(ToolType.RECTANGLE)}
+              >
                 <svg width="32" height="32" viewBox="0 0 48 48">
                   <rect x="12" y="12" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none"/>
                 </svg>

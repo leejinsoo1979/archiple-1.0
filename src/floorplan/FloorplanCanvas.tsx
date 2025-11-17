@@ -20,6 +20,7 @@ import { SelectionLayer } from './renderer/layers/SelectionLayer';
 // Tools
 import { ToolManager } from './tools/ToolManager';
 import { WallTool } from './tools/WallTool';
+import { RectangleTool } from './tools/RectangleTool';
 
 // Services
 import { SnapService } from './services/SnapService';
@@ -140,6 +141,9 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     // Register tools
     const wallTool = new WallTool(sceneManager, snapService);
     toolManager.registerTool(ToolType.WALL, wallTool);
+
+    const rectangleTool = new RectangleTool(sceneManager, snapService);
+    toolManager.registerTool(ToolType.RECTANGLE, rectangleTool);
 
     // Set default tool
     toolManager.setActiveTool(ToolType.WALL);
