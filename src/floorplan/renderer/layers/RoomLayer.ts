@@ -57,9 +57,12 @@ export class RoomLayer extends BaseLayer {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img, 0, 0);
+        // Scale down texture: 1 pixel = 10mm, so texture should be scaled accordingly
+        // Original texture represents real-world size, scale it down for pixel display
+        const scale = 0.1; // Scale factor for 2D view
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         this.woodPattern = ctx.createPattern(canvas, 'repeat');
       }
     };
