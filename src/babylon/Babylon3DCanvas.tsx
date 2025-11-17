@@ -231,7 +231,6 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
     const planMetrics = computePlanMetrics(points);
     const centerX = planMetrics?.centerX ?? 0;
     const centerZ = planMetrics?.centerZ ?? 0;
-    const _boundingRadius = planMetrics?.boundingRadius ?? 15;
 
     if (planMetrics && arcCameraRef.current) {
       const arcCamera = arcCameraRef.current;
@@ -277,9 +276,6 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
     const floorMaterial = new PBRMaterial('floorMat_2d', scene);
     floorMaterial.metallic = 0.0;
     floorMaterial.environmentIntensity = 0.6;
-
-    // Physical texture size: 100mm x 100mm to match 2D grid
-    const _TEXTURE_PHYSICAL_SIZE = 0.1; // 100mm = 0.1m (matches 2D minor grid)
 
     // Load real wood textures
     const diffuseTexture = new Texture('/texture/floor/f2 diffuse.JPG', scene);

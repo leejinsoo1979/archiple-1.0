@@ -15,16 +15,14 @@ export class HalfEdge {
   height: number;
 
   redrawCallbacks = new CallbackList();
-  private room: Room | null;
   wall: Wall;
   private front: boolean;
 
   constructor(
-    room: Room | null,
+    _room: Room | null,
     wall: Wall,
     front: boolean
   ) {
-    this.room = room;
     this.wall = wall;
     this.front = front;
     this.offset = wall.thickness / 2;
@@ -69,8 +67,6 @@ export class HalfEdge {
   }
 
   distanceTo(x: number, y: number): number {
-    const _start = this.interiorStart();
-    const _end = this.interiorEnd();
     return this.wall.distanceFrom(x, y);
   }
 

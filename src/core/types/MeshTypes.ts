@@ -11,14 +11,16 @@ export interface MeshData {
   material?: MaterialData;
 }
 
-export enum MeshType {
-  WALL = 'wall',
-  FLOOR = 'floor',
-  CEILING = 'ceiling',
-  DOOR = 'door',
-  WINDOW = 'window',
-  FURNITURE = 'furniture',
-}
+export const MeshType = {
+  WALL: 'wall',
+  FLOOR: 'floor',
+  CEILING: 'ceiling',
+  DOOR: 'door',
+  WINDOW: 'window',
+  FURNITURE: 'furniture',
+} as const;
+
+export type MeshType = typeof MeshType[keyof typeof MeshType];
 
 export interface MaterialData {
   id: string;

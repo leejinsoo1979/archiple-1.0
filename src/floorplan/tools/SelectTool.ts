@@ -22,7 +22,6 @@ export class SelectTool extends BaseTool {
   // Selection and drag state
   private selectedPoint: Point | null = null;
   private isDragging = false;
-  private _dragStartPos: Vector2 | null = null;
 
   // Config
   private pointSelectRadius = 200; // 200mm selection radius (easier to click)
@@ -55,7 +54,6 @@ export class SelectTool extends BaseTool {
       // Select point and start dragging
       this.selectedPoint = clickedPoint;
       this.isDragging = true;
-      this._dragStartPos = position;
 
       console.log('[SelectTool] Selected point:', clickedPoint.id, 'at', clickedPoint.x, clickedPoint.y);
 
@@ -114,7 +112,6 @@ export class SelectTool extends BaseTool {
 
     // Finalize move
     this.isDragging = false;
-    this.dragStartPos = null;
 
     // Emit final update event
     eventBus.emit(FloorEvents.POINT_UPDATED, {
@@ -152,7 +149,6 @@ export class SelectTool extends BaseTool {
   private resetState(): void {
     this.selectedPoint = null;
     this.isDragging = false;
-    this._dragStartPos = null;
 
     // Clear selection events
     eventBus.emit(FloorEvents.POINT_SELECTION_CLEARED, {});

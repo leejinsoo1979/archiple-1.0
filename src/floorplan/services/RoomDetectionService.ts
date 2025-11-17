@@ -222,22 +222,4 @@ export class RoomDetectionService {
 
     return room;
   }
-
-  /**
-   * Order points in clockwise direction
-   */
-  private _orderPointsClockwise(points: Point[]): Point[] {
-    // Calculate centroid
-    const centroid = {
-      x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
-      y: points.reduce((sum, p) => sum + p.y, 0) / points.length,
-    };
-
-    // Sort by angle from centroid
-    return points.sort((a, b) => {
-      const angleA = Math.atan2(a.y - centroid.y, a.x - centroid.x);
-      const angleB = Math.atan2(b.y - centroid.y, b.x - centroid.x);
-      return angleA - angleB;
-    });
-  }
 }

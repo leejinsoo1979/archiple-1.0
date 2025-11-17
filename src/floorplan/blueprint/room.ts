@@ -56,13 +56,6 @@ export class Room {
     this.floorChangeCallbacks.fire();
   }
 
-  private _cycleIndex(index: number): number {
-    if (index < 0) {
-      return index + this.corners.length;
-    }
-    return index % this.corners.length;
-  }
-
   private updateInteriorCorners(): void {
     this.interiorCorners = [];
     if (!this.edgePointer) return;

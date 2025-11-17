@@ -56,7 +56,7 @@ export class RectangleTool extends BaseTool {
     this.startDrawing(snappedPos);
   }
 
-  handleMouseMove(position: Vector2, event: MouseEvent): void {
+  handleMouseMove(position: Vector2, _event: MouseEvent): void {
     if (!this.isDrawing || !this.startPoint) return;
 
     // Update snap service with all existing points for axis alignment

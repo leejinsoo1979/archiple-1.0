@@ -16,14 +16,16 @@ export interface EditorState {
   snapEnabled: boolean;
 }
 
-export enum ToolType {
-  SELECT = 'select',
-  WALL = 'wall',
-  RECTANGLE = 'rectangle',
-  DRAW_WALL = 'draw_wall',
-  MOVE = 'move',
-  ERASE = 'erase',
-}
+export const ToolType = {
+  SELECT: 'select',
+  WALL: 'wall',
+  RECTANGLE: 'rectangle',
+  DRAW_WALL: 'draw_wall',
+  MOVE: 'move',
+  ERASE: 'erase',
+} as const;
+
+export type ToolType = typeof ToolType[keyof typeof ToolType];
 
 export interface EditorConfig {
   gridSize: number;
