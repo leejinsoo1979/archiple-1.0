@@ -45,10 +45,9 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
   const [_mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
   const [_stats, setStats] = useState({ points: 0, walls: 0, rooms: 0, fps: 0 });
 
-  // Pan state
+  // Pan state (middle mouse button only)
   const isPanningRef = useRef(false);
   const lastPanPosRef = useRef<{ x: number; y: number } | null>(null);
-  const spaceKeyPressedRef = useRef(false);
 
   // Refs for cleanup
   const sceneManagerRef = useRef<SceneManager | null>(null);
@@ -196,6 +195,7 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
       // Update layer data
       wallLayer.setWalls(walls);
       wallLayer.setPoints(points);
+      wallLayer.setDoors(doors);
 
       pointLayer.setPoints(points);
 
@@ -538,27 +538,29 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     return () => canvas.removeEventListener('wheel', handleWheel);
   }, []);
 
-  // Handle canvas panning (middle mouse or right mouse drag)
+  // Handle canvas panning (middle mouse button only - don't interfere with left-click)
   useEffect(() => {
     const canvas = canvasRef.current;
     const renderer = rendererRef.current;
     if (!canvas || !renderer) return;
 
     const handleMouseDown = (event: MouseEvent) => {
-      // Pan only with Space + Left mouse, or Middle mouse button
-      if ((spaceKeyPressedRef.current && event.button === 0) || event.button === 1) {
+      // Pan ONLY with middle mouse button (button 1)
+      // DO NOT use left-click to avoid interfering with MouseController
+      if (event.button === 1) {
         event.preventDefault();
-        event.stopPropagation(); // Prevent MouseController from getting this event
+        event.stopPropagation();
         isPanningRef.current = true;
         lastPanPosRef.current = { x: event.clientX, y: event.clientY };
         canvas.style.cursor = 'grabbing';
+        console.log('[FloorplanCanvas] Started panning with middle mouse');
       }
     };
 
     const handleMouseMove = (event: MouseEvent) => {
       if (isPanningRef.current && lastPanPosRef.current) {
         event.preventDefault();
-        event.stopPropagation(); // Prevent MouseController from getting this event
+        event.stopPropagation();
 
         const dx = event.clientX - lastPanPosRef.current.x;
         const dy = event.clientY - lastPanPosRef.current.y;
@@ -572,44 +574,23 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     };
 
     const handleMouseUp = (event: MouseEvent) => {
-      if (event.button === 0 || event.button === 1) {
+      if (event.button === 1) {
         isPanningRef.current = false;
         lastPanPosRef.current = null;
-        canvas.style.cursor = spaceKeyPressedRef.current ? 'grab' : 'default';
+        canvas.style.cursor = 'default';
+        console.log('[FloorplanCanvas] Stopped panning');
       }
     };
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.code === 'Space' && !spaceKeyPressedRef.current) {
-        spaceKeyPressedRef.current = true;
-        canvas.style.cursor = 'grab';
-        event.preventDefault();
-      }
-    };
-
-    const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.code === 'Space') {
-        spaceKeyPressedRef.current = false;
-        if (!isPanningRef.current) {
-          canvas.style.cursor = 'default';
-        }
-        event.preventDefault();
-      }
-    };
-
-    // Use capture phase to intercept events before MouseController
+    // Use capture phase to intercept middle-click before MouseController
     canvas.addEventListener('mousedown', handleMouseDown, true);
     canvas.addEventListener('mousemove', handleMouseMove, true);
     canvas.addEventListener('mouseup', handleMouseUp, true);
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
 
     return () => {
       canvas.removeEventListener('mousedown', handleMouseDown, true);
       canvas.removeEventListener('mousemove', handleMouseMove, true);
       canvas.removeEventListener('mouseup', handleMouseUp, true);
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
     };
   }, []);
 
