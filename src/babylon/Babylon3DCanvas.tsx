@@ -333,10 +333,13 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       const wallThickness = wallThicknessMM * MM_TO_METERS;
       const wallHeight = wallHeightMM * MM_TO_METERS;
 
+      // Extend wall length to overlap at corners (prevent gaps)
+      const extendedLength = wallLength + wallThickness;
+
       const wallMesh = MeshBuilder.CreateBox(
         `wall_${index}`,
         {
-          width: wallLength,
+          width: extendedLength,
           height: wallHeight,
           depth: wallThickness,
         },
