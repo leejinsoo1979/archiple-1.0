@@ -388,8 +388,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
 
         if (roomPoints.length < 3) return;
 
-        // Create polygon floor using PolygonMeshBuilder
-        // This ensures floor is ONLY inside walls, not rectangular bounding box
+        // Create polygon floor directly on XZ plane (horizontal ground)
+        // Using custom mesh with earcut triangulation
 
         console.log(`[Babylon3DCanvas] Creating polygon floor ${roomIndex} with ${roomPoints.length} points`);
 
@@ -401,18 +401,46 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
         const width = maxX - minX;
         const depth = maxZ - minZ;
 
-        // Create shape from room points (X, Z coordinates)
-        const shape = roomPoints.map((p: Vector3) => new Vector2(p.x, p.z));
+        // Flatten XZ coordinates for earcut (format: [x1, z1, x2, z2, ...])
+        const flatCoords: number[] = [];
+        roomPoints.forEach((p: Vector3) => {
+          flatCoords.push(p.x, p.z);
+        });
 
-        console.log('[Babylon3DCanvas] Shape points:', shape.slice(0, 3).map(s => `(${s.x.toFixed(2)}, ${s.y.toFixed(2)})`));
+        // Triangulate using earcut
+        const triangleIndices = earcut(flatCoords, undefined, 2);
 
-        // Use PolygonMeshBuilder to create polygon on XY plane
-        const polygon = new PolygonMeshBuilder(`floor_${roomIndex}`, shape, scene, earcut);
-        const floor = polygon.build(false, 0.01); // Don't flip normals, thickness 0.01
+        if (triangleIndices.length === 0) {
+          console.error(`[Babylon3DCanvas] Earcut failed for room ${roomIndex}`);
+          return;
+        }
 
-        // Rotate from XY plane to XZ plane (horizontal)
-        floor.rotation.x = -Math.PI / 2;
-        floor.position.y = 0.01; // Slightly above ground
+        // Build custom mesh directly on XZ plane
+        const positions: number[] = [];
+        const normals: number[] = [];
+        const uvs: number[] = [];
+
+        roomPoints.forEach((p: Vector3) => {
+          // Position on XZ plane (Y=0.01 for floor height)
+          positions.push(p.x, 0.01, p.z);
+
+          // Normal pointing UP (+Y)
+          normals.push(0, 1, 0);
+
+          // UV coordinates
+          const u = ((p.x - minX) / width) * width;
+          const v = ((p.z - minZ) / depth) * depth;
+          uvs.push(u, v);
+        });
+
+        // Create mesh
+        const floor = new Mesh(`floor_${roomIndex}`, scene);
+        const vertexData = new VertexData();
+        vertexData.positions = positions;
+        vertexData.normals = normals;
+        vertexData.uvs = uvs;
+        vertexData.indices = Array.from(triangleIndices);
+        vertexData.applyToMesh(floor);
 
         // Apply material
         const roomFloorMat = floorMaterial.clone(`floorMat_room_${roomIndex}`);
@@ -423,8 +451,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
         floor.material = roomFloorMat;
         floor.receiveShadows = true;
 
-        console.log(`[Babylon3DCanvas] ✅ PolygonMeshBuilder floor ${roomIndex} created:`, {
+        console.log(`[Babylon3DCanvas] ✅ Custom floor ${roomIndex} created on XZ plane:`, {
           points: roomPoints.length,
+          triangles: triangleIndices.length / 3,
           width_m: width.toFixed(2),
           depth_m: depth.toFixed(2),
         });
