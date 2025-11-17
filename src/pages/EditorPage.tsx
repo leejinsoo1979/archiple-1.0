@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import FloorplanCanvas from '../floorplan/FloorplanCanvas';
+import BlueprintFloorplanCanvas from '../floorplan/BlueprintFloorplanCanvas';
 import Babylon3DCanvas from '../babylon/Babylon3DCanvas';
 import styles from './EditorPage.module.css';
 import { ToolType } from '../core/types/EditorState';
@@ -549,7 +549,7 @@ const EditorPage = () => {
           visibility: viewMode === '2D' ? 'visible' : 'hidden',
           pointerEvents: viewMode === '2D' ? 'auto' : 'none'
         }}>
-          <FloorplanCanvas activeTool={activeTool} onDataChange={setFloorplanData} />
+          <BlueprintFloorplanCanvas activeTool={activeTool} onDataChange={setFloorplanData} />
         </div>
         <div style={{
           position: 'absolute',
