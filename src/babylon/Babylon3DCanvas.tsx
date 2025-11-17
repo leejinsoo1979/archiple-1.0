@@ -268,31 +268,37 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
     wallMaterial.roughness = 0.6;
     wallMaterial.environmentIntensity = 0.7;
 
-    // Create floor material with grid for scale reference
+    // Create floor material with wood texture
     const floorMaterial = new PBRMaterial('floorMat_2d', scene);
-    floorMaterial.albedoColor = new Color3(0.9, 0.9, 0.9); // 밝은 회색
+    floorMaterial.albedoColor = new Color3(0.6, 0.4, 0.2); // 나무 베이스 컬러
     floorMaterial.metallic = 0.0;
-    floorMaterial.roughness = 0.8;
-    floorMaterial.environmentIntensity = 0.5;
+    floorMaterial.roughness = 0.9;
+    floorMaterial.environmentIntensity = 0.4;
 
-    // Add 1m grid lines for scale reference
+    // Add wood grain texture
     try {
-      const gridTexture = new Texture('data:image/svg+xml;base64,' + btoa(`
-        <svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
-          <rect width="100" height="100" fill="white"/>
-          <line x1="0" y1="0" x2="100" y2="0" stroke="#ddd" stroke-width="1"/>
-          <line x1="0" y1="0" x2="0" y2="100" stroke="#ddd" stroke-width="1"/>
-          <line x1="0" y1="100" x2="100" y2="100" stroke="#ccc" stroke-width="2"/>
-          <line x1="100" y1="0" x2="100" y2="100" stroke="#ccc" stroke-width="2"/>
+      const woodTexture = new Texture('data:image/svg+xml;base64,' + btoa(`
+        <svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="wood" width="100" height="20" patternUnits="userSpaceOnUse">
+              <rect width="100" height="20" fill="#8B6F47"/>
+              <rect width="100" height="1" y="0" fill="#7A5C3E" opacity="0.3"/>
+              <rect width="100" height="1" y="10" fill="#7A5C3E" opacity="0.2"/>
+              <rect width="100" height="1" y="19" fill="#6B4E32" opacity="0.4"/>
+              <ellipse cx="30" cy="10" rx="15" ry="8" fill="#6B4E32" opacity="0.15"/>
+              <ellipse cx="70" cy="10" rx="20" ry="6" fill="#6B4E32" opacity="0.1"/>
+            </pattern>
+          </defs>
+          <rect width="512" height="512" fill="url(#wood)"/>
         </svg>
       `), scene);
-      gridTexture.uScale = 1; // 1 texture = 1m
-      gridTexture.vScale = 1;
-      gridTexture.wrapU = Texture.WRAP_ADDRESSMODE;
-      gridTexture.wrapV = Texture.WRAP_ADDRESSMODE;
-      floorMaterial.albedoTexture = gridTexture;
+      woodTexture.uScale = 5; // 5 planks per meter
+      woodTexture.vScale = 5;
+      woodTexture.wrapU = Texture.WRAP_ADDRESSMODE;
+      woodTexture.wrapV = Texture.WRAP_ADDRESSMODE;
+      floorMaterial.albedoTexture = woodTexture;
     } catch (e) {
-      console.warn('[Babylon3DCanvas] Grid texture failed, using solid color');
+      console.warn('[Babylon3DCanvas] Wood texture failed, using solid color');
     }
 
     // Create walls using simple CreateBox (works reliably)
