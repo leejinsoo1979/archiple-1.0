@@ -92,6 +92,9 @@ export class RectangleTool extends BaseTool {
 
     this.currentPreviewEnd = snappedPos;
 
+    // Clear distance measurement (no diagonal line needed for rectangle)
+    eventBus.emit(FloorEvents.DISTANCE_MEASUREMENT_CLEARED, {});
+
     // Emit preview event for rendering
     this.emitPreview();
   }

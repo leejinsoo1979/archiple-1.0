@@ -123,10 +123,8 @@ export class BlueprintObjectManager {
       return;
     }
 
-    const blueprintWall = this.floorplan.newWall(start, end);
-    blueprintWall.thickness = wall.thickness;
-    blueprintWall.height = wall.height;
-    console.log('[BlueprintObjectManager] Created wall:', blueprintWall.id, 'from', start.id, 'to', end.id);
+    const blueprintWall = this.floorplan.newWall(start, end, wall.thickness, wall.height);
+    console.log('[BlueprintObjectManager] Created wall:', blueprintWall.id, 'from', start.id, 'to', end.id, 'height:', wall.height);
   }
 
   getWall(id: string): Wall | undefined {

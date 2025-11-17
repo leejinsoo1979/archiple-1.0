@@ -90,8 +90,8 @@ export class Floorplan {
     return corner;
   }
 
-  newWall(start: Corner, end: Corner): Wall {
-    const wall = new Wall(start, end);
+  newWall(start: Corner, end: Corner, thickness?: number, height?: number): Wall {
+    const wall = new Wall(start, end, thickness, height);
     this.walls.push(wall);
     wall.fireOnDelete((w: Wall) => this.removeWall(w));
     this.newWallCallbacks.fire(wall);
