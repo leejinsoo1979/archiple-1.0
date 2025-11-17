@@ -76,6 +76,9 @@ export class WallTool extends BaseTool {
   handleMouseMove(position: Vector2, event: MouseEvent): void {
     const hasActiveStart = this.isDrawing && !!this.startPoint;
 
+    // Update snap service with all existing points for axis alignment
+    this.snapService.setPoints(this.sceneManager.objectManager.getAllPoints());
+
     // Enable orthogonal snap only when Shift key is pressed during active drawing
     this.snapService.updateConfig({
       orthogonalSnapEnabled: hasActiveStart && event.shiftKey,
@@ -210,23 +213,36 @@ export class WallTool extends BaseTool {
 
   /**
    * Finish wall chain
+   * Auto-completes the room by connecting last point to first point
    */
   private finishChain(): void {
     if (this.wallChain.length === 0) return;
 
     console.log('[WallTool] Finished chain with', this.wallChain.length, 'points');
 
-    // Check if we formed a closed loop
+    // Auto-complete room if we have at least 3 points
     if (this.wallChain.length >= 3) {
       const firstPoint = this.wallChain[0];
       const lastPoint = this.wallChain[this.wallChain.length - 1];
 
-      if (firstPoint.id === lastPoint.id) {
-        // Closed loop detected - trigger room detection
-        eventBus.emit(FloorEvents.POTENTIAL_ROOM_DETECTED, {
-          points: this.wallChain,
-        });
+      // If not already closed, auto-complete by connecting last to first
+      if (firstPoint.id !== lastPoint.id) {
+        console.log('[WallTool] Auto-completing room by connecting last point to first');
+
+        // Create closing wall
+        const closingWall = this.createWall(lastPoint, firstPoint);
+        this.sceneManager.objectManager.addWall(closingWall);
+
+        // Add first point to chain to mark as closed
+        this.wallChain.push(firstPoint);
+
+        console.log('[WallTool] Auto-completed room with closing wall');
       }
+
+      // Closed loop - trigger room detection
+      eventBus.emit(FloorEvents.POTENTIAL_ROOM_DETECTED, {
+        points: this.wallChain,
+      });
     }
 
     this.wallChain = [];
