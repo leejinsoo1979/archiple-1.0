@@ -69,7 +69,7 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
 
     // 1. Initialize SceneManager
     // Units: mm (millimeters) - 모든 내부 좌표는 mm 단위
-    // Scale: scalePxPerMm = 0.1 means 1mm = 0.1px (4800mm = 480px)
+    // Scale: scalePxPerMm = 0.12 means 1mm = 0.12px (8333mm = 1000px)
     const config: EditorConfig = {
       gridSize: 100, // 100mm = 10cm grid display
       snapEnabled: true,
@@ -112,6 +112,7 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     wallLayerRef.current = wallLayer;
 
     const pointLayer = new PointLayer();
+    pointLayer.setCamera(renderer.getCamera());
     pointLayerRef.current = pointLayer;
 
     const guideLayer = new GuideLayer();
@@ -131,14 +132,11 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     renderer.addLayer(selectionLayer);
 
     // 5. Initialize Services
-    // Convert screen-space snap threshold to world-space (mm)
-    // snapThreshold is in px, need to convert to mm using current scale
-    const scalePxPerMm = renderer.getCamera().getZoom();
-    const snapThresholdMm = config.snapThreshold / scalePxPerMm; // 15px / 0.1 = 150mm
-
+    // Use fixed 150mm snap threshold for consistent point snapping
+    // Independent of zoom level for better UX
     const snapService = new SnapService({
       gridSize: config.gridSize,
-      pointSnapThreshold: snapThresholdMm,
+      pointSnapThreshold: 150, // 150mm = 15cm fixed snap range
     });
     snapServiceRef.current = snapService;
 
@@ -162,7 +160,8 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
 
     // 7. Initialize Controllers
     const mouseController = new MouseController(canvas, toolManager);
-    mouseController.setCamera(renderer.getCamera()); // Set camera for coordinate transformation
+    const camera = renderer.getCamera();
+    mouseController.setCamera(camera); // Set camera for coordinate transformation
     mouseControllerRef.current = mouseController;
 
     const keyboardController = new KeyboardController(toolManager, sceneManager);
@@ -277,64 +276,70 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
       guideLayer.clearHorizontalGuide();
     });
 
-    // Room detection on wall added (detect rooms automatically)
+    // Wall added event - just update layers, NO automatic room detection
     eventBus.on(FloorEvents.WALL_ADDED, () => {
-      console.log('[FloorplanCanvas] Wall added, detecting rooms...');
+      console.log('[FloorplanCanvas] Wall added, updating layers...');
+      updateLayers();
+    });
+
+    // Room detection on potential room (user manually closed a loop)
+    eventBus.on(FloorEvents.POTENTIAL_ROOM_DETECTED, (data: any) => {
+      console.log('[FloorplanCanvas] User closed loop, creating room from points:', data.points);
+
+      if (!data.points || data.points.length < 3) {
+        console.warn('[FloorplanCanvas] Not enough points to create room');
+        return;
+      }
+
       const points = sceneManager.objectManager.getAllPoints();
-      const walls = sceneManager.objectManager.getAllWalls();
       const rooms = sceneManager.objectManager.getAllRooms();
-      const detectedRooms = roomDetectionService.detectRooms(walls, points);
 
-      detectedRooms.forEach((room) => {
-        // Check if room already exists
-        const existing = rooms.find((r) => {
-          const samePoints =
-            r.points.length === room.points.length &&
-            r.points.every((pid) => room.points.includes(pid));
-          return samePoints;
-        });
+      // Create room ONLY from the user-defined loop (data.points)
+      const roomPointIds = data.points.map((p: any) => p.id);
 
-        if (!existing) {
-          sceneManager.objectManager.addRoom(room);
-          eventBus.emit(FloorEvents.ROOM_DETECTED, { room });
-          console.log('[FloorplanCanvas] Room detected:', room.name, room.area.toFixed(2), 'm²');
-        }
+      // Calculate area
+      const roomPointsData = roomPointIds.map((id: string) => points.find((p) => p.id === id)).filter(Boolean);
+      if (roomPointsData.length < 3) return;
+
+      let area = 0;
+      for (let i = 0; i < roomPointsData.length - 1; i++) {
+        const p1 = roomPointsData[i];
+        const p2 = roomPointsData[i + 1];
+        area += (p1.x * p2.y - p2.x * p1.y);
+      }
+      area = Math.abs(area / 2) / 1000000; // mm² to m²
+
+      const room = {
+        id: `room_${Date.now()}`,
+        name: `Room ${Math.floor(Math.random() * 1000)}`,
+        points: roomPointIds,
+        area: area,
+      };
+
+      // Check if room already exists
+      const existing = rooms.find((r) => {
+        const samePoints =
+          r.points.length === room.points.length &&
+          r.points.every((pid) => room.points.includes(pid));
+        return samePoints;
       });
+
+      if (!existing) {
+        sceneManager.objectManager.addRoom(room);
+        eventBus.emit(FloorEvents.ROOM_DETECTED, { room });
+        console.log('[FloorplanCanvas] Room created:', room.name, room.area.toFixed(2), 'm²');
+      }
 
       updateLayers();
     });
 
-    // Room detection on potential room
-    eventBus.on(FloorEvents.POTENTIAL_ROOM_DETECTED, () => {
-      console.log('[FloorplanCanvas] Detecting rooms...');
-      const points = sceneManager.objectManager.getAllPoints();
-      const walls = sceneManager.objectManager.getAllWalls();
-      const rooms = sceneManager.objectManager.getAllRooms();
-      const detectedRooms = roomDetectionService.detectRooms(walls, points);
+    // 9. Force initial render to ensure camera transform is applied
+    renderer.render();
 
-      detectedRooms.forEach((room) => {
-        // Check if room already exists
-        const existing = rooms.find((r) => {
-          const samePoints =
-            r.points.length === room.points.length &&
-            r.points.every((pid) => room.points.includes(pid));
-          return samePoints;
-        });
-
-        if (!existing) {
-          sceneManager.objectManager.addRoom(room);
-          eventBus.emit(FloorEvents.ROOM_DETECTED, { room });
-          console.log('[FloorplanCanvas] Room detected:', room.name, room.area.toFixed(2), 'm²');
-        }
-      });
-
-      updateLayers();
-    });
-
-    // 9. Start rendering
+    // 10. Start rendering loop
     renderer.start();
 
-    // 10. Handle window resize
+    // 11. Handle window resize
     const handleResize = () => {
       if (!canvas || !container) return;
 
