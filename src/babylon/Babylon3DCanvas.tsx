@@ -340,12 +340,17 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
       // Extend wall length to overlap at corners (prevent gaps)
       const extendedLength = wallLength + wallThickness;
 
+      // Set face colors: top face (ceiling edge) = black
+      const faceColors = new Array(6);
+      faceColors[4] = new Color3(0, 0, 0); // Top face (천장 단면) - black
+
       const wallMesh = MeshBuilder.CreateBox(
         `wall_${index}`,
         {
           width: extendedLength,
           height: wallHeight,
           depth: wallThickness,
+          faceColors: faceColors,
         },
         scene
       );
