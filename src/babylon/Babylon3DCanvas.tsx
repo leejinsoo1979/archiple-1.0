@@ -28,9 +28,10 @@ interface Babylon3DCanvasProps {
   };
 }
 
-const MM_TO_UNITS = 1; // 1 Babylon unit = 1mm from the 2D editor
-const DEFAULT_CAMERA_RADIUS = 8000; // ≈8m viewing distance in mm
-const DEFAULT_CAMERA_HEIGHT = 1500; // 1.5m eye height in mm
+// UNIFIED SCALE: 1 Babylon unit = 1mm (완전 통일)
+const PIXELS_TO_UNITS = 1; // 1 pixel = 1mm = 1 Babylon unit
+const DEFAULT_CAMERA_RADIUS = 8000; // 8000mm = 8m viewing distance
+const DEFAULT_CAMERA_HEIGHT = 1700; // 1700mm = 1.7m eye height
 
 interface PlanMetrics {
   centerX: number;
@@ -49,8 +50,8 @@ const computePlanMetrics = (points?: any[] | null): PlanMetrics | null => {
   let maxZ = -Infinity;
 
   points.forEach((point) => {
-    const worldX = point.x * MM_TO_UNITS;
-    const worldZ = point.y * MM_TO_UNITS;
+    const worldX = point.x * PIXELS_TO_UNITS; // 1px = 1mm
+    const worldZ = point.y * PIXELS_TO_UNITS;
 
     if (worldX < minX) minX = worldX;
     if (worldX > maxX) maxX = worldX;
@@ -62,11 +63,11 @@ const computePlanMetrics = (points?: any[] | null): PlanMetrics | null => {
     return null;
   }
 
-  const extentX = Math.max(maxX - minX, 0.1);
-  const extentZ = Math.max(maxZ - minZ, 0.1);
+  const extentX = Math.max(maxX - minX, 100); // min 100mm
+  const extentZ = Math.max(maxZ - minZ, 100);
   const centerX = (minX + maxX) / 2;
   const centerZ = (minZ + maxZ) / 2;
-  const boundingRadius = Math.max(extentX, extentZ) * 0.75 + 2000;
+  const boundingRadius = Math.max(extentX, extentZ) * 0.75 + 2000; // +2000mm margin
 
   return {
     centerX,
@@ -125,11 +126,11 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
         scene
       );
       arcCamera.attachControl(canvas, true);
-      arcCamera.lowerRadiusLimit = 500;
-      arcCamera.upperRadiusLimit = 50000;
+      arcCamera.lowerRadiusLimit = 500; // 500mm = 0.5m minimum distance
+      arcCamera.upperRadiusLimit = 50000; // 50000mm = 50m maximum distance
       arcCamera.upperBetaLimit = Math.PI / 2.05;
-      arcCamera.wheelPrecision = 200;
-      arcCamera.panningSensibility = 2000;
+      arcCamera.wheelPrecision = 200; // Slower zoom for precision
+      arcCamera.panningSensibility = 2000; // Slower panning for precision
       arcCamera.inertia = 0.9;
       arcCamera.angularSensibilityX = 1000;
       arcCamera.angularSensibilityY = 1000;
@@ -138,21 +139,21 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
       // Create FPS camera (first-person WASD mode)
       const fpsCamera = new UniversalCamera(
         'fpsCamera',
-        new Vector3(0, 1700, 0),
+        new Vector3(0, DEFAULT_CAMERA_HEIGHT, 0), // 1700mm eye height
         scene
       );
-      fpsCamera.speed = 500; // 0.5m per frame
+      fpsCamera.speed = 500; // 500mm per frame = 0.5m
       fpsCamera.angularSensibility = 2000;
       fpsCamera.keysUp = [87]; // W
       fpsCamera.keysDown = [83]; // S
       fpsCamera.keysLeft = [65]; // A
       fpsCamera.keysRight = [68]; // D
-      fpsCamera.minZ = 0.1; // Near clipping plane
+      fpsCamera.minZ = 10; // 10mm near clipping
 
-      // Collision detection
+      // Collision detection (all in mm)
       fpsCamera.checkCollisions = true;
-      fpsCamera.applyGravity = false; // Keep at constant height
-      fpsCamera.ellipsoid = new Vector3(300, 850, 300);
+      fpsCamera.applyGravity = false;
+      fpsCamera.ellipsoid = new Vector3(300, 850, 300); // 300mm radius, 850mm half-height
       fpsCameraRef.current = fpsCamera;
 
       // Set default camera
@@ -169,8 +170,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
       const altitude = sunSettings?.altitude ?? 45;
       const intensity = sunSettings?.intensity ?? 1.5;
 
-      // Convert azimuth/altitude to 3D position
-      const radius = 50000; // 50m expressed in mm units
+      // Convert azimuth/altitude to 3D position (in mm)
+      const radius = 50000; // 50000mm = 50m
       const azimuthRad = (azimuth * Math.PI) / 180;
       const altitudeRad = (altitude * Math.PI) / 180;
 
@@ -246,9 +247,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
 
     if (planMetrics && arcCameraRef.current) {
       const arcCamera = arcCameraRef.current;
-      const maxWallHeightMm = walls.reduce((max, wall) => Math.max(max, wall.height || 2800), 2800);
-      const targetY = Math.max(maxWallHeightMm / 2, DEFAULT_CAMERA_HEIGHT);
-      arcCamera.setTarget(new Vector3(0, targetY, 0));
+      const maxWallHeight = walls.reduce((max, wall) => Math.max(max, wall.height || 2800), 2800);
+      const targetY = Math.max(maxWallHeight / 2, DEFAULT_CAMERA_HEIGHT); // All in mm
+      arcCamera.setTarget(new Vector3(centerX, targetY, centerZ));
 
       const minRadius = Math.max(500, boundingRadius * 0.6);
       const maxRadius = Math.max(minRadius * 5, boundingRadius * 2.5);
@@ -259,9 +260,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
 
     if (planMetrics && fpsCameraRef.current) {
       const fpsCamera = fpsCameraRef.current;
-      // Position FPS camera at center of floorplan at eye height
-      fpsCamera.position = new Vector3(centerX, 1700, centerZ);
-      console.log('[Babylon3DCanvas] FPS camera positioned at:', fpsCamera.position);
+      fpsCamera.position = new Vector3(centerX, DEFAULT_CAMERA_HEIGHT, centerZ); // All in mm
+      console.log('[Babylon3DCanvas] FPS camera at:', fpsCamera.position);
     }
 
     // Create point lookup map
@@ -294,22 +294,21 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
       const endPoint = pointMap.get(wall.endPointId);
 
       if (startPoint && endPoint) {
-        // Convert 2D coordinates to 3D
-        // 2D: x,y in mm  →  3D: x,z in meters (y=height)
-        const x1 = startPoint.x * MM_TO_UNITS - centerX;
-        const z1 = startPoint.y * MM_TO_UNITS - centerZ;
-        const x2 = endPoint.x * MM_TO_UNITS - centerX;
-        const z2 = endPoint.y * MM_TO_UNITS - centerZ;
+        // Convert 2D coordinates to 3D (1px = 1mm = 1 Babylon unit)
+        const x1 = startPoint.x * PIXELS_TO_UNITS - centerX;
+        const z1 = startPoint.y * PIXELS_TO_UNITS - centerZ;
+        const x2 = endPoint.x * PIXELS_TO_UNITS - centerX;
+        const z2 = endPoint.y * PIXELS_TO_UNITS - centerZ;
 
-        // Calculate wall dimensions
+        // Calculate wall dimensions (all in mm)
         const length = Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
         const midX = (x1 + x2) / 2;
         const midZ = (z1 + z2) / 2;
         const angle = Math.atan2(z2 - z1, x2 - x1);
 
-        // Convert mm to meters
-        const wallHeightUnits = (wall.height || 2800) * MM_TO_UNITS;
-        const thicknessUnits = (wall.thickness || 200) * MM_TO_UNITS;
+        // Heights in mm (no conversion needed!)
+        const wallHeight = wall.height || 2800; // mm
+        const thickness = wall.thickness || 200; // mm
 
         console.log(`[Babylon3DCanvas] Wall ${index}:`, {
           start: { x: startPoint.x, y: startPoint.y },
@@ -322,15 +321,15 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
           thicknessMm: wall.thickness || 200,
         });
 
-        // Create wall mesh
+        // Create wall mesh (all dimensions in mm)
         const wallMesh = MeshBuilder.CreateBox(
           `wall_${index}`,
-          { width: length, height: wallHeightUnits, depth: thicknessUnits },
+          { width: length, height: wallHeight, depth: thickness },
           scene
         );
 
-        // Position and rotate
-        wallMesh.position.set(midX, wallHeightUnits / 2, midZ);
+        // Position and rotate (all in mm)
+        wallMesh.position.set(midX, wallHeight / 2, midZ);
         wallMesh.rotation.y = angle;
         wallMesh.material = wallMaterial;
         wallMesh.receiveShadows = true;
@@ -383,21 +382,21 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
         });
       }
 
-      const thicknessUnits = maxThickness * MM_TO_UNITS;
-      const heightUnits = maxHeight * MM_TO_UNITS;
+      const thickness = maxThickness; // mm
+      const height = maxHeight; // mm
 
-      // Convert point position to 3D
-      const x = point.x * MM_TO_UNITS - centerX;
-      const z = point.y * MM_TO_UNITS - centerZ;
+      // Convert point position to 3D (1px = 1mm)
+      const x = point.x * PIXELS_TO_UNITS - centerX;
+      const z = point.y * PIXELS_TO_UNITS - centerZ;
 
-      // Create a box at the corner
+      // Create a box at the corner (all dimensions in mm)
       const cornerJoint = MeshBuilder.CreateBox(
         `corner_${point.id}`,
-        { width: thicknessUnits, height: heightUnits, depth: thicknessUnits },
+        { width: thickness, height: height, depth: thickness },
         scene
       );
 
-      cornerJoint.position.set(x, heightUnits / 2, z);
+      cornerJoint.position.set(x, height / 2, z);
       cornerJoint.material = wallMaterial;
       cornerJoint.receiveShadows = true;
 
@@ -420,8 +419,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
           const p = pointMap.get(pid);
           if (!p) return null;
           return {
-            x: p.x * MM_TO_UNITS - centerX,
-            z: p.y * MM_TO_UNITS - centerZ,
+            x: p.x * PIXELS_TO_UNITS - centerX, // 1px = 1mm
+            z: p.y * PIXELS_TO_UNITS - centerZ,
           };
         }).filter((p: any) => p !== null);
 
@@ -435,8 +434,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
 
         const width = maxX - minX;
         const depth = maxZ - minZ;
-        const centerX = (minX + maxX) / 2;
-        const centerZ = (minZ + maxZ) / 2;
+        const floorCenterX = (minX + maxX) / 2;
+        const floorCenterZ = (minZ + maxZ) / 2;
 
         // Create floor
         const floor = MeshBuilder.CreateGround(
@@ -444,7 +443,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, playMode = false, sunS
           { width, height: depth, subdivisions: 1 },
           scene
         );
-        floor.position.set(centerX, 0.01, centerZ);
+        floor.position.set(floorCenterX, 0.01, floorCenterZ);
         floor.material = floorMaterial;
         floor.receiveShadows = true;
       });

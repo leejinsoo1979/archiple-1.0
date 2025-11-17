@@ -43,15 +43,15 @@ export class SnapService {
     this.config = {
       enabled: true,
       pointSnapEnabled: true,
-      gridSnapEnabled: true,
-      angleSnapEnabled: true,
-      orthogonalSnapEnabled: false, // Smart snap: only when near horizontal/vertical
-      perpendicularSnapEnabled: true,
-      midpointSnapEnabled: true,
+      gridSnapEnabled: false, // DISABLED - no grid snap for precise 1mm control
+      angleSnapEnabled: false, // DISABLED - free drawing
+      orthogonalSnapEnabled: false, // DISABLED - free drawing
+      perpendicularSnapEnabled: false, // DISABLED - free drawing
+      midpointSnapEnabled: false, // DISABLED - free drawing
       pointSnapThreshold: 15,
-      gridSize: 20,
-      angleSnapDegrees: [0, 90, 180, 270], // Only 90 degree angles
-      orthogonalAngles: [0, 90, 180, 270], // Strict horizontal/vertical
+      gridSize: 1, // 1mm grid (but disabled)
+      angleSnapDegrees: [], // No angle snapping
+      orthogonalAngles: [], // No orthogonal snapping
       ...config,
     };
   }
