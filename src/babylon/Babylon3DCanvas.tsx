@@ -14,7 +14,9 @@ import {
   DirectionalLight,
   ShadowGenerator,
   HemisphericLight,
-  GlowLayer
+  GlowLayer,
+  VertexData,
+  Mesh
 } from '@babylonjs/core';
 import * as earcut from 'earcut';
 import styles from './Babylon3DCanvas.module.css';
@@ -386,28 +388,36 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
 
         if (roomPoints.length < 3) return;
 
-        // Create polygon floor using ExtrudePolygon with depth 0
-        // This creates a flat polygon on the ground (XZ plane)
-        const shape = roomPoints.map((p: Vector3) => new Vector2(p.x, p.z));
+        // Create custom polygon mesh using earcut triangulation
+        // This ensures floor is ONLY inside walls, not rectangular bounding box
 
-        console.log(`[Babylon3DCanvas] Creating floor ${roomIndex} with ${shape.length} points:`,
-          shape.map(s => `(${s.x.toFixed(2)}, ${s.y.toFixed(2)})`).join(', '));
+        console.log(`[Babylon3DCanvas] Creating polygon floor ${roomIndex} with ${roomPoints.length} points`);
 
         try {
-          const floor = MeshBuilder.ExtrudePolygon(
-            `floor_${roomIndex}`,
-            {
-              shape: shape,
-              depth: 0.001, // Very thin extrusion (1mm)
-              sideOrientation: 2 // DOUBLESIDE
-            },
-            scene,
-            earcut
-          );
+          // Flatten XZ coordinates for earcut (format: [x1, z1, x2, z2, ...])
+          const flatCoords: number[] = [];
+          roomPoints.forEach((p: Vector3) => {
+            flatCoords.push(p.x, p.z);
+          });
 
-          floor.position.y = 0.01; // Slightly above ground to prevent z-fighting
+          console.log('[Babylon3DCanvas] Flat coords:', flatCoords.slice(0, 10), '...');
 
-          // Calculate texture scale
+          // Triangulate using earcut
+          const triangles = earcut(flatCoords, undefined, 2);
+
+          console.log('[Babylon3DCanvas] Triangle indices:', triangles.length / 3, 'triangles');
+
+          if (triangles.length === 0) {
+            throw new Error('Earcut triangulation failed - no triangles generated');
+          }
+
+          // Build mesh manually using VertexData
+          const positions: number[] = [];
+          const normals: number[] = [];
+          const uvs: number[] = [];
+          const indices: number[] = [];
+
+          // Calculate bounds for UV mapping
           const minX = Math.min(...roomPoints.map((p: Vector3) => p.x));
           const maxX = Math.max(...roomPoints.map((p: Vector3) => p.x));
           const minZ = Math.min(...roomPoints.map((p: Vector3) => p.z));
@@ -415,49 +425,53 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings }: Babylon
           const width = maxX - minX;
           const depth = maxZ - minZ;
 
-          // Clone material for each floor
+          // Add vertices
+          roomPoints.forEach((p: Vector3) => {
+            // Position (XYZ - Y is up)
+            positions.push(p.x, 0.01, p.z);
+
+            // Normal (pointing up)
+            normals.push(0, 1, 0);
+
+            // UV coordinates (normalized to 0-1 range, then scaled for texture)
+            const u = ((p.x - minX) / width) * width;
+            const v = ((p.z - minZ) / depth) * depth;
+            uvs.push(u, v);
+          });
+
+          // Add triangle indices
+          triangles.forEach((idx: number) => {
+            indices.push(idx);
+          });
+
+          // Create custom mesh
+          const customMesh = new Mesh(`floor_${roomIndex}`, scene);
+
+          const vertexData = new VertexData();
+          vertexData.positions = positions;
+          vertexData.normals = normals;
+          vertexData.uvs = uvs;
+          vertexData.indices = indices;
+
+          vertexData.applyToMesh(customMesh);
+
+          // Apply material
           const roomFloorMat = floorMaterial.clone(`floorMat_room_${roomIndex}`);
           if (roomFloorMat.albedoTexture && roomFloorMat.albedoTexture instanceof Texture) {
             (roomFloorMat.albedoTexture as Texture).uScale = width;
             (roomFloorMat.albedoTexture as Texture).vScale = depth;
           }
-          floor.material = roomFloorMat;
-          floor.receiveShadows = true;
+          customMesh.material = roomFloorMat;
+          customMesh.receiveShadows = true;
 
-          console.log(`[Babylon3DCanvas] ✅ ExtrudePolygon floor ${roomIndex} created:`, {
-            points: roomPoints.length,
+          console.log(`[Babylon3DCanvas] ✅ Custom polygon floor ${roomIndex} created:`, {
+            vertices: roomPoints.length,
+            triangles: triangles.length / 3,
             width_m: width.toFixed(2),
             depth_m: depth.toFixed(2),
           });
         } catch (error) {
-          console.error(`[Babylon3DCanvas] ❌ Failed to create polygon floor ${roomIndex}:`, error);
-
-          // Fallback: Create simple ground mesh (rectangular)
-          const minX = Math.min(...roomPoints.map((p: Vector3) => p.x));
-          const maxX = Math.max(...roomPoints.map((p: Vector3) => p.x));
-          const minZ = Math.min(...roomPoints.map((p: Vector3) => p.z));
-          const maxZ = Math.max(...roomPoints.map((p: Vector3) => p.z));
-          const width = maxX - minX;
-          const depth = maxZ - minZ;
-          const centerFloorX = (minX + maxX) / 2;
-          const centerFloorZ = (minZ + maxZ) / 2;
-
-          const fallbackFloor = MeshBuilder.CreateGround(
-            `floor_${roomIndex}_fallback`,
-            { width, height: depth },
-            scene
-          );
-          fallbackFloor.position.set(centerFloorX, 0.01, centerFloorZ);
-
-          const roomFloorMat = floorMaterial.clone(`floorMat_room_${roomIndex}`);
-          if (roomFloorMat.albedoTexture && roomFloorMat.albedoTexture instanceof Texture) {
-            (roomFloorMat.albedoTexture as Texture).uScale = width;
-            (roomFloorMat.albedoTexture as Texture).vScale = depth;
-          }
-          fallbackFloor.material = roomFloorMat;
-          fallbackFloor.receiveShadows = true;
-
-          console.log(`[Babylon3DCanvas] ⚠️  Fallback rectangular floor created for room ${roomIndex}`);
+          console.error(`[Babylon3DCanvas] ❌ Failed to create custom polygon floor ${roomIndex}:`, error);
         }
       });
 
