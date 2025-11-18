@@ -9,7 +9,6 @@ import { PiCubeTransparentLight } from 'react-icons/pi';
 import { eventBus } from '../core/events/EventBus';
 import { EditorEvents } from '../core/events/EditorEvents';
 import type { Light, LightType } from '../core/types/Light';
-import { createDefaultLight } from '../core/types/Light';
 
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 
@@ -95,6 +94,12 @@ const EditorPage = () => {
     console.log('[EditorPage] Total lights:', newLights.length);
     // Keep placement mode active for placing multiple lights
     // User can manually exit by clicking the button again or switching views
+  };
+
+  // Handle light movement via gizmo
+  const handleLightMoved = (lightId: string, newPosition: { x: number; y: number; z: number }) => {
+    console.log('[EditorPage] Light moved:', lightId, 'to position:', newPosition);
+    setLights(lights.map(l => l.id === lightId ? { ...l, position: newPosition } : l));
   };
 
   // Babylon3DCanvas ref for screenshot capture
@@ -1987,6 +1992,7 @@ const EditorPage = () => {
             lightPlacementMode={lightPlacementMode}
             selectedLightType={selectedLightType}
             onLightPlaced={handleLightPlaced}
+            onLightMoved={handleLightMoved}
           />
 
           {/* Light Placement Guide Overlay */}

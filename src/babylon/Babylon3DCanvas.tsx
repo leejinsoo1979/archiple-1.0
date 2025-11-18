@@ -82,6 +82,7 @@ interface Babylon3DCanvasProps {
   lightPlacementMode?: boolean;
   selectedLightType?: LightType;
   onLightPlaced?: (light: Light) => void;
+  onLightMoved?: (lightId: string, newPosition: { x: number; y: number; z: number }) => void;
 }
 
 // 2D 좌표(mm)를 Babylon 미터 단위로 변환
@@ -226,7 +227,8 @@ const Babylon3DCanvas = forwardRef<
   lights = [],
   lightPlacementMode = false,
   selectedLightType = 'point',
-  onLightPlaced
+  onLightPlaced,
+  onLightMoved
 }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
@@ -1661,6 +1663,28 @@ const Babylon3DCanvas = forwardRef<
             }
           }
         }
+
+        // Check if picked mesh is part of window
+        if (picked.name.includes('window_') || picked.name.includes('_glassPane') || picked.name.includes('_handle')) {
+          // Find parent sliding pane
+          let slidingPane: Mesh | null = null;
+          let current = picked.parent;
+          while (current) {
+            if (current.name.includes('_slidingPane')) {
+              slidingPane = current as Mesh;
+              break;
+            }
+            current = current.parent;
+          }
+
+          // Show hotspot
+          if (slidingPane && slidingPane.metadata && slidingPane.metadata.hotspot) {
+            const hotspot = slidingPane.metadata.hotspot as Mesh;
+            if (hotspot.material) {
+              (hotspot.material as PBRMaterial).alpha = 0.8; // Show hotspot
+            }
+          }
+        }
       }
     };
 
@@ -1719,6 +1743,56 @@ const Babylon3DCanvas = forwardRef<
                 // Update state
                 doorLeaf.metadata.isOpen = !isOpen;
                 console.log('[Babylon3DCanvas] Door', doorLeaf.name, isOpen ? 'closed' : 'opened');
+              }
+            };
+
+            animate();
+          }
+        }
+
+        // Check if clicked on window or hotspot
+        if (picked.name.includes('window_') || picked.name.includes('_hotspot') ||
+            picked.name.includes('_glassPane') || picked.name.includes('_handle')) {
+
+          // Find parent sliding pane
+          let slidingPane: Mesh | null = null;
+          let current = picked.parent;
+          while (current) {
+            if (current.name.includes('_slidingPane')) {
+              slidingPane = current as Mesh;
+              break;
+            }
+            current = current.parent;
+          }
+
+          if (slidingPane && slidingPane.metadata) {
+            const isOpen = slidingPane.metadata.isOpen;
+            const closedPosX = slidingPane.metadata.closedPosX;
+            const openPosX = slidingPane.metadata.openPosX;
+            const targetPosX = isOpen ? closedPosX : openPosX;
+
+            // Smooth sliding animation
+            const startPosX = slidingPane.position.x;
+            const duration = 500; // 0.5 seconds
+            const startTime = performance.now();
+
+            const animate = () => {
+              const elapsed = performance.now() - startTime;
+              const progress = Math.min(elapsed / duration, 1);
+
+              // Ease-in-out
+              const eased = progress < 0.5
+                ? 2 * progress * progress
+                : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+
+              slidingPane.position.x = startPosX + (targetPosX - startPosX) * eased;
+
+              if (progress < 1) {
+                requestAnimationFrame(animate);
+              } else {
+                // Update state
+                slidingPane.metadata.isOpen = !isOpen;
+                console.log('[Babylon3DCanvas] Window', slidingPane.name, isOpen ? 'closed' : 'opened');
               }
             };
 
@@ -2601,7 +2675,7 @@ const Babylon3DCanvas = forwardRef<
     // Setup click handler for light indicator selection
     const gizmoManager = gizmoManagerRef.current;
     if (gizmoManager) {
-      const handlePointerObservable = scene.onPointerObservable.add((pointerInfo) => {
+      scene.onPointerObservable.add((pointerInfo) => {
         if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
           const pickResult = pointerInfo.pickInfo;
 
@@ -2632,17 +2706,10 @@ const Babylon3DCanvas = forwardRef<
 
                   console.log('[Babylon3DCanvas] Light moved to:', newPositionMm);
 
-                  // Update light position in state
-                  const updatedLights = lights.map(l => {
-                    if (l.id === lightId) {
-                      return { ...l, position: newPositionMm };
-                    }
-                    return l;
-                  });
-
-                  // TODO: Need to call a callback to update lights in EditorPage
-                  // For now, just log
-                  console.log('[Babylon3DCanvas] Updated lights:', updatedLights);
+                  // Update light position in parent component
+                  if (onLightMoved) {
+                    onLightMoved(lightId, newPositionMm);
+                  }
                 });
               }
             } else {
