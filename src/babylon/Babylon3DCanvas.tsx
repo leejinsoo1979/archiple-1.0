@@ -2003,6 +2003,15 @@ const Babylon3DCanvas = ({
         console.log('[Babylon3DCanvas] ✅ Photo-realistic pipeline disabled');
       }
 
+      // Reset scene image processing to defaults
+      if (scene.imageProcessingConfiguration) {
+        scene.imageProcessingConfiguration.toneMappingEnabled = false;
+        scene.imageProcessingConfiguration.contrast = 1.0;
+        scene.imageProcessingConfiguration.exposure = 1.0;
+        scene.imageProcessingConfiguration.vignetteEnabled = false;
+        console.log('[Babylon3DCanvas] ✅ Scene image processing reset to defaults');
+      }
+
       // Restore standard shadow quality
       if (sunLight) {
         const shadowGen = sunLight.getShadowGenerator();
