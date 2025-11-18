@@ -22,6 +22,7 @@ import {
   FollowCamera
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials/grid';
+import { SkyMaterial } from '@babylonjs/materials/sky';
 import '@babylonjs/loaders/glTF';
 import earcut from 'earcut';
 import styles from './Babylon3DCanvas.module.css';
@@ -361,6 +362,50 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       };
 
       createInfiniteGrid();
+
+      // Create outdoor skybox with clouds
+      const createSkybox = () => {
+        // Create large skybox sphere (1000m radius)
+        const skybox = MeshBuilder.CreateSphere(
+          'skybox',
+          { diameter: 1000, segments: 32 },
+          scene
+        );
+
+        // Create sky material with clouds
+        const skyMaterial = new SkyMaterial('skyMaterial', scene);
+
+        // Sky appearance settings
+        skyMaterial.turbidity = 10; // Atmospheric haze (1-20, higher = hazier)
+        skyMaterial.luminance = 1.0; // Overall brightness (0-1)
+        skyMaterial.rayleigh = 2.0; // Blue sky scattering (0-4)
+        skyMaterial.mieCoefficient = 0.005; // Cloud scattering (0-0.1)
+        skyMaterial.mieDirectionalG = 0.8; // Cloud directness (0-1)
+
+        // Sun position for lighting (matches directional light)
+        const azimuth = sunSettings?.azimuth ?? 45;
+        const altitude = sunSettings?.altitude ?? 45;
+
+        skyMaterial.azimuth = azimuth / 360; // 0-1 normalized
+        skyMaterial.inclination = (90 - altitude) / 180; // 0-1 normalized (0=zenith, 0.5=horizon)
+
+        // Apply material
+        skybox.material = skyMaterial;
+
+        // Render skybox first (behind everything)
+        skybox.renderingGroupId = 0;
+        skybox.infiniteDistance = true; // Always at infinite distance
+
+        // Disable interactions
+        skybox.isPickable = false;
+        skybox.checkCollisions = false;
+
+        console.log('[Babylon3DCanvas] Outdoor skybox created with clouds');
+
+        return skybox;
+      };
+
+      createSkybox();
 
       // Create realistic human character
       const createCharacter = () => {
@@ -882,10 +927,11 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     }
   }, [floorplanData]);
 
-  // Update sun light when settings change
+  // Update sun light and skybox when settings change
   useEffect(() => {
     const sunLight = sunLightRef.current;
-    if (!sunLight || !sunSettings) return;
+    const scene = sceneRef.current;
+    if (!sunLight || !sunSettings || !scene) return;
 
     const { azimuth, altitude, intensity } = sunSettings;
 
@@ -900,6 +946,15 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
     sunLight.position.set(x, y, z);
     sunLight.intensity = intensity;
+
+    // Update skybox sun position
+    const skybox = scene.getMeshByName('skybox');
+    if (skybox && skybox.material instanceof SkyMaterial) {
+      const skyMaterial = skybox.material as SkyMaterial;
+      skyMaterial.azimuth = azimuth / 360; // 0-1 normalized
+      skyMaterial.inclination = (90 - altitude) / 180; // 0-1 normalized
+      console.log('[Babylon3DCanvas] Skybox updated - azimuth:', azimuth, 'altitude:', altitude);
+    }
   }, [sunSettings]);
 
   // Switch camera and controls based on view mode and play mode
