@@ -6,8 +6,11 @@ import { ToolType } from '../core/types/EditorState';
 import { createTestRoom } from '../floorplan/blueprint/BlueprintToBabylonAdapter';
 import { RxCursorArrow } from 'react-icons/rx';
 import { PiCubeTransparentLight } from 'react-icons/pi';
+import { MdOutlinePhotoCamera } from 'react-icons/md';
 import { eventBus } from '../core/events/EventBus';
 import { EditorEvents } from '../core/events/EditorEvents';
+import type { Light, LightType } from '../core/types/Light';
+import { createDefaultLight } from '../core/types/Light';
 
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 
@@ -26,6 +29,7 @@ const EditorPage = () => {
   });
   const [playMode, setPlayMode] = useState(false); // FPS mode toggle
   const [showCharacter, setShowCharacter] = useState(false); // Character toggle
+  const [photoRealisticMode, setPhotoRealisticMode] = useState(false); // Photo-realistic rendering
 
   // 3D View display options
   const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
@@ -59,6 +63,22 @@ const EditorPage = () => {
 
   // GLB model state
   const [glbModelFile, setGlbModelFile] = useState<File | null>(null);
+
+  // Lighting system state
+  const [lightPanelOpen, setLightPanelOpen] = useState(false);
+  const [lights, setLights] = useState<Light[]>([]);
+  const [selectedLightId, setSelectedLightId] = useState<string | null>(null);
+  const [lightPlacementMode, setLightPlacementMode] = useState(false);
+  const [selectedLightType, setSelectedLightType] = useState<LightType>('point');
+
+  // Handle light placement from 3D view
+  const handleLightPlaced = (light: Light) => {
+    console.log('[EditorPage] Light placed:', light);
+    setLights([...lights, light]);
+    setSelectedLightId(light.id);
+    setLightPlacementMode(false); // Exit placement mode after placing
+    setViewMode('2D'); // Switch back to 2D view to show light settings
+  };
 
   // Close view options dropdown when clicking outside
   useEffect(() => {
@@ -496,11 +516,352 @@ const EditorPage = () => {
                 </div>
               )}
             </div>
-            <button className={styles.topBtn} title="Light">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/>
-              </svg>
+            <button
+              className={`${styles.topBtn} ${photoRealisticMode ? styles.active : ''}`}
+              title="Photo-Realistic Rendering"
+              onClick={() => setPhotoRealisticMode(!photoRealisticMode)}
+            >
+              <MdOutlinePhotoCamera size={20} />
             </button>
+            <div style={{ position: 'relative' }}>
+              <button
+                className={`${styles.topBtn} ${lightPanelOpen ? styles.active : ''}`}
+                title="Light"
+                onClick={() => setLightPanelOpen(!lightPanelOpen)}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/>
+                </svg>
+              </button>
+
+              {lightPanelOpen && (
+                <div className={styles.sunDropdown}>
+                  <div className={styles.dropdownHeader}>
+                    <span>Light Settings</span>
+                    <button onClick={() => setLightPanelOpen(false)} className={styles.closeBtn}>×</button>
+                  </div>
+                  <div className={styles.dropdownBody}>
+                    {/* Light Type Selection */}
+                    <div className={styles.controlGroup}>
+                      <label>Light Type</label>
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                        <button
+                          onClick={() => setSelectedLightType('point')}
+                          style={{
+                            flex: 1,
+                            padding: '10px',
+                            background: selectedLightType === 'point' ? '#3fae7a' : '#f5f5f5',
+                            color: selectedLightType === 'point' ? 'white' : '#666',
+                            border: 'none',
+                            borderRadius: '4px',
+                            fontSize: '13px',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                          }}
+                        >
+                          💡 포인트
+                        </button>
+                        <button
+                          onClick={() => setSelectedLightType('spot')}
+                          style={{
+                            flex: 1,
+                            padding: '10px',
+                            background: selectedLightType === 'spot' ? '#3fae7a' : '#f5f5f5',
+                            color: selectedLightType === 'spot' ? 'white' : '#666',
+                            border: 'none',
+                            borderRadius: '4px',
+                            fontSize: '13px',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                          }}
+                        >
+                          🔦 스포트
+                        </button>
+                        <button
+                          onClick={() => setSelectedLightType('directional')}
+                          style={{
+                            flex: 1,
+                            padding: '10px',
+                            background: selectedLightType === 'directional' ? '#3fae7a' : '#f5f5f5',
+                            color: selectedLightType === 'directional' ? 'white' : '#666',
+                            border: 'none',
+                            borderRadius: '4px',
+                            fontSize: '13px',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                          }}
+                        >
+                          ☀️ 방향성
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Placement Mode Button */}
+                    <div className={styles.controlGroup}>
+                      <button
+                        onClick={() => {
+                          setLightPlacementMode(!lightPlacementMode);
+                          if (!lightPlacementMode) {
+                            setViewMode('3D'); // Switch to 3D for placement
+                          }
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '12px',
+                          background: lightPlacementMode ? '#e74c3c' : '#3fae7a',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          fontSize: '14px',
+                          fontWeight: '500',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        {lightPlacementMode ? '배치 모드 종료' : '3D 뷰에서 배치하기'}
+                      </button>
+                    </div>
+
+                    {/* Light List */}
+                    <div className={styles.controlGroup}>
+                      <label>배치된 조명 ({lights.length})</label>
+                      <div style={{ marginTop: '8px', maxHeight: '200px', overflowY: 'auto' }}>
+                        {lights.length === 0 ? (
+                          <div style={{
+                            padding: '20px',
+                            textAlign: 'center',
+                            color: '#999',
+                            fontSize: '12px',
+                            background: '#f9f9f9',
+                            borderRadius: '4px'
+                          }}>
+                            배치된 조명이 없습니다
+                          </div>
+                        ) : (
+                          lights.map((light) => (
+                            <div
+                              key={light.id}
+                              onClick={() => setSelectedLightId(light.id)}
+                              style={{
+                                padding: '12px',
+                                marginBottom: '6px',
+                                background: selectedLightId === light.id ? '#e8f5f0' : '#f9f9f9',
+                                border: `2px solid ${selectedLightId === light.id ? '#3fae7a' : '#eee'}`,
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontSize: '13px', fontWeight: '500', color: '#333', marginBottom: '4px' }}>
+                                    {light.type === 'point' ? '💡' : light.type === 'spot' ? '🔦' : '☀️'} {light.name}
+                                  </div>
+                                  <div style={{ fontSize: '11px', color: '#999' }}>
+                                    강도: {light.intensity.toFixed(1)} | {light.enabled ? '켜짐' : '꺼짐'}
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setLights(lights.filter(l => l.id !== light.id));
+                                    if (selectedLightId === light.id) {
+                                      setSelectedLightId(null);
+                                    }
+                                  }}
+                                  style={{
+                                    padding: '4px 8px',
+                                    background: '#ff4444',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '3px',
+                                    fontSize: '11px',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  삭제
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Selected Light Settings */}
+                    {selectedLightId && lights.find(l => l.id === selectedLightId) && (() => {
+                      const selectedLight = lights.find(l => l.id === selectedLightId)!;
+                      return (
+                        <div style={{ borderTop: '1px solid #eee', paddingTop: '16px', marginTop: '8px' }}>
+                          <div style={{ fontSize: '13px', fontWeight: '600', color: '#333', marginBottom: '12px' }}>
+                            상세 설정
+                          </div>
+
+                          {/* Name */}
+                          <div className={styles.controlGroup}>
+                            <label>이름</label>
+                            <input
+                              type="text"
+                              value={selectedLight.name}
+                              onChange={(e) => {
+                                setLights(lights.map(l =>
+                                  l.id === selectedLightId ? { ...l, name: e.target.value } : l
+                                ));
+                              }}
+                              style={{
+                                width: '100%',
+                                padding: '8px',
+                                border: '1px solid #ddd',
+                                borderRadius: '4px',
+                                fontSize: '13px',
+                              }}
+                            />
+                          </div>
+
+                          {/* Intensity */}
+                          <div className={styles.controlGroup}>
+                            <label>강도 (Intensity)</label>
+                            <div className={styles.controlInput}>
+                              <input
+                                type="range"
+                                min="0"
+                                max="5"
+                                step="0.1"
+                                value={selectedLight.intensity}
+                                onChange={(e) => {
+                                  setLights(lights.map(l =>
+                                    l.id === selectedLightId ? { ...l, intensity: parseFloat(e.target.value) } : l
+                                  ));
+                                }}
+                                className={styles.rangeSlider}
+                              />
+                              <span className={styles.valueDisplay}>{selectedLight.intensity.toFixed(1)}</span>
+                            </div>
+                          </div>
+
+                          {/* Color */}
+                          <div className={styles.controlGroup}>
+                            <label>색상 (Color)</label>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                              <input
+                                type="color"
+                                value={`#${selectedLight.color.r.toString(16).padStart(2, '0')}${selectedLight.color.g.toString(16).padStart(2, '0')}${selectedLight.color.b.toString(16).padStart(2, '0')}`}
+                                onChange={(e) => {
+                                  const hex = e.target.value;
+                                  const r = parseInt(hex.slice(1, 3), 16);
+                                  const g = parseInt(hex.slice(3, 5), 16);
+                                  const b = parseInt(hex.slice(5, 7), 16);
+                                  setLights(lights.map(l =>
+                                    l.id === selectedLightId ? { ...l, color: { r, g, b } } : l
+                                  ));
+                                }}
+                                style={{
+                                  width: '50px',
+                                  height: '32px',
+                                  border: '1px solid #ddd',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                }}
+                              />
+                              <span style={{ fontSize: '12px', color: '#666' }}>
+                                RGB({selectedLight.color.r}, {selectedLight.color.g}, {selectedLight.color.b})
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Range (for point and spot) */}
+                          {(selectedLight.type === 'point' || selectedLight.type === 'spot') && (
+                            <div className={styles.controlGroup}>
+                              <label>범위 (Range)</label>
+                              <div className={styles.controlInput}>
+                                <input
+                                  type="range"
+                                  min="1"
+                                  max="50"
+                                  step="0.5"
+                                  value={selectedLight.range || 10}
+                                  onChange={(e) => {
+                                    setLights(lights.map(l =>
+                                      l.id === selectedLightId ? { ...l, range: parseFloat(e.target.value) } : l
+                                    ));
+                                  }}
+                                  className={styles.rangeSlider}
+                                />
+                                <span className={styles.valueDisplay}>{(selectedLight.range || 10).toFixed(1)}m</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Angle (for spot) */}
+                          {selectedLight.type === 'spot' && (
+                            <div className={styles.controlGroup}>
+                              <label>각도 (Angle)</label>
+                              <div className={styles.controlInput}>
+                                <input
+                                  type="range"
+                                  min="10"
+                                  max="90"
+                                  step="1"
+                                  value={selectedLight.angle || 45}
+                                  onChange={(e) => {
+                                    setLights(lights.map(l =>
+                                      l.id === selectedLightId ? { ...l, angle: parseFloat(e.target.value) } : l
+                                    ));
+                                  }}
+                                  className={styles.rangeSlider}
+                                />
+                                <span className={styles.valueDisplay}>{selectedLight.angle || 45}°</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Shadows */}
+                          <div className={styles.controlGroup}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <label style={{ margin: 0 }}>그림자 (Shadows)</label>
+                              <label className={styles.toggleSwitch}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedLight.castShadows}
+                                  onChange={(e) => {
+                                    setLights(lights.map(l =>
+                                      l.id === selectedLightId ? { ...l, castShadows: e.target.checked } : l
+                                    ));
+                                  }}
+                                />
+                                <span className={styles.toggleSlider}></span>
+                              </label>
+                            </div>
+                          </div>
+
+                          {/* Enabled */}
+                          <div className={styles.controlGroup}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <label style={{ margin: 0 }}>활성화 (Enabled)</label>
+                              <label className={styles.toggleSwitch}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedLight.enabled}
+                                  onChange={(e) => {
+                                    setLights(lights.map(l =>
+                                      l.id === selectedLightId ? { ...l, enabled: e.target.checked } : l
+                                    ));
+                                  }}
+                                />
+                                <span className={styles.toggleSlider}></span>
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
             <button className={styles.topBtn} title="Material">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
@@ -1064,6 +1425,11 @@ const EditorPage = () => {
             playMode={playMode}
             showCharacter={showCharacter}
             glbModelFile={glbModelFile}
+            photoRealisticMode={photoRealisticMode}
+            lights={lights}
+            lightPlacementMode={lightPlacementMode}
+            selectedLightType={selectedLightType}
+            onLightPlaced={handleLightPlaced}
           />
         </div>
 
