@@ -898,12 +898,8 @@ const EditorPage = () => {
                 <span>Double Door</span>
               </button>
               <button className={styles.toolBtn}>
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <rect x="10" y="12" width="10" height="24" stroke="currentColor" strokeWidth="2" fill="none"/>
-                  <rect x="20" y="12" width="10" height="24" stroke="currentColor" strokeWidth="2" fill="none"/>
-                  <rect x="30" y="12" width="8" height="24" stroke="currentColor" strokeWidth="2" fill="none"/>
-                </svg>
-                <span>Unequal Double Door</span>
+                <img src="/icons/slidingdoor.svg" alt="Sliding Door" width="32" height="32" />
+                <span>Sliding Door</span>
               </button>
             </div>
           </div>
