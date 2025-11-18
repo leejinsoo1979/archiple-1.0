@@ -484,61 +484,6 @@ const EditorPage = () => {
             </button>
           </div>
 
-          {/* Image controls when image is loaded */}
-          {backgroundImage && (
-            <div className={styles.toolSection}>
-              <h4>Image Controls</h4>
-              <div style={{ padding: '0 16px' }}>
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>
-                    스케일: {imageScale.toFixed(1)}x
-                  </label>
-                  <input
-                    type="range"
-                    min="0.1"
-                    max="3"
-                    step="0.1"
-                    value={imageScale}
-                    onChange={(e) => setImageScale(parseFloat(e.target.value))}
-                    style={{ width: '100%' }}
-                  />
-                </div>
-
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>
-                    투명도: {Math.round(imageOpacity * 100)}%
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.1"
-                    value={imageOpacity}
-                    onChange={(e) => setImageOpacity(parseFloat(e.target.value))}
-                    style={{ width: '100%' }}
-                  />
-                </div>
-
-                <button
-                  onClick={handleScan}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    background: '#667eea',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    fontSize: '14px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                  }}
-                >
-                  스캐닝
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* Walls */}
           <div className={styles.toolSection}>
             <h4>Walls</h4>
@@ -786,6 +731,86 @@ const EditorPage = () => {
             playMode={playMode}
           />
         </div>
+
+        {/* Image Controls Overlay */}
+        {backgroundImage && viewMode === '2D' && !playMode && (
+          <div style={{
+            position: 'absolute',
+            bottom: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(0, 0, 0, 0.8)',
+            padding: '20px 30px',
+            borderRadius: '12px',
+            display: 'flex',
+            gap: '30px',
+            alignItems: 'center',
+            zIndex: 1000,
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <label style={{ fontSize: '14px', color: 'white', fontWeight: '600', minWidth: '60px' }}>
+                스케일:
+              </label>
+              <input
+                type="range"
+                min="0.1"
+                max="3"
+                step="0.1"
+                value={imageScale}
+                onChange={(e) => setImageScale(parseFloat(e.target.value))}
+                style={{ width: '200px' }}
+              />
+              <span style={{ fontSize: '14px', color: '#4CAF50', fontWeight: 'bold', minWidth: '50px' }}>
+                {imageScale.toFixed(1)}x
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <label style={{ fontSize: '14px', color: 'white', fontWeight: '600', minWidth: '60px' }}>
+                투명도:
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={imageOpacity}
+                onChange={(e) => setImageOpacity(parseFloat(e.target.value))}
+                style={{ width: '200px' }}
+              />
+              <span style={{ fontSize: '14px', color: '#4CAF50', fontWeight: 'bold', minWidth: '50px' }}>
+                {Math.round(imageOpacity * 100)}%
+              </span>
+            </div>
+
+            <button
+              onClick={handleScan}
+              style={{
+                padding: '12px 32px',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                boxShadow: '0 4px 8px rgba(102, 126, 234, 0.3)',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 12px rgba(102, 126, 234, 0.4)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 8px rgba(102, 126, 234, 0.3)';
+              }}
+            >
+              스캐닝
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Right Settings Panel */}
