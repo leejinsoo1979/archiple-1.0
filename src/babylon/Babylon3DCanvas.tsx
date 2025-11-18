@@ -742,44 +742,51 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     // Clear and prepare wall meshes array for snap detection
     wallMeshesRef.current = [];
 
-    // Create walls with Miter Joints - split if doors present
+    // Create walls - TEMPORARY: Use simple box method without miter
+    const ENABLE_MITER = false; // Set to true to enable miter joints
+
     walls.forEach((wall, wallIndex) => {
       const startPoint = pointMap.get(wall.startPointId);
       const endPoint = pointMap.get(wall.endPointId);
       if (!startPoint || !endPoint) return;
 
+      const wallThicknessMM = wall.thickness;
       const wallHeightMM = wall.height || 2400;
 
       // Find doors on this wall
       const wallDoors = doors.filter((door: any) => door.wallId === wall.id);
 
-      if (wallIndex === 0) {
-        console.log('[Babylon3DCanvas] Wall door check:', {
-          wallId: wall.id,
-          totalDoors: doors.length,
-          wallDoors: wallDoors.length,
-          doors: wallDoors,
-        });
-      }
+      // Convert to meters (flip Z axis for correct orientation)
+      const startX = startPoint.x * MM_TO_METERS - centerX;
+      const startZ = -(startPoint.y * MM_TO_METERS) - centerZ;
+      const endX = endPoint.x * MM_TO_METERS - centerX;
+      const endZ = -(endPoint.y * MM_TO_METERS) - centerZ;
 
-      // Find connected walls and calculate miter joint corners
-      const connections = findConnectedWalls(walls as Wall[], wall as Wall, pointMap);
-      const corners = calculateWallCorners(wall as Wall, connections, pointMap);
+      const dx = endX - startX;
+      const dz = endZ - startZ;
+      const wallLengthM = Math.sqrt(dx * dx + dz * dz);
+      const wallThickness = wallThicknessMM * MM_TO_METERS;
+      const wallHeight = wallHeightMM * MM_TO_METERS;
 
-      if (!corners) {
-        console.error('[Babylon3DCanvas] Failed to calculate corners for wall:', wall.id);
-        return;
-      }
+      const angle = Math.atan2(dz, dx);
 
       if (wallDoors.length === 0) {
-        // No doors - create full wall with miter joints
-        const wallMesh = createWallMeshFromCorners(
-          corners,
-          wallHeightMM,
-          centerX,
-          centerZ,
+        // No doors - create full wall
+        const wallMesh = MeshBuilder.CreateBox(
           `wall_${wallIndex}`,
+          {
+            width: wallLengthM,
+            height: wallHeight,
+            depth: wallThickness,
+          },
           scene
+        );
+
+        wallMesh.rotation.y = -angle;
+        wallMesh.position = new Vector3(
+          (startX + endX) / 2,
+          wallHeight / 2,
+          (startZ + endZ) / 2
         );
 
         wallMesh.material = wallMaterial;
@@ -796,17 +803,11 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         // Has doors - split wall into segments
         const openings: Array<{ start: number; end: number }> = [];
 
-        // Calculate wall length
-        const dx = endPoint.x - startPoint.x;
-        const dy = endPoint.y - startPoint.y;
-        const wallLengthMM = Math.sqrt(dx * dx + dy * dy);
-
         wallDoors.forEach((door: any) => {
-          const doorWidthMM = door.width;
-          const halfWidth = doorWidthMM / 2;
-          // door.position is 0-1 normalized along wall length
-          const openingStart = Math.max(0, door.position - halfWidth / wallLengthMM);
-          const openingEnd = Math.min(1, door.position + halfWidth / wallLengthMM);
+          const doorWidthM = door.width * MM_TO_METERS;
+          const halfWidth = doorWidthM / 2;
+          const openingStart = Math.max(0, door.position - halfWidth / wallLengthM);
+          const openingEnd = Math.min(1, door.position + halfWidth / wallLengthM);
           openings.push({ start: openingStart, end: openingEnd });
         });
 
@@ -833,24 +834,34 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           if (currentPos < opening.start) {
             const segStart = currentPos;
             const segEnd = opening.start;
+            const segLength = (segEnd - segStart) * wallLengthM;
 
-            // Calculate segment corners
-            const segCorners = calculateSegmentCorners(corners, segStart, segEnd);
+            const segStartX = startX + dx * segStart;
+            const segStartZ = startZ + dz * segStart;
+            const segEndX = startX + dx * segEnd;
+            const segEndZ = startZ + dz * segEnd;
 
-            const segMesh = createWallMeshFromCorners(
-              segCorners,
-              wallHeightMM,
-              centerX,
-              centerZ,
+            const segMesh = MeshBuilder.CreateBox(
               `wall_${wallIndex}_seg_${segIndex++}`,
+              {
+                width: segLength,
+                height: wallHeight,
+                depth: wallThickness,
+              },
               scene
+            );
+
+            segMesh.rotation.y = -angle;
+            segMesh.position = new Vector3(
+              (segStartX + segEndX) / 2,
+              wallHeight / 2,
+              (segStartZ + segEndZ) / 2
             );
 
             segMesh.material = wallMaterial;
             segMesh.receiveShadows = true;
             segMesh.checkCollisions = true;
 
-            // Store wall segment mesh for snap detection
             wallMeshesRef.current.push(segMesh);
 
             if (shadowGenerator) {
@@ -864,23 +875,32 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         if (currentPos < 1) {
           const segStart = currentPos;
           const segEnd = 1;
+          const segLength = (segEnd - segStart) * wallLengthM;
 
-          const segCorners = calculateSegmentCorners(corners, segStart, segEnd);
+          const segStartX = startX + dx * segStart;
+          const segStartZ = startZ + dz * segStart;
 
-          const segMesh = createWallMeshFromCorners(
-            segCorners,
-            wallHeightMM,
-            centerX,
-            centerZ,
+          const segMesh = MeshBuilder.CreateBox(
             `wall_${wallIndex}_seg_${segIndex}`,
+            {
+              width: segLength,
+              height: wallHeight,
+              depth: wallThickness,
+            },
             scene
+          );
+
+          segMesh.rotation.y = -angle;
+          segMesh.position = new Vector3(
+            (segStartX + endX) / 2,
+            wallHeight / 2,
+            (segStartZ + endZ) / 2
           );
 
           segMesh.material = wallMaterial;
           segMesh.receiveShadows = true;
           segMesh.checkCollisions = true;
 
-          // Store wall segment mesh for snap detection
           wallMeshesRef.current.push(segMesh);
 
           if (shadowGenerator) {
