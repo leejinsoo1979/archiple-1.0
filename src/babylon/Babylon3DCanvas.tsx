@@ -570,7 +570,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     centerZ: number,
     name: string,
     scene: Scene,
-    startHeight: number = 0
+    startHeight: number = 0,
+    skipTopFace: boolean = false
   ): Mesh => {
     const MM_TO_METERS = 0.001;
     const wallHeight = height * MM_TO_METERS;
@@ -633,9 +634,11 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       indices.push(0, 3, 2);
     }
 
-    // 천장 단면 (반시계방향)
-    indices.push(8, 9, 10);
-    indices.push(8, 10, 11);
+    // 천장 단면 (반시계방향) - skipTopFace가 false일 때만 생성
+    if (!skipTopFace) {
+      indices.push(8, 9, 10);
+      indices.push(8, 10, 11);
+    }
 
     // 측면 4개 - 흰색 vertex 사용 (4-7)
     // Left side (0-1-5-4)
@@ -1038,7 +1041,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
               centerZ,
               `wall_${wallIndex}_lower_seg_${segIndex++}`,
               scene,
-              0 // 바닥부터 시작
+              0, // 바닥부터 시작
+              true // 상단면 안 그림 (인방이 덮음)
             );
 
             segMesh.material = wallMaterial;
@@ -1068,7 +1072,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
             centerZ,
             `wall_${wallIndex}_lower_seg_${segIndex}`,
             scene,
-            0
+            0, // 바닥부터 시작
+            true // 상단면 안 그림 (인방이 덮음)
           );
 
           segMesh.material = wallMaterial;
