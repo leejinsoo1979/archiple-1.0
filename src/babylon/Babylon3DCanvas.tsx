@@ -561,6 +561,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
    * @param centerX, centerZ 중심점 offset (meters)
    * @param name mesh 이름
    * @param scene Babylon scene
+   * @param startHeight 시작 높이 (mm 단위, 기본값 0 = 바닥부터)
    */
   const createWallMeshFromCorners = (
     corners: WallCorners,
@@ -568,10 +569,12 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     centerX: number,
     centerZ: number,
     name: string,
-    scene: Scene
+    scene: Scene,
+    startHeight: number = 0
   ): Mesh => {
     const MM_TO_METERS = 0.001;
     const wallHeight = height * MM_TO_METERS;
+    const wallStartHeight = startHeight * MM_TO_METERS;
 
     // 코너를 meters로 변환하고 중심점 offset 적용
     const toMeters = (x: number, z: number) => ({
@@ -590,34 +593,35 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     const normals: number[] = [];
     const colors: number[] = [];
 
-    // 바닥 4개 vertex (y=0) - 흰색
-    positions.push(c1.x, 0, c1.z); // 0
+    // 바닥 4개 vertex (y=wallStartHeight) - 흰색
+    positions.push(c1.x, wallStartHeight, c1.z); // 0
     colors.push(1, 1, 1, 1);
-    positions.push(c2.x, 0, c2.z); // 1
+    positions.push(c2.x, wallStartHeight, c2.z); // 1
     colors.push(1, 1, 1, 1);
-    positions.push(c3.x, 0, c3.z); // 2
+    positions.push(c3.x, wallStartHeight, c3.z); // 2
     colors.push(1, 1, 1, 1);
-    positions.push(c4.x, 0, c4.z); // 3
-    colors.push(1, 1, 1, 1);
-
-    // 측면용 윗 vertex 4개 (y=wallHeight) - 흰색 (측면에 그라데이션 방지)
-    positions.push(c1.x, wallHeight, c1.z); // 4
-    colors.push(1, 1, 1, 1);
-    positions.push(c2.x, wallHeight, c2.z); // 5
-    colors.push(1, 1, 1, 1);
-    positions.push(c3.x, wallHeight, c3.z); // 6
-    colors.push(1, 1, 1, 1);
-    positions.push(c4.x, wallHeight, c4.z); // 7
+    positions.push(c4.x, wallStartHeight, c4.z); // 3
     colors.push(1, 1, 1, 1);
 
-    // 천장 단면용 vertex 4개 (y=wallHeight) - 검정색
-    positions.push(c1.x, wallHeight, c1.z); // 8
+    // 측면용 윗 vertex 4개 (y=wallStartHeight+wallHeight) - 흰색 (측면에 그라데이션 방지)
+    const topY = wallStartHeight + wallHeight;
+    positions.push(c1.x, topY, c1.z); // 4
+    colors.push(1, 1, 1, 1);
+    positions.push(c2.x, topY, c2.z); // 5
+    colors.push(1, 1, 1, 1);
+    positions.push(c3.x, topY, c3.z); // 6
+    colors.push(1, 1, 1, 1);
+    positions.push(c4.x, topY, c4.z); // 7
+    colors.push(1, 1, 1, 1);
+
+    // 천장 단면용 vertex 4개 (y=wallStartHeight+wallHeight) - 검정색
+    positions.push(c1.x, topY, c1.z); // 8
     colors.push(0, 0, 0, 1);
-    positions.push(c2.x, wallHeight, c2.z); // 9
+    positions.push(c2.x, topY, c2.z); // 9
     colors.push(0, 0, 0, 1);
-    positions.push(c3.x, wallHeight, c3.z); // 10
+    positions.push(c3.x, topY, c3.z); // 10
     colors.push(0, 0, 0, 1);
-    positions.push(c4.x, wallHeight, c4.z); // 11
+    positions.push(c4.x, topY, c4.z); // 11
     colors.push(0, 0, 0, 1);
 
     // Indices
@@ -664,6 +668,163 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     mesh.edgesColor = new Color4(0.5, 0.5, 0.5, 1); // 그레이색
 
     return mesh;
+  };
+
+  /**
+   * 사실적인 도어 mesh 생성 (문틀, 문짝, 손잡이 포함)
+   *
+   * @param position 도어 위치 (벽 상의 0-1 normalized position)
+   * @param wallStart 벽 시작점 (mm)
+   * @param wallEnd 벽 끝점 (mm)
+   * @param wallThickness 벽 두께 (mm)
+   * @param centerX, centerZ 중심점 offset (meters)
+   * @param name mesh 이름
+   * @param scene Babylon scene
+   */
+  const createDoorMesh = (
+    position: number,
+    wallStart: { x: number; y: number },
+    wallEnd: { x: number; y: number },
+    wallThickness: number,
+    centerX: number,
+    centerZ: number,
+    name: string,
+    scene: Scene
+  ): { doorGroup: Mesh; doorLeaf: Mesh; hotspot: Mesh } => {
+    const MM_TO_METERS = 0.001;
+    const DOOR_WIDTH = 900; // 900mm
+    const DOOR_HEIGHT = 2050; // 2050mm
+    const FRAME_DEPTH = 40; // 문틀 깊이 40mm
+    const FRAME_WIDTH = 50; // 문틀 너비 50mm
+
+    // 벽 방향 계산
+    const dx = wallEnd.x - wallStart.x;
+    const dy = wallEnd.y - wallStart.y;
+    const wallLength = Math.sqrt(dx * dx + dy * dy);
+    const wallDir = { x: dx / wallLength, y: dy / wallLength };
+
+    // 도어 중심 위치 (mm 단위)
+    const doorCenterMM = {
+      x: wallStart.x + wallDir.x * position * wallLength,
+      y: wallStart.y + wallDir.y * position * wallLength
+    };
+
+    // meters로 변환
+    const doorCenter3D = new Vector3(
+      doorCenterMM.x * MM_TO_METERS - centerX,
+      DOOR_HEIGHT * MM_TO_METERS / 2,
+      -(doorCenterMM.y * MM_TO_METERS) - centerZ
+    );
+
+    // 도어 회전 (벽 방향)
+    const doorRotationY = Math.atan2(wallDir.x, wallDir.y);
+
+    // 도어 그룹 (회전 pivot)
+    const doorGroup = new Mesh(`${name}_group`, scene);
+    doorGroup.position = doorCenter3D;
+    doorGroup.rotation.y = doorRotationY;
+
+    // === 문틀 (Frame) ===
+    const frameMaterial = new PBRMaterial(`${name}_frameMat`, scene);
+    frameMaterial.albedoColor = new Color3(0.4, 0.3, 0.2); // 다크 브라운
+    frameMaterial.metallic = 0;
+    frameMaterial.roughness = 0.7;
+
+    // 좌측 문틀
+    const leftFrame = MeshBuilder.CreateBox(`${name}_leftFrame`, {
+      width: FRAME_WIDTH * MM_TO_METERS,
+      height: DOOR_HEIGHT * MM_TO_METERS,
+      depth: wallThickness * MM_TO_METERS
+    }, scene);
+    leftFrame.position.x = -(DOOR_WIDTH / 2 + FRAME_WIDTH / 2) * MM_TO_METERS;
+    leftFrame.material = frameMaterial;
+    leftFrame.parent = doorGroup;
+
+    // 우측 문틀
+    const rightFrame = MeshBuilder.CreateBox(`${name}_rightFrame`, {
+      width: FRAME_WIDTH * MM_TO_METERS,
+      height: DOOR_HEIGHT * MM_TO_METERS,
+      depth: wallThickness * MM_TO_METERS
+    }, scene);
+    rightFrame.position.x = (DOOR_WIDTH / 2 + FRAME_WIDTH / 2) * MM_TO_METERS;
+    rightFrame.material = frameMaterial;
+    rightFrame.parent = doorGroup;
+
+    // 상단 문틀
+    const topFrame = MeshBuilder.CreateBox(`${name}_topFrame`, {
+      width: (DOOR_WIDTH + FRAME_WIDTH * 2) * MM_TO_METERS,
+      height: FRAME_WIDTH * MM_TO_METERS,
+      depth: wallThickness * MM_TO_METERS
+    }, scene);
+    topFrame.position.y = (DOOR_HEIGHT / 2 + FRAME_WIDTH / 2) * MM_TO_METERS;
+    topFrame.material = frameMaterial;
+    topFrame.parent = doorGroup;
+
+    // === 문짝 (Door Leaf) - 경첩을 pivot으로 회전 ===
+    const doorLeafMaterial = new PBRMaterial(`${name}_leafMat`, scene);
+    doorLeafMaterial.albedoColor = new Color3(0.85, 0.7, 0.5); // 밝은 나무색
+    doorLeafMaterial.metallic = 0;
+    doorLeafMaterial.roughness = 0.5;
+
+    // 문짝 pivot (경첩 위치)
+    const doorLeaf = new Mesh(`${name}_leaf`, scene);
+    doorLeaf.position.x = -(DOOR_WIDTH / 2) * MM_TO_METERS; // 좌측 경첩
+    doorLeaf.parent = doorGroup;
+
+    // 문짝 본체
+    const doorPanel = MeshBuilder.CreateBox(`${name}_panel`, {
+      width: DOOR_WIDTH * MM_TO_METERS,
+      height: DOOR_HEIGHT * MM_TO_METERS,
+      depth: FRAME_DEPTH * MM_TO_METERS
+    }, scene);
+    doorPanel.position.x = (DOOR_WIDTH / 2) * MM_TO_METERS; // pivot 기준 오른쪽으로 이동
+    doorPanel.material = doorLeafMaterial;
+    doorPanel.parent = doorLeaf;
+
+    // 손잡이
+    const handleMaterial = new PBRMaterial(`${name}_handleMat`, scene);
+    handleMaterial.albedoColor = new Color3(0.7, 0.7, 0.7); // 은색
+    handleMaterial.metallic = 0.8;
+    handleMaterial.roughness = 0.2;
+
+    const handle = MeshBuilder.CreateCylinder(`${name}_handle`, {
+      diameter: 20 * MM_TO_METERS,
+      height: 120 * MM_TO_METERS
+    }, scene);
+    handle.rotation.z = Math.PI / 2; // 수평으로 회전
+    handle.position.set(
+      (DOOR_WIDTH * 0.85) * MM_TO_METERS, // 문 오른쪽 85% 위치
+      0, // 중간 높이
+      (FRAME_DEPTH / 2 + 15) * MM_TO_METERS // 문 앞쪽
+    );
+    handle.material = handleMaterial;
+    handle.parent = doorLeaf;
+
+    // === 호버 핫스팟 (작은 초록색 구) ===
+    const hotspotMaterial = new PBRMaterial(`${name}_hotspotMat`, scene);
+    hotspotMaterial.albedoColor = new Color3(0.25, 0.68, 0.48); // 초록색 #3fae7a
+    hotspotMaterial.emissiveColor = new Color3(0.25, 0.68, 0.48);
+    hotspotMaterial.alpha = 0; // 초기에는 숨김
+
+    const hotspot = MeshBuilder.CreateSphere(`${name}_hotspot`, {
+      diameter: 0.1
+    }, scene);
+    hotspot.position.set(
+      (DOOR_WIDTH * 0.85) * MM_TO_METERS,
+      0,
+      (FRAME_DEPTH / 2 + 60) * MM_TO_METERS
+    );
+    hotspot.material = hotspotMaterial;
+    hotspot.isPickable = true;
+    hotspot.parent = doorLeaf;
+
+    // 문짝 초기 상태 (닫힘)
+    doorLeaf.rotation.y = 0;
+    doorLeaf.metadata = { isOpen: false }; // 상태 저장
+
+    console.log('[Babylon3DCanvas] Created door:', name, 'at position', doorCenter3D);
+
+    return { doorGroup, doorLeaf, hotspot };
   };
 
   // Update 3D scene when floorplan data changes
@@ -808,7 +969,13 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           shadowGenerator.addShadowCaster(wallMesh);
         }
       } else {
-        // Has doors - split wall into segments
+        // Has doors - create wall in TWO layers:
+        // 1. Bottom layer (0 ~ 2050mm): Door opening segments
+        // 2. Top layer (2050mm ~ ceiling): Lintel (full wall)
+
+        const DOOR_HEIGHT = 2050; // 도어 높이
+        const LINTEL_HEIGHT = wallHeightMM - DOOR_HEIGHT; // 인방 높이
+
         // Need BOTH miter corners (for wall ends) and basic corners (for door openings)
         const basicCorners = calculateBasicWallCorners(wall as Wall, pointMap);
 
@@ -825,7 +992,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         const wallLengthMM = Math.sqrt(dx * dx + dy * dy);
 
         wallDoors.forEach((door: any) => {
-          const doorWidthMM = door.width;
+          const doorWidthMM = door.width || 900;
           const halfWidth = doorWidthMM / 2;
           // door.position is 0-1 normalized along wall length
           const openingStart = Math.max(0, door.position - halfWidth / wallLengthMM);
@@ -848,7 +1015,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           }
         });
 
-        // Create segments: wall ends use miter, door openings use basic
+        // === BOTTOM LAYER: Door opening segments (0 ~ 2050mm) ===
         let currentPos = 0;
         let segIndex = 0;
 
@@ -862,11 +1029,12 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
             const segMesh = createWallMeshFromCorners(
               segCorners,
-              wallHeightMM,
+              DOOR_HEIGHT, // 도어 높이까지만
               centerX,
               centerZ,
-              `wall_${wallIndex}_seg_${segIndex++}`,
-              scene
+              `wall_${wallIndex}_lower_seg_${segIndex++}`,
+              scene,
+              0 // 바닥부터 시작
             );
 
             segMesh.material = wallMaterial;
@@ -882,7 +1050,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           currentPos = opening.end;
         });
 
-        // Final segment
+        // Final bottom segment
         if (currentPos < 1) {
           const segStart = currentPos;
           const segEnd = 1;
@@ -891,11 +1059,12 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
           const segMesh = createWallMeshFromCorners(
             segCorners,
-            wallHeightMM,
+            DOOR_HEIGHT,
             centerX,
             centerZ,
-            `wall_${wallIndex}_seg_${segIndex}`,
-            scene
+            `wall_${wallIndex}_lower_seg_${segIndex}`,
+            scene,
+            0
           );
 
           segMesh.material = wallMaterial;
@@ -908,6 +1077,58 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
             shadowGenerator.addShadowCaster(segMesh);
           }
         }
+
+        // === TOP LAYER: Lintel (2050mm ~ ceiling) - Full wall ===
+        if (LINTEL_HEIGHT > 0) {
+          const lintelMesh = createWallMeshFromCorners(
+            corners, // Miter corners for full wall
+            LINTEL_HEIGHT, // 인방 높이
+            centerX,
+            centerZ,
+            `wall_${wallIndex}_lintel`,
+            scene,
+            DOOR_HEIGHT // 도어 높이부터 시작
+          );
+
+          lintelMesh.material = wallMaterial;
+          lintelMesh.receiveShadows = true;
+          lintelMesh.checkCollisions = true;
+
+          wallMeshesRef.current.push(lintelMesh);
+
+          if (shadowGenerator) {
+            shadowGenerator.addShadowCaster(lintelMesh);
+          }
+        }
+
+        // === CREATE DOOR MESHES ===
+        wallDoors.forEach((door: any, doorIndex: number) => {
+          const { doorGroup, doorLeaf, hotspot } = createDoorMesh(
+            door.position,
+            { x: startPoint.x, y: startPoint.y },
+            { x: endPoint.x, y: endPoint.y },
+            wall.thickness,
+            centerX,
+            centerZ,
+            `door_${wallIndex}_${doorIndex}`,
+            scene
+          );
+
+          // Add to shadow caster
+          if (shadowGenerator) {
+            doorGroup.getChildMeshes().forEach((mesh) => {
+              shadowGenerator.addShadowCaster(mesh);
+            });
+          }
+
+          // Store door leaf for interaction
+          doorLeaf.metadata = {
+            ...doorLeaf.metadata,
+            hotspot: hotspot,
+            wallIndex,
+            doorIndex
+          };
+        });
       }
     });
 
@@ -1015,6 +1236,118 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       });
 
       console.log('[Babylon3DCanvas] Created polygon floors for', rooms.length, 'rooms');
+    }
+
+    // === DOOR INTERACTION: Hover and Click ===
+    // Pointer move for hover hotspot
+    const handlePointerMove = (evt: PointerEvent) => {
+      if (!scene) return;
+
+      const pickResult = scene.pick(evt.offsetX, evt.offsetY);
+
+      // Hide all hotspots first
+      scene.meshes.forEach((mesh) => {
+        if (mesh.name.includes('_hotspot') && mesh.material) {
+          (mesh.material as PBRMaterial).alpha = 0;
+        }
+      });
+
+      // Check if hovering over door
+      if (pickResult && pickResult.hit && pickResult.pickedMesh) {
+        const picked = pickResult.pickedMesh;
+
+        // Check if picked mesh is part of door
+        if (picked.name.includes('door_') || picked.name.includes('_panel') || picked.name.includes('_handle')) {
+          // Find parent door leaf
+          let doorLeaf: Mesh | null = null;
+          let current = picked.parent;
+          while (current) {
+            if (current.name.includes('_leaf')) {
+              doorLeaf = current as Mesh;
+              break;
+            }
+            current = current.parent;
+          }
+
+          // Show hotspot
+          if (doorLeaf && doorLeaf.metadata && doorLeaf.metadata.hotspot) {
+            const hotspot = doorLeaf.metadata.hotspot as Mesh;
+            if (hotspot.material) {
+              (hotspot.material as PBRMaterial).alpha = 0.8; // Show hotspot
+            }
+          }
+        }
+      }
+    };
+
+    // Click to open/close door
+    const handlePointerDown = (evt: PointerEvent) => {
+      if (!scene) return;
+
+      const pickResult = scene.pick(evt.offsetX, evt.offsetY);
+
+      if (pickResult && pickResult.hit && pickResult.pickedMesh) {
+        const picked = pickResult.pickedMesh;
+
+        // Check if clicked on door or hotspot
+        if (picked.name.includes('door_') || picked.name.includes('_hotspot') ||
+            picked.name.includes('_panel') || picked.name.includes('_handle')) {
+
+          // Find parent door leaf
+          let doorLeaf: Mesh | null = null;
+          let current = picked.parent;
+          while (current) {
+            if (current.name.includes('_leaf')) {
+              doorLeaf = current as Mesh;
+              break;
+            }
+            current = current.parent;
+          }
+
+          if (doorLeaf && doorLeaf.metadata) {
+            const isOpen = doorLeaf.metadata.isOpen;
+            const targetRotation = isOpen ? 0 : -Math.PI / 2; // 90 degrees
+
+            // Smooth animation
+            const startRotation = doorLeaf.rotation.y;
+            const duration = 500; // 0.5 seconds
+            const startTime = performance.now();
+
+            const animate = () => {
+              const elapsed = performance.now() - startTime;
+              const progress = Math.min(elapsed / duration, 1);
+
+              // Ease-in-out
+              const eased = progress < 0.5
+                ? 2 * progress * progress
+                : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+
+              doorLeaf.rotation.y = startRotation + (targetRotation - startRotation) * eased;
+
+              if (progress < 1) {
+                requestAnimationFrame(animate);
+              } else {
+                // Update state
+                doorLeaf.metadata.isOpen = !isOpen;
+                console.log('[Babylon3DCanvas] Door', doorLeaf.name, isOpen ? 'closed' : 'opened');
+              }
+            };
+
+            animate();
+          }
+        }
+      }
+    };
+
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.addEventListener('pointermove', handlePointerMove as any);
+      canvas.addEventListener('pointerdown', handlePointerDown as any);
+
+      return () => {
+        canvas.removeEventListener('pointermove', handlePointerMove as any);
+        canvas.removeEventListener('pointerdown', handlePointerDown as any);
+      };
     }
   }, [floorplanData]);
 
