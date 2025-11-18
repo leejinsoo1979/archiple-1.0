@@ -6,7 +6,6 @@ import { ToolType } from '../core/types/EditorState';
 import { createTestRoom } from '../floorplan/blueprint/BlueprintToBabylonAdapter';
 import { RxCursorArrow } from 'react-icons/rx';
 import { PiCubeTransparentLight } from 'react-icons/pi';
-import { MdOutlinePhotoCamera } from 'react-icons/md';
 import { eventBus } from '../core/events/EventBus';
 import { EditorEvents } from '../core/events/EditorEvents';
 import type { Light, LightType } from '../core/types/Light';
@@ -509,20 +508,23 @@ const EditorPage = () => {
                   <div className={styles.dropdownSection}>
                     <h4 className={styles.dropdownTitle}>그래픽 설정</h4>
                     <div className={styles.graphicsButtons}>
-                      <button className={styles.graphicsBtn}>효과 우선</button>
-                      <button className={`${styles.graphicsBtn} ${styles.active}`}>성능 우선</button>
+                      <button
+                        className={`${styles.graphicsBtn} ${photoRealisticMode ? styles.active : ''}`}
+                        onClick={() => setPhotoRealisticMode(true)}
+                      >
+                        효과 우선
+                      </button>
+                      <button
+                        className={`${styles.graphicsBtn} ${!photoRealisticMode ? styles.active : ''}`}
+                        onClick={() => setPhotoRealisticMode(false)}
+                      >
+                        성능 우선
+                      </button>
                     </div>
                   </div>
                 </div>
               )}
             </div>
-            <button
-              className={`${styles.topBtn} ${photoRealisticMode ? styles.active : ''}`}
-              title="Photo-Realistic Rendering"
-              onClick={() => setPhotoRealisticMode(!photoRealisticMode)}
-            >
-              <MdOutlinePhotoCamera size={20} />
-            </button>
             <div style={{ position: 'relative' }}>
               <button
                 className={`${styles.topBtn} ${lightPanelOpen ? styles.active : ''}`}
