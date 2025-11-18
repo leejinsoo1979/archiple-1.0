@@ -16,8 +16,11 @@
     "@babylonjs/loaders": "^8.37.0",
     "@types/earcut": "^3.0.0",
     "earcut": "^3.0.2",
+    "opencv.js": "^1.2.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-icons": "^5.5.0",
+    "tesseract.js": "^6.0.1",
     "uuid": "^13.0.0"
   },
   "devDependencies": {

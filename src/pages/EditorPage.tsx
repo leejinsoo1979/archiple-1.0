@@ -5,6 +5,7 @@ import styles from './EditorPage.module.css';
 import { ToolType } from '../core/types/EditorState';
 import { createTestRoom } from '../floorplan/blueprint/BlueprintToBabylonAdapter';
 import { RxCursorArrow } from 'react-icons/rx';
+import { ImageImportPanel } from '../ui/panels/ImageImportPanel';
 
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 
@@ -22,6 +23,7 @@ const EditorPage = () => {
     altitude: 45, // 고도 0-90도
   });
   const [playMode, setPlayMode] = useState(false); // FPS mode toggle
+  const [showImageImport, setShowImageImport] = useState(false); // Image import panel toggle
 
   // Load test room data (2800mm x 2800mm room with 100mm walls)
   const handleLoadTestRoom = () => {
@@ -29,6 +31,14 @@ const EditorPage = () => {
     console.log('[EditorPage] Loading test room:', testData);
     setFloorplanData(testData);
     setViewMode('3D'); // Switch to 3D view to see the result
+  };
+
+  // Handle floorplan generated from image import
+  const handleFloorplanGenerated = (data: any) => {
+    console.log('[EditorPage] Floorplan generated from image:', data);
+    setFloorplanData(data);
+    setViewMode('3D'); // Switch to 3D view to see the result
+    setShowImageImport(false); // Close image import panel
   };
 
   return (
@@ -327,7 +337,7 @@ const EditorPage = () => {
         )}
 
       {/* Left Tools Panel */}
-      {!playMode && leftPanelOpen && (
+      {!playMode && leftPanelOpen && !showImageImport && (
         <div className={styles.leftPanel}>
           <div className={styles.panelHeader}>
             <h3>Create Room</h3>
@@ -343,7 +353,7 @@ const EditorPage = () => {
               </div>
               <span>Explore</span>
             </button>
-            <button className={styles.optionCard}>
+            <button className={styles.optionCard} onClick={() => setShowImageImport(true)}>
               <div className={styles.optionIcon}>
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
@@ -531,6 +541,16 @@ const EditorPage = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Image Import Panel */}
+      {!playMode && showImageImport && (
+        <div className={styles.leftPanel}>
+          <ImageImportPanel
+            onFloorplanGenerated={handleFloorplanGenerated}
+            onClose={() => setShowImageImport(false)}
+          />
         </div>
       )}
 
