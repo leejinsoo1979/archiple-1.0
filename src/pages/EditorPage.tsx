@@ -30,13 +30,9 @@ const EditorPage = () => {
   const [showCharacter, setShowCharacter] = useState(false); // Character toggle
   const [photoRealisticMode, setPhotoRealisticMode] = useState(false); // Photo-realistic rendering
 
-  // Rendering modal and settings
-  const [renderModalOpen, setRenderModalOpen] = useState(false);
-  const [renderInProgress, setRenderInProgress] = useState(false);
-  const [renderProgress, setRenderProgress] = useState(0);
-  const [renderedImage, setRenderedImage] = useState<string | null>(null);
+  // Rendering settings panel (right sidebar)
+  const [renderPanelOpen, setRenderPanelOpen] = useState(false);
   const [renderSettings, setRenderSettings] = useState({
-    resolution: '1920x1080' as '1920x1080' | '2560x1440' | '3840x2160',
     ssaoRadius: 1.0,
     ssaoStrength: 1.3,
     ssrStrength: 0.5,
@@ -101,54 +97,29 @@ const EditorPage = () => {
     // User can manually exit by clicking the button again or switching views
   };
 
-  // Babylon3DCanvas ref for triggering render
+  // Babylon3DCanvas ref for screenshot capture
   const babylon3DCanvasRef = useRef<{ captureRender: (width: number, height: number) => Promise<string> } | null>(null);
 
-  // Start rendering process
-  const handleStartRender = async () => {
+  // Capture and download screenshot
+  const handleCaptureScreenshot = async () => {
     if (!babylon3DCanvasRef.current) {
       alert('3D 뷰를 먼저 로드해주세요.');
       return;
     }
 
-    setRenderInProgress(true);
-    setRenderProgress(0);
-    setRenderedImage(null);
-
     try {
-      // Parse resolution
-      const [width, height] = renderSettings.resolution.split('x').map(Number);
+      // Default to Full HD
+      const imageData = await babylon3DCanvasRef.current.captureRender(1920, 1080);
 
-      // Enable photo-realistic mode
-      setPhotoRealisticMode(true);
-      setRenderProgress(10);
-
-      // Wait for pipeline to initialize
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setRenderProgress(30);
-
-      // Capture render
-      const imageData = await babylon3DCanvasRef.current.captureRender(width, height);
-      setRenderProgress(90);
-
-      setRenderedImage(imageData);
-      setRenderProgress(100);
+      // Download immediately
+      const link = document.createElement('a');
+      link.href = imageData;
+      link.download = `render_${Date.now()}.png`;
+      link.click();
     } catch (error) {
-      console.error('[EditorPage] Render failed:', error);
-      alert('렌더링 실패: ' + (error as Error).message);
-    } finally {
-      setRenderInProgress(false);
+      console.error('[EditorPage] Screenshot failed:', error);
+      alert('스크린샷 실패: ' + (error as Error).message);
     }
-  };
-
-  // Download rendered image
-  const handleDownloadRender = () => {
-    if (!renderedImage) return;
-
-    const link = document.createElement('a');
-    link.href = renderedImage;
-    link.download = `render_${renderSettings.resolution}_${Date.now()}.png`;
-    link.click();
   };
 
   // Close view options dropdown when clicking outside
@@ -942,6 +913,210 @@ const EditorPage = () => {
                 </div>
               )}
             </div>
+            <div style={{ position: 'relative' }}>
+              <button
+                className={`${styles.topBtn} ${renderPanelOpen ? styles.active : ''}`}
+                title="Render Settings"
+                onClick={() => setRenderPanelOpen(!renderPanelOpen)}
+                disabled={!photoRealisticMode}
+                style={{ opacity: photoRealisticMode ? 1 : 0.4 }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+                </svg>
+              </button>
+
+              {renderPanelOpen && photoRealisticMode && (
+                <div className={styles.sunDropdown}>
+                  <div className={styles.dropdownHeader}>
+                    <span>Render Settings</span>
+                    <button onClick={() => setRenderPanelOpen(false)} className={styles.closeBtn}>×</button>
+                  </div>
+                  <div className={styles.dropdownBody}>
+                    {/* SSAO */}
+                    <div className={styles.controlGroup}>
+                      <label>SSAO Radius</label>
+                      <div className={styles.controlInput}>
+                        <input
+                          type="range"
+                          min="0"
+                          max="2"
+                          step="0.1"
+                          value={renderSettings.ssaoRadius}
+                          onChange={(e) => setRenderSettings({...renderSettings, ssaoRadius: parseFloat(e.target.value)})}
+                          className={styles.rangeSlider}
+                        />
+                        <span className={styles.valueDisplay}>{renderSettings.ssaoRadius.toFixed(1)}</span>
+                      </div>
+                    </div>
+
+                    <div className={styles.controlGroup}>
+                      <label>SSAO Strength</label>
+                      <div className={styles.controlInput}>
+                        <input
+                          type="range"
+                          min="0"
+                          max="2"
+                          step="0.1"
+                          value={renderSettings.ssaoStrength}
+                          onChange={(e) => setRenderSettings({...renderSettings, ssaoStrength: parseFloat(e.target.value)})}
+                          className={styles.rangeSlider}
+                        />
+                        <span className={styles.valueDisplay}>{renderSettings.ssaoStrength.toFixed(1)}</span>
+                      </div>
+                    </div>
+
+                    {/* SSR */}
+                    <div className={styles.controlGroup}>
+                      <label>SSR Strength</label>
+                      <div className={styles.controlInput}>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={renderSettings.ssrStrength}
+                          onChange={(e) => setRenderSettings({...renderSettings, ssrStrength: parseFloat(e.target.value)})}
+                          className={styles.rangeSlider}
+                        />
+                        <span className={styles.valueDisplay}>{renderSettings.ssrStrength.toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    {/* Bloom */}
+                    <div className={styles.controlGroup}>
+                      <label>Bloom Threshold</label>
+                      <div className={styles.controlInput}>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={renderSettings.bloomThreshold}
+                          onChange={(e) => setRenderSettings({...renderSettings, bloomThreshold: parseFloat(e.target.value)})}
+                          className={styles.rangeSlider}
+                        />
+                        <span className={styles.valueDisplay}>{renderSettings.bloomThreshold.toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    <div className={styles.controlGroup}>
+                      <label>Bloom Weight</label>
+                      <div className={styles.controlInput}>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={renderSettings.bloomWeight}
+                          onChange={(e) => setRenderSettings({...renderSettings, bloomWeight: parseFloat(e.target.value)})}
+                          className={styles.rangeSlider}
+                        />
+                        <span className={styles.valueDisplay}>{renderSettings.bloomWeight.toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    {/* DOF */}
+                    <div className={styles.controlGroup}>
+                      <label>DOF Focus (mm)</label>
+                      <div className={styles.controlInput}>
+                        <input
+                          type="range"
+                          min="1000"
+                          max="10000"
+                          step="100"
+                          value={renderSettings.dofFocusDistance}
+                          onChange={(e) => setRenderSettings({...renderSettings, dofFocusDistance: parseFloat(e.target.value)})}
+                          className={styles.rangeSlider}
+                        />
+                        <span className={styles.valueDisplay}>{renderSettings.dofFocusDistance}</span>
+                      </div>
+                    </div>
+
+                    <div className={styles.controlGroup}>
+                      <label>DOF F-Stop</label>
+                      <div className={styles.controlInput}>
+                        <input
+                          type="range"
+                          min="1"
+                          max="22"
+                          step="0.1"
+                          value={renderSettings.dofFStop}
+                          onChange={(e) => setRenderSettings({...renderSettings, dofFStop: parseFloat(e.target.value)})}
+                          className={styles.rangeSlider}
+                        />
+                        <span className={styles.valueDisplay}>f/{renderSettings.dofFStop.toFixed(1)}</span>
+                      </div>
+                    </div>
+
+                    {/* Effects */}
+                    <div className={styles.controlGroup}>
+                      <label>Chromatic Aberration</label>
+                      <div className={styles.controlInput}>
+                        <input
+                          type="range"
+                          min="0"
+                          max="10"
+                          step="0.5"
+                          value={renderSettings.chromaticAberration}
+                          onChange={(e) => setRenderSettings({...renderSettings, chromaticAberration: parseFloat(e.target.value)})}
+                          className={styles.rangeSlider}
+                        />
+                        <span className={styles.valueDisplay}>{renderSettings.chromaticAberration.toFixed(1)}</span>
+                      </div>
+                    </div>
+
+                    <div className={styles.controlGroup}>
+                      <label>Film Grain</label>
+                      <div className={styles.controlInput}>
+                        <input
+                          type="range"
+                          min="0"
+                          max="20"
+                          step="0.5"
+                          value={renderSettings.grainIntensity}
+                          onChange={(e) => setRenderSettings({...renderSettings, grainIntensity: parseFloat(e.target.value)})}
+                          className={styles.rangeSlider}
+                        />
+                        <span className={styles.valueDisplay}>{renderSettings.grainIntensity.toFixed(1)}</span>
+                      </div>
+                    </div>
+
+                    <div className={styles.controlGroup}>
+                      <label>Vignette</label>
+                      <div className={styles.controlInput}>
+                        <input
+                          type="range"
+                          min="0"
+                          max="3"
+                          step="0.1"
+                          value={renderSettings.vignetteWeight}
+                          onChange={(e) => setRenderSettings({...renderSettings, vignetteWeight: parseFloat(e.target.value)})}
+                          className={styles.rangeSlider}
+                        />
+                        <span className={styles.valueDisplay}>{renderSettings.vignetteWeight.toFixed(1)}</span>
+                      </div>
+                    </div>
+
+                    <div className={styles.controlGroup}>
+                      <label>Sharpen</label>
+                      <div className={styles.controlInput}>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={renderSettings.sharpenAmount}
+                          onChange={(e) => setRenderSettings({...renderSettings, sharpenAmount: parseFloat(e.target.value)})}
+                          className={styles.rangeSlider}
+                        />
+                        <span className={styles.valueDisplay}>{renderSettings.sharpenAmount.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <button className={styles.topBtn} title="Material">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
@@ -1049,13 +1224,22 @@ const EditorPage = () => {
               </svg>
             </button>
             <button
-              className={styles.topBtn}
-              title="Render Image"
-              onClick={() => setRenderModalOpen(true)}
+              className={`${styles.topBtn} ${photoRealisticMode ? styles.active : ''}`}
+              title="Photo-Realistic Rendering"
+              onClick={() => setPhotoRealisticMode(!photoRealisticMode)}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <circle cx="12" cy="12" r="3.2"/>
                 <path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
+              </svg>
+            </button>
+            <button
+              className={styles.topBtn}
+              title="Capture Screenshot"
+              onClick={handleCaptureScreenshot}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/>
               </svg>
             </button>
 
@@ -2081,228 +2265,6 @@ const EditorPage = () => {
               <input type="text" defaultValue="120 mm" />
             </div>
             <button className={styles.editBtn}>Edit Floor ›</button>
-          </div>
-        </div>
-      )}
-
-      {/* Rendering Modal */}
-      {renderModalOpen && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10000,
-        }}>
-          <div style={{
-            backgroundColor: '#1e1e1e',
-            borderRadius: '12px',
-            padding: '30px',
-            width: '600px',
-            maxWidth: '90vw',
-            maxHeight: '90vh',
-            overflow: 'auto',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
-              <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 600, color: '#fff' }}>Photo-Realistic Render</h2>
-              <button
-                onClick={() => {
-                  setRenderModalOpen(false);
-                  setRenderedImage(null);
-                  setRenderProgress(0);
-                }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '28px',
-                  color: '#999',
-                  cursor: 'pointer',
-                  padding: 0,
-                  lineHeight: 1,
-                }}
-              >×</button>
-            </div>
-
-            {!renderedImage && !renderInProgress && (
-              <>
-                {/* Resolution */}
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ display: 'block', marginBottom: '8px', color: '#ccc', fontSize: '14px', fontWeight: 500 }}>해상도</label>
-                  <select
-                    value={renderSettings.resolution}
-                    onChange={(e) => setRenderSettings({...renderSettings, resolution: e.target.value as any})}
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      backgroundColor: '#2a2a2a',
-                      border: '1px solid #444',
-                      borderRadius: '6px',
-                      color: '#fff',
-                      fontSize: '14px',
-                    }}
-                  >
-                    <option value="1920x1080">Full HD (1920 x 1080)</option>
-                    <option value="2560x1440">2K (2560 x 1440)</option>
-                    <option value="3840x2160">4K (3840 x 2160)</option>
-                  </select>
-                </div>
-
-                {/* Settings */}
-                <div style={{ marginBottom: '25px' }}>
-                  <h3 style={{ fontSize: '16px', color: '#fff', marginBottom: '15px', fontWeight: 600 }}>렌더링 설정</h3>
-
-                  <div style={{ display: 'grid', gap: '15px' }}>
-                    {/* SSAO */}
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '6px', color: '#aaa', fontSize: '13px' }}>SSAO Strength</label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="2"
-                        step="0.1"
-                        value={renderSettings.ssaoStrength}
-                        onChange={(e) => setRenderSettings({...renderSettings, ssaoStrength: parseFloat(e.target.value)})}
-                        style={{ width: '100%' }}
-                      />
-                      <span style={{ color: '#888', fontSize: '12px' }}>{renderSettings.ssaoStrength.toFixed(1)}</span>
-                    </div>
-
-                    {/* Bloom */}
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '6px', color: '#aaa', fontSize: '13px' }}>Bloom Weight</label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.05"
-                        value={renderSettings.bloomWeight}
-                        onChange={(e) => setRenderSettings({...renderSettings, bloomWeight: parseFloat(e.target.value)})}
-                        style={{ width: '100%' }}
-                      />
-                      <span style={{ color: '#888', fontSize: '12px' }}>{renderSettings.bloomWeight.toFixed(2)}</span>
-                    </div>
-
-                    {/* DOF F-Stop */}
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '6px', color: '#aaa', fontSize: '13px' }}>DOF F-Stop</label>
-                      <input
-                        type="range"
-                        min="1"
-                        max="22"
-                        step="0.1"
-                        value={renderSettings.dofFStop}
-                        onChange={(e) => setRenderSettings({...renderSettings, dofFStop: parseFloat(e.target.value)})}
-                        style={{ width: '100%' }}
-                      />
-                      <span style={{ color: '#888', fontSize: '12px' }}>f/{renderSettings.dofFStop.toFixed(1)}</span>
-                    </div>
-
-                    {/* Grain */}
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '6px', color: '#aaa', fontSize: '13px' }}>Film Grain</label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="20"
-                        step="0.5"
-                        value={renderSettings.grainIntensity}
-                        onChange={(e) => setRenderSettings({...renderSettings, grainIntensity: parseFloat(e.target.value)})}
-                        style={{ width: '100%' }}
-                      />
-                      <span style={{ color: '#888', fontSize: '12px' }}>{renderSettings.grainIntensity.toFixed(1)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Start Render Button */}
-                <button
-                  onClick={handleStartRender}
-                  style={{
-                    width: '100%',
-                    padding: '16px',
-                    backgroundColor: '#2196f3',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '16px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    transition: 'background-color 0.2s',
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1976d2'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#2196f3'}
-                >
-                  렌더링 시작
-                </button>
-              </>
-            )}
-
-            {/* Rendering Progress */}
-            {renderInProgress && (
-              <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                <div style={{ marginBottom: '20px' }}>
-                  <div style={{
-                    width: '100%',
-                    height: '8px',
-                    backgroundColor: '#333',
-                    borderRadius: '4px',
-                    overflow: 'hidden',
-                  }}>
-                    <div style={{
-                      width: `${renderProgress}%`,
-                      height: '100%',
-                      backgroundColor: '#2196f3',
-                      transition: 'width 0.3s ease',
-                    }} />
-                  </div>
-                  <p style={{ marginTop: '12px', color: '#ccc', fontSize: '14px' }}>{renderProgress}%</p>
-                </div>
-                <p style={{ color: '#999', fontSize: '14px' }}>렌더링 중...</p>
-              </div>
-            )}
-
-            {/* Rendered Image */}
-            {renderedImage && !renderInProgress && (
-              <div>
-                <div style={{
-                  marginBottom: '20px',
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  backgroundColor: '#000',
-                }}>
-                  <img
-                    src={renderedImage}
-                    alt="Rendered"
-                    style={{ width: '100%', display: 'block' }}
-                  />
-                </div>
-                <button
-                  onClick={handleDownloadRender}
-                  style={{
-                    width: '100%',
-                    padding: '16px',
-                    backgroundColor: '#4caf50',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '16px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    transition: 'background-color 0.2s',
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#45a049'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#4caf50'}
-                >
-                  이미지 다운로드
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}
