@@ -1023,6 +1023,34 @@ const EditorPage = () => {
                         >
                           극대
                         </button>
+                        <button
+                          onClick={() => setRenderSettings({
+                            ssaoRadius: 3.0, // Beyond slider max (2.0)
+                            ssaoStrength: 3.0, // Beyond slider max (2.0)
+                            ssrStrength: 1.0,
+                            bloomThreshold: 0.1, // Very low = maximum bloom
+                            bloomWeight: 2.0, // Beyond slider max (1.0)
+                            dofFocusDistance: 2000, // Very close focus
+                            dofFStop: 1.0, // Minimum f-stop = maximum blur
+                            chromaticAberration: 30, // Beyond slider max (10)
+                            grainIntensity: 50, // Beyond slider max (20)
+                            vignetteWeight: 5.0, // Beyond slider max (3.0)
+                            sharpenAmount: 2.0, // Beyond slider max (1.0)
+                          })}
+                          style={{
+                            flex: 1,
+                            padding: '8px',
+                            backgroundColor: '#8b0000', // Dark red to indicate "extreme"
+                            color: '#fff',
+                            border: '1px solid #ff0000',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: 'bold',
+                          }}
+                        >
+                          슈퍼극대
+                        </button>
                       </div>
                     </div>
 
