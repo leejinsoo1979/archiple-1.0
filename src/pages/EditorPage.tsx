@@ -543,17 +543,21 @@ const EditorPage = () => {
                     <button onClick={() => setLightPanelOpen(false)} className={styles.closeBtn}>×</button>
                   </div>
                   <div className={styles.dropdownBody}>
-                    {/* Light Type Selection */}
+                    {/* Add Light Buttons - Click to place directly */}
                     <div className={styles.controlGroup}>
-                      <label>Light Type</label>
+                      <label>조명 추가 (3D 뷰에서 클릭)</label>
                       <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                         <button
-                          onClick={() => setSelectedLightType('point')}
+                          onClick={() => {
+                            setSelectedLightType('point');
+                            setLightPlacementMode(true);
+                            setViewMode('3D');
+                          }}
                           style={{
                             flex: 1,
                             padding: '10px',
-                            background: selectedLightType === 'point' ? '#3fae7a' : '#f5f5f5',
-                            color: selectedLightType === 'point' ? 'white' : '#666',
+                            background: lightPlacementMode && selectedLightType === 'point' ? '#e74c3c' : '#3fae7a',
+                            color: 'white',
                             border: 'none',
                             borderRadius: '4px',
                             fontSize: '13px',
@@ -562,15 +566,19 @@ const EditorPage = () => {
                             transition: 'all 0.2s',
                           }}
                         >
-                          💡 포인트
+                          포인트
                         </button>
                         <button
-                          onClick={() => setSelectedLightType('spot')}
+                          onClick={() => {
+                            setSelectedLightType('spot');
+                            setLightPlacementMode(true);
+                            setViewMode('3D');
+                          }}
                           style={{
                             flex: 1,
                             padding: '10px',
-                            background: selectedLightType === 'spot' ? '#3fae7a' : '#f5f5f5',
-                            color: selectedLightType === 'spot' ? 'white' : '#666',
+                            background: lightPlacementMode && selectedLightType === 'spot' ? '#e74c3c' : '#3fae7a',
+                            color: 'white',
                             border: 'none',
                             borderRadius: '4px',
                             fontSize: '13px',
@@ -579,15 +587,19 @@ const EditorPage = () => {
                             transition: 'all 0.2s',
                           }}
                         >
-                          🔦 스포트
+                          스포트
                         </button>
                         <button
-                          onClick={() => setSelectedLightType('directional')}
+                          onClick={() => {
+                            setSelectedLightType('directional');
+                            setLightPlacementMode(true);
+                            setViewMode('3D');
+                          }}
                           style={{
                             flex: 1,
                             padding: '10px',
-                            background: selectedLightType === 'directional' ? '#3fae7a' : '#f5f5f5',
-                            color: selectedLightType === 'directional' ? 'white' : '#666',
+                            background: lightPlacementMode && selectedLightType === 'directional' ? '#e74c3c' : '#3fae7a',
+                            color: 'white',
                             border: 'none',
                             borderRadius: '4px',
                             fontSize: '13px',
@@ -596,35 +608,22 @@ const EditorPage = () => {
                             transition: 'all 0.2s',
                           }}
                         >
-                          ☀️ 방향성
+                          방향성
                         </button>
                       </div>
-                    </div>
-
-                    {/* Placement Mode Button */}
-                    <div className={styles.controlGroup}>
-                      <button
-                        onClick={() => {
-                          setLightPlacementMode(!lightPlacementMode);
-                          if (!lightPlacementMode) {
-                            setViewMode('3D'); // Switch to 3D for placement
-                          }
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '12px',
-                          background: lightPlacementMode ? '#e74c3c' : '#3fae7a',
-                          color: 'white',
-                          border: 'none',
+                      {lightPlacementMode && (
+                        <div style={{
+                          marginTop: '8px',
+                          padding: '8px',
+                          background: '#fff3cd',
+                          border: '1px solid #ffc107',
                           borderRadius: '4px',
-                          fontSize: '14px',
-                          fontWeight: '500',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s',
-                        }}
-                      >
-                        {lightPlacementMode ? '배치 모드 종료' : '3D 뷰에서 배치하기'}
-                      </button>
+                          fontSize: '12px',
+                          color: '#856404',
+                        }}>
+                          3D 뷰에서 원하는 위치를 클릭하세요
+                        </div>
+                      )}
                     </div>
 
                     {/* Light List */}
@@ -660,7 +659,7 @@ const EditorPage = () => {
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div style={{ flex: 1 }}>
                                   <div style={{ fontSize: '13px', fontWeight: '500', color: '#333', marginBottom: '4px' }}>
-                                    {light.type === 'point' ? '💡' : light.type === 'spot' ? '🔦' : '☀️'} {light.name}
+                                    [{light.type === 'point' ? '포인트' : light.type === 'spot' ? '스포트' : '방향성'}] {light.name}
                                   </div>
                                   <div style={{ fontSize: '11px', color: '#999' }}>
                                     강도: {light.intensity.toFixed(1)} | {light.enabled ? '켜짐' : '꺼짐'}
