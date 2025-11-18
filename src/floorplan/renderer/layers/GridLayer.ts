@@ -63,16 +63,25 @@ export class GridLayer extends BaseLayer {
     const viewRight = (this.width - transform.e) * invZoom;
     const viewBottom = (this.height - transform.f) * invZoom;
 
-    // Fill background - FULLY OPAQUE (3D GridMaterial opacity applies to entire material, not background)
+    // Fill background - FULLY OPAQUE
     const margin = Math.max(this.width, this.height) * invZoom;
     ctx.fillStyle = this.config.backgroundColor;
     ctx.fillRect(viewLeft - margin, viewTop - margin, (viewRight - viewLeft) + margin * 2, (viewBottom - viewTop) + margin * 2);
 
-    // Draw minor grid with 30% opacity (matches 3D minorUnitVisibility: 0.3)
-    this.drawGrid(ctx, this.config.gridSize, this.config.minorColor, 1, viewLeft, viewTop, viewRight, viewBottom, 0.3);
+    // Adaptive opacity based on zoom for better visibility
+    // At low zoom (zoomed out), increase opacity so grid is still visible
+    let gridOpacity = 1.0;
+    if (zoom < 0.05) {
+      gridOpacity = 1.0; // Full opacity when very zoomed out
+    } else if (zoom < 0.5) {
+      gridOpacity = 0.8 + (zoom / 0.5) * 0.2; // Fade from 0.8 to 1.0
+    }
 
-    // Draw major grid with full opacity (matches 3D major lines)
-    this.drawGrid(ctx, this.config.majorGridSize, this.config.majorColor, 2, viewLeft, viewTop, viewRight, viewBottom, 1.0);
+    // Draw minor grid (10cm) - lighter and thinner
+    this.drawGrid(ctx, this.config.gridSize, this.config.minorColor, 1, viewLeft, viewTop, viewRight, viewBottom, gridOpacity * 0.5);
+
+    // Draw major grid (1m) - darker and thicker for visibility
+    this.drawGrid(ctx, this.config.majorGridSize, this.config.majorColor, 2, viewLeft, viewTop, viewRight, viewBottom, gridOpacity);
 
     this.resetOpacity(ctx);
   }

@@ -379,19 +379,27 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         // CRITICAL: Disable backface culling to see inside of box
         skyMaterial.backFaceCulling = false;
 
-        // Sky appearance settings
-        skyMaterial.turbidity = 10; // Atmospheric haze (1-20, higher = hazier)
+        // Realistic sky appearance settings
+        skyMaterial.turbidity = 3; // Clear sky (1-20, lower = clearer)
         skyMaterial.luminance = 1.0; // Overall brightness (0-1)
-        skyMaterial.rayleigh = 2.0; // Blue sky scattering (0-4)
-        skyMaterial.mieCoefficient = 0.005; // Cloud scattering (0-0.1)
-        skyMaterial.mieDirectionalG = 0.8; // Cloud directness (0-1)
+        skyMaterial.rayleigh = 3.0; // Strong blue sky scattering (0-4)
+        skyMaterial.mieCoefficient = 0.003; // Subtle cloud scattering (0-0.1)
+        skyMaterial.mieDirectionalG = 0.82; // Cloud sharpness (0-1)
+        skyMaterial.useSunPosition = true; // Use sun position for realistic lighting
 
         // Sun position for lighting (matches directional light)
         const azimuth = sunSettings?.azimuth ?? 45;
         const altitude = sunSettings?.altitude ?? 45;
 
-        skyMaterial.azimuth = azimuth / 360; // 0-1 normalized
-        skyMaterial.inclination = (90 - altitude) / 180; // 0-1 normalized (0=zenith, 0.5=horizon)
+        // Convert to 3D position for realistic sun position
+        const azimuthRad = (azimuth * Math.PI) / 180;
+        const altitudeRad = (altitude * Math.PI) / 180;
+
+        const sunX = Math.cos(altitudeRad) * Math.sin(azimuthRad);
+        const sunY = Math.sin(altitudeRad);
+        const sunZ = Math.cos(altitudeRad) * Math.cos(azimuthRad);
+
+        skyMaterial.sunPosition = new Vector3(sunX, sunY, sunZ);
 
         // Apply material
         skybox.material = skyMaterial;
@@ -951,13 +959,18 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     sunLight.position.set(x, y, z);
     sunLight.intensity = intensity;
 
-    // Update skybox sun position
+    // Update skybox sun position with Vector3 for realistic appearance
     const skybox = scene.getMeshByName('skybox');
     if (skybox && skybox.material instanceof SkyMaterial) {
       const skyMaterial = skybox.material as SkyMaterial;
-      skyMaterial.azimuth = azimuth / 360; // 0-1 normalized
-      skyMaterial.inclination = (90 - altitude) / 180; // 0-1 normalized
-      console.log('[Babylon3DCanvas] Skybox updated - azimuth:', azimuth, 'altitude:', altitude);
+
+      // Convert azimuth/altitude to Vector3 (matching createSkybox logic)
+      const sunX = Math.cos(altitudeRad) * Math.sin(azimuthRad);
+      const sunY = Math.sin(altitudeRad);
+      const sunZ = Math.cos(altitudeRad) * Math.cos(azimuthRad);
+
+      skyMaterial.sunPosition = new Vector3(sunX, sunY, sunZ);
+      console.log('[Babylon3DCanvas] Skybox updated - sunPosition:', sunX.toFixed(2), sunY.toFixed(2), sunZ.toFixed(2));
     }
   }, [sunSettings]);
 

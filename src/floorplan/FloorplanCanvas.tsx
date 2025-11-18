@@ -141,11 +141,11 @@ const FloorplanCanvas = ({
     backgroundLayerRef.current = backgroundLayer;
 
     const gridLayer = new GridLayer({
-      gridSize: 1000, // 1000mm = 1m minor grid (same as 3D gridRatio: 1.0)
-      majorGridSize: 10000, // 10000mm = 10m major grid (same as 3D majorUnitFrequency: 10)
-      minorColor: '#999999', // Dark gray minor lines (30% opacity effect)
-      majorColor: '#666666', // Darker gray major lines (matches 3D lineColor: 0.4, 0.4, 0.4)
-      backgroundColor: '#CCCCCC', // Light gray background (matches 3D mainColor: 0.8, 0.8, 0.8)
+      gridSize: 100, // 100mm = 10cm minor grid
+      majorGridSize: 1000, // 1000mm = 1m major grid (matches 3D 1m spacing visually)
+      minorColor: '#e0e0e0', // Light gray minor lines (subtle)
+      majorColor: '#999999', // Medium gray major lines (clear but not too dark)
+      backgroundColor: '#f5f5f5', // Very light gray background (clean look)
     });
     gridLayer.setSize(canvas.width, canvas.height);
     gridLayerRef.current = gridLayer;
