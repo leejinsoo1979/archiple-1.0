@@ -210,22 +210,48 @@ export function calculateWallCorners(
 
       // 각도가 너무 작으면 miter 적용 안 함 (일직선)
       if (Math.abs(miterAngle) > 0.01) {
-        // 절단면과 벽 수직선 사이 각도
-        const cutAngle = Math.PI / 2 - Math.abs(miterAngle);
+        // miterAngle > 0: 왼쪽으로 회전 → startLeft가 바깥쪽
+        // miterAngle < 0: 오른쪽으로 회전 → startRight가 바깥쪽
+        const isLeftOuter = miterAngle > 0;
 
-        // 모서리별 offset: 바깥쪽은 더 많이, 안쪽은 덜 이동
-        const offsetOuter = t + t * Math.tan(cutAngle);
-        const offsetInner = t - t * Math.tan(cutAngle);
+        // 연결된 벽의 perpendicular
+        const connectedPerp = {
+          x: -adjustedConnectedDir.z,
+          z: adjustedConnectedDir.x,
+        };
 
-        // miterAngle이 음수면 오른쪽이 바깥, 양수면 왼쪽이 바깥
-        const offsetLeft = miterAngle < 0 ? offsetInner : offsetOuter;
-        const offsetRight = miterAngle < 0 ? offsetOuter : offsetInner;
+        // 연결된 벽의 바깥쪽 모서리 시작점
+        // (왼쪽 회전이면 연결 벽의 오른쪽이 바깥, 오른쪽 회전이면 연결 벽의 왼쪽이 바깥)
+        const connectedOuterStart = {
+          x: startPoint.x + connectedPerp.x * (isLeftOuter ? -t : t),
+          z: startPoint.y + connectedPerp.z * (isLeftOuter ? -t : t),
+        };
 
-        // 시작점 코너들을 벽 방향으로 각각 다른 거리만큼 이동
-        corners.startLeft.x -= wallDir.x * offsetLeft;
-        corners.startLeft.z -= wallDir.z * offsetLeft;
-        corners.startRight.x -= wallDir.x * offsetRight;
-        corners.startRight.z -= wallDir.z * offsetRight;
+        // 현재 벽의 바깥쪽 모서리 시작점
+        const currentOuterStart = isLeftOuter ? corners.startLeft : corners.startRight;
+
+        // 두 바깥 모서리선의 교점 계산
+        // Line 1: currentOuterStart + s * (-wallDir) [뒤 방향]
+        // Line 2: connectedOuterStart + u * adjustedConnectedDir
+        const det = -wallDir.x * adjustedConnectedDir.z - (-wallDir.z) * adjustedConnectedDir.x;
+
+        if (Math.abs(det) > 0.001) {
+          const dx = connectedOuterStart.x - currentOuterStart.x;
+          const dz = connectedOuterStart.z - currentOuterStart.z;
+          const s = (dx * adjustedConnectedDir.z - dz * adjustedConnectedDir.x) / det;
+
+          const intersection = {
+            x: currentOuterStart.x + s * (-wallDir.x),
+            z: currentOuterStart.z + s * (-wallDir.z),
+          };
+
+          // 바깥쪽 코너를 교점으로 설정, 안쪽 코너는 유지
+          if (isLeftOuter) {
+            corners.startLeft = intersection;
+          } else {
+            corners.startRight = intersection;
+          }
+        }
       }
     }
   }
@@ -246,21 +272,47 @@ export function calculateWallCorners(
       const miterAngle = calculateMiterAngle(wallDir, adjustedConnectedDir, true);
 
       if (Math.abs(miterAngle) > 0.01) {
-        // 절단면과 벽 수직선 사이 각도
-        const cutAngle = Math.PI / 2 - Math.abs(miterAngle);
+        // miterAngle > 0: 왼쪽으로 회전 → endLeft가 바깥쪽
+        // miterAngle < 0: 오른쪽으로 회전 → endRight가 바깥쪽
+        const isLeftOuter = miterAngle > 0;
 
-        // 모서리별 offset
-        const offsetOuter = t + t * Math.tan(cutAngle);
-        const offsetInner = t - t * Math.tan(cutAngle);
+        // 연결된 벽의 perpendicular
+        const connectedPerp = {
+          x: -adjustedConnectedDir.z,
+          z: adjustedConnectedDir.x,
+        };
 
-        const offsetLeft = miterAngle < 0 ? offsetInner : offsetOuter;
-        const offsetRight = miterAngle < 0 ? offsetOuter : offsetInner;
+        // 연결된 벽의 바깥쪽 모서리 시작점
+        const connectedOuterStart = {
+          x: endPoint.x + connectedPerp.x * (isLeftOuter ? -t : t),
+          z: endPoint.y + connectedPerp.z * (isLeftOuter ? -t : t),
+        };
 
-        // 끝점 코너들을 벽 방향으로 각각 다른 거리만큼 이동
-        corners.endLeft.x += wallDir.x * offsetLeft;
-        corners.endLeft.z += wallDir.z * offsetLeft;
-        corners.endRight.x += wallDir.x * offsetRight;
-        corners.endRight.z += wallDir.z * offsetRight;
+        // 현재 벽의 바깥쪽 모서리 끝점
+        const currentOuterEnd = isLeftOuter ? corners.endLeft : corners.endRight;
+
+        // 두 바깥 모서리선의 교점 계산
+        // Line 1: currentOuterEnd + s * wallDir [앞 방향]
+        // Line 2: connectedOuterStart + u * adjustedConnectedDir
+        const det = wallDir.x * adjustedConnectedDir.z - wallDir.z * adjustedConnectedDir.x;
+
+        if (Math.abs(det) > 0.001) {
+          const dx = connectedOuterStart.x - currentOuterEnd.x;
+          const dz = connectedOuterStart.z - currentOuterEnd.z;
+          const s = (dx * adjustedConnectedDir.z - dz * adjustedConnectedDir.x) / det;
+
+          const intersection = {
+            x: currentOuterEnd.x + s * wallDir.x,
+            z: currentOuterEnd.z + s * wallDir.z,
+          };
+
+          // 바깥쪽 코너를 교점으로 설정, 안쪽 코너는 유지
+          if (isLeftOuter) {
+            corners.endLeft = intersection;
+          } else {
+            corners.endRight = intersection;
+          }
+        }
       }
     }
   }
