@@ -19,7 +19,9 @@ import {
   Mesh,
   SceneLoader,
   AbstractMesh,
-  FollowCamera
+  FollowCamera,
+  DefaultRenderingPipeline,
+  ImageProcessingConfiguration
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials/grid';
 import { SkyMaterial } from '@babylonjs/materials/sky';
@@ -54,6 +56,7 @@ interface Babylon3DCanvasProps {
   playMode?: boolean;
   showCharacter?: boolean;
   glbModelFile?: File | null;
+  photoRealisticMode?: boolean;
 }
 
 // 2D 좌표(mm)를 Babylon 미터 단위로 변환
@@ -183,7 +186,7 @@ const findNearestWallSnap = (
   return { x, z };
 };
 
-const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode = false, showCharacter = false, glbModelFile }: Babylon3DCanvasProps) => {
+const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode = false, showCharacter = false, glbModelFile, photoRealisticMode = false }: Babylon3DCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const sceneRef = useRef<Scene | null>(null);
@@ -195,6 +198,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
   // const animationsRef = useRef<AnimationGroup[]>([]);
   const loadedModelRef = useRef<AbstractMesh | null>(null); // Store loaded GLB model
   const wallMeshesRef = useRef<Mesh[]>([]); // Store wall meshes for snap detection
+  const pipelineRef = useRef<DefaultRenderingPipeline | null>(null); // Store rendering pipeline
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1950,6 +1954,135 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       URL.revokeObjectURL(objectUrl);
     };
   }, [glbModelFile]); // Remove floorplanData dependency - GLB can load independently
+
+  // Photo-realistic rendering pipeline
+  useEffect(() => {
+    const scene = sceneRef.current;
+    const sunLight = sunLightRef.current;
+
+    if (!scene) return;
+
+    console.log('[Babylon3DCanvas] Photo-realistic mode:', photoRealisticMode);
+
+    if (photoRealisticMode) {
+      // Create high-quality rendering pipeline
+      if (!pipelineRef.current) {
+        console.log('[Babylon3DCanvas] Creating photo-realistic rendering pipeline...');
+
+        const pipeline = new DefaultRenderingPipeline(
+          'photoRealisticPipeline',
+          true, // HDR enabled
+          scene,
+          scene.cameras
+        );
+
+        pipelineRef.current = pipeline;
+
+        // Enable SSAO (Screen Space Ambient Occlusion) for realistic shadows
+        pipeline.ssaoEnabled = true;
+        if (pipeline.ssao2) {
+          pipeline.ssao2.radius = 1.0;
+          pipeline.ssao2.totalStrength = 1.3;
+          pipeline.ssao2.expensiveBlur = true;
+          pipeline.ssao2.samples = 32;
+          pipeline.ssao2.maxZ = 250;
+        }
+
+        // Enable Screen Space Reflections
+        pipeline.screenSpaceReflectionsEnabled = true;
+        if (pipeline.screenSpaceReflections) {
+          pipeline.screenSpaceReflections.strength = 0.5;
+          pipeline.screenSpaceReflections.reflectionSpecularFalloffExponent = 3;
+          pipeline.screenSpaceReflections.threshold = 0.5;
+          pipeline.screenSpaceReflections.roughnessFactor = 0.1;
+        }
+
+        // Enable Bloom for bright highlights
+        pipeline.bloomEnabled = true;
+        if (pipeline.bloom) {
+          pipeline.bloom.threshold = 0.8;
+          pipeline.bloom.weight = 0.3;
+          pipeline.bloom.kernel = 64;
+        }
+
+        // Enable Depth of Field for camera focus effect
+        pipeline.depthOfFieldEnabled = true;
+        if (pipeline.depthOfField) {
+          pipeline.depthOfField.focusDistance = 5000; // 5m focus distance
+          pipeline.depthOfField.focalLength = 50; // 50mm lens
+          pipeline.depthOfField.fStop = 2.8; // f/2.8 aperture
+        }
+
+        // Enable Image Processing with advanced tone mapping
+        pipeline.imageProcessingEnabled = true;
+        if (pipeline.imageProcessing) {
+          pipeline.imageProcessing.toneMappingEnabled = true;
+          pipeline.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES; // ACES tone mapping
+          pipeline.imageProcessing.exposure = 1.0;
+          pipeline.imageProcessing.contrast = 1.1;
+          pipeline.imageProcessing.vignetteEnabled = true;
+          pipeline.imageProcessing.vignetteWeight = 1.5;
+          pipeline.imageProcessing.vignetteStretch = 0.5;
+          pipeline.imageProcessing.vignetteColor = new Color4(0, 0, 0, 0);
+          pipeline.imageProcessing.vignetteCameraFov = 0.8;
+        }
+
+        // Enable Chromatic Aberration for lens effect
+        pipeline.chromaticAberrationEnabled = true;
+        if (pipeline.chromaticAberration) {
+          pipeline.chromaticAberration.aberrationAmount = 30;
+        }
+
+        // Enable Grain for film-like quality
+        pipeline.grainEnabled = true;
+        if (pipeline.grain) {
+          pipeline.grain.intensity = 10;
+          pipeline.grain.animated = true;
+        }
+
+        // Sharpen for enhanced detail
+        pipeline.sharpenEnabled = true;
+        if (pipeline.sharpen) {
+          pipeline.sharpen.edgeAmount = 0.3;
+          pipeline.sharpen.colorAmount = 0.3;
+        }
+
+        console.log('[Babylon3DCanvas] ✅ Photo-realistic pipeline created with SSAO, SSR, Bloom, DOF, ACES tone mapping');
+      }
+
+      // Upgrade shadow quality
+      if (sunLight) {
+        const shadowGen = sunLight.getShadowGenerator();
+        if (shadowGen) {
+          shadowGen.mapSize = 4096; // Increase from 2048 to 4096
+          shadowGen.filteringQuality = ShadowGenerator.QUALITY_HIGH;
+          shadowGen.contactHardeningLightSizeUVRatio = 0.05;
+          shadowGen.darkness = 0.4;
+          console.log('[Babylon3DCanvas] ✅ Shadow quality upgraded to 4096x4096');
+        }
+      }
+
+    } else {
+      // Disable photo-realistic pipeline
+      if (pipelineRef.current) {
+        console.log('[Babylon3DCanvas] Disabling photo-realistic pipeline...');
+        pipelineRef.current.dispose();
+        pipelineRef.current = null;
+        console.log('[Babylon3DCanvas] ✅ Photo-realistic pipeline disabled');
+      }
+
+      // Restore standard shadow quality
+      if (sunLight) {
+        const shadowGen = sunLight.getShadowGenerator();
+        if (shadowGen) {
+          shadowGen.mapSize = 2048; // Standard quality
+          shadowGen.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
+          shadowGen.darkness = 0.3;
+          console.log('[Babylon3DCanvas] ✅ Shadow quality restored to standard');
+        }
+      }
+    }
+  }, [photoRealisticMode]);
 
   return (
     <div className={styles.container}>
