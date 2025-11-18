@@ -198,7 +198,9 @@ export function calculateWallCorners(
     if (connectedDir) {
       const atStart = connections.startConnected.atStart;
 
-      // 연결된 벽의 방향 (연결 지점 기준)
+      // 연결된 벽의 방향 조정 (연결 지점 기준)
+      // atStart=true: 연결된 벽의 시작점이 연결점 → 벽이 나가는 방향
+      // atStart=false: 연결된 벽의 끝점이 연결점 → 벽이 들어오는 방향 (반대로)
       const adjustedConnectedDir = atStart
         ? { x: connectedDir.x, z: connectedDir.z }
         : { x: -connectedDir.x, z: -connectedDir.z };
@@ -213,12 +215,21 @@ export function calculateWallCorners(
       // 각도가 너무 작으면 miter 적용 안 함 (일직선)
       if (Math.abs(miterAngle) > 0.01) {
         const miterOffset = t / Math.tan(Math.abs(miterAngle));
+        
+        // 양쪽 코너를 다르게 이동 (대각선 절단)
+        if (miterAngle > 0) {
+          // 오른쪽 회전: startLeft는 많이, startRight는 적게
+          corners.startLeft.x -= wallDir.x * (miterOffset * 2);
+          corners.startLeft.z -= wallDir.z * (miterOffset * 2);
+          // startRight는 그대로 (이동 없음)
+        } else {
+          // 왼쪽 회전: startRight는 많이, startLeft는 적게  
+          corners.startRight.x -= wallDir.x * (miterOffset * 2);
+          corners.startRight.z -= wallDir.z * (miterOffset * 2);
+          // startLeft는 그대로 (이동 없음)
+        }
 
-        // 시작점 코너들을 벽 방향으로 이동
-        corners.startLeft.x -= wallDir.x * miterOffset;
-        corners.startLeft.z -= wallDir.z * miterOffset;
-        corners.startRight.x -= wallDir.x * miterOffset;
-        corners.startRight.z -= wallDir.z * miterOffset;
+        console.log(`[WallMiter] START - Wall ${wall.id}: miterAngle=${(miterAngle * 180 / Math.PI).toFixed(1)}°, offset=${miterOffset.toFixed(2)}mm`);
       }
     }
   }
@@ -231,6 +242,7 @@ export function calculateWallCorners(
     if (connectedDir) {
       const atStart = connections.endConnected.atStart;
 
+      // 연결된 벽의 방향 조정 (연결 지점 기준)
       const adjustedConnectedDir = atStart
         ? { x: connectedDir.x, z: connectedDir.z }
         : { x: -connectedDir.x, z: -connectedDir.z };
@@ -240,11 +252,19 @@ export function calculateWallCorners(
       if (Math.abs(miterAngle) > 0.01) {
         const miterOffset = t / Math.tan(Math.abs(miterAngle));
 
-        // 끝점 코너들을 벽 방향으로 이동
-        corners.endLeft.x += wallDir.x * miterOffset;
-        corners.endLeft.z += wallDir.z * miterOffset;
-        corners.endRight.x += wallDir.x * miterOffset;
-        corners.endRight.z += wallDir.z * miterOffset;
+        if (miterAngle < 0) {
+          // 왼쪽 회전: endLeft는 많이, endRight는 적게
+          corners.endLeft.x += wallDir.x * (miterOffset * 2);
+          corners.endLeft.z += wallDir.z * (miterOffset * 2);
+          // endRight는 그대로
+        } else {
+          // 오른쪽 회전: endRight는 많이, endLeft는 적게
+          corners.endRight.x += wallDir.x * (miterOffset * 2);
+          corners.endRight.z += wallDir.z * (miterOffset * 2);
+          // endLeft는 그대로
+        }
+
+        console.log(`[WallMiter] END - Wall ${wall.id}: miterAngle=${(miterAngle * 180 / Math.PI).toFixed(1)}°, offset=${miterOffset.toFixed(2)}mm`);
       }
     }
   }
