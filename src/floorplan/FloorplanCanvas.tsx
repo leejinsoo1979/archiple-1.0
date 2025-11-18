@@ -51,6 +51,7 @@ interface FloorplanCanvasProps {
   onRulerDragEnd?: () => void;
   onRulerLabelClick?: (screenX: number, screenY: number, currentDistanceMm: number) => void;
   draggingRulerPoint?: 'start' | 'end' | null;
+  scannedWalls?: { points: any[]; walls: any[] } | null;
 }
 
 const FloorplanCanvas = ({
@@ -68,6 +69,7 @@ const FloorplanCanvas = ({
   onRulerDragEnd,
   onRulerLabelClick,
   draggingRulerPoint = null,
+  scannedWalls = null,
 }: FloorplanCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -897,6 +899,92 @@ const FloorplanCanvas = ({
       cancelAnimationFrame(animationId);
     };
   }, [rulerVisible, rulerStart, rulerEnd]);
+
+  // Draw scanned walls overlay continuously
+  useEffect(() => {
+    if (!scannedWalls || !scannedWalls.walls.length) return;
+
+    const canvas = canvasRef.current;
+    const renderer = rendererRef.current;
+    if (!canvas || !renderer) return;
+
+    let animationId: number;
+
+    const drawScannedWalls = () => {
+      const ctx = canvas.getContext('2d');
+      const camera = renderer.getCamera();
+      if (!ctx || !camera) return;
+
+      // Convert image pixel coordinates to world coordinates (mm)
+      // Image coordinates: (0,0) at top-left, +X right, +Y down
+      // World coordinates: (0,0) at center, +X right, +Y down
+      const imageWidth = backgroundImage?.width || 1000;
+      const imageHeight = backgroundImage?.height || 1000;
+
+      const pixelToWorld = (pixelX: number, pixelY: number) => {
+        // Convert pixel to mm
+        const worldX = (pixelX * imageScale) - (imageWidth * imageScale / 2);
+        const worldY = (pixelY * imageScale) - (imageHeight * imageScale / 2);
+        return { x: worldX, y: worldY };
+      };
+
+      // Create point lookup map
+      const pointMap = new Map();
+      scannedWalls.points.forEach((p: any) => {
+        pointMap.set(p.id, p);
+      });
+
+      // Draw walls in screen space
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset to screen space
+
+      scannedWalls.walls.forEach((wall: any) => {
+        const startPoint = pointMap.get(wall.startPointId);
+        const endPoint = pointMap.get(wall.endPointId);
+
+        if (!startPoint || !endPoint) return;
+
+        // Convert to world coordinates
+        const startWorld = pixelToWorld(startPoint.x, startPoint.y);
+        const endWorld = pixelToWorld(endPoint.x, endPoint.y);
+
+        // Convert to screen coordinates
+        const startScreen = camera.worldToScreen(startWorld.x, startWorld.y);
+        const endScreen = camera.worldToScreen(endWorld.x, endWorld.y);
+
+        // Draw wall line in green with dashed style
+        ctx.strokeStyle = '#22c55e'; // Green color
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 4]); // Dashed pattern
+        ctx.beginPath();
+        ctx.moveTo(startScreen.x, startScreen.y);
+        ctx.lineTo(endScreen.x, endScreen.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Draw endpoints as small circles
+        ctx.fillStyle = '#22c55e';
+        ctx.beginPath();
+        ctx.arc(startScreen.x, startScreen.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(endScreen.x, endScreen.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      ctx.restore();
+
+      // Continue drawing
+      animationId = requestAnimationFrame(drawScannedWalls);
+    };
+
+    // Start drawing loop
+    animationId = requestAnimationFrame(drawScannedWalls);
+
+    return () => {
+      cancelAnimationFrame(animationId);
+    };
+  }, [scannedWalls, imageScale, backgroundImage]);
 
   return (
     <div ref={containerRef} className={styles.canvasContainer}>
