@@ -716,8 +716,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       -(doorCenterMM.y * MM_TO_METERS) - centerZ
     );
 
-    // 도어 회전 (벽 방향)
-    const doorRotationY = Math.atan2(wallDir.x, wallDir.y);
+    // 도어 회전 (벽 방향) - Z축 반전 고려
+    const doorRotationY = Math.atan2(wallDir.x, -wallDir.y);
 
     // 도어 그룹 (회전 pivot)
     const doorGroup = new Mesh(`${name}_group`, scene);
