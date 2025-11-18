@@ -59,6 +59,19 @@ interface Babylon3DCanvasProps {
   showCharacter?: boolean;
   glbModelFile?: File | null;
   photoRealisticMode?: boolean;
+  renderSettings?: {
+    ssaoRadius: number;
+    ssaoStrength: number;
+    ssrStrength: number;
+    bloomThreshold: number;
+    bloomWeight: number;
+    dofFocusDistance: number;
+    dofFStop: number;
+    chromaticAberration: number;
+    grainIntensity: number;
+    vignetteWeight: number;
+    sharpenAmount: number;
+  };
   lights?: Light[];
   lightPlacementMode?: boolean;
   selectedLightType?: LightType;
@@ -200,6 +213,7 @@ const Babylon3DCanvas = ({
   showCharacter = false,
   glbModelFile,
   photoRealisticMode = false,
+  renderSettings,
   lights = [],
   lightPlacementMode = false,
   selectedLightType = 'point',
@@ -1913,8 +1927,8 @@ const Babylon3DCanvas = ({
         // Enable SSAO (Screen Space Ambient Occlusion) for realistic shadows
         pipeline.ssaoEnabled = true;
         if (pipeline.ssao2) {
-          pipeline.ssao2.radius = 1.0;
-          pipeline.ssao2.totalStrength = 1.3;
+          pipeline.ssao2.radius = renderSettings?.ssaoRadius ?? 1.0;
+          pipeline.ssao2.totalStrength = renderSettings?.ssaoStrength ?? 1.3;
           pipeline.ssao2.expensiveBlur = true;
           pipeline.ssao2.samples = 32;
           pipeline.ssao2.maxZ = 250;
@@ -1923,7 +1937,7 @@ const Babylon3DCanvas = ({
         // Enable Screen Space Reflections
         pipeline.screenSpaceReflectionsEnabled = true;
         if (pipeline.screenSpaceReflections) {
-          pipeline.screenSpaceReflections.strength = 0.5;
+          pipeline.screenSpaceReflections.strength = renderSettings?.ssrStrength ?? 0.5;
           pipeline.screenSpaceReflections.reflectionSpecularFalloffExponent = 3;
           pipeline.screenSpaceReflections.threshold = 0.5;
           pipeline.screenSpaceReflections.roughnessFactor = 0.1;
@@ -1932,17 +1946,17 @@ const Babylon3DCanvas = ({
         // Enable Bloom for bright highlights
         pipeline.bloomEnabled = true;
         if (pipeline.bloom) {
-          pipeline.bloom.threshold = 0.8;
-          pipeline.bloom.weight = 0.3;
+          pipeline.bloom.threshold = renderSettings?.bloomThreshold ?? 0.8;
+          pipeline.bloom.weight = renderSettings?.bloomWeight ?? 0.3;
           pipeline.bloom.kernel = 64;
         }
 
         // Enable Depth of Field for camera focus effect
         pipeline.depthOfFieldEnabled = true;
         if (pipeline.depthOfField) {
-          pipeline.depthOfField.focusDistance = 5000; // 5m focus distance
+          pipeline.depthOfField.focusDistance = renderSettings?.dofFocusDistance ?? 5000; // 5m focus distance
           pipeline.depthOfField.focalLength = 50; // 50mm lens
-          pipeline.depthOfField.fStop = 2.8; // f/2.8 aperture
+          pipeline.depthOfField.fStop = renderSettings?.dofFStop ?? 2.8; // f/2.8 aperture
         }
 
         // Enable Image Processing with advanced tone mapping
@@ -1953,7 +1967,7 @@ const Babylon3DCanvas = ({
           pipeline.imageProcessing.exposure = 1.0;
           pipeline.imageProcessing.contrast = 1.1;
           pipeline.imageProcessing.vignetteEnabled = true;
-          pipeline.imageProcessing.vignetteWeight = 1.5;
+          pipeline.imageProcessing.vignetteWeight = renderSettings?.vignetteWeight ?? 1.5;
           pipeline.imageProcessing.vignetteStretch = 0.5;
           pipeline.imageProcessing.vignetteColor = new Color4(0, 0, 0, 0);
           pipeline.imageProcessing.vignetteCameraFov = 0.8;
@@ -1962,21 +1976,22 @@ const Babylon3DCanvas = ({
         // Enable Chromatic Aberration for lens effect
         pipeline.chromaticAberrationEnabled = true;
         if (pipeline.chromaticAberration) {
-          pipeline.chromaticAberration.aberrationAmount = 3; // Reduced from 30 to avoid rainbow artifacts
+          pipeline.chromaticAberration.aberrationAmount = renderSettings?.chromaticAberration ?? 3;
         }
 
         // Enable Grain for film-like quality
         pipeline.grainEnabled = true;
         if (pipeline.grain) {
-          pipeline.grain.intensity = 5; // Reduced from 10 for subtle film grain
+          pipeline.grain.intensity = renderSettings?.grainIntensity ?? 5;
           pipeline.grain.animated = true;
         }
 
         // Sharpen for enhanced detail
         pipeline.sharpenEnabled = true;
         if (pipeline.sharpen) {
-          pipeline.sharpen.edgeAmount = 0.3;
-          pipeline.sharpen.colorAmount = 0.3;
+          const sharpenAmount = renderSettings?.sharpenAmount ?? 0.3;
+          pipeline.sharpen.edgeAmount = sharpenAmount;
+          pipeline.sharpen.colorAmount = sharpenAmount;
         }
 
         console.log('[Babylon3DCanvas] ✅ Photo-realistic pipeline created with SSAO, SSR, Bloom, DOF, ACES tone mapping');
@@ -2024,6 +2039,59 @@ const Babylon3DCanvas = ({
       }
     }
   }, [photoRealisticMode]);
+
+  // Update rendering settings in real-time without recreating pipeline
+  useEffect(() => {
+    if (!photoRealisticMode || !pipelineRef.current || !renderSettings) return;
+
+    const pipeline = pipelineRef.current;
+
+    // Update SSAO
+    if (pipeline.ssao2) {
+      pipeline.ssao2.radius = renderSettings.ssaoRadius;
+      pipeline.ssao2.totalStrength = renderSettings.ssaoStrength;
+    }
+
+    // Update SSR
+    if (pipeline.screenSpaceReflections) {
+      pipeline.screenSpaceReflections.strength = renderSettings.ssrStrength;
+    }
+
+    // Update Bloom
+    if (pipeline.bloom) {
+      pipeline.bloom.threshold = renderSettings.bloomThreshold;
+      pipeline.bloom.weight = renderSettings.bloomWeight;
+    }
+
+    // Update DOF
+    if (pipeline.depthOfField) {
+      pipeline.depthOfField.focusDistance = renderSettings.dofFocusDistance;
+      pipeline.depthOfField.fStop = renderSettings.dofFStop;
+    }
+
+    // Update Image Processing
+    if (pipeline.imageProcessing) {
+      pipeline.imageProcessing.vignetteWeight = renderSettings.vignetteWeight;
+    }
+
+    // Update Chromatic Aberration
+    if (pipeline.chromaticAberration) {
+      pipeline.chromaticAberration.aberrationAmount = renderSettings.chromaticAberration;
+    }
+
+    // Update Grain
+    if (pipeline.grain) {
+      pipeline.grain.intensity = renderSettings.grainIntensity;
+    }
+
+    // Update Sharpen
+    if (pipeline.sharpen) {
+      pipeline.sharpen.edgeAmount = renderSettings.sharpenAmount;
+      pipeline.sharpen.colorAmount = renderSettings.sharpenAmount;
+    }
+
+    console.log('[Babylon3DCanvas] ✅ Updated rendering settings:', renderSettings);
+  }, [photoRealisticMode, renderSettings]);
 
   // Render lights in 3D scene with visual indicators
   useEffect(() => {

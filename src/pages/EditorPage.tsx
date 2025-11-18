@@ -30,6 +30,22 @@ const EditorPage = () => {
   const [showCharacter, setShowCharacter] = useState(false); // Character toggle
   const [photoRealisticMode, setPhotoRealisticMode] = useState(false); // Photo-realistic rendering
 
+  // Rendering settings panel
+  const [renderSettingsOpen, setRenderSettingsOpen] = useState(false);
+  const [renderSettings, setRenderSettings] = useState({
+    ssaoRadius: 1.0,
+    ssaoStrength: 1.3,
+    ssrStrength: 0.5,
+    bloomThreshold: 0.8,
+    bloomWeight: 0.3,
+    dofFocusDistance: 5000,
+    dofFStop: 2.8,
+    chromaticAberration: 3,
+    grainIntensity: 5,
+    vignetteWeight: 1.5,
+    sharpenAmount: 0.3,
+  });
+
   // 3D View display options
   const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
   const [displayStyle, setDisplayStyle] = useState<'material' | 'white' | 'sketch' | 'transparent'>('material');
@@ -980,6 +996,215 @@ const EditorPage = () => {
                 <path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
               </svg>
             </button>
+            <button
+              className={`${styles.topBtn} ${renderSettingsOpen ? styles.active : ''}`}
+              title="Rendering Settings"
+              onClick={() => setRenderSettingsOpen(!renderSettingsOpen)}
+              disabled={!photoRealisticMode}
+              style={{ opacity: photoRealisticMode ? 1 : 0.4 }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+              </svg>
+            </button>
+
+            {renderSettingsOpen && photoRealisticMode && (
+              <div className={styles.sunDropdown} style={{ width: '320px', maxHeight: '600px', overflowY: 'auto' }}>
+                <div className={styles.dropdownHeader}>
+                  <span>Rendering Settings</span>
+                  <button onClick={() => setRenderSettingsOpen(false)} className={styles.closeBtn}>×</button>
+                </div>
+                <div className={styles.dropdownBody}>
+                  {/* SSAO Radius */}
+                  <div className={styles.controlGroup}>
+                    <label>SSAO Radius</label>
+                    <div className={styles.controlInput}>
+                      <input
+                        type="range"
+                        min="0"
+                        max="2"
+                        step="0.1"
+                        value={renderSettings.ssaoRadius}
+                        onChange={(e) => setRenderSettings({...renderSettings, ssaoRadius: parseFloat(e.target.value)})}
+                        className={styles.rangeSlider}
+                      />
+                      <span className={styles.valueDisplay}>{renderSettings.ssaoRadius.toFixed(1)}</span>
+                    </div>
+                  </div>
+
+                  {/* SSAO Strength */}
+                  <div className={styles.controlGroup}>
+                    <label>SSAO Strength</label>
+                    <div className={styles.controlInput}>
+                      <input
+                        type="range"
+                        min="0"
+                        max="2"
+                        step="0.1"
+                        value={renderSettings.ssaoStrength}
+                        onChange={(e) => setRenderSettings({...renderSettings, ssaoStrength: parseFloat(e.target.value)})}
+                        className={styles.rangeSlider}
+                      />
+                      <span className={styles.valueDisplay}>{renderSettings.ssaoStrength.toFixed(1)}</span>
+                    </div>
+                  </div>
+
+                  {/* SSR Strength */}
+                  <div className={styles.controlGroup}>
+                    <label>SSR Strength</label>
+                    <div className={styles.controlInput}>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={renderSettings.ssrStrength}
+                        onChange={(e) => setRenderSettings({...renderSettings, ssrStrength: parseFloat(e.target.value)})}
+                        className={styles.rangeSlider}
+                      />
+                      <span className={styles.valueDisplay}>{renderSettings.ssrStrength.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  {/* Bloom Threshold */}
+                  <div className={styles.controlGroup}>
+                    <label>Bloom Threshold</label>
+                    <div className={styles.controlInput}>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={renderSettings.bloomThreshold}
+                        onChange={(e) => setRenderSettings({...renderSettings, bloomThreshold: parseFloat(e.target.value)})}
+                        className={styles.rangeSlider}
+                      />
+                      <span className={styles.valueDisplay}>{renderSettings.bloomThreshold.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  {/* Bloom Weight */}
+                  <div className={styles.controlGroup}>
+                    <label>Bloom Weight</label>
+                    <div className={styles.controlInput}>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={renderSettings.bloomWeight}
+                        onChange={(e) => setRenderSettings({...renderSettings, bloomWeight: parseFloat(e.target.value)})}
+                        className={styles.rangeSlider}
+                      />
+                      <span className={styles.valueDisplay}>{renderSettings.bloomWeight.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  {/* DOF Focus Distance */}
+                  <div className={styles.controlGroup}>
+                    <label>DOF Focus Distance (mm)</label>
+                    <div className={styles.controlInput}>
+                      <input
+                        type="range"
+                        min="1000"
+                        max="10000"
+                        step="100"
+                        value={renderSettings.dofFocusDistance}
+                        onChange={(e) => setRenderSettings({...renderSettings, dofFocusDistance: parseFloat(e.target.value)})}
+                        className={styles.rangeSlider}
+                      />
+                      <span className={styles.valueDisplay}>{renderSettings.dofFocusDistance}</span>
+                    </div>
+                  </div>
+
+                  {/* DOF F-Stop */}
+                  <div className={styles.controlGroup}>
+                    <label>DOF F-Stop</label>
+                    <div className={styles.controlInput}>
+                      <input
+                        type="range"
+                        min="1"
+                        max="22"
+                        step="0.1"
+                        value={renderSettings.dofFStop}
+                        onChange={(e) => setRenderSettings({...renderSettings, dofFStop: parseFloat(e.target.value)})}
+                        className={styles.rangeSlider}
+                      />
+                      <span className={styles.valueDisplay}>f/{renderSettings.dofFStop.toFixed(1)}</span>
+                    </div>
+                  </div>
+
+                  {/* Chromatic Aberration */}
+                  <div className={styles.controlGroup}>
+                    <label>Chromatic Aberration</label>
+                    <div className={styles.controlInput}>
+                      <input
+                        type="range"
+                        min="0"
+                        max="10"
+                        step="0.5"
+                        value={renderSettings.chromaticAberration}
+                        onChange={(e) => setRenderSettings({...renderSettings, chromaticAberration: parseFloat(e.target.value)})}
+                        className={styles.rangeSlider}
+                      />
+                      <span className={styles.valueDisplay}>{renderSettings.chromaticAberration.toFixed(1)}</span>
+                    </div>
+                  </div>
+
+                  {/* Grain Intensity */}
+                  <div className={styles.controlGroup}>
+                    <label>Grain Intensity</label>
+                    <div className={styles.controlInput}>
+                      <input
+                        type="range"
+                        min="0"
+                        max="20"
+                        step="0.5"
+                        value={renderSettings.grainIntensity}
+                        onChange={(e) => setRenderSettings({...renderSettings, grainIntensity: parseFloat(e.target.value)})}
+                        className={styles.rangeSlider}
+                      />
+                      <span className={styles.valueDisplay}>{renderSettings.grainIntensity.toFixed(1)}</span>
+                    </div>
+                  </div>
+
+                  {/* Vignette Weight */}
+                  <div className={styles.controlGroup}>
+                    <label>Vignette Weight</label>
+                    <div className={styles.controlInput}>
+                      <input
+                        type="range"
+                        min="0"
+                        max="3"
+                        step="0.1"
+                        value={renderSettings.vignetteWeight}
+                        onChange={(e) => setRenderSettings({...renderSettings, vignetteWeight: parseFloat(e.target.value)})}
+                        className={styles.rangeSlider}
+                      />
+                      <span className={styles.valueDisplay}>{renderSettings.vignetteWeight.toFixed(1)}</span>
+                    </div>
+                  </div>
+
+                  {/* Sharpen Amount */}
+                  <div className={styles.controlGroup}>
+                    <label>Sharpen Amount</label>
+                    <div className={styles.controlInput}>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={renderSettings.sharpenAmount}
+                        onChange={(e) => setRenderSettings({...renderSettings, sharpenAmount: parseFloat(e.target.value)})}
+                        className={styles.rangeSlider}
+                      />
+                      <span className={styles.valueDisplay}>{renderSettings.sharpenAmount.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <button className={styles.topBtn} title="Target">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/>
@@ -1433,6 +1658,7 @@ const EditorPage = () => {
             showCharacter={showCharacter}
             glbModelFile={glbModelFile}
             photoRealisticMode={photoRealisticMode}
+            renderSettings={renderSettings}
             lights={lights}
             lightPlacementMode={lightPlacementMode}
             selectedLightType={selectedLightType}
