@@ -238,6 +238,49 @@ const Babylon3DCanvas = forwardRef<
   const wallMeshesRef = useRef<Mesh[]>([]); // Store wall meshes for snap detection
   const pipelineRef = useRef<DefaultRenderingPipeline | null>(null); // Store rendering pipeline
 
+  // Expose captureRender function via ref
+  useImperativeHandle(ref, () => ({
+    captureRender: async (width: number, height: number): Promise<string> => {
+      const scene = sceneRef.current;
+      const engine = engineRef.current;
+
+      if (!scene || !engine) {
+        throw new Error('Scene or Engine not initialized');
+      }
+
+      console.log('[Babylon3DCanvas] Capturing render at', width, 'x', height);
+
+      return new Promise((resolve, reject) => {
+        try {
+          const camera = scene.activeCamera;
+          if (!camera) {
+            reject(new Error('No active camera'));
+            return;
+          }
+
+          // Use Babylon's Tools.CreateScreenshotUsingRenderTarget
+          import('@babylonjs/core').then((BABYLON) => {
+            BABYLON.Tools.CreateScreenshotUsingRenderTarget(
+              engine,
+              camera,
+              { width, height, precision: 1 },
+              (data) => {
+                console.log('[Babylon3DCanvas] ✅ Render captured successfully');
+                resolve(data);
+              },
+              'image/png',
+              1,
+              false
+            );
+          });
+        } catch (error) {
+          console.error('[Babylon3DCanvas] ❌ Render capture failed:', error);
+          reject(error);
+        }
+      });
+    },
+  }));
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -2564,6 +2607,8 @@ const Babylon3DCanvas = forwardRef<
       />
     </div>
   );
-};
+});
+
+Babylon3DCanvas.displayName = 'Babylon3DCanvas';
 
 export default Babylon3DCanvas;
