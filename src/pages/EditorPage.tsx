@@ -875,9 +875,7 @@ const EditorPage = () => {
                 title="Draw Rooms"
                 onClick={() => setActiveTool(ToolType.RECTANGLE)}
               >
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <rect x="12" y="12" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none"/>
-                </svg>
+                <img src="/icons/room.svg" alt="Room" width="32" height="32" />
                 <span>Draw Rooms</span>
               </button>
             </div>
@@ -1037,23 +1035,6 @@ const EditorPage = () => {
           >
             3D
           </button>
-          {viewMode === '3D' && (
-            <button
-              className={`${styles.playModeBtn} ${playMode ? styles.playModeBtnActive : ''}`}
-              onClick={() => setPlayMode(!playMode)}
-              title="Play Mode (WASD)"
-            >
-              {playMode ? (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-                </svg>
-              ) : (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M8 5v14l11-7z"/>
-                </svg>
-              )}
-            </button>
-          )}
         </div>
 
         <div style={{
