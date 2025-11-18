@@ -337,20 +337,20 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         );
         gridPlane.position = new Vector3(0, -0.01, 0); // Fixed at origin, slightly below Y=0
 
-        // Create GridMaterial with high contrast settings
+        // Create GridMaterial with realistic settings
         const gridMaterial = new GridMaterial('gridMaterial', scene);
 
-        // Grid appearance - darker for visibility against bright skybox
-        gridMaterial.mainColor = new Color3(0.5, 0.5, 0.5); // Medium gray background
-        gridMaterial.lineColor = new Color3(0.15, 0.15, 0.15); // Very dark gray lines (almost black)
+        // Grid appearance - natural look
+        gridMaterial.mainColor = new Color3(0.8, 0.8, 0.8); // Light gray background
+        gridMaterial.lineColor = new Color3(0.4, 0.4, 0.4); // Dark gray lines
 
         // Grid spacing - 1 unit = 1 meter
         gridMaterial.gridRatio = 1.0; // 1m grid cells
         gridMaterial.majorUnitFrequency = 10; // Major line every 10 cells (10m)
-        gridMaterial.minorUnitVisibility = 0.45; // Minor lines at 45% opacity (more visible)
+        gridMaterial.minorUnitVisibility = 0.3; // Minor lines at 30% opacity
 
         // Fade out with distance
-        gridMaterial.opacity = 1.0; // Full opacity for maximum visibility
+        gridMaterial.opacity = 0.95; // Overall opacity
         gridMaterial.gridOffset = new Vector3(0, 0, 0);
 
         // Apply material
