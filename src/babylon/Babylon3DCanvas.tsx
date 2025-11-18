@@ -821,39 +821,65 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       // Set as active camera
       scene.activeCamera = fpsCamera;
 
-      // Attach controls immediately
+      // Attach mouse controls only
       fpsCamera.attachControl(canvas, true);
 
       // Focus canvas
       canvas.focus();
 
-      // Test keyboard detection
-      const testKeyDown = (evt: KeyboardEvent) => {
-        console.log('[Babylon3DCanvas] Global key pressed:', evt.key, evt.keyCode);
-      };
-      window.addEventListener('keydown', testKeyDown);
+      console.log('[Babylon3DCanvas] FPS Camera activated');
 
-      console.log('[Babylon3DCanvas] FPS Camera activated, inputs attached:', {
-        hasKeyboardInput: !!fpsCamera.inputs?.attached?.keyboard,
-        keysUp: fpsCamera.keysUp,
-        keysDown: fpsCamera.keysDown,
-        keysLeft: fpsCamera.keysLeft,
-        keysRight: fpsCamera.keysRight,
-        speed: fpsCamera.speed
-      });
+      // Manual WASD keyboard controls
+      const fpsInputMap: { [key: string]: boolean } = {};
+      const onFpsKeyDown = (evt: KeyboardEvent) => {
+        fpsInputMap[evt.key.toLowerCase()] = true;
+      };
+      const onFpsKeyUp = (evt: KeyboardEvent) => {
+        fpsInputMap[evt.key.toLowerCase()] = false;
+      };
+
+      window.addEventListener('keydown', onFpsKeyDown);
+      window.addEventListener('keyup', onFpsKeyUp);
 
       let lastCameraPos = fpsCamera.position.clone();
+      const moveSpeed = 0.1;
 
       const fpsObserver = scene.onBeforeRenderObservable.add(() => {
         if (!fpsCamera || !character) return;
 
-        // Sync character position for collision
-        const cameraDelta = fpsCamera.position.subtract(lastCameraPos);
+        // Manual WASD movement
+        const forward = new Vector3(
+          Math.sin(fpsCamera.rotation.y),
+          0,
+          Math.cos(fpsCamera.rotation.y)
+        );
+        const right = new Vector3(
+          Math.sin(fpsCamera.rotation.y + Math.PI / 2),
+          0,
+          Math.cos(fpsCamera.rotation.y + Math.PI / 2)
+        );
 
-        if (cameraDelta.length() > 0.001) {
-          console.log('[Babylon3DCanvas] FPS Camera moved:', cameraDelta);
+        let moved = false;
+
+        if (fpsInputMap['w']) {
+          fpsCamera.position.addInPlace(forward.scale(moveSpeed));
+          moved = true;
+        }
+        if (fpsInputMap['s']) {
+          fpsCamera.position.addInPlace(forward.scale(-moveSpeed));
+          moved = true;
+        }
+        if (fpsInputMap['a']) {
+          fpsCamera.position.addInPlace(right.scale(-moveSpeed));
+          moved = true;
+        }
+        if (fpsInputMap['d']) {
+          fpsCamera.position.addInPlace(right.scale(moveSpeed));
+          moved = true;
         }
 
+        // Sync character position for collision
+        const cameraDelta = fpsCamera.position.subtract(lastCameraPos);
         character.position.x += cameraDelta.x;
         character.position.z += cameraDelta.z;
         character.position.y = 0;
@@ -862,10 +888,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         lastCameraPos = fpsCamera.position.clone();
 
         // Walking bob
-        const keys = (fpsCamera as any)._keys;
-        const isMoving = keys && (keys.forward || keys.backward || keys.left || keys.right);
-
-        if (isMoving) {
+        if (moved) {
           const time = performance.now() * 0.01;
           fpsCamera.position.y = DEFAULT_CAMERA_HEIGHT + Math.sin(time) * 0.015;
         } else {
@@ -875,7 +898,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
       return () => {
         console.log('[Babylon3DCanvas] Cleanup Play Mode');
-        window.removeEventListener('keydown', testKeyDown);
+        window.removeEventListener('keydown', onFpsKeyDown);
+        window.removeEventListener('keyup', onFpsKeyUp);
         scene.onBeforeRenderObservable.remove(fpsObserver);
         fpsCamera.detachControl();
         character.isVisible = true;
@@ -934,18 +958,14 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       const onKeyDown = (evt: KeyboardEvent) => {
         const key = evt.key.toLowerCase();
         inputMap[key] = true;
-        console.log('[Babylon3DCanvas] 3D Mode Key Down:', key, 'inputMap:', inputMap);
       };
       const onKeyUp = (evt: KeyboardEvent) => {
         const key = evt.key.toLowerCase();
         inputMap[key] = false;
-        console.log('[Babylon3DCanvas] 3D Mode Key Up:', key);
       };
 
       window.addEventListener('keydown', onKeyDown);
       window.addEventListener('keyup', onKeyUp);
-
-      console.log('[Babylon3DCanvas] 3D Mode keyboard listeners attached');
 
       const moveSpeed = 0.05;
       const rotateSpeed = 0.03;
@@ -958,11 +978,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         // Rotation
         if (inputMap['a']) {
           character.rotation.y += rotateSpeed;
-          console.log('[Babylon3DCanvas] Rotating left');
         }
         if (inputMap['d']) {
           character.rotation.y -= rotateSpeed;
-          console.log('[Babylon3DCanvas] Rotating right');
         }
 
         // Movement
@@ -975,12 +993,10 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         if (inputMap['w']) {
           character.position.addInPlace(forward.scale(moveSpeed));
           moved = true;
-          console.log('[Babylon3DCanvas] Moving forward, pos:', character.position);
         }
         if (inputMap['s']) {
           character.position.addInPlace(forward.scale(-moveSpeed));
           moved = true;
-          console.log('[Babylon3DCanvas] Moving backward, pos:', character.position);
         }
 
         // Camera follows character only when moving
