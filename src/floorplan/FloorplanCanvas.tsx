@@ -46,10 +46,10 @@ interface FloorplanCanvasProps {
   rulerVisible?: boolean;
   rulerStart?: { x: number; y: number } | null;
   rulerEnd?: { x: number; y: number } | null;
-  onRulerDragStart?: () => void;
+  onRulerDragStart?: (isStartPoint: boolean) => void;
   onRulerDrag?: (worldX: number, worldY: number) => void;
   onRulerDragEnd?: () => void;
-  isDraggingRuler?: boolean;
+  draggingRulerPoint?: 'start' | 'end' | null;
 }
 
 const FloorplanCanvas = ({
@@ -65,7 +65,7 @@ const FloorplanCanvas = ({
   onRulerDragStart,
   onRulerDrag,
   onRulerDragEnd,
-  isDraggingRuler = false,
+  draggingRulerPoint = null,
 }: FloorplanCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -629,16 +629,33 @@ const FloorplanCanvas = ({
       const screenX = event.clientX - rect.left;
       const screenY = event.clientY - rect.top;
 
-      // Check for ruler endpoint drag (left-click on ruler endpoint)
-      if (event.button === 0 && rulerVisible && rulerEnd && onRulerDragStart) {
+      // Check for ruler point drag (left-click on ruler start or end point)
+      if (event.button === 0 && rulerVisible && rulerStart && rulerEnd && onRulerDragStart) {
         const camera = renderer.getCamera();
+
+        // Check start point first
+        const startScreen = camera.worldToScreen(rulerStart.x, rulerStart.y);
+        const startDistance = Math.sqrt(
+          Math.pow(screenX - startScreen.x, 2) +
+          Math.pow(screenY - startScreen.y, 2)
+        );
+
+        if (startDistance < 15) { // 15px hitbox radius
+          event.preventDefault();
+          event.stopPropagation();
+          onRulerDragStart(true); // true = start point
+          canvas.style.cursor = 'grabbing';
+          return;
+        }
+
+        // Check end point
         const endScreen = camera.worldToScreen(rulerEnd.x, rulerEnd.y);
-        const distance = Math.sqrt(
+        const endDistance = Math.sqrt(
           Math.pow(screenX - endScreen.x, 2) +
           Math.pow(screenY - endScreen.y, 2)
         );
 
-        if (distance < 15) { // 15px hitbox radius
+        if (endDistance < 15) { // 15px hitbox radius
           event.preventDefault();
           event.stopPropagation();
           onRulerDragStart(false); // false = end point
@@ -679,7 +696,7 @@ const FloorplanCanvas = ({
       const screenY = event.clientY - rect.top;
 
       // Handle ruler dragging
-      if (isDraggingRuler && onRulerDrag) {
+      if (draggingRulerPoint && onRulerDrag) {
         event.preventDefault();
         event.stopPropagation();
         const camera = renderer.getCamera();
@@ -706,7 +723,7 @@ const FloorplanCanvas = ({
 
     const handleMouseUp = (event: MouseEvent) => {
       // Handle ruler drag end
-      if (event.button === 0 && isDraggingRuler && onRulerDragEnd) {
+      if (event.button === 0 && draggingRulerPoint && onRulerDragEnd) {
         event.preventDefault();
         event.stopPropagation();
         onRulerDragEnd();
@@ -740,7 +757,7 @@ const FloorplanCanvas = ({
       canvas.removeEventListener('mouseup', handleMouseUp, true);
       canvas.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, [onDimensionClick, rulerVisible, rulerEnd, onRulerDragStart, onRulerDrag, onRulerDragEnd, isDraggingRuler]);
+  }, [onDimensionClick, rulerVisible, rulerStart, rulerEnd, onRulerDragStart, onRulerDrag, onRulerDragEnd, draggingRulerPoint]);
 
   // Handle mouse move for coordinate display
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -786,13 +803,20 @@ const FloorplanCanvas = ({
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Draw start point (fixed, smaller)
+      // Draw start point (draggable, same style as end point)
       ctx.fillStyle = '#FF0000';
       ctx.beginPath();
-      ctx.arc(startScreen.x, startScreen.y, 6, 0, Math.PI * 2);
+      ctx.arc(startScreen.x, startScreen.y, 8, 0, Math.PI * 2);
       ctx.fill();
 
-      // Draw end point (draggable, larger with ring to indicate interactivity)
+      // Draw outer ring on start point
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(startScreen.x, startScreen.y, 12, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Draw end point (draggable, same style as start point)
       ctx.fillStyle = '#FF0000';
       ctx.beginPath();
       ctx.arc(endScreen.x, endScreen.y, 8, 0, Math.PI * 2);
@@ -841,7 +865,7 @@ const FloorplanCanvas = ({
         ref={canvasRef}
         className={styles.canvas}
         onMouseMove={handleMouseMove}
-        style={{ cursor: isDraggingRuler ? 'grabbing' : 'default' }}
+        style={{ cursor: draggingRulerPoint ? 'grabbing' : 'default' }}
       />
     </div>
   );

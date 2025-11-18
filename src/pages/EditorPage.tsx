@@ -36,7 +36,7 @@ const EditorPage = () => {
   const [rulerStart, setRulerStart] = useState<{ x: number; y: number } | null>(null);
   const [rulerEnd, setRulerEnd] = useState<{ x: number; y: number } | null>(null);
   const [rulerDistance, setRulerDistance] = useState<string>('');
-  const [isDraggingRuler, setIsDraggingRuler] = useState(false);
+  const [draggingRulerPoint, setDraggingRulerPoint] = useState<'start' | 'end' | null>(null);
 
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -97,19 +97,23 @@ const EditorPage = () => {
 
   // Handle ruler drag start
   const handleRulerDragStart = (isStartPoint: boolean) => {
-    setIsDraggingRuler(true);
+    setDraggingRulerPoint(isStartPoint ? 'start' : 'end');
   };
 
   // Handle ruler drag
   const handleRulerDrag = (worldX: number, worldY: number) => {
-    if (!isDraggingRuler) return;
-    // Always drag the end point
-    setRulerEnd({ x: worldX, y: worldY });
+    if (!draggingRulerPoint) return;
+
+    if (draggingRulerPoint === 'start') {
+      setRulerStart({ x: worldX, y: worldY });
+    } else {
+      setRulerEnd({ x: worldX, y: worldY });
+    }
   };
 
   // Handle ruler drag end
   const handleRulerDragEnd = () => {
-    setIsDraggingRuler(false);
+    setDraggingRulerPoint(null);
   };
 
   // Handle ruler distance submit
@@ -894,7 +898,7 @@ const EditorPage = () => {
             onRulerDragStart={handleRulerDragStart}
             onRulerDrag={handleRulerDrag}
             onRulerDragEnd={handleRulerDragEnd}
-            isDraggingRuler={isDraggingRuler}
+            draggingRulerPoint={draggingRulerPoint}
           />
         </div>
         <div style={{
