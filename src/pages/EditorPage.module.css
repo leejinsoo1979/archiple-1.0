@@ -799,3 +799,267 @@
 .rightPanel::-webkit-scrollbar-thumb:hover {
   background: #aaa;
 }
+
+/* ===== 3D VIEW OPTIONS DROPDOWN ===== */
+.viewOptionsWrapper {
+  position: relative;
+}
+
+.viewOptionsDropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 380px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  overflow: hidden;
+  animation: dropdownSlideIn 0.2s ease-out;
+}
+
+.dropdownSection {
+  padding: 16px;
+}
+
+.dropdownTitle {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+}
+
+.dropdownDivider {
+  height: 1px;
+  background: #e8e8e8;
+  margin: 0;
+}
+
+/* Display Style Grid */
+.displayStyleGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.styleOption {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: #f8f8f8;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.styleOption:hover {
+  background: #f0f0f0;
+}
+
+.styleOption.selected {
+  background: #e8f5ff;
+  border-color: #3b82f6;
+}
+
+.stylePreview {
+  width: 100%;
+  height: 80px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.materialPreview {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #ff9a56 0%, #ffd4a3 50%, #87ceeb 100%);
+  position: relative;
+}
+
+.materialPreview::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 30%;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.2));
+}
+
+.whitePreview {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 50%, #ffffff 100%);
+}
+
+.sketchPreview {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #ffe0b3 0%, #ffd4a3 50%, #ffebcc 100%);
+  position: relative;
+}
+
+.sketchPreview::after {
+  content: '';
+  position: absolute;
+  top: 20%;
+  left: 20%;
+  width: 60%;
+  height: 60%;
+  border: 2px solid rgba(0,0,0,0.3);
+  border-radius: 4px;
+}
+
+.transparentPreview {
+  width: 100%;
+  height: 100%;
+  background: white;
+  position: relative;
+}
+
+.transparentPreview::before,
+.transparentPreview::after {
+  content: '';
+  position: absolute;
+  border: 2px solid #ccc;
+}
+
+.transparentPreview::before {
+  top: 25%;
+  left: 25%;
+  width: 30%;
+  height: 40%;
+  border-radius: 4px;
+}
+
+.transparentPreview::after {
+  top: 30%;
+  left: 45%;
+  width: 30%;
+  height: 40%;
+  border-radius: 4px;
+  border-color: #999;
+}
+
+.styleLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: #333;
+}
+
+.styleNumber {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 11px;
+  color: #999;
+  background: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Toggle Row */
+.toggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toggleLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+}
+
+.toggleSwitch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.toggleSwitch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggleSlider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  border-radius: 24px;
+  transition: 0.3s;
+}
+
+.toggleSlider::before {
+  position: absolute;
+  content: '';
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+.toggleSwitch input:checked + .toggleSlider {
+  background-color: #3b82f6;
+}
+
+.toggleSwitch input:checked + .toggleSlider::before {
+  transform: translateX(20px);
+}
+
+/* Graphics Buttons */
+.graphicsButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.graphicsBtn {
+  flex: 1;
+  padding: 8px 12px;
+  background: #f8f8f8;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.graphicsBtn:hover {
+  background: #f0f0f0;
+}
+
+.graphicsBtn.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+@keyframes dropdownSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}

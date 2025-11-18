@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import FloorplanCanvas from '../floorplan/FloorplanCanvas';
 import Babylon3DCanvas from '../babylon/Babylon3DCanvas';
 import styles from './EditorPage.module.css';
@@ -27,6 +27,11 @@ const EditorPage = () => {
   const [playMode, setPlayMode] = useState(false); // FPS mode toggle
   const [showCharacter, setShowCharacter] = useState(false); // Character toggle
 
+  // 3D View display options
+  const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
+  const [displayStyle, setDisplayStyle] = useState<'material' | 'white' | 'sketch' | 'transparent'>('material');
+  const [hiddenLineMode, setHiddenLineMode] = useState(false);
+
   // Background image state
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
   const [imageScale, setImageScale] = useState(100); // 100mm per pixel default
@@ -54,6 +59,21 @@ const EditorPage = () => {
 
   // GLB model state
   const [glbModelFile, setGlbModelFile] = useState<File | null>(null);
+
+  // Close view options dropdown when clicking outside
+  useEffect(() => {
+    if (!viewOptionsOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(`.${styles.viewOptionsWrapper}`)) {
+        setViewOptionsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [viewOptionsOpen]);
 
   // Load test room data (2800mm x 2800mm room with 100mm walls)
   const handleLoadTestRoom = () => {
@@ -390,9 +410,92 @@ const EditorPage = () => {
         <div className={styles.headerCenter}>
           {/* Top Toolbar */}
           <div className={styles.topToolbar}>
-            <button className={styles.topBtn} title="3D View">
-              <PiCubeTransparentLight size={20} />
-            </button>
+            <div className={styles.viewOptionsWrapper}>
+              <button
+                className={`${styles.topBtn} ${viewOptionsOpen ? styles.active : ''}`}
+                title="3D View"
+                onClick={() => setViewOptionsOpen(!viewOptionsOpen)}
+              >
+                <PiCubeTransparentLight size={20} />
+              </button>
+
+              {/* 3D View Options Dropdown */}
+              {viewOptionsOpen && (
+                <div className={styles.viewOptionsDropdown}>
+                  <div className={styles.dropdownSection}>
+                    <h4 className={styles.dropdownTitle}>디스플레이 스타일</h4>
+                    <div className={styles.displayStyleGrid}>
+                      <button
+                        className={`${styles.styleOption} ${displayStyle === 'material' ? styles.selected : ''}`}
+                        onClick={() => setDisplayStyle('material')}
+                      >
+                        <div className={styles.stylePreview}>
+                          <div className={styles.materialPreview}></div>
+                        </div>
+                        <span className={styles.styleLabel}>재질</span>
+                        <span className={styles.styleNumber}>⌘1</span>
+                      </button>
+                      <button
+                        className={`${styles.styleOption} ${displayStyle === 'white' ? styles.selected : ''}`}
+                        onClick={() => setDisplayStyle('white')}
+                      >
+                        <div className={styles.stylePreview}>
+                          <div className={styles.whitePreview}></div>
+                        </div>
+                        <span className={styles.styleLabel}>화이트 모델</span>
+                        <span className={styles.styleNumber}>⌘2</span>
+                      </button>
+                      <button
+                        className={`${styles.styleOption} ${displayStyle === 'sketch' ? styles.selected : ''}`}
+                        onClick={() => setDisplayStyle('sketch')}
+                      >
+                        <div className={styles.stylePreview}>
+                          <div className={styles.sketchPreview}></div>
+                        </div>
+                        <span className={styles.styleLabel}>스케치</span>
+                        <span className={styles.styleNumber}>⌘3</span>
+                      </button>
+                      <button
+                        className={`${styles.styleOption} ${displayStyle === 'transparent' ? styles.selected : ''}`}
+                        onClick={() => setDisplayStyle('transparent')}
+                      >
+                        <div className={styles.stylePreview}>
+                          <div className={styles.transparentPreview}></div>
+                        </div>
+                        <span className={styles.styleLabel}>투명</span>
+                        <span className={styles.styleNumber}>⌘4</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className={styles.dropdownDivider}></div>
+
+                  <div className={styles.dropdownSection}>
+                    <div className={styles.toggleRow}>
+                      <span className={styles.toggleLabel}>은선모드</span>
+                      <label className={styles.toggleSwitch}>
+                        <input
+                          type="checkbox"
+                          checked={hiddenLineMode}
+                          onChange={(e) => setHiddenLineMode(e.target.checked)}
+                        />
+                        <span className={styles.toggleSlider}></span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className={styles.dropdownDivider}></div>
+
+                  <div className={styles.dropdownSection}>
+                    <h4 className={styles.dropdownTitle}>그래픽 설정</h4>
+                    <div className={styles.graphicsButtons}>
+                      <button className={styles.graphicsBtn}>효과 우선</button>
+                      <button className={`${styles.graphicsBtn} ${styles.active}`}>성능 우선</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <button className={styles.topBtn} title="Light">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/>
