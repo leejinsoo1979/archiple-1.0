@@ -571,7 +571,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     name: string,
     scene: Scene,
     startHeight: number = 0,
-    skipTopFace: boolean = false
+    skipTopFace: boolean = false,
+    skipBottomFace: boolean = false
   ): Mesh => {
     const MM_TO_METERS = 0.001;
     const wallHeight = height * MM_TO_METERS;
@@ -628,8 +629,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     colors.push(topFaceColor, topFaceColor, topFaceColor, 1);
 
     // Indices
-    // 바닥 (시계방향) - startHeight === 0 일 때만 생성
-    if (startHeight === 0) {
+    // 바닥 (시계방향) - skipBottomFace가 false일 때만 생성
+    if (!skipBottomFace) {
       indices.push(0, 2, 1);
       indices.push(0, 3, 2);
     }
@@ -723,8 +724,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       -(doorCenterMM.y * MM_TO_METERS) - centerZ
     );
 
-    // 도어 회전 (벽 방향) - Z축 반전 고려
-    const doorRotationY = Math.atan2(wallDir.x, -wallDir.y);
+    // 도어 회전 (벽 방향) - Z축 반전 고려, 90도 보정
+    const doorRotationY = Math.atan2(wallDir.x, -wallDir.y) + Math.PI / 2;
 
     // 도어 그룹 (회전 pivot)
     const doorGroup = new Mesh(`${name}_group`, scene);
@@ -1042,7 +1043,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
               `wall_${wallIndex}_lower_seg_${segIndex++}`,
               scene,
               0, // 바닥부터 시작
-              true // 상단면 안 그림 (인방이 덮음)
+              true, // skipTopFace: 상단면 안 그림 (인방이 덮음)
+              false // skipBottomFace: 하단면 그림 (바닥)
             );
 
             segMesh.material = wallMaterial;
@@ -1073,7 +1075,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
             `wall_${wallIndex}_lower_seg_${segIndex}`,
             scene,
             0, // 바닥부터 시작
-            true // 상단면 안 그림 (인방이 덮음)
+            true, // skipTopFace: 상단면 안 그림 (인방이 덮음)
+            false // skipBottomFace: 하단면 그림 (바닥)
           );
 
           segMesh.material = wallMaterial;
@@ -1096,7 +1099,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
             centerZ,
             `wall_${wallIndex}_lintel`,
             scene,
-            DOOR_HEIGHT // 도어 높이부터 시작
+            DOOR_HEIGHT, // 도어 높이부터 시작
+            false, // skipTopFace: 천장 단면은 그림
+            true // skipBottomFace: 하단면 안 그림 (도어 위)
           );
 
           lintelMesh.material = wallMaterial;
