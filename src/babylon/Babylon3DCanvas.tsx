@@ -859,6 +859,10 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       fpsCamera.detachControl();
       thirdPersonCamera.detachControl();
       arcCamera.attachControl(canvas, true);
+
+      // Disable camera keyboard controls so character controls work
+      arcCamera.inputs.removeByType('ArcRotateCameraKeyboardMoveInput');
+
       scene.activeCamera = arcCamera;
 
       // Character controls
