@@ -791,15 +791,27 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
       arcCamera.detachControl();
       thirdPersonCamera.detachControl();
-      fpsCamera.attachControl(canvas, true);
+
+      // Set active camera first
       scene.activeCamera = fpsCamera;
+
+      // Attach control with noPreventDefault = false to allow keyboard input
+      fpsCamera.attachControl(canvas, false);
+
+      // Ensure keyboard input is enabled
+      if (fpsCamera.inputs && fpsCamera.inputs.attached.keyboard) {
+        console.log('[Babylon3DCanvas] FPS Camera keyboard input exists');
+      } else {
+        console.error('[Babylon3DCanvas] FPS Camera keyboard input NOT found!');
+      }
 
       console.log('[Babylon3DCanvas] FPS Camera attached, keys configured:', {
         keysUp: fpsCamera.keysUp,
         keysDown: fpsCamera.keysDown,
         keysLeft: fpsCamera.keysLeft,
         keysRight: fpsCamera.keysRight,
-        speed: fpsCamera.speed
+        speed: fpsCamera.speed,
+        attached: fpsCamera.inputs?.attached
       });
 
       let lastCameraPos = fpsCamera.position.clone();
