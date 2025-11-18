@@ -68,20 +68,16 @@ export class GridLayer extends BaseLayer {
     ctx.fillStyle = this.config.backgroundColor;
     ctx.fillRect(viewLeft - margin, viewTop - margin, (viewRight - viewLeft) + margin * 2, (viewBottom - viewTop) + margin * 2);
 
-    // Adaptive opacity based on zoom for better visibility
-    // At low zoom (zoomed out), increase opacity so grid is still visible
-    let gridOpacity = 1.0;
-    if (zoom < 0.05) {
-      gridOpacity = 1.0; // Full opacity when very zoomed out
-    } else if (zoom < 0.5) {
-      gridOpacity = 0.8 + (zoom / 0.5) * 0.2; // Fade from 0.8 to 1.0
-    }
+    // Constant high opacity - no fade with zoom
+    // Grid should always be clearly visible at any zoom level
+    const minorOpacity = 0.5; // 50% for minor grid (subtle but visible)
+    const majorOpacity = 1.0; // 100% for major grid (always clear)
 
-    // Draw minor grid (10cm) - lighter and thinner
-    this.drawGrid(ctx, this.config.gridSize, this.config.minorColor, 1, viewLeft, viewTop, viewRight, viewBottom, gridOpacity * 0.5);
+    // Draw minor grid (10cm) - lighter color with moderate opacity
+    this.drawGrid(ctx, this.config.gridSize, this.config.minorColor, 1, viewLeft, viewTop, viewRight, viewBottom, minorOpacity);
 
-    // Draw major grid (1m) - darker and thicker for visibility
-    this.drawGrid(ctx, this.config.majorGridSize, this.config.majorColor, 2, viewLeft, viewTop, viewRight, viewBottom, gridOpacity);
+    // Draw major grid (1m) - darker color with full opacity
+    this.drawGrid(ctx, this.config.majorGridSize, this.config.majorColor, 2, viewLeft, viewTop, viewRight, viewBottom, majorOpacity);
 
     this.resetOpacity(ctx);
   }
