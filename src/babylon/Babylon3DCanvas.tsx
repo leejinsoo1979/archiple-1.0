@@ -825,8 +825,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         character.isVisible = true;
       };
     } else {
-      // ====== 3D VIEW MODE: 3rd Person (character control) ======
-      console.log('[Babylon3DCanvas] 3D View Mode: 3rd Person');
+      // ====== 3D VIEW MODE: Isometric orbit control ======
+      console.log('[Babylon3DCanvas] 3D View Mode: Isometric orbit');
 
       const planMetrics = computePlanMetrics(floorplanData?.points);
       if (planMetrics) {
@@ -836,35 +836,30 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           planMetrics.centerZ
         );
         character.rotation.y = 0;
+
+        // Setup isometric orbit camera
+        arcCamera.setTarget(new Vector3(planMetrics.centerX, 0, planMetrics.centerZ));
+        arcCamera.alpha = Math.PI / 4; // 45 degrees horizontal
+        arcCamera.beta = Math.PI / 3; // 60 degrees from top (isometric)
+        arcCamera.radius = 10;
       }
 
       // Show character
       character.isVisible = true;
 
-      // Setup 3rd person camera
-      thirdPersonCamera.lockedTarget = character;
-      thirdPersonCamera.radius = 4;
-      thirdPersonCamera.heightOffset = 2;
+      // Configure orbit controls
+      arcCamera.lowerRadiusLimit = 5;
+      arcCamera.upperRadiusLimit = 50;
+      arcCamera.lowerBetaLimit = 0.1; // Prevent going under floor
+      arcCamera.upperBetaLimit = Math.PI / 2.1; // Prevent going too vertical
 
-      // Limit zoom range
-      thirdPersonCamera.lowerRadiusLimit = 2;
-      thirdPersonCamera.upperRadiusLimit = 8;
-
-      // Smooth and slow camera movement
-      thirdPersonCamera.rotationOffset = 0;
-      thirdPersonCamera.cameraAcceleration = 0.01; // Very slow acceleration
-      thirdPersonCamera.maxCameraSpeed = 0.5; // Slower max speed
-
-      // Reduce mouse sensitivity
-      thirdPersonCamera.inputs.attached.mousewheel.wheelPrecision = 50; // Slower zoom
-
-      // Lock rotation to prevent spinning
-      thirdPersonCamera.inputs.attached.pointers.buttons = []; // Disable mouse rotation
+      arcCamera.panningSensibility = 50;
+      arcCamera.wheelPrecision = 50;
 
       fpsCamera.detachControl();
-      arcCamera.detachControl();
-      thirdPersonCamera.attachControl(canvas, true);
-      scene.activeCamera = thirdPersonCamera;
+      thirdPersonCamera.detachControl();
+      arcCamera.attachControl(canvas, true);
+      scene.activeCamera = arcCamera;
 
       // Character controls
       const inputMap: { [key: string]: boolean } = {};
