@@ -754,7 +754,7 @@ const FloorplanCanvas = ({
     setMousePos({ x: Math.round(x), y: Math.round(y) });
   };
 
-  // Draw ruler overlay
+  // Draw ruler overlay continuously
   useEffect(() => {
     if (!rulerVisible || !rulerStart || !rulerEnd) return;
 
@@ -762,66 +762,77 @@ const FloorplanCanvas = ({
     const renderer = rendererRef.current;
     if (!canvas || !renderer) return;
 
-    const camera = renderer.getCamera();
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    let animationId: number;
 
-    // Redraw the scene first
-    renderer.render();
+    const drawRuler = () => {
+      const ctx = canvas.getContext('2d');
+      const camera = renderer.getCamera();
+      if (!ctx || !camera) return;
 
-    // Draw ruler in screen space
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset to screen space
+      // Draw ruler in screen space (after renderer has drawn the scene)
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset to screen space
 
-    const startScreen = camera.worldToScreen(rulerStart.x, rulerStart.y);
-    const endScreen = camera.worldToScreen(rulerEnd.x, rulerEnd.y);
+      const startScreen = camera.worldToScreen(rulerStart.x, rulerStart.y);
+      const endScreen = camera.worldToScreen(rulerEnd.x, rulerEnd.y);
 
-    // Draw line
-    ctx.strokeStyle = '#FF0000';
-    ctx.lineWidth = 3;
-    ctx.setLineDash([10, 5]);
-    ctx.beginPath();
-    ctx.moveTo(startScreen.x, startScreen.y);
-    ctx.lineTo(endScreen.x, endScreen.y);
-    ctx.stroke();
-    ctx.setLineDash([]);
+      // Draw line
+      ctx.strokeStyle = '#FF0000';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([10, 5]);
+      ctx.beginPath();
+      ctx.moveTo(startScreen.x, startScreen.y);
+      ctx.lineTo(endScreen.x, endScreen.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
 
-    // Draw start point (fixed, smaller)
-    ctx.fillStyle = '#FF0000';
-    ctx.beginPath();
-    ctx.arc(startScreen.x, startScreen.y, 6, 0, Math.PI * 2);
-    ctx.fill();
+      // Draw start point (fixed, smaller)
+      ctx.fillStyle = '#FF0000';
+      ctx.beginPath();
+      ctx.arc(startScreen.x, startScreen.y, 6, 0, Math.PI * 2);
+      ctx.fill();
 
-    // Draw end point (draggable, larger with ring to indicate interactivity)
-    ctx.fillStyle = '#FF0000';
-    ctx.beginPath();
-    ctx.arc(endScreen.x, endScreen.y, 8, 0, Math.PI * 2);
-    ctx.fill();
+      // Draw end point (draggable, larger with ring to indicate interactivity)
+      ctx.fillStyle = '#FF0000';
+      ctx.beginPath();
+      ctx.arc(endScreen.x, endScreen.y, 8, 0, Math.PI * 2);
+      ctx.fill();
 
-    // Draw outer ring on end point
-    ctx.strokeStyle = '#FFFFFF';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(endScreen.x, endScreen.y, 12, 0, Math.PI * 2);
-    ctx.stroke();
+      // Draw outer ring on end point
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(endScreen.x, endScreen.y, 12, 0, Math.PI * 2);
+      ctx.stroke();
 
-    // Draw distance label
-    const dx = rulerEnd.x - rulerStart.x;
-    const dy = rulerEnd.y - rulerStart.y;
-    const distMm = Math.sqrt(dx * dx + dy * dy);
-    const midX = (startScreen.x + endScreen.x) / 2;
-    const midY = (startScreen.y + endScreen.y) / 2;
+      // Draw distance label
+      const dx = rulerEnd.x - rulerStart.x;
+      const dy = rulerEnd.y - rulerStart.y;
+      const distMm = Math.sqrt(dx * dx + dy * dy);
+      const midX = (startScreen.x + endScreen.x) / 2;
+      const midY = (startScreen.y + endScreen.y) / 2;
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-    ctx.fillRect(midX - 60, midY - 15, 120, 30);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      ctx.fillRect(midX - 60, midY - 15, 120, 30);
 
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 14px system-ui';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`${distMm.toFixed(0)}mm`, midX, midY);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 14px system-ui';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${distMm.toFixed(0)}mm`, midX, midY);
 
-    ctx.restore();
+      ctx.restore();
+
+      // Continue drawing
+      animationId = requestAnimationFrame(drawRuler);
+    };
+
+    // Start drawing loop
+    animationId = requestAnimationFrame(drawRuler);
+
+    return () => {
+      cancelAnimationFrame(animationId);
+    };
   }, [rulerVisible, rulerStart, rulerEnd]);
 
   return (
