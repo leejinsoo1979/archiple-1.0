@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import FloorplanCanvas from '../floorplan/FloorplanCanvas';
 import Babylon3DCanvas from '../babylon/Babylon3DCanvas';
 import styles from './EditorPage.module.css';
@@ -27,6 +27,9 @@ const EditorPage = () => {
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
   const [imageScale, setImageScale] = useState(1.0);
   const [imageOpacity, setImageOpacity] = useState(0.5);
+
+  // File input ref
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load test room data (2800mm x 2800mm room with 100mm walls)
   const handleLoadTestRoom = () => {
@@ -448,6 +451,13 @@ const EditorPage = () => {
           </div>
 
           <div className={styles.createRoomOptions}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              style={{ display: 'none' }}
+            />
             <button className={styles.optionCard}>
               <div className={styles.optionIcon}>
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
@@ -456,7 +466,7 @@ const EditorPage = () => {
               </div>
               <span>Explore</span>
             </button>
-            <button className={styles.optionCard}>
+            <button className={styles.optionCard} onClick={() => fileInputRef.current?.click()}>
               <div className={styles.optionIcon}>
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
@@ -473,6 +483,61 @@ const EditorPage = () => {
               <span>RoomScaner</span>
             </button>
           </div>
+
+          {/* Image controls when image is loaded */}
+          {backgroundImage && (
+            <div className={styles.toolSection}>
+              <h4>Image Controls</h4>
+              <div style={{ padding: '0 16px' }}>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>
+                    스케일: {imageScale.toFixed(1)}x
+                  </label>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="3"
+                    step="0.1"
+                    value={imageScale}
+                    onChange={(e) => setImageScale(parseFloat(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>
+                    투명도: {Math.round(imageOpacity * 100)}%
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={imageOpacity}
+                    onChange={(e) => setImageOpacity(parseFloat(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                <button
+                  onClick={handleScan}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    background: '#667eea',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                  }}
+                >
+                  스캐닝
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Walls */}
           <div className={styles.toolSection}>
