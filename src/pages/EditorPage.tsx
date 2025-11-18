@@ -5,7 +5,6 @@ import styles from './EditorPage.module.css';
 import { ToolType } from '../core/types/EditorState';
 import { createTestRoom } from '../floorplan/blueprint/BlueprintToBabylonAdapter';
 import { RxCursorArrow } from 'react-icons/rx';
-import { ImageImportPanel } from '../ui/panels/ImageImportPanel';
 
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 
@@ -23,7 +22,6 @@ const EditorPage = () => {
     altitude: 45, // 고도 0-90도
   });
   const [playMode, setPlayMode] = useState(false); // FPS mode toggle
-  const [showImageImport, setShowImageImport] = useState(false); // Image import panel toggle
 
   // Background image state
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
@@ -36,14 +34,6 @@ const EditorPage = () => {
     console.log('[EditorPage] Loading test room:', testData);
     setFloorplanData(testData);
     setViewMode('3D'); // Switch to 3D view to see the result
-  };
-
-  // Handle floorplan generated from image import
-  const handleFloorplanGenerated = (data: any) => {
-    console.log('[EditorPage] Floorplan generated from image:', data);
-    setFloorplanData(data);
-    setViewMode('3D'); // Switch to 3D view to see the result
-    setShowImageImport(false); // Close image import panel
   };
 
   // Handle image upload
@@ -63,35 +53,98 @@ const EditorPage = () => {
     reader.readAsDataURL(file);
   };
 
-  // Handle scan button
+  // Handle scan button - extract walls and generate 3D
   const handleScan = async () => {
     if (!backgroundImage) {
-      alert('Please upload an image first');
+      alert('이미지를 먼저 업로드하세요');
       return;
     }
 
-    // Create canvas for image processing
-    const canvas = document.createElement('canvas');
-    canvas.width = backgroundImage.width;
-    canvas.height = backgroundImage.height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    try {
+      // Create canvas for image processing
+      const canvas = document.createElement('canvas');
+      canvas.width = backgroundImage.width;
+      canvas.height = backgroundImage.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
 
-    ctx.drawImage(backgroundImage, 0, 0);
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(backgroundImage, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-    // Import image processing functions
-    const { detectLines, filterWallLines, mergeParallelLines } = await import('../lib/imageProcessing');
+      // Import image processing functions
+      const { detectLines, filterWallLines, mergeParallelLines } = await import('../lib/imageProcessing');
 
-    // Detect lines
-    const allLines = await detectLines(imageData);
-    const wallLines = filterWallLines(allLines);
-    const mergedLines = mergeParallelLines(wallLines);
+      // Detect lines
+      console.log('[EditorPage] Detecting lines...');
+      const allLines = await detectLines(imageData);
+      const wallLines = filterWallLines(allLines);
+      const mergedLines = mergeParallelLines(wallLines);
 
-    console.log('[EditorPage] Detected lines:', mergedLines);
+      console.log('[EditorPage] Detected', mergedLines.length, 'wall lines');
 
-    // TODO: Convert lines to walls and add to FloorplanCanvas
-    alert(`Detected ${mergedLines.length} wall lines! (Conversion not implemented yet)`);
+      if (mergedLines.length === 0) {
+        alert('벽을 감지할 수 없습니다. 이미지 스케일을 조정해보세요.');
+        return;
+      }
+
+      // Convert lines to Blueprint format
+      const points: any[] = [];
+      const walls: any[] = [];
+      const pointMap = new Map<string, number>();
+
+      // Scale factor: image pixels to mm (assume 1 pixel = imageScale mm for now)
+      const pixelToMm = imageScale;
+
+      const getPointId = (x: number, y: number): number => {
+        const key = `${Math.round(x)},${Math.round(y)}`;
+        if (pointMap.has(key)) {
+          return pointMap.get(key)!;
+        }
+        const id = points.length;
+        points.push({
+          id: `p${id}`,
+          x: Math.round(x * pixelToMm),
+          y: Math.round(y * pixelToMm),
+        });
+        pointMap.set(key, id);
+        return id;
+      };
+
+      // Convert each line to a wall
+      mergedLines.forEach((line, index) => {
+        const startId = getPointId(line.x1, line.y1);
+        const endId = getPointId(line.x2, line.y2);
+
+        if (startId !== endId) {
+          walls.push({
+            id: `w${index}`,
+            startPointId: points[startId].id,
+            endPointId: points[endId].id,
+            thickness: 100, // Default 100mm
+            height: 2400, // Default 2400mm
+          });
+        }
+      });
+
+      const babylonData = {
+        points,
+        walls,
+        rooms: [],
+        doors: [],
+        floorplan: null,
+      };
+
+      console.log('[EditorPage] Generated floorplan data:', babylonData);
+
+      // Set data and switch to 3D
+      setFloorplanData(babylonData);
+      setViewMode('3D');
+
+      alert(`${walls.length}개의 벽이 생성되었습니다!`);
+    } catch (error) {
+      console.error('Scan error:', error);
+      alert('스캐닝 중 오류가 발생했습니다.');
+    }
   };
 
   return (
@@ -438,7 +491,7 @@ const EditorPage = () => {
         )}
 
       {/* Left Tools Panel */}
-      {!playMode && leftPanelOpen && !showImageImport && (
+      {!playMode && leftPanelOpen && (
         <div className={styles.leftPanel}>
           <div className={styles.panelHeader}>
             <h3>Create Room</h3>
@@ -454,7 +507,7 @@ const EditorPage = () => {
               </div>
               <span>Explore</span>
             </button>
-            <button className={styles.optionCard} onClick={() => setShowImageImport(true)}>
+            <button className={styles.optionCard}>
               <div className={styles.optionIcon}>
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
@@ -642,16 +695,6 @@ const EditorPage = () => {
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Image Import Panel */}
-      {!playMode && showImageImport && (
-        <div className={styles.leftPanel}>
-          <ImageImportPanel
-            onFloorplanGenerated={handleFloorplanGenerated}
-            onClose={() => setShowImageImport(false)}
-          />
         </div>
       )}
 
