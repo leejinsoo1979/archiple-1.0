@@ -37,6 +37,7 @@ const EditorPage = () => {
   const [rulerEnd, setRulerEnd] = useState<{ x: number; y: number } | null>(null);
   const [rulerDistance, setRulerDistance] = useState<string>('');
   const [draggingRulerPoint, setDraggingRulerPoint] = useState<'start' | 'end' | null>(null);
+  const [editingRulerLabel, setEditingRulerLabel] = useState<{ x: number; y: number; currentDistance: number } | null>(null);
 
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -114,6 +115,46 @@ const EditorPage = () => {
   // Handle ruler drag end
   const handleRulerDragEnd = () => {
     setDraggingRulerPoint(null);
+  };
+
+  // Handle ruler label click
+  const handleRulerLabelClick = (screenX: number, screenY: number, currentDistanceMm: number) => {
+    setEditingRulerLabel({ x: screenX, y: screenY, currentDistance: currentDistanceMm });
+    setRulerDistance(currentDistanceMm.toFixed(0));
+  };
+
+  // Handle ruler label submit
+  const handleRulerLabelSubmit = () => {
+    if (!editingRulerLabel || !rulerStart || !rulerEnd || !backgroundImage) {
+      setEditingRulerLabel(null);
+      return;
+    }
+
+    const realDistanceMm = parseFloat(rulerDistance);
+    if (isNaN(realDistanceMm) || realDistanceMm <= 0) {
+      alert('유효한 거리를 입력하세요');
+      return;
+    }
+
+    // Convert world coordinates (mm) to image pixel coordinates
+    const widthInMm = backgroundImage.width * imageScale;
+    const heightInMm = backgroundImage.height * imageScale;
+
+    const pixel1X = (rulerStart.x + widthInMm / 2) / imageScale;
+    const pixel1Y = (rulerStart.y + heightInMm / 2) / imageScale;
+    const pixel2X = (rulerEnd.x + widthInMm / 2) / imageScale;
+    const pixel2Y = (rulerEnd.y + heightInMm / 2) / imageScale;
+
+    // Calculate pixel distance in image
+    const dx = pixel2X - pixel1X;
+    const dy = pixel2Y - pixel1Y;
+    const pixelDistance = Math.sqrt(dx * dx + dy * dy);
+
+    // Calculate mm per pixel
+    const mmPerPixel = realDistanceMm / pixelDistance;
+
+    setImageScale(mmPerPixel);
+    setEditingRulerLabel(null);
   };
 
   // Handle ruler distance submit
@@ -898,6 +939,7 @@ const EditorPage = () => {
             onRulerDragStart={handleRulerDragStart}
             onRulerDrag={handleRulerDrag}
             onRulerDragEnd={handleRulerDragEnd}
+            onRulerLabelClick={handleRulerLabelClick}
             draggingRulerPoint={draggingRulerPoint}
           />
         </div>
@@ -990,6 +1032,79 @@ const EditorPage = () => {
                   border: 'none',
                   borderRadius: '4px',
                   fontSize: '13px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                }}
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Ruler Label Edit Overlay */}
+        {editingRulerLabel && viewMode === '2D' && !playMode && (
+          <div style={{
+            position: 'absolute',
+            left: `${editingRulerLabel.x}px`,
+            top: `${editingRulerLabel.y + 40}px`,
+            background: 'white',
+            padding: '12px',
+            borderRadius: '6px',
+            border: '2px solid #FF0000',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
+            zIndex: 2000,
+            minWidth: '200px',
+          }}>
+            <div style={{ marginBottom: '8px', fontSize: '12px', color: '#666', fontWeight: '500' }}>
+              실제 거리 입력:
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <input
+                type="number"
+                value={rulerDistance}
+                onChange={(e) => setRulerDistance(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleRulerLabelSubmit();
+                  if (e.key === 'Escape') setEditingRulerLabel(null);
+                }}
+                autoFocus
+                style={{
+                  flex: 1,
+                  padding: '6px 8px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '13px',
+                }}
+              />
+              <span style={{ fontSize: '13px', color: '#666' }}>mm</span>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <button
+                onClick={() => setEditingRulerLabel(null)}
+                style={{
+                  flex: 1,
+                  padding: '6px 12px',
+                  background: '#f5f5f5',
+                  color: '#666',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleRulerLabelSubmit}
+                style={{
+                  flex: 1,
+                  padding: '6px 12px',
+                  background: '#FF0000',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '12px',
                   fontWeight: '500',
                   cursor: 'pointer',
                 }}

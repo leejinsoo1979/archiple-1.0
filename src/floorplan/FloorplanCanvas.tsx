@@ -49,6 +49,7 @@ interface FloorplanCanvasProps {
   onRulerDragStart?: (isStartPoint: boolean) => void;
   onRulerDrag?: (worldX: number, worldY: number) => void;
   onRulerDragEnd?: () => void;
+  onRulerLabelClick?: (screenX: number, screenY: number, currentDistanceMm: number) => void;
   draggingRulerPoint?: 'start' | 'end' | null;
 }
 
@@ -65,12 +66,16 @@ const FloorplanCanvas = ({
   onRulerDragStart,
   onRulerDrag,
   onRulerDragEnd,
+  onRulerLabelClick,
   draggingRulerPoint = null,
 }: FloorplanCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [_mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
   const [_stats, setStats] = useState({ points: 0, walls: 0, rooms: 0, fps: 0 });
+
+  // Ruler label hitbox (in screen coordinates)
+  const rulerLabelHitboxRef = useRef<{ x: number; y: number; width: number; height: number; distanceMm: number } | null>(null);
 
   // Pan state (middle mouse button only)
   const isPanningRef = useRef(false);
@@ -629,6 +634,21 @@ const FloorplanCanvas = ({
       const screenX = event.clientX - rect.left;
       const screenY = event.clientY - rect.top;
 
+      // Check for ruler label click (highest priority - before point dragging)
+      if (event.button === 0 && rulerVisible && onRulerLabelClick) {
+        const hitbox = rulerLabelHitboxRef.current;
+        if (hitbox &&
+            screenX >= hitbox.x &&
+            screenX <= hitbox.x + hitbox.width &&
+            screenY >= hitbox.y &&
+            screenY <= hitbox.y + hitbox.height) {
+          event.preventDefault();
+          event.stopPropagation();
+          onRulerLabelClick(screenX, screenY, hitbox.distanceMm);
+          return;
+        }
+      }
+
       // Check for ruler point drag (left-click on ruler start or end point)
       if (event.button === 0 && rulerVisible && rulerStart && rulerEnd && onRulerDragStart) {
         const camera = renderer.getCamera();
@@ -757,7 +777,7 @@ const FloorplanCanvas = ({
       canvas.removeEventListener('mouseup', handleMouseUp, true);
       canvas.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, [onDimensionClick, rulerVisible, rulerStart, rulerEnd, onRulerDragStart, onRulerDrag, onRulerDragEnd, draggingRulerPoint]);
+  }, [onDimensionClick, rulerVisible, rulerStart, rulerEnd, onRulerDragStart, onRulerDrag, onRulerDragEnd, onRulerLabelClick, draggingRulerPoint]);
 
   // Handle mouse move for coordinate display
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -836,8 +856,27 @@ const FloorplanCanvas = ({
       const midX = (startScreen.x + endScreen.x) / 2;
       const midY = (startScreen.y + endScreen.y) / 2;
 
+      const labelWidth = 120;
+      const labelHeight = 30;
+      const labelX = midX - labelWidth / 2;
+      const labelY = midY - labelHeight / 2;
+
+      // Store hitbox for click detection
+      rulerLabelHitboxRef.current = {
+        x: labelX,
+        y: labelY,
+        width: labelWidth,
+        height: labelHeight,
+        distanceMm: distMm,
+      };
+
       ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-      ctx.fillRect(midX - 60, midY - 15, 120, 30);
+      ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
+
+      // Draw border to indicate clickability
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(labelX, labelY, labelWidth, labelHeight);
 
       ctx.fillStyle = '#FFFFFF';
       ctx.font = 'bold 14px system-ui';
