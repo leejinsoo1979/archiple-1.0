@@ -795,20 +795,22 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     doorPanel.material = doorLeafMaterial;
     doorPanel.parent = doorLeaf;
 
-    // 손잡이 (경첩 반대편)
+    // 손잡이 (경첩 반대편) - doorLeaf 로컬 좌표
     const handleMaterial = new PBRMaterial(`${name}_handleMat`, scene);
     handleMaterial.albedoColor = new Color3(0.7, 0.7, 0.7); // 은색
     handleMaterial.metallic = 0.8;
     handleMaterial.roughness = 0.2;
 
-    const handleX = isLeftHinge ? (DOOR_WIDTH * 0.85) : (DOOR_WIDTH * 0.15);
+    // doorLeaf pivot이 경첩 위치이므로, 손잡이는 경첩에서 멀리 떨어진 곳
+    // left: pivot에서 +방향 (오른쪽), right: pivot에서 -방향 (왼쪽)
+    const handleLocalX = isLeftHinge ? (DOOR_WIDTH * 0.85) : -(DOOR_WIDTH * 0.85);
     const handle = MeshBuilder.CreateCylinder(`${name}_handle`, {
       diameter: 20 * MM_TO_METERS,
       height: 120 * MM_TO_METERS
     }, scene);
     handle.rotation.z = Math.PI / 2; // 수평으로 회전
     handle.position.set(
-      handleX * MM_TO_METERS,
+      handleLocalX * MM_TO_METERS,
       0, // 중간 높이
       (FRAME_DEPTH / 2 + 15) * MM_TO_METERS // 문 앞쪽
     );
@@ -825,7 +827,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       diameter: 0.1
     }, scene);
     hotspot.position.set(
-      handleX * MM_TO_METERS,
+      handleLocalX * MM_TO_METERS,
       0,
       (FRAME_DEPTH / 2 + 60) * MM_TO_METERS
     );
