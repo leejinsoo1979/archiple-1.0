@@ -861,9 +861,7 @@ const EditorPage = () => {
                 title="Draw Staight Walls"
                 onClick={() => setActiveTool(ToolType.WALL)}
               >
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <rect x="8" y="20" width="32" height="8" stroke="currentColor" strokeWidth="2" fill="none"/>
-                </svg>
+                <img src="/icons/wall.svg" alt="Wall" width="32" height="32" />
                 <span>Draw Staight Walls</span>
               </button>
               <button className={styles.toolBtn} title="Draw Arc Walls">
