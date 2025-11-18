@@ -77,11 +77,11 @@ export class GridLayer extends BaseLayer {
       gridOpacity = 0.8 + (zoom - 0.05) / 0.95 * 0.2; // Fade from 0.8 to 1.0
     }
 
-    // Draw minor grid with fade effect (very thin lines)
-    this.drawGrid(ctx, this.config.gridSize, this.config.minorColor, 1, viewLeft, viewTop, viewRight, viewBottom, gridOpacity);
+    // Draw minor grid with 30% opacity (matches 3D minorUnitVisibility: 0.3)
+    this.drawGrid(ctx, this.config.gridSize, this.config.minorColor, 1, viewLeft, viewTop, viewRight, viewBottom, gridOpacity * 0.3);
 
-    // Draw major grid with fade effect (much thicker lines)
-    this.drawGrid(ctx, this.config.majorGridSize, this.config.majorColor, 3, viewLeft, viewTop, viewRight, viewBottom, gridOpacity);
+    // Draw major grid with full opacity (thicker lines)
+    this.drawGrid(ctx, this.config.majorGridSize, this.config.majorColor, 2, viewLeft, viewTop, viewRight, viewBottom, gridOpacity);
 
     this.resetOpacity(ctx);
   }

@@ -141,11 +141,11 @@ const FloorplanCanvas = ({
     backgroundLayerRef.current = backgroundLayer;
 
     const gridLayer = new GridLayer({
-      gridSize: config.gridSize, // 100mm minor grid
-      majorGridSize: 1000, // 1000mm = 1m major grid
-      minorColor: '#f0f0f0', // 연한 회색 (100mm 그리드)
-      majorColor: '#666666', // 진한 회색 (1m 그리드)
-      backgroundColor: '#ffffff', // 순백색 배경
+      gridSize: 1000, // 1000mm = 1m minor grid (same as 3D gridRatio: 1.0)
+      majorGridSize: 10000, // 10000mm = 10m major grid (same as 3D majorUnitFrequency: 10)
+      minorColor: '#999999', // Dark gray minor lines (30% opacity effect)
+      majorColor: '#666666', // Darker gray major lines (matches 3D lineColor: 0.4, 0.4, 0.4)
+      backgroundColor: '#CCCCCC', // Light gray background (matches 3D mainColor: 0.8, 0.8, 0.8)
     });
     gridLayer.setSize(canvas.width, canvas.height);
     gridLayerRef.current = gridLayer;
