@@ -901,6 +901,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           moved = true;
         }
 
+        // Camera follows character
+        arcCamera.setTarget(character.position);
+
         // Walking animation
         if (moved) {
           const time = performance.now() * 0.005;
