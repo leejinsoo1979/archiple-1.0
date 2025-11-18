@@ -841,7 +841,7 @@ const Babylon3DCanvas = forwardRef<
 
     // === 문틀 (Frame) ===
     const frameMaterial = new PBRMaterial(`${name}_frameMat`, scene);
-    frameMaterial.albedoColor = new Color3(0.4, 0.3, 0.2); // 다크 브라운
+    frameMaterial.albedoColor = new Color3(1, 1, 1); // 흰색
     frameMaterial.metallic = 0;
     frameMaterial.roughness = 0.7;
 
@@ -877,7 +877,7 @@ const Babylon3DCanvas = forwardRef<
 
     // === 문짝 (Door Leaf) - 경첩을 pivot으로 회전 ===
     const doorLeafMaterial = new PBRMaterial(`${name}_leafMat`, scene);
-    doorLeafMaterial.albedoColor = new Color3(0.85, 0.7, 0.5); // 밝은 나무색
+    doorLeafMaterial.albedoColor = new Color3(1, 1, 1); // 흰색
     doorLeafMaterial.metallic = 0;
     doorLeafMaterial.roughness = 0.5;
 
