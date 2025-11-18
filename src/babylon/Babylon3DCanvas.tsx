@@ -852,11 +852,12 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
     console.log('[Babylon3DCanvas] Updating 3D scene from 2D data...', floorplanData);
 
-    // Remove ALL old meshes (walls, floors, ceilings, corners, ceiling edges)
+    // Remove ALL old meshes (walls, floors, ceilings, doors, corners)
     const meshesToRemove = scene.meshes.filter(mesh =>
       mesh.name.startsWith('wall') ||
       mesh.name.startsWith('floor_') ||
       mesh.name.startsWith('ceiling_') ||
+      mesh.name.startsWith('door_') ||
       mesh.name.startsWith('corner_')
     );
     meshesToRemove.forEach((mesh) => {
@@ -1265,6 +1266,72 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       });
 
       console.log('[Babylon3DCanvas] Created polygon floors for', rooms.length, 'rooms');
+
+      // Create ceilings for each room - ONLY in play mode
+      if (playMode) {
+        // Calculate maximum wall height for ceiling position
+        const maxWallHeight = walls.reduce((max, wall) => Math.max(max, wall.height || 2400), 2400);
+        const ceilingY = maxWallHeight * MM_TO_METERS;
+
+        // Create ceiling material (white)
+        const ceilingMaterial = new PBRMaterial('ceilingMat_2d', scene);
+        ceilingMaterial.albedoColor = new Color3(0.96, 0.96, 0.94);
+        ceilingMaterial.metallic = 0.0;
+        ceilingMaterial.roughness = 0.6;
+        ceilingMaterial.environmentIntensity = 0.7;
+
+        rooms.forEach((room, roomIndex) => {
+          // Get room boundary points
+          const roomPoints = room.points.map((pid: string) => {
+            const p = pointMap.get(pid);
+            if (!p) return null;
+            return new Vector3(
+              p.x * MM_TO_METERS - centerX,
+              ceilingY,
+              -(p.y * MM_TO_METERS) - centerZ
+            );
+          }).filter((p: any) => p !== null);
+
+          if (roomPoints.length < 3) return;
+
+          // Flatten XZ coordinates for earcut
+          const flatCoords: number[] = [];
+          roomPoints.forEach((p: Vector3) => {
+            flatCoords.push(p.x, p.z);
+          });
+
+          // Triangulate using earcut
+          const triangleIndices = earcut(flatCoords, undefined, 2);
+          if (triangleIndices.length === 0) return;
+
+          // Build ceiling mesh
+          const positions: number[] = [];
+          const normals: number[] = [];
+
+          roomPoints.forEach((p: Vector3) => {
+            positions.push(p.x, ceilingY, p.z);
+            // Normal pointing DOWN (-Y) for ceiling
+            normals.push(0, -1, 0);
+          });
+
+          // Create ceiling mesh
+          const ceiling = new Mesh(`ceiling_${roomIndex}`, scene);
+          const vertexData = new VertexData();
+          vertexData.positions = positions;
+          vertexData.normals = normals;
+          // Reverse indices for correct winding order (viewed from below)
+          vertexData.indices = Array.from(triangleIndices).reverse();
+          vertexData.applyToMesh(ceiling);
+
+          ceiling.material = ceilingMaterial;
+          ceiling.receiveShadows = true;
+          ceiling.checkCollisions = true;
+
+          console.log(`[Babylon3DCanvas] ✅ Ceiling ${roomIndex} created at Y=${ceilingY.toFixed(2)}m`);
+        });
+
+        console.log('[Babylon3DCanvas] Created ceilings for', rooms.length, 'rooms (play mode)');
+      }
     }
 
     // === DOOR INTERACTION: Hover and Click ===
@@ -1383,7 +1450,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         canvas.removeEventListener('pointerdown', handlePointerDown as any);
       };
     }
-  }, [floorplanData]);
+  }, [floorplanData, playMode]);
 
   // Update sun light and skybox when settings change
   useEffect(() => {
