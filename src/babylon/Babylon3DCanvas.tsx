@@ -28,6 +28,14 @@ import earcut from 'earcut';
 import styles from './Babylon3DCanvas.module.css';
 import { eventBus } from '../core/events/EventBus';
 import { EditorEvents } from '../core/events/EditorEvents';
+import {
+  findConnectedWalls,
+  calculateWallCorners,
+  calculateSegmentCorners,
+  type WallCorners,
+} from './utils/WallMiterUtils';
+import type { Wall } from '../core/types/Wall';
+import type { Point } from '../core/types/Point';
 
 // Make earcut available globally for Babylon.js polygon operations
 if (typeof window !== 'undefined') {
@@ -545,6 +553,95 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     initScene();
   }, []);
 
+  /**
+   * Miter Joint 적용된 벽 mesh 생성
+   *
+   * @param corners 4개 코너 (mm 단위)
+   * @param height 벽 높이 (mm 단위)
+   * @param centerX, centerZ 중심점 offset (meters)
+   * @param name mesh 이름
+   * @param scene Babylon scene
+   */
+  const createWallMeshFromCorners = (
+    corners: WallCorners,
+    height: number,
+    centerX: number,
+    centerZ: number,
+    name: string,
+    scene: Scene
+  ): Mesh => {
+    const MM_TO_METERS = 0.001;
+    const wallHeight = height * MM_TO_METERS;
+
+    // 코너를 meters로 변환하고 중심점 offset 적용
+    const toMeters = (x: number, z: number) => ({
+      x: x * MM_TO_METERS - centerX,
+      z: -(z * MM_TO_METERS) - centerZ, // Z축 반전
+    });
+
+    const c1 = toMeters(corners.startLeft.x, corners.startLeft.z);
+    const c2 = toMeters(corners.endLeft.x, corners.endLeft.z);
+    const c3 = toMeters(corners.endRight.x, corners.endRight.z);
+    const c4 = toMeters(corners.startRight.x, corners.startRight.z);
+
+    // VertexData로 직접 mesh 생성
+    const positions: number[] = [];
+    const indices: number[] = [];
+    const normals: number[] = [];
+
+    // 8개 vertex (바닥 4개 + 천장 4개)
+    // 바닥 (y=0)
+    positions.push(c1.x, 0, c1.z); // 0
+    positions.push(c2.x, 0, c2.z); // 1
+    positions.push(c3.x, 0, c3.z); // 2
+    positions.push(c4.x, 0, c4.z); // 3
+
+    // 천장 (y=wallHeight)
+    positions.push(c1.x, wallHeight, c1.z); // 4
+    positions.push(c2.x, wallHeight, c2.z); // 5
+    positions.push(c3.x, wallHeight, c3.z); // 6
+    positions.push(c4.x, wallHeight, c4.z); // 7
+
+    // Indices (각 면마다 2개의 삼각형)
+    // 바닥 (시계방향) - submesh 0
+    indices.push(0, 2, 1);
+    indices.push(0, 3, 2);
+
+    // 천장 (반시계방향 - 위에서 보면 시계방향) - submesh 0
+    indices.push(4, 5, 6);
+    indices.push(4, 6, 7);
+
+    // 측면 4개
+    // Left side (0-1-5-4)
+    indices.push(0, 1, 5);
+    indices.push(0, 5, 4);
+
+    // Front side (1-2-6-5)
+    indices.push(1, 2, 6);
+    indices.push(1, 6, 5);
+
+    // Right side (2-3-7-6)
+    indices.push(2, 3, 7);
+    indices.push(2, 7, 6);
+
+    // Back side (3-0-4-7)
+    indices.push(3, 0, 4);
+    indices.push(3, 4, 7);
+
+    const vertexData = new VertexData();
+    vertexData.positions = positions;
+    vertexData.indices = indices;
+
+    // Normals 자동 계산
+    VertexData.ComputeNormals(positions, indices, normals);
+    vertexData.normals = normals;
+
+    const mesh = new Mesh(name, scene);
+    vertexData.applyToMesh(mesh);
+
+    return mesh;
+  };
+
   // Update 3D scene when floorplan data changes
   useEffect(() => {
     const scene = sceneRef.current;
@@ -645,13 +742,12 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     // Clear and prepare wall meshes array for snap detection
     wallMeshesRef.current = [];
 
-    // Create walls - split if doors present
+    // Create walls with Miter Joints - split if doors present
     walls.forEach((wall, wallIndex) => {
       const startPoint = pointMap.get(wall.startPointId);
       const endPoint = pointMap.get(wall.endPointId);
       if (!startPoint || !endPoint) return;
 
-      const wallThicknessMM = wall.thickness;
       const wallHeightMM = wall.height || 2400;
 
       // Find doors on this wall
@@ -662,48 +758,28 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           wallId: wall.id,
           totalDoors: doors.length,
           wallDoors: wallDoors.length,
-          doors: wallDoors
+          doors: wallDoors,
         });
       }
 
-      // Convert to meters (flip Z axis for correct orientation)
-      const startX = startPoint.x * MM_TO_METERS - centerX;
-      const startZ = -(startPoint.y * MM_TO_METERS) - centerZ;
-      const endX = endPoint.x * MM_TO_METERS - centerX;
-      const endZ = -(endPoint.y * MM_TO_METERS) - centerZ;
+      // Find connected walls and calculate miter joint corners
+      const connections = findConnectedWalls(walls as Wall[], wall as Wall, pointMap);
+      const corners = calculateWallCorners(wall as Wall, connections, pointMap);
 
-      const dx = endX - startX;
-      const dz = endZ - startZ;
-      const wallLengthM = Math.sqrt(dx * dx + dz * dz);
-      const wallThickness = wallThicknessMM * MM_TO_METERS;
-      const wallHeight = wallHeightMM * MM_TO_METERS;
-
-      const angle = Math.atan2(dz, dx);
-
-      // Set face colors: top face = black
-      const faceColors = new Array(6);
-      faceColors[4] = new Color3(0, 0, 0);
+      if (!corners) {
+        console.error('[Babylon3DCanvas] Failed to calculate corners for wall:', wall.id);
+        return;
+      }
 
       if (wallDoors.length === 0) {
-        // No doors - full wall
-        const extendedLength = wallLengthM + wallThickness;
-
-        const wallMesh = MeshBuilder.CreateBox(
+        // No doors - create full wall with miter joints
+        const wallMesh = createWallMeshFromCorners(
+          corners,
+          wallHeightMM,
+          centerX,
+          centerZ,
           `wall_${wallIndex}`,
-          {
-            width: extendedLength,
-            height: wallHeight,
-            depth: wallThickness,
-            faceColors: faceColors,
-          },
           scene
-        );
-
-        wallMesh.rotation.y = -angle;
-        wallMesh.position = new Vector3(
-          (startX + endX) / 2,
-          wallHeight / 2,
-          (startZ + endZ) / 2
         );
 
         wallMesh.material = wallMaterial;
@@ -717,21 +793,26 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           shadowGenerator.addShadowCaster(wallMesh);
         }
       } else {
-        // Has doors - split wall (NO EXTENSION - use original wall length)
+        // Has doors - split wall into segments
         const openings: Array<{ start: number; end: number }> = [];
 
+        // Calculate wall length
+        const dx = endPoint.x - startPoint.x;
+        const dy = endPoint.y - startPoint.y;
+        const wallLengthMM = Math.sqrt(dx * dx + dy * dy);
+
         wallDoors.forEach((door: any) => {
-          const doorWidthM = door.width * MM_TO_METERS;
-          const halfWidth = doorWidthM / 2;
-          // door.position is 0-1 normalized along ORIGINAL wall length
-          const openingStart = Math.max(0, door.position - halfWidth / wallLengthM);
-          const openingEnd = Math.min(1, door.position + halfWidth / wallLengthM);
+          const doorWidthMM = door.width;
+          const halfWidth = doorWidthMM / 2;
+          // door.position is 0-1 normalized along wall length
+          const openingStart = Math.max(0, door.position - halfWidth / wallLengthMM);
+          const openingEnd = Math.min(1, door.position + halfWidth / wallLengthMM);
           openings.push({ start: openingStart, end: openingEnd });
         });
 
         openings.sort((a, b) => a.start - b.start);
         const merged: Array<{ start: number; end: number }> = [];
-        openings.forEach(opening => {
+        openings.forEach((opening) => {
           if (merged.length === 0) {
             merged.push(opening);
           } else {
@@ -748,33 +829,21 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         let currentPos = 0;
         let segIndex = 0;
 
-        merged.forEach(opening => {
+        merged.forEach((opening) => {
           if (currentPos < opening.start) {
             const segStart = currentPos;
             const segEnd = opening.start;
-            const segLength = (segEnd - segStart) * wallLengthM;
 
-            const segStartX = startX + dx * segStart;
-            const segStartZ = startZ + dz * segStart;
-            const segEndX = startX + dx * segEnd;
-            const segEndZ = startZ + dz * segEnd;
+            // Calculate segment corners
+            const segCorners = calculateSegmentCorners(corners, segStart, segEnd);
 
-            const segMesh = MeshBuilder.CreateBox(
+            const segMesh = createWallMeshFromCorners(
+              segCorners,
+              wallHeightMM,
+              centerX,
+              centerZ,
               `wall_${wallIndex}_seg_${segIndex++}`,
-              {
-                width: segLength,
-                height: wallHeight,
-                depth: wallThickness,
-                faceColors: faceColors,
-              },
               scene
-            );
-
-            segMesh.rotation.y = -angle;
-            segMesh.position = new Vector3(
-              (segStartX + segEndX) / 2,
-              wallHeight / 2,
-              (segStartZ + segEndZ) / 2
             );
 
             segMesh.material = wallMaterial;
@@ -795,27 +864,16 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         if (currentPos < 1) {
           const segStart = currentPos;
           const segEnd = 1;
-          const segLength = (segEnd - segStart) * wallLengthM;
 
-          const segStartX = startX + dx * segStart;
-          const segStartZ = startZ + dz * segStart;
+          const segCorners = calculateSegmentCorners(corners, segStart, segEnd);
 
-          const segMesh = MeshBuilder.CreateBox(
+          const segMesh = createWallMeshFromCorners(
+            segCorners,
+            wallHeightMM,
+            centerX,
+            centerZ,
             `wall_${wallIndex}_seg_${segIndex}`,
-            {
-              width: segLength,
-              height: wallHeight,
-              depth: wallThickness,
-              faceColors: faceColors,
-            },
             scene
-          );
-
-          segMesh.rotation.y = -angle;
-          segMesh.position = new Vector3(
-            (segStartX + endX) / 2,
-            wallHeight / 2,
-            (segStartZ + endZ) / 2
           );
 
           segMesh.material = wallMaterial;
