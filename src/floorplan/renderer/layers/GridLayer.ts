@@ -63,20 +63,16 @@ export class GridLayer extends BaseLayer {
     const viewRight = (this.width - transform.e) * invZoom;
     const viewBottom = (this.height - transform.f) * invZoom;
 
-    // Fill background with opacity (matches 3D GridMaterial opacity: 0.95)
+    // Fill background - FULLY OPAQUE (3D GridMaterial opacity applies to entire material, not background)
     const margin = Math.max(this.width, this.height) * invZoom;
-    const bgRgb = this.hexToRgb(this.config.backgroundColor);
-    ctx.fillStyle = `rgba(${bgRgb.r}, ${bgRgb.g}, ${bgRgb.b}, 0.95)`;
+    ctx.fillStyle = this.config.backgroundColor;
     ctx.fillRect(viewLeft - margin, viewTop - margin, (viewRight - viewLeft) + margin * 2, (viewBottom - viewTop) + margin * 2);
 
-    // Fixed opacity matching 3D GridMaterial (opacity: 0.95)
-    const baseOpacity = 0.95;
-
     // Draw minor grid with 30% opacity (matches 3D minorUnitVisibility: 0.3)
-    this.drawGrid(ctx, this.config.gridSize, this.config.minorColor, 1, viewLeft, viewTop, viewRight, viewBottom, baseOpacity * 0.3);
+    this.drawGrid(ctx, this.config.gridSize, this.config.minorColor, 1, viewLeft, viewTop, viewRight, viewBottom, 0.3);
 
-    // Draw major grid with full opacity
-    this.drawGrid(ctx, this.config.majorGridSize, this.config.majorColor, 2, viewLeft, viewTop, viewRight, viewBottom, baseOpacity);
+    // Draw major grid with full opacity (matches 3D major lines)
+    this.drawGrid(ctx, this.config.majorGridSize, this.config.majorColor, 2, viewLeft, viewTop, viewRight, viewBottom, 1.0);
 
     this.resetOpacity(ctx);
   }
