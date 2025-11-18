@@ -212,11 +212,14 @@ export function calculateWallCorners(
       if (Math.abs(miterAngle) > 0.01) {
         const miterOffset = t / Math.tan(Math.abs(miterAngle));
 
-        // 시작점 양쪽 코너를 모두 벽 방향 반대로 이동 (뒤로 당김)
-        corners.startLeft.x -= wallDir.x * miterOffset;
-        corners.startLeft.z -= wallDir.z * miterOffset;
-        corners.startRight.x -= wallDir.x * miterOffset;
-        corners.startRight.z -= wallDir.z * miterOffset;
+        // 양쪽 코너를 모두 대각선으로 절단
+        // startLeft: 벽 방향 뒤로 + perpendicular 왼쪽으로
+        corners.startLeft.x -= wallDir.x * miterOffset - perpendicular.x * miterOffset;
+        corners.startLeft.z -= wallDir.z * miterOffset - perpendicular.z * miterOffset;
+
+        // startRight: 벽 방향 뒤로 + perpendicular 오른쪽으로
+        corners.startRight.x -= wallDir.x * miterOffset + perpendicular.x * miterOffset;
+        corners.startRight.z -= wallDir.z * miterOffset + perpendicular.z * miterOffset;
       }
     }
   }
@@ -239,11 +242,14 @@ export function calculateWallCorners(
       if (Math.abs(miterAngle) > 0.01) {
         const miterOffset = t / Math.tan(Math.abs(miterAngle));
 
-        // 끝점 양쪽 코너를 모두 벽 방향으로 이동 (앞으로 밀어냄)
-        corners.endLeft.x += wallDir.x * miterOffset;
-        corners.endLeft.z += wallDir.z * miterOffset;
-        corners.endRight.x += wallDir.x * miterOffset;
-        corners.endRight.z += wallDir.z * miterOffset;
+        // 양쪽 코너를 모두 대각선으로 절단
+        // endLeft: 벽 방향 앞으로 + perpendicular 왼쪽으로
+        corners.endLeft.x += wallDir.x * miterOffset - perpendicular.x * miterOffset;
+        corners.endLeft.z += wallDir.z * miterOffset - perpendicular.z * miterOffset;
+
+        // endRight: 벽 방향 앞으로 + perpendicular 오른쪽으로
+        corners.endRight.x += wallDir.x * miterOffset + perpendicular.x * miterOffset;
+        corners.endRight.z += wallDir.z * miterOffset + perpendicular.z * miterOffset;
       }
     }
   }
