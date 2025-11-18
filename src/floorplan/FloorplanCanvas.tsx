@@ -547,7 +547,7 @@ const FloorplanCanvas = ({
     if (backgroundLayer) {
       backgroundLayer.setImage(backgroundImage || null);
       backgroundLayer.setScale(imageScale);
-      backgroundLayer.setOpacity(imageOpacity);
+      backgroundLayer.setImageOpacity(imageOpacity);
     }
   }, [backgroundImage, imageScale, imageOpacity]);
 

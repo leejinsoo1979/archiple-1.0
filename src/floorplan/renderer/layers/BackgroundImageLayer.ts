@@ -1,4 +1,4 @@
-import { BaseLayer } from './BaseLayer';
+import { BaseLayer } from './Layer';
 
 /**
  * Background image layer for displaying uploaded floor plan images
@@ -8,10 +8,12 @@ export class BackgroundImageLayer extends BaseLayer {
   private scale: number = 1.0;
   private offsetX: number = 0;
   private offsetY: number = 0;
-  private opacity: number = 0.5;
+  private imageOpacity: number = 0.5;
+  private ctx: CanvasRenderingContext2D;
 
   constructor(ctx: CanvasRenderingContext2D) {
-    super(ctx);
+    super(-1); // z-index: -1 (below grid)
+    this.ctx = ctx;
   }
 
   setImage(image: HTMLImageElement | null): void {
@@ -27,40 +29,31 @@ export class BackgroundImageLayer extends BaseLayer {
     this.offsetY = y;
   }
 
-  setOpacity(opacity: number): void {
-    this.opacity = Math.max(0, Math.min(1, opacity));
+  setImageOpacity(opacity: number): void {
+    this.imageOpacity = Math.max(0, Math.min(1, opacity));
   }
 
   getScale(): number {
     return this.scale;
   }
 
-  getOpacity(): number {
-    return this.opacity;
+  getImageOpacity(): number {
+    return this.imageOpacity;
   }
 
-  render(viewport: { offsetX: number; offsetY: number; zoom: number }): void {
-    if (!this.image) return;
-
-    const ctx = this.ctx;
+  render(ctx: CanvasRenderingContext2D): void {
+    if (!this.image || !this.visible) return;
 
     ctx.save();
 
-    // Apply viewport transform
-    ctx.translate(viewport.offsetX, viewport.offsetY);
-    ctx.scale(viewport.zoom, viewport.zoom);
-
-    // Apply image offset
-    ctx.translate(this.offsetX, this.offsetY);
-
     // Set opacity
-    ctx.globalAlpha = this.opacity;
+    ctx.globalAlpha = this.imageOpacity;
 
-    // Draw image with scale
+    // Draw image with scale at origin
     const width = this.image.width * this.scale;
     const height = this.image.height * this.scale;
 
-    ctx.drawImage(this.image, 0, 0, width, height);
+    ctx.drawImage(this.image, this.offsetX, this.offsetY, width, height);
 
     ctx.restore();
   }
