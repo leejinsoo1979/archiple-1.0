@@ -781,8 +781,14 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
     if (!visible) {
       console.log('[Babylon3DCanvas] Not visible, skipping');
+      // Detach all controls when not visible
+      arcCamera.detachControl();
+      fpsCamera.detachControl();
+      thirdPersonCamera.detachControl();
       return;
     }
+
+    console.log('[Babylon3DCanvas] Starting camera switch, playMode:', playMode);
 
     if (playMode) {
       // ====== PLAY MODE: 1st Person FPS (game mode) ======
@@ -821,15 +827,24 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       // Focus canvas
       canvas.focus();
 
+      // Test keyboard detection
+      const testKeyDown = (evt: KeyboardEvent) => {
+        console.log('[Babylon3DCanvas] Global key pressed:', evt.key, evt.keyCode);
+      };
+      window.addEventListener('keydown', testKeyDown);
+
       console.log('[Babylon3DCanvas] FPS Camera activated, inputs attached:', {
         hasKeyboardInput: !!fpsCamera.inputs?.attached?.keyboard,
         keysUp: fpsCamera.keysUp,
+        keysDown: fpsCamera.keysDown,
+        keysLeft: fpsCamera.keysLeft,
+        keysRight: fpsCamera.keysRight,
         speed: fpsCamera.speed
       });
 
       let lastCameraPos = fpsCamera.position.clone();
 
-      scene.onBeforeRenderObservable.add(() => {
+      const fpsObserver = scene.onBeforeRenderObservable.add(() => {
         if (!fpsCamera || !character) return;
 
         // Sync character position for collision
@@ -859,7 +874,10 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       });
 
       return () => {
-        scene.onBeforeRenderObservable.clear();
+        console.log('[Babylon3DCanvas] Cleanup Play Mode');
+        window.removeEventListener('keydown', testKeyDown);
+        scene.onBeforeRenderObservable.remove(fpsObserver);
+        fpsCamera.detachControl();
         character.isVisible = true;
       };
     } else {
@@ -932,7 +950,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       const moveSpeed = 0.05;
       const rotateSpeed = 0.03;
 
-      scene.onBeforeRenderObservable.add(() => {
+      const characterObserver = scene.onBeforeRenderObservable.add(() => {
         if (!character) return;
 
         let moved = false;
@@ -992,9 +1010,11 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       });
 
       return () => {
+        console.log('[Babylon3DCanvas] Cleanup 3D Mode');
         window.removeEventListener('keydown', onKeyDown);
         window.removeEventListener('keyup', onKeyUp);
-        scene.onBeforeRenderObservable.clear();
+        scene.onBeforeRenderObservable.remove(characterObserver);
+        arcCamera.detachControl();
       };
     }
   }, [playMode, floorplanData, visible]);
