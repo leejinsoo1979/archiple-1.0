@@ -11,6 +11,7 @@ import {
   Color3,
   Color4,
   Texture,
+  CubeTexture,
   DirectionalLight,
   PointLight,
   SpotLight,
@@ -2403,6 +2404,21 @@ const Babylon3DCanvas = forwardRef<
         console.log('[Babylon3DCanvas] ✅ Photo-realistic pipeline created with SSAO, SSR, Bloom, DOF, ACES tone mapping');
       }
 
+      // Create environment texture for PBR materials
+      if (!scene.environmentTexture) {
+        // Use skybox as environment reflection source
+        const skybox = scene.getMeshByName('skybox');
+        if (skybox && skybox.material instanceof SkyMaterial) {
+          // Create procedural environment from skybox for reflections
+          const hdrTexture = CubeTexture.CreateFromPrefilteredData(
+            'https://assets.babylonjs.com/environments/environmentSpecular.env',
+            scene
+          );
+          scene.environmentTexture = hdrTexture;
+          console.log('[Babylon3DCanvas] ✅ HDR environment texture loaded for PBR reflections');
+        }
+      }
+
       // Enhance environment reflections for PBR materials
       if (scene.environmentIntensity !== 1.5) {
         scene.environmentIntensity = 1.5; // Boost environment reflections
@@ -2437,6 +2453,13 @@ const Babylon3DCanvas = forwardRef<
         scene.imageProcessingConfiguration.exposure = 1.0;
         scene.imageProcessingConfiguration.vignetteEnabled = false;
         console.log('[Babylon3DCanvas] ✅ Scene image processing reset to defaults');
+      }
+
+      // Remove environment texture
+      if (scene.environmentTexture) {
+        scene.environmentTexture.dispose();
+        scene.environmentTexture = null;
+        console.log('[Babylon3DCanvas] ✅ Environment texture removed');
       }
 
       // Reset environment intensity to standard
