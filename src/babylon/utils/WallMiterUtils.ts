@@ -316,34 +316,44 @@ export function calculateBasicWallCorners(
 /**
  * 벽 segment를 생성하기 위한 코너 계산 (문이 있을 때)
  *
- * @param corners 전체 벽의 4개 코너 (miter 적용 안 된 기본 corners 사용 권장)
+ * @param miterCorners Miter 적용된 전체 벽 코너 (벽 연결부 사선)
+ * @param basicCorners Miter 적용 안 된 전체 벽 코너 (도어 구멍 일자)
  * @param segmentStart segment 시작 비율 (0-1)
  * @param segmentEnd segment 끝 비율 (0-1)
  */
 export function calculateSegmentCorners(
-  corners: WallCorners,
+  miterCorners: WallCorners,
+  basicCorners: WallCorners,
   segmentStart: number,
   segmentEnd: number
 ): WallCorners {
   // Linear interpolation
   const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
+  const threshold = 0.001; // 0.1% 이내면 벽 끝으로 간주
+
+  // 시작 코너: 벽 시작 부분이면 miter, 아니면 basic
+  const useStartMiter = segmentStart < threshold;
+  const startLeft = useStartMiter
+    ? miterCorners.startLeft
+    : { x: lerp(basicCorners.startLeft.x, basicCorners.endLeft.x, segmentStart), z: lerp(basicCorners.startLeft.z, basicCorners.endLeft.z, segmentStart) };
+  const startRight = useStartMiter
+    ? miterCorners.startRight
+    : { x: lerp(basicCorners.startRight.x, basicCorners.endRight.x, segmentStart), z: lerp(basicCorners.startRight.z, basicCorners.endRight.z, segmentStart) };
+
+  // 끝 코너: 벽 끝 부분이면 miter, 아니면 basic
+  const useEndMiter = segmentEnd > (1 - threshold);
+  const endLeft = useEndMiter
+    ? miterCorners.endLeft
+    : { x: lerp(basicCorners.startLeft.x, basicCorners.endLeft.x, segmentEnd), z: lerp(basicCorners.startLeft.z, basicCorners.endLeft.z, segmentEnd) };
+  const endRight = useEndMiter
+    ? miterCorners.endRight
+    : { x: lerp(basicCorners.startRight.x, basicCorners.endRight.x, segmentEnd), z: lerp(basicCorners.startRight.z, basicCorners.endRight.z, segmentEnd) };
+
   return {
-    startLeft: {
-      x: lerp(corners.startLeft.x, corners.endLeft.x, segmentStart),
-      z: lerp(corners.startLeft.z, corners.endLeft.z, segmentStart),
-    },
-    startRight: {
-      x: lerp(corners.startRight.x, corners.endRight.x, segmentStart),
-      z: lerp(corners.startRight.z, corners.endRight.z, segmentStart),
-    },
-    endLeft: {
-      x: lerp(corners.startLeft.x, corners.endLeft.x, segmentEnd),
-      z: lerp(corners.startLeft.z, corners.endLeft.z, segmentEnd),
-    },
-    endRight: {
-      x: lerp(corners.startRight.x, corners.endRight.x, segmentEnd),
-      z: lerp(corners.startRight.z, corners.endRight.z, segmentEnd),
-    },
+    startLeft,
+    startRight,
+    endLeft,
+    endRight,
   };
 }

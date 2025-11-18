@@ -809,7 +809,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         }
       } else {
         // Has doors - split wall into segments
-        // Use BASIC corners (no miter) for door segments to get clean cuts
+        // Need BOTH miter corners (for wall ends) and basic corners (for door openings)
         const basicCorners = calculateBasicWallCorners(wall as Wall, pointMap);
 
         if (!basicCorners) {
@@ -848,7 +848,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           }
         });
 
-        // Create segments using basic corners for clean door cuts
+        // Create segments: wall ends use miter, door openings use basic
         let currentPos = 0;
         let segIndex = 0;
 
@@ -857,8 +857,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
             const segStart = currentPos;
             const segEnd = opening.start;
 
-            // Calculate segment corners from BASIC corners (no miter = clean door cuts)
-            const segCorners = calculateSegmentCorners(basicCorners, segStart, segEnd);
+            // Segment corners: miter at wall ends, basic at door openings
+            const segCorners = calculateSegmentCorners(corners, basicCorners, segStart, segEnd);
 
             const segMesh = createWallMeshFromCorners(
               segCorners,
@@ -887,7 +887,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           const segStart = currentPos;
           const segEnd = 1;
 
-          const segCorners = calculateSegmentCorners(basicCorners, segStart, segEnd);
+          const segCorners = calculateSegmentCorners(corners, basicCorners, segStart, segEnd);
 
           const segMesh = createWallMeshFromCorners(
             segCorners,
