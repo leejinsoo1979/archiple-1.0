@@ -922,6 +922,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     wallMaterial.metallic = 0.0;
     wallMaterial.roughness = 0.6;
     wallMaterial.environmentIntensity = 0.7;
+    wallMaterial.useVertexColor = false; // 모든 벽 세그먼트 동일한 색상
 
     // Create floor material with real wood texture
     const floorMaterial = new PBRMaterial('floorMat_2d', scene);
