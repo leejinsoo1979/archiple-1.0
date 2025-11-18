@@ -1408,7 +1408,8 @@ const EditorPage = () => {
           width: '100%',
           height: '100%',
           visibility: playMode || viewMode === '3D' ? 'visible' : 'hidden',
-          pointerEvents: playMode || viewMode === '3D' ? 'auto' : 'none'
+          pointerEvents: playMode || viewMode === '3D' ? 'auto' : 'none',
+          cursor: lightPlacementMode ? 'crosshair' : 'default'
         }}>
           <Babylon3DCanvas
             floorplanData={floorplanData}
@@ -1423,6 +1424,35 @@ const EditorPage = () => {
             selectedLightType={selectedLightType}
             onLightPlaced={handleLightPlaced}
           />
+
+          {/* Light Placement Guide Overlay */}
+          {lightPlacementMode && viewMode === '3D' && (
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'rgba(0, 0, 0, 0.85)',
+              color: 'white',
+              padding: '32px 48px',
+              borderRadius: '12px',
+              fontSize: '24px',
+              fontWeight: '600',
+              textAlign: 'center',
+              pointerEvents: 'none',
+              zIndex: 1000,
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+            }}>
+              <div style={{ marginBottom: '12px' }}>
+                {selectedLightType === 'point' ? '포인트 라이트' :
+                 selectedLightType === 'spot' ? '스포트 라이트' :
+                 '방향성 라이트'} 배치 모드
+              </div>
+              <div style={{ fontSize: '18px', fontWeight: '400', color: '#ffc107' }}>
+                ↓ 3D 뷰에서 원하는 위치를 클릭하세요 ↓
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Dimension Edit Modal */}
