@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import {
   Engine,
   Scene,
@@ -12,6 +12,8 @@ import {
   Color4,
   Texture,
   DirectionalLight,
+  PointLight,
+  SpotLight,
   ShadowGenerator,
   HemisphericLight,
   GlowLayer,
@@ -40,6 +42,7 @@ import {
 } from './utils/WallMiterUtils';
 import type { Wall } from '../core/types/Wall';
 import type { Light, LightType } from '../core/types/Light';
+import { createDefaultLight } from '../core/types/Light';
 
 // Make earcut available globally for Babylon.js polygon operations
 if (typeof window !== 'undefined') {
@@ -205,7 +208,10 @@ const findNearestWallSnap = (
   return { x, z };
 };
 
-const Babylon3DCanvas = ({
+const Babylon3DCanvas = forwardRef<
+  { captureRender: (width: number, height: number) => Promise<string> },
+  Babylon3DCanvasProps
+>(({
   floorplanData,
   visible = true,
   sunSettings,
@@ -218,7 +224,7 @@ const Babylon3DCanvas = ({
   lightPlacementMode = false,
   selectedLightType = 'point',
   onLightPlaced
-}: Babylon3DCanvasProps) => {
+}, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const sceneRef = useRef<Scene | null>(null);
@@ -887,6 +893,201 @@ const Babylon3DCanvas = ({
     return { doorGroup, doorLeaf, hotspot };
   };
 
+  /**
+   * 사실적인 슬라이딩 창문 mesh 생성 (창틀, 유리창 2개, 손잡이 포함)
+   *
+   * @param position 창문 위치 (벽 상의 0-1 normalized position)
+   * @param wallStart 벽 시작점 (mm)
+   * @param wallEnd 벽 끝점 (mm)
+   * @param wallThickness 벽 두께 (mm)
+   * @param width 창문 폭 (mm)
+   * @param height 창문 높이 (mm)
+   * @param sillHeight 창틀 하단 높이 (mm from floor)
+   * @param centerX, centerZ 중심점 offset (meters)
+   * @param name mesh 이름
+   * @param scene Babylon scene
+   */
+  const createSlidingWindowMesh = (
+    position: number,
+    wallStart: { x: number; y: number },
+    wallEnd: { x: number; y: number },
+    wallThickness: number,
+    width: number,
+    height: number,
+    sillHeight: number,
+    centerX: number,
+    centerZ: number,
+    name: string,
+    scene: Scene
+  ): { windowGroup: Mesh; slidingPane: Mesh; hotspot: Mesh } => {
+    const MM_TO_METERS = 0.001;
+    const FRAME_WIDTH = 50; // 창틀 너비 50mm
+    const GLASS_THICKNESS = 5; // 유리 두께 5mm
+
+    // 벽 방향 계산
+    const dx = wallEnd.x - wallStart.x;
+    const dy = wallEnd.y - wallStart.y;
+    const wallLength = Math.sqrt(dx * dx + dy * dy);
+    const wallDir = { x: dx / wallLength, y: dy / wallLength };
+
+    // 창문 중심 위치 (mm 단위)
+    const windowCenterMM = {
+      x: wallStart.x + wallDir.x * position * wallLength,
+      y: wallStart.y + wallDir.y * position * wallLength
+    };
+
+    // meters로 변환 - 창문 중심 높이는 sillHeight + height/2
+    const windowCenter3D = new Vector3(
+      windowCenterMM.x * MM_TO_METERS - centerX,
+      (sillHeight + height / 2) * MM_TO_METERS,
+      -(windowCenterMM.y * MM_TO_METERS) - centerZ
+    );
+
+    // 창문 회전 (벽 방향) - Z축 반전 고려, 90도 보정
+    const windowRotationY = Math.atan2(wallDir.x, -wallDir.y) + Math.PI / 2;
+
+    // 창문 그룹 (회전 pivot)
+    const windowGroup = new Mesh(`${name}_group`, scene);
+    windowGroup.position = windowCenter3D;
+    windowGroup.rotation.y = windowRotationY;
+
+    // === 창틀 (Aluminum Frame) ===
+    const frameMaterial = new PBRMaterial(`${name}_frameMat`, scene);
+    frameMaterial.albedoColor = new Color3(0.7, 0.7, 0.75); // 알루미늄 회색
+    frameMaterial.metallic = 0.6;
+    frameMaterial.roughness = 0.3;
+
+    // 좌측 창틀
+    const leftFrame = MeshBuilder.CreateBox(`${name}_leftFrame`, {
+      width: FRAME_WIDTH * MM_TO_METERS,
+      height: height * MM_TO_METERS,
+      depth: wallThickness * MM_TO_METERS
+    }, scene);
+    leftFrame.position.x = -(width / 2 + FRAME_WIDTH / 2) * MM_TO_METERS;
+    leftFrame.material = frameMaterial;
+    leftFrame.parent = windowGroup;
+
+    // 우측 창틀
+    const rightFrame = MeshBuilder.CreateBox(`${name}_rightFrame`, {
+      width: FRAME_WIDTH * MM_TO_METERS,
+      height: height * MM_TO_METERS,
+      depth: wallThickness * MM_TO_METERS
+    }, scene);
+    rightFrame.position.x = (width / 2 + FRAME_WIDTH / 2) * MM_TO_METERS;
+    rightFrame.material = frameMaterial;
+    rightFrame.parent = windowGroup;
+
+    // 상단 창틀
+    const topFrame = MeshBuilder.CreateBox(`${name}_topFrame`, {
+      width: (width + FRAME_WIDTH * 2) * MM_TO_METERS,
+      height: FRAME_WIDTH * MM_TO_METERS,
+      depth: wallThickness * MM_TO_METERS
+    }, scene);
+    topFrame.position.y = (height / 2 + FRAME_WIDTH / 2) * MM_TO_METERS;
+    topFrame.material = frameMaterial;
+    topFrame.parent = windowGroup;
+
+    // 하단 창틀 (Sill)
+    const bottomFrame = MeshBuilder.CreateBox(`${name}_bottomFrame`, {
+      width: (width + FRAME_WIDTH * 2) * MM_TO_METERS,
+      height: FRAME_WIDTH * MM_TO_METERS,
+      depth: wallThickness * MM_TO_METERS
+    }, scene);
+    bottomFrame.position.y = -(height / 2 + FRAME_WIDTH / 2) * MM_TO_METERS;
+    bottomFrame.material = frameMaterial;
+    bottomFrame.parent = windowGroup;
+
+    // 중앙 세로 구분선 (두 유리창 사이)
+    const centerDivider = MeshBuilder.CreateBox(`${name}_centerDivider`, {
+      width: FRAME_WIDTH * 0.5 * MM_TO_METERS,
+      height: height * MM_TO_METERS,
+      depth: wallThickness * MM_TO_METERS
+    }, scene);
+    centerDivider.position.x = 0;
+    centerDivider.material = frameMaterial;
+    centerDivider.parent = windowGroup;
+
+    // === 유리 재질 (투명) ===
+    const glassMaterial = new PBRMaterial(`${name}_glassMat`, scene);
+    glassMaterial.albedoColor = new Color3(0.8, 0.9, 1.0); // 약간 파란 틴트
+    glassMaterial.alpha = 0.3; // 투명도
+    glassMaterial.metallic = 0.0;
+    glassMaterial.roughness = 0.1; // 매우 매끄러움
+    glassMaterial.indexOfRefraction = 1.5; // 유리 굴절률
+    glassMaterial.transparencyMode = 2; // Alpha blend mode
+
+    // === 고정 유리창 (Fixed Pane - 왼쪽) ===
+    const fixedPane = MeshBuilder.CreateBox(`${name}_fixedPane`, {
+      width: (width / 2 - FRAME_WIDTH * 0.25) * MM_TO_METERS,
+      height: (height - FRAME_WIDTH * 0.5) * MM_TO_METERS,
+      depth: GLASS_THICKNESS * MM_TO_METERS
+    }, scene);
+    fixedPane.position.x = -(width / 4 + FRAME_WIDTH * 0.125) * MM_TO_METERS;
+    fixedPane.material = glassMaterial;
+    fixedPane.parent = windowGroup;
+
+    // === 슬라이딩 유리창 (Sliding Pane - 오른쪽, 좌우 이동 가능) ===
+    const slidingPane = new Mesh(`${name}_slidingPane`, scene);
+    slidingPane.position.x = (width / 4 + FRAME_WIDTH * 0.125) * MM_TO_METERS; // 초기 위치 (닫힘)
+    slidingPane.parent = windowGroup;
+
+    const glassPane = MeshBuilder.CreateBox(`${name}_glassPane`, {
+      width: (width / 2 - FRAME_WIDTH * 0.25) * MM_TO_METERS,
+      height: (height - FRAME_WIDTH * 0.5) * MM_TO_METERS,
+      depth: GLASS_THICKNESS * MM_TO_METERS
+    }, scene);
+    glassPane.material = glassMaterial;
+    glassPane.parent = slidingPane;
+
+    // 슬라이딩 창문 손잡이 (작은 실린더)
+    const handleMaterial = new PBRMaterial(`${name}_handleMat`, scene);
+    handleMaterial.albedoColor = new Color3(0.3, 0.3, 0.3); // 검은색
+    handleMaterial.metallic = 0.7;
+    handleMaterial.roughness = 0.2;
+
+    const handle = MeshBuilder.CreateCylinder(`${name}_handle`, {
+      diameter: 15 * MM_TO_METERS,
+      height: 80 * MM_TO_METERS
+    }, scene);
+    handle.rotation.z = Math.PI / 2; // 수평으로 회전
+    handle.position.set(
+      -(width / 4) * MM_TO_METERS, // 왼쪽 가장자리
+      0,
+      (GLASS_THICKNESS / 2 + 10) * MM_TO_METERS // 유리 앞쪽
+    );
+    handle.material = handleMaterial;
+    handle.parent = slidingPane;
+
+    // === 호버 핫스팟 (작은 초록색 구) ===
+    const hotspotMaterial = new PBRMaterial(`${name}_hotspotMat`, scene);
+    hotspotMaterial.albedoColor = new Color3(0.25, 0.68, 0.48); // 초록색 #3fae7a
+    hotspotMaterial.emissiveColor = new Color3(0.25, 0.68, 0.48);
+    hotspotMaterial.alpha = 0; // 초기에는 숨김
+
+    const hotspot = MeshBuilder.CreateSphere(`${name}_hotspot`, {
+      diameter: 0.08
+    }, scene);
+    hotspot.position.set(
+      -(width / 4) * MM_TO_METERS,
+      0,
+      (GLASS_THICKNESS / 2 + 50) * MM_TO_METERS
+    );
+    hotspot.material = hotspotMaterial;
+    hotspot.isPickable = true;
+    hotspot.parent = slidingPane;
+
+    // 슬라이딩 창문 초기 상태 (닫힘)
+    slidingPane.metadata = {
+      isOpen: false,
+      closedPosX: (width / 4 + FRAME_WIDTH * 0.125) * MM_TO_METERS,
+      openPosX: -(width / 4 + FRAME_WIDTH * 0.125) * MM_TO_METERS // 왼쪽으로 슬라이딩
+    };
+
+    console.log('[Babylon3DCanvas] Created sliding window:', name, 'at position', windowCenter3D);
+
+    return { windowGroup, slidingPane, hotspot };
+  };
+
   // Update 3D scene when floorplan data changes
   useEffect(() => {
     const scene = sceneRef.current;
@@ -894,12 +1095,13 @@ const Babylon3DCanvas = ({
 
     console.log('[Babylon3DCanvas] Updating 3D scene from 2D data...', floorplanData);
 
-    // Remove ALL old meshes (walls, floors, ceilings, doors, corners)
+    // Remove ALL old meshes (walls, floors, ceilings, doors, windows, corners)
     const meshesToRemove = scene.meshes.filter(mesh =>
       mesh.name.startsWith('wall') ||
       mesh.name.startsWith('floor_') ||
       mesh.name.startsWith('ceiling_') ||
       mesh.name.startsWith('door_') ||
+      mesh.name.startsWith('window_') ||
       mesh.name.startsWith('corner_')
     );
     meshesToRemove.forEach((mesh) => {
@@ -907,8 +1109,8 @@ const Babylon3DCanvas = ({
       mesh.dispose();
     });
 
-    const { points, walls, doors = [], floorplan: _floorplan } = floorplanData;
-    console.log('[Babylon3DCanvas] Points:', points?.length, 'Walls:', walls?.length, 'Doors:', doors?.length);
+    const { points, walls, doors = [], windows = [], floorplan: _floorplan } = floorplanData;
+    console.log('[Babylon3DCanvas] Points:', points?.length, 'Walls:', walls?.length, 'Doors:', doors?.length, 'Windows:', windows?.length);
     if (!walls || walls.length === 0) return;
 
     const planMetrics = computePlanMetrics(points);
@@ -997,8 +1199,9 @@ const Babylon3DCanvas = ({
 
       const wallHeightMM = wall.height || 2400;
 
-      // Find doors on this wall
+      // Find doors and windows on this wall
       const wallDoors = doors.filter((door: any) => door.wallId === wall.id);
+      const wallWindows = windows.filter((window: any) => window.wallId === wall.id);
 
       // Find connected walls and calculate miter joint corners
       const connections = findConnectedWalls(walls as Wall[], wall as Wall, pointMap);
@@ -1019,8 +1222,8 @@ const Babylon3DCanvas = ({
         scene
       );
 
-      // If wall has doors, subtract door openings using CSG
-      if (wallDoors.length > 0) {
+      // If wall has doors or windows, subtract openings using CSG
+      if (wallDoors.length > 0 || wallWindows.length > 0) {
         const DOOR_HEIGHT = 2050; // 도어 높이 (mm)
         const FRAME_WIDTH = 50; // 문틀 너비 (mm)
         const OPENING_HEIGHT = DOOR_HEIGHT + FRAME_WIDTH; // 타공 높이 (도어 + 상단 문틀)
@@ -1045,7 +1248,7 @@ const Babylon3DCanvas = ({
           };
 
           // Create door opening box (in meters)
-          const openingBox = MeshBuilder.CreateBox(`temp_opening`, {
+          const openingBox = MeshBuilder.CreateBox(`temp_door_opening`, {
             width: OPENING_WIDTH_MM * MM_TO_METERS,
             height: OPENING_HEIGHT * MM_TO_METERS,
             depth: (wall.thickness + 100) * MM_TO_METERS // Slightly larger than wall thickness
@@ -1064,6 +1267,44 @@ const Babylon3DCanvas = ({
 
           // Dispose temporary box
           openingBox.dispose();
+        });
+
+        // Subtract each window opening
+        wallWindows.forEach((window: any) => {
+          const windowWidth = window.width || 1200;
+          const windowHeight = window.height || 1200;
+          const windowSillHeight = window.sillHeight || 900;
+          const WINDOW_FRAME_WIDTH = 50;
+
+          // Calculate window center position along wall
+          const windowCenterMM = {
+            x: startPoint.x + wallDir.x * window.position * wallLengthMM,
+            y: startPoint.y + wallDir.y * window.position * wallLengthMM
+          };
+
+          // Create window opening box (in meters)
+          const windowOpeningBox = MeshBuilder.CreateBox(`temp_window_opening`, {
+            width: (windowWidth + WINDOW_FRAME_WIDTH * 2) * MM_TO_METERS,
+            height: (windowHeight + WINDOW_FRAME_WIDTH * 2) * MM_TO_METERS,
+            depth: (wall.thickness + 100) * MM_TO_METERS
+          }, scene);
+
+          // Window center Y position (from floor)
+          const windowCenterY = (windowSillHeight + windowHeight / 2) * MM_TO_METERS;
+
+          windowOpeningBox.position = new Vector3(
+            windowCenterMM.x * MM_TO_METERS - centerX,
+            windowCenterY,
+            -(windowCenterMM.y * MM_TO_METERS) - centerZ
+          );
+          windowOpeningBox.rotation.y = wallRotationY + Math.PI / 2;
+
+          // Subtract opening from wall
+          const windowOpeningCSG = CSG.FromMesh(windowOpeningBox);
+          wallCSG = wallCSG.subtract(windowOpeningCSG);
+
+          // Dispose temporary box
+          windowOpeningBox.dispose();
         });
 
         // Convert CSG back to mesh
@@ -2296,7 +2537,6 @@ const Babylon3DCanvas = ({
       console.log('[Babylon3DCanvas] Light placement position (mm):', lightPosition);
 
       // Create light with default settings for selected type
-      const { createDefaultLight } = require('../core/types/Light');
       const newLight = createDefaultLight(selectedLightType, lightPosition);
 
       // Call callback to add light to state
