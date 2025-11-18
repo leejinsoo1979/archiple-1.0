@@ -2330,52 +2330,75 @@ const Babylon3DCanvas = forwardRef<
 
     const pipeline = pipelineRef.current;
 
+    console.log('[Babylon3DCanvas] Updating rendering settings...', renderSettings);
+
     // Update SSAO
     if (pipeline.ssao2) {
       pipeline.ssao2.radius = renderSettings.ssaoRadius;
       pipeline.ssao2.totalStrength = renderSettings.ssaoStrength;
+      console.log('[Babylon3DCanvas] SSAO updated:', renderSettings.ssaoRadius, renderSettings.ssaoStrength);
     }
 
     // Update SSR
     if (pipeline.screenSpaceReflections) {
       pipeline.screenSpaceReflections.strength = renderSettings.ssrStrength;
+      console.log('[Babylon3DCanvas] SSR updated:', renderSettings.ssrStrength);
     }
 
     // Update Bloom
     if (pipeline.bloom) {
       pipeline.bloom.threshold = renderSettings.bloomThreshold;
       pipeline.bloom.weight = renderSettings.bloomWeight;
+      console.log('[Babylon3DCanvas] Bloom updated:', renderSettings.bloomThreshold, renderSettings.bloomWeight);
     }
 
     // Update DOF
     if (pipeline.depthOfField) {
       pipeline.depthOfField.focusDistance = renderSettings.dofFocusDistance;
       pipeline.depthOfField.fStop = renderSettings.dofFStop;
+      console.log('[Babylon3DCanvas] DOF updated:', renderSettings.dofFocusDistance, renderSettings.dofFStop);
     }
 
     // Update Image Processing
     if (pipeline.imageProcessing) {
       pipeline.imageProcessing.vignetteWeight = renderSettings.vignetteWeight;
+      console.log('[Babylon3DCanvas] Vignette updated:', renderSettings.vignetteWeight);
     }
 
     // Update Chromatic Aberration
     if (pipeline.chromaticAberration) {
       pipeline.chromaticAberration.aberrationAmount = renderSettings.chromaticAberration;
+      console.log('[Babylon3DCanvas] Chromatic Aberration updated:', renderSettings.chromaticAberration);
     }
 
     // Update Grain
     if (pipeline.grain) {
       pipeline.grain.intensity = renderSettings.grainIntensity;
+      console.log('[Babylon3DCanvas] Grain updated:', renderSettings.grainIntensity);
     }
 
     // Update Sharpen
     if (pipeline.sharpen) {
       pipeline.sharpen.edgeAmount = renderSettings.sharpenAmount;
       pipeline.sharpen.colorAmount = renderSettings.sharpenAmount;
+      console.log('[Babylon3DCanvas] Sharpen updated:', renderSettings.sharpenAmount);
     }
 
-    console.log('[Babylon3DCanvas] ✅ Updated rendering settings:', renderSettings);
-  }, [photoRealisticMode, renderSettings]);
+    console.log('[Babylon3DCanvas] ✅ All rendering settings updated');
+  }, [
+    photoRealisticMode,
+    renderSettings?.ssaoRadius,
+    renderSettings?.ssaoStrength,
+    renderSettings?.ssrStrength,
+    renderSettings?.bloomThreshold,
+    renderSettings?.bloomWeight,
+    renderSettings?.dofFocusDistance,
+    renderSettings?.dofFStop,
+    renderSettings?.chromaticAberration,
+    renderSettings?.grainIntensity,
+    renderSettings?.vignetteWeight,
+    renderSettings?.sharpenAmount,
+  ]);
 
   // Render lights in 3D scene with visual indicators
   useEffect(() => {
