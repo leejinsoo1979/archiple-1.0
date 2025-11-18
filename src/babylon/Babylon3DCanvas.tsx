@@ -670,8 +670,10 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     const mesh = new Mesh(name, scene);
     vertexData.applyToMesh(mesh);
 
-    // 얇은 그레이 윤곽선 추가 (도어 개구부 세그먼트 제외)
-    if (!skipTopFace) {
+    // 얇은 그레이 윤곽선 추가 (도어 관련 세그먼트 제외)
+    // skipTopFace=true: 도어 개구부 하단 세그먼트
+    // skipBottomFace=true: 인방 (도어 위)
+    if (!skipTopFace && !skipBottomFace) {
       mesh.enableEdgesRendering();
       mesh.edgesWidth = 1.0; // 얇은 선
       mesh.edgesColor = new Color4(0.5, 0.5, 0.5, 1); // 그레이색
