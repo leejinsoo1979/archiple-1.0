@@ -4,6 +4,7 @@ import Babylon3DCanvas from '../babylon/Babylon3DCanvas';
 import styles from './EditorPage.module.css';
 import { ToolType } from '../core/types/EditorState';
 import { createTestRoom } from '../floorplan/blueprint/BlueprintToBabylonAdapter';
+import { RxCursorArrow } from 'react-icons/rx';
 
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 
@@ -221,8 +222,9 @@ const EditorPage = () => {
       </header>
 
       {/* Main Content Area */}
-      <div className={styles.mainContent}>
+      <div className={styles.mainContent} style={playMode ? { paddingLeft: 0 } : {}}>
         {/* Left Green Sidebar */}
+        {!playMode && (
         <div className={styles.leftSidebar}>
         <div className={styles.sidebarButtons}>
           <button className={styles.sidebarBtn}>
@@ -322,9 +324,10 @@ const EditorPage = () => {
           </button>
         </div>
       </div>
+        )}
 
       {/* Left Tools Panel */}
-      {leftPanelOpen && (
+      {!playMode && leftPanelOpen && (
         <div className={styles.leftPanel}>
           <div className={styles.panelHeader}>
             <h3>Create Room</h3>
@@ -367,9 +370,7 @@ const EditorPage = () => {
                 title="Select and Move Points"
                 onClick={() => setActiveTool(ToolType.SELECT)}
               >
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <path d="M 10 10 L 10 38 L 24 28 L 30 38 L 34 36 L 28 26 L 38 26 Z" stroke="currentColor" strokeWidth="2" fill="none"/>
-                </svg>
+                <RxCursorArrow size={32} />
                 <span>Select</span>
               </button>
               <button
@@ -580,8 +581,8 @@ const EditorPage = () => {
           left: 0,
           width: '100%',
           height: '100%',
-          visibility: viewMode === '2D' ? 'visible' : 'hidden',
-          pointerEvents: viewMode === '2D' ? 'auto' : 'none'
+          visibility: playMode ? 'hidden' : (viewMode === '2D' ? 'visible' : 'hidden'),
+          pointerEvents: playMode ? 'none' : (viewMode === '2D' ? 'auto' : 'none')
         }}>
           <FloorplanCanvas activeTool={activeTool} onDataChange={setFloorplanData} />
         </div>
@@ -591,12 +592,12 @@ const EditorPage = () => {
           left: 0,
           width: '100%',
           height: '100%',
-          visibility: viewMode === '3D' ? 'visible' : 'hidden',
-          pointerEvents: viewMode === '3D' ? 'auto' : 'none'
+          visibility: playMode || viewMode === '3D' ? 'visible' : 'hidden',
+          pointerEvents: playMode || viewMode === '3D' ? 'auto' : 'none'
         }}>
           <Babylon3DCanvas
             floorplanData={floorplanData}
-            visible={viewMode === '3D'}
+            visible={playMode || viewMode === '3D'}
             sunSettings={sunSettings}
             playMode={playMode}
           />
@@ -604,7 +605,7 @@ const EditorPage = () => {
       </div>
 
       {/* Right Settings Panel */}
-      {rightPanelOpen && (
+      {!playMode && rightPanelOpen && (
         <div className={styles.rightPanel}>
           <div className={styles.panelHeader}>
             <h3>Layer Settings</h3>
