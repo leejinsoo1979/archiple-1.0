@@ -215,19 +215,12 @@ export function calculateWallCorners(
       // 각도가 너무 작으면 miter 적용 안 함 (일직선)
       if (Math.abs(miterAngle) > 0.01) {
         const miterOffset = t / Math.tan(Math.abs(miterAngle));
-        
-        // 양쪽 코너를 다르게 이동 (대각선 절단)
-        if (miterAngle > 0) {
-          // 오른쪽 회전: startLeft는 많이, startRight는 적게
-          corners.startLeft.x -= wallDir.x * (miterOffset * 2);
-          corners.startLeft.z -= wallDir.z * (miterOffset * 2);
-          // startRight는 그대로 (이동 없음)
-        } else {
-          // 왼쪽 회전: startRight는 많이, startLeft는 적게  
-          corners.startRight.x -= wallDir.x * (miterOffset * 2);
-          corners.startRight.z -= wallDir.z * (miterOffset * 2);
-          // startLeft는 그대로 (이동 없음)
-        }
+
+        // 양쪽 코너를 모두 같은 방향으로 이동 (벽 시작 방향으로 당김)
+        corners.startLeft.x -= wallDir.x * miterOffset;
+        corners.startLeft.z -= wallDir.z * miterOffset;
+        corners.startRight.x -= wallDir.x * miterOffset;
+        corners.startRight.z -= wallDir.z * miterOffset;
 
         console.log(`[WallMiter] START - Wall ${wall.id}: miterAngle=${(miterAngle * 180 / Math.PI).toFixed(1)}°, offset=${miterOffset.toFixed(2)}mm`);
       }
@@ -252,17 +245,11 @@ export function calculateWallCorners(
       if (Math.abs(miterAngle) > 0.01) {
         const miterOffset = t / Math.tan(Math.abs(miterAngle));
 
-        if (miterAngle < 0) {
-          // 왼쪽 회전: endLeft는 많이, endRight는 적게
-          corners.endLeft.x += wallDir.x * (miterOffset * 2);
-          corners.endLeft.z += wallDir.z * (miterOffset * 2);
-          // endRight는 그대로
-        } else {
-          // 오른쪽 회전: endRight는 많이, endLeft는 적게
-          corners.endRight.x += wallDir.x * (miterOffset * 2);
-          corners.endRight.z += wallDir.z * (miterOffset * 2);
-          // endLeft는 그대로
-        }
+        // 양쪽 코너를 모두 같은 방향으로 이동 (벽 끝 방향으로 밀어냄)
+        corners.endLeft.x += wallDir.x * miterOffset;
+        corners.endLeft.z += wallDir.z * miterOffset;
+        corners.endRight.x += wallDir.x * miterOffset;
+        corners.endRight.z += wallDir.z * miterOffset;
 
         console.log(`[WallMiter] END - Wall ${wall.id}: miterAngle=${(miterAngle * 180 / Math.PI).toFixed(1)}°, offset=${miterOffset.toFixed(2)}mm`);
       }
