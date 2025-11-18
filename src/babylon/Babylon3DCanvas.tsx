@@ -850,10 +850,16 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       thirdPersonCamera.lowerRadiusLimit = 2;
       thirdPersonCamera.upperRadiusLimit = 8;
 
-      // Limit rotation
+      // Smooth and slow camera movement
       thirdPersonCamera.rotationOffset = 0;
-      thirdPersonCamera.cameraAcceleration = 0.05;
-      thirdPersonCamera.maxCameraSpeed = 1;
+      thirdPersonCamera.cameraAcceleration = 0.01; // Very slow acceleration
+      thirdPersonCamera.maxCameraSpeed = 0.5; // Slower max speed
+
+      // Reduce mouse sensitivity
+      thirdPersonCamera.inputs.attached.mousewheel.wheelPrecision = 50; // Slower zoom
+
+      // Lock rotation to prevent spinning
+      thirdPersonCamera.inputs.attached.pointers.buttons = []; // Disable mouse rotation
 
       fpsCamera.detachControl();
       arcCamera.detachControl();
