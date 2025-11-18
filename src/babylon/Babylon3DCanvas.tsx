@@ -20,6 +20,9 @@ import {
   VertexData,
   Mesh,
   SceneLoader,
+  PointerEventTypes,
+  GizmoManager,
+  UtilityLayerRenderer,
   AbstractMesh,
   FollowCamera,
   DefaultRenderingPipeline,
@@ -237,6 +240,8 @@ const Babylon3DCanvas = forwardRef<
   const loadedModelRef = useRef<AbstractMesh | null>(null); // Store loaded GLB model
   const wallMeshesRef = useRef<Mesh[]>([]); // Store wall meshes for snap detection
   const pipelineRef = useRef<DefaultRenderingPipeline | null>(null); // Store rendering pipeline
+  const gizmoManagerRef = useRef<GizmoManager | null>(null); // Store gizmo manager
+  const selectedLightMeshRef = useRef<Mesh | null>(null); // Store selected light indicator mesh
 
   // Expose captureRender function via ref
   useImperativeHandle(ref, () => ({
@@ -614,6 +619,15 @@ const Babylon3DCanvas = forwardRef<
       createCharacter();
 
       // Render loop
+      // Create GizmoManager for light manipulation
+      const gizmoManager = new GizmoManager(scene);
+      gizmoManager.positionGizmoEnabled = true;
+      gizmoManager.rotationGizmoEnabled = false;
+      gizmoManager.scaleGizmoEnabled = false;
+      gizmoManager.boundingBoxGizmoEnabled = false;
+      gizmoManager.usePointerToAttachGizmos = false; // Manual attachment
+      gizmoManagerRef.current = gizmoManager;
+
       engine.runRenderLoop(() => {
         scene.render();
       });
@@ -1397,6 +1411,40 @@ const Babylon3DCanvas = forwardRef<
             hotspot: hotspot,
             wallIndex,
             doorIndex
+          };
+        });
+      }
+
+      // === CREATE WINDOW MESHES ===
+      if (wallWindows.length > 0) {
+        wallWindows.forEach((window: any, windowIndex: number) => {
+          const { windowGroup, slidingPane, hotspot } = createSlidingWindowMesh(
+            window.position,
+            { x: startPoint.x, y: startPoint.y },
+            { x: endPoint.x, y: endPoint.y },
+            wall.thickness,
+            window.width || 1200,
+            window.height || 1200,
+            window.sillHeight || 900,
+            centerX,
+            centerZ,
+            `window_${wallIndex}_${windowIndex}`,
+            scene
+          );
+
+          // Add to shadow caster
+          if (shadowGenerator) {
+            windowGroup.getChildMeshes().forEach((mesh) => {
+              shadowGenerator.addShadowCaster(mesh);
+            });
+          }
+
+          // Store sliding pane for interaction
+          slidingPane.metadata = {
+            ...slidingPane.metadata,
+            hotspot: hotspot,
+            wallIndex,
+            windowIndex
           };
         });
       }
@@ -2445,6 +2493,7 @@ const Babylon3DCanvas = forwardRef<
         diameter: 0.15 // 15cm diameter
       }, scene);
       indicator.position = positionMeters;
+      indicator.metadata = { lightId: light.id, isLightIndicator: true }; // Store light ID
 
       const indicatorMat = new PBRMaterial(`light_indicator_mat_${light.id}`, scene);
       indicatorMat.albedoColor = indicatorColor;
@@ -2458,6 +2507,9 @@ const Babylon3DCanvas = forwardRef<
       if (glowLayer) {
         glowLayer.addIncludedOnlyMesh(indicator);
       }
+
+      // Make indicator clickable for gizmo manipulation
+      indicator.isPickable = true;
 
       // Create Babylon.js light based on type
       if (!light.enabled) {
@@ -2545,6 +2597,67 @@ const Babylon3DCanvas = forwardRef<
         console.log('[Babylon3DCanvas] Created DirectionalLight:', light.id, 'at', positionMeters, 'direction:', direction);
       }
     });
+
+    // Setup click handler for light indicator selection
+    const gizmoManager = gizmoManagerRef.current;
+    if (gizmoManager) {
+      const handlePointerObservable = scene.onPointerObservable.add((pointerInfo) => {
+        if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
+          const pickResult = pointerInfo.pickInfo;
+
+          if (pickResult && pickResult.hit && pickResult.pickedMesh) {
+            const mesh = pickResult.pickedMesh;
+
+            // Check if clicked mesh is a light indicator
+            if (mesh.metadata && mesh.metadata.isLightIndicator) {
+              console.log('[Babylon3DCanvas] Light indicator clicked:', mesh.metadata.lightId);
+
+              // Attach gizmo to this mesh
+              gizmoManager.attachToMesh(mesh);
+              selectedLightMeshRef.current = mesh as Mesh;
+
+              // Listen for position changes
+              if (gizmoManager.gizmos.positionGizmo) {
+                gizmoManager.gizmos.positionGizmo.onDragEndObservable.clear();
+                gizmoManager.gizmos.positionGizmo.onDragEndObservable.add(() => {
+                  const newPosition = mesh.position;
+                  const lightId = mesh.metadata.lightId;
+
+                  // Convert position back to mm
+                  const newPositionMm = {
+                    x: newPosition.x * 1000,
+                    y: newPosition.y * 1000,
+                    z: -newPosition.z * 1000
+                  };
+
+                  console.log('[Babylon3DCanvas] Light moved to:', newPositionMm);
+
+                  // Update light position in state
+                  const updatedLights = lights.map(l => {
+                    if (l.id === lightId) {
+                      return { ...l, position: newPositionMm };
+                    }
+                    return l;
+                  });
+
+                  // TODO: Need to call a callback to update lights in EditorPage
+                  // For now, just log
+                  console.log('[Babylon3DCanvas] Updated lights:', updatedLights);
+                });
+              }
+            } else {
+              // Clicked something else - detach gizmo
+              gizmoManager.attachToMesh(null);
+              selectedLightMeshRef.current = null;
+            }
+          } else {
+            // Clicked empty space - detach gizmo
+            gizmoManager.attachToMesh(null);
+            selectedLightMeshRef.current = null;
+          }
+        }
+      });
+    }
 
     console.log('[Babylon3DCanvas] ✅ Rendered', lights.length, 'lights in 3D scene');
   }, [lights]);

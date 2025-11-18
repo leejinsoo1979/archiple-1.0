@@ -933,6 +933,94 @@ const EditorPage = () => {
                     <button onClick={() => setRenderPanelOpen(false)} className={styles.closeBtn}>×</button>
                   </div>
                   <div className={styles.dropdownBody}>
+                    {/* Preset Buttons */}
+                    <div className={styles.controlGroup}>
+                      <label>프리셋</label>
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                        <button
+                          onClick={() => setRenderSettings({
+                            ssaoRadius: 1.0,
+                            ssaoStrength: 1.3,
+                            ssrStrength: 0.5,
+                            bloomThreshold: 0.8,
+                            bloomWeight: 0.3,
+                            dofFocusDistance: 5000,
+                            dofFStop: 2.8,
+                            chromaticAberration: 3,
+                            grainIntensity: 5,
+                            vignetteWeight: 1.5,
+                            sharpenAmount: 0.3,
+                          })}
+                          style={{
+                            flex: 1,
+                            padding: '8px',
+                            backgroundColor: '#3a3a3a',
+                            color: '#fff',
+                            border: '1px solid #555',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                          }}
+                        >
+                          기본
+                        </button>
+                        <button
+                          onClick={() => setRenderSettings({
+                            ssaoRadius: 0,
+                            ssaoStrength: 0,
+                            ssrStrength: 0,
+                            bloomThreshold: 1,
+                            bloomWeight: 0,
+                            dofFocusDistance: 5000,
+                            dofFStop: 22,
+                            chromaticAberration: 0,
+                            grainIntensity: 0,
+                            vignetteWeight: 0,
+                            sharpenAmount: 0,
+                          })}
+                          style={{
+                            flex: 1,
+                            padding: '8px',
+                            backgroundColor: '#3a3a3a',
+                            color: '#fff',
+                            border: '1px solid #555',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                          }}
+                        >
+                          꺼짐
+                        </button>
+                        <button
+                          onClick={() => setRenderSettings({
+                            ssaoRadius: 2.0,
+                            ssaoStrength: 2.0,
+                            ssrStrength: 1.0,
+                            bloomThreshold: 0.3,
+                            bloomWeight: 1.0,
+                            dofFocusDistance: 3000,
+                            dofFStop: 1.4,
+                            chromaticAberration: 10,
+                            grainIntensity: 20,
+                            vignetteWeight: 3.0,
+                            sharpenAmount: 1.0,
+                          })}
+                          style={{
+                            flex: 1,
+                            padding: '8px',
+                            backgroundColor: '#3a3a3a',
+                            color: '#fff',
+                            border: '1px solid #555',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                          }}
+                        >
+                          극대
+                        </button>
+                      </div>
+                    </div>
+
                     {/* SSAO */}
                     <div className={styles.controlGroup}>
                       <label>SSAO Radius</label>
