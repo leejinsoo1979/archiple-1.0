@@ -212,19 +212,17 @@ export function calculateWallCorners(
       if (Math.abs(miterAngle) > 0.01) {
         const miterOffset = t / Math.tan(Math.abs(miterAngle));
 
-        // miterAngle > 0: 왼쪽으로 회전 → startRight가 바깥쪽 (더 많이 이동)
-        // miterAngle < 0: 오른쪽으로 회전 → startLeft가 바깥쪽 (더 많이 이동)
-
         if (miterAngle > 0) {
-          // 왼쪽 회전: Right가 바깥 (2배), Left는 안쪽 (그대로)
-          corners.startRight.x -= wallDir.x * miterOffset * 2;
-          corners.startRight.z -= wallDir.z * miterOffset * 2;
-          // startLeft는 그대로
+          // 모든 부호 반대로!
+          corners.startRight.x += wallDir.x * miterOffset;
+          corners.startRight.z += wallDir.z * miterOffset;
+          corners.startLeft.x -= wallDir.x * miterOffset;
+          corners.startLeft.z -= wallDir.z * miterOffset;
         } else {
-          // 오른쪽 회전: Left가 바깥 (2배), Right는 안쪽 (그대로)
-          corners.startLeft.x -= wallDir.x * miterOffset * 2;
-          corners.startLeft.z -= wallDir.z * miterOffset * 2;
-          // startRight는 그대로
+          corners.startLeft.x += wallDir.x * miterOffset;
+          corners.startLeft.z += wallDir.z * miterOffset;
+          corners.startRight.x -= wallDir.x * miterOffset;
+          corners.startRight.z -= wallDir.z * miterOffset;
         }
       }
     }
@@ -248,19 +246,17 @@ export function calculateWallCorners(
       if (Math.abs(miterAngle) > 0.01) {
         const miterOffset = t / Math.tan(Math.abs(miterAngle));
 
-        // miterAngle > 0: 왼쪽으로 회전 → endRight가 바깥쪽 (더 많이 이동)
-        // miterAngle < 0: 오른쪽으로 회전 → endLeft가 바깥쪽 (더 많이 이동)
-
         if (miterAngle > 0) {
-          // 왼쪽 회전: Right가 바깥 (2배), Left는 안쪽 (그대로)
-          corners.endRight.x += wallDir.x * miterOffset * 2;
-          corners.endRight.z += wallDir.z * miterOffset * 2;
-          // endLeft는 그대로
+          // 모든 부호 반대로!
+          corners.endRight.x += wallDir.x * miterOffset;
+          corners.endRight.z += wallDir.z * miterOffset;
+          corners.endLeft.x -= wallDir.x * miterOffset;
+          corners.endLeft.z -= wallDir.z * miterOffset;
         } else {
-          // 오른쪽 회전: Left가 바깥 (2배), Right는 안쪽 (그대로)
-          corners.endLeft.x += wallDir.x * miterOffset * 2;
-          corners.endLeft.z += wallDir.z * miterOffset * 2;
-          // endRight는 그대로
+          corners.endLeft.x += wallDir.x * miterOffset;
+          corners.endLeft.z += wallDir.z * miterOffset;
+          corners.endRight.x -= wallDir.x * miterOffset;
+          corners.endRight.z -= wallDir.z * miterOffset;
         }
       }
     }
