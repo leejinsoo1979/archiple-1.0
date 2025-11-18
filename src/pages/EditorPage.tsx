@@ -25,6 +25,11 @@ const EditorPage = () => {
   const [playMode, setPlayMode] = useState(false); // FPS mode toggle
   const [showImageImport, setShowImageImport] = useState(false); // Image import panel toggle
 
+  // Background image state
+  const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
+  const [imageScale, setImageScale] = useState(1.0);
+  const [imageOpacity, setImageOpacity] = useState(0.5);
+
   // Load test room data (2800mm x 2800mm room with 100mm walls)
   const handleLoadTestRoom = () => {
     const testData = createTestRoom();
@@ -41,6 +46,54 @@ const EditorPage = () => {
     setShowImageImport(false); // Close image import panel
   };
 
+  // Handle image upload
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        setBackgroundImage(img);
+        setViewMode('2D'); // Switch to 2D to see image
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle scan button
+  const handleScan = async () => {
+    if (!backgroundImage) {
+      alert('Please upload an image first');
+      return;
+    }
+
+    // Create canvas for image processing
+    const canvas = document.createElement('canvas');
+    canvas.width = backgroundImage.width;
+    canvas.height = backgroundImage.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.drawImage(backgroundImage, 0, 0);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    // Import image processing functions
+    const { detectLines, filterWallLines, mergeParallelLines } = await import('../lib/imageProcessing');
+
+    // Detect lines
+    const allLines = await detectLines(imageData);
+    const wallLines = filterWallLines(allLines);
+    const mergedLines = mergeParallelLines(wallLines);
+
+    console.log('[EditorPage] Detected lines:', mergedLines);
+
+    // TODO: Convert lines to walls and add to FloorplanCanvas
+    alert(`Detected ${mergedLines.length} wall lines! (Conversion not implemented yet)`);
+  };
+
   return (
     <div className={styles.editorContainer}>
       {/* Header */}
@@ -50,6 +103,54 @@ const EditorPage = () => {
           <button onClick={handleLoadTestRoom} className={styles.topBtn} title="Load Test Room (2.8m x 2.8m)" style={{ marginLeft: '10px', padding: '5px 10px', fontSize: '11px' }}>
             TEST ROOM
           </button>
+
+          {/* Image Import Controls */}
+          <div style={{ marginLeft: '20px', display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              style={{ display: 'none' }}
+              id="imageUpload"
+            />
+            <label htmlFor="imageUpload" className={styles.topBtn} style={{ margin: 0, cursor: 'pointer' }}>
+              이미지 업로드
+            </label>
+
+            {backgroundImage && (
+              <>
+                <label style={{ fontSize: '12px', color: '#666' }}>
+                  스케일: {imageScale.toFixed(1)}x
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="3"
+                    step="0.1"
+                    value={imageScale}
+                    onChange={(e) => setImageScale(parseFloat(e.target.value))}
+                    style={{ marginLeft: '8px', width: '100px' }}
+                  />
+                </label>
+
+                <label style={{ fontSize: '12px', color: '#666' }}>
+                  투명도: {Math.round(imageOpacity * 100)}%
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={imageOpacity}
+                    onChange={(e) => setImageOpacity(parseFloat(e.target.value))}
+                    style={{ marginLeft: '8px', width: '100px' }}
+                  />
+                </label>
+
+                <button onClick={handleScan} className={styles.topBtn} style={{ padding: '5px 15px', fontSize: '13px', fontWeight: 'bold' }}>
+                  스캐닝
+                </button>
+              </>
+            )}
+          </div>
         </div>
         <div className={styles.headerCenter}>
           {/* Top Toolbar */}
@@ -604,7 +705,13 @@ const EditorPage = () => {
           visibility: playMode ? 'hidden' : (viewMode === '2D' ? 'visible' : 'hidden'),
           pointerEvents: playMode ? 'none' : (viewMode === '2D' ? 'auto' : 'none')
         }}>
-          <FloorplanCanvas activeTool={activeTool} onDataChange={setFloorplanData} />
+          <FloorplanCanvas
+            activeTool={activeTool}
+            onDataChange={setFloorplanData}
+            backgroundImage={backgroundImage}
+            imageScale={imageScale}
+            imageOpacity={imageOpacity}
+          />
         </div>
         <div style={{
           position: 'absolute',

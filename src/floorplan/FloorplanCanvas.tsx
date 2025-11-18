@@ -19,6 +19,7 @@ import { PointLayer } from './renderer/layers/PointLayer';
 import { GuideLayer } from './renderer/layers/GuideLayer';
 import { SelectionLayer } from './renderer/layers/SelectionLayer';
 import { DoorLayer } from './renderer/layers/DoorLayer';
+import { BackgroundImageLayer } from './renderer/layers/BackgroundImageLayer';
 
 // Tools
 import { ToolManager } from './tools/ToolManager';
@@ -38,9 +39,18 @@ import { KeyboardController } from './controllers/KeyboardController';
 interface FloorplanCanvasProps {
   activeTool: ToolType;
   onDataChange?: (data: { points: any[]; walls: any[]; rooms: any[] }) => void;
+  backgroundImage?: HTMLImageElement | null;
+  imageScale?: number;
+  imageOpacity?: number;
 }
 
-const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => {
+const FloorplanCanvas = ({
+  activeTool,
+  onDataChange,
+  backgroundImage,
+  imageScale = 1.0,
+  imageOpacity = 0.5,
+}: FloorplanCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [_mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
@@ -60,6 +70,7 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
   const keyboardControllerRef = useRef<KeyboardController | null>(null);
 
   // Layers
+  const backgroundLayerRef = useRef<BackgroundImageLayer | null>(null);
   const gridLayerRef = useRef<GridLayer | null>(null);
   const roomLayerRef = useRef<RoomLayer | null>(null);
   const wallLayerRef = useRef<WallLayer | null>(null);
@@ -100,6 +111,12 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
     rendererRef.current = renderer;
 
     // 4. Create Layers
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const backgroundLayer = new BackgroundImageLayer(ctx);
+    backgroundLayerRef.current = backgroundLayer;
+
     const gridLayer = new GridLayer({
       gridSize: config.gridSize, // 100mm minor grid
       majorGridSize: 1000, // 1000mm = 1m major grid
@@ -133,7 +150,8 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
 
     const doorLayer = new DoorLayer();
 
-    // Add layers to renderer (z-index order: Grid→Room→Wall→Door→Point→Guide→Selection)
+    // Add layers to renderer (z-index order: Background→Grid→Room→Wall→Door→Point→Guide→Selection)
+    renderer.addLayer(backgroundLayer);
     renderer.addLayer(gridLayer);
     renderer.addLayer(roomLayer);
     renderer.addLayer(wallLayer);
@@ -522,6 +540,16 @@ const FloorplanCanvas = ({ activeTool, onDataChange }: FloorplanCanvasProps) => 
       sceneManager.setTool(activeTool);
     }
   }, [activeTool]);
+
+  // Update background image layer when props change
+  useEffect(() => {
+    const backgroundLayer = backgroundLayerRef.current;
+    if (backgroundLayer) {
+      backgroundLayer.setImage(backgroundImage || null);
+      backgroundLayer.setScale(imageScale);
+      backgroundLayer.setOpacity(imageOpacity);
+    }
+  }, [backgroundImage, imageScale, imageOpacity]);
 
   // Handle mouse wheel zoom
   useEffect(() => {
