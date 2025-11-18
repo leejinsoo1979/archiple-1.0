@@ -32,17 +32,17 @@ const EditorPage = () => {
   // Rendering settings panel (right sidebar)
   const [renderPanelOpen, setRenderPanelOpen] = useState(false);
   const [renderSettings, setRenderSettings] = useState({
-    ssaoRadius: 1.0,
-    ssaoStrength: 1.3,
-    ssrStrength: 0.5,
-    bloomThreshold: 0.8,
-    bloomWeight: 0.3,
+    ssaoRadius: 1.5,
+    ssaoStrength: 2.0,
+    ssrStrength: 0.8,
+    bloomThreshold: 0.6,
+    bloomWeight: 0.5,
     dofFocusDistance: 5000,
-    dofFStop: 2.8,
-    chromaticAberration: 3,
-    grainIntensity: 5,
-    vignetteWeight: 1.5,
-    sharpenAmount: 0.3,
+    dofFStop: 2.0,
+    chromaticAberration: 5,
+    grainIntensity: 8,
+    vignetteWeight: 2.0,
+    sharpenAmount: 0.5,
   });
 
   // 3D View display options
@@ -944,17 +944,17 @@ const EditorPage = () => {
                       <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                         <button
                           onClick={() => setRenderSettings({
-                            ssaoRadius: 1.0,
-                            ssaoStrength: 1.3,
-                            ssrStrength: 0.5,
-                            bloomThreshold: 0.8,
-                            bloomWeight: 0.3,
+                            ssaoRadius: 1.5,
+                            ssaoStrength: 2.0,
+                            ssrStrength: 0.8,
+                            bloomThreshold: 0.6,
+                            bloomWeight: 0.5,
                             dofFocusDistance: 5000,
-                            dofFStop: 2.8,
-                            chromaticAberration: 3,
-                            grainIntensity: 5,
-                            vignetteWeight: 1.5,
-                            sharpenAmount: 0.3,
+                            dofFStop: 2.0,
+                            chromaticAberration: 5,
+                            grainIntensity: 8,
+                            vignetteWeight: 2.0,
+                            sharpenAmount: 0.5,
                           })}
                           style={{
                             flex: 1,

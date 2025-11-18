@@ -2334,8 +2334,8 @@ const Babylon3DCanvas = forwardRef<
         // Enable SSAO (Screen Space Ambient Occlusion) for realistic shadows
         pipeline.ssaoEnabled = true;
         if (pipeline.ssao2) {
-          pipeline.ssao2.radius = renderSettings?.ssaoRadius ?? 1.0;
-          pipeline.ssao2.totalStrength = renderSettings?.ssaoStrength ?? 1.3;
+          pipeline.ssao2.radius = renderSettings?.ssaoRadius ?? 1.5;
+          pipeline.ssao2.totalStrength = renderSettings?.ssaoStrength ?? 2.0;
           pipeline.ssao2.expensiveBlur = true;
           pipeline.ssao2.samples = 32;
           pipeline.ssao2.maxZ = 250;
@@ -2344,7 +2344,7 @@ const Babylon3DCanvas = forwardRef<
         // Enable Screen Space Reflections
         pipeline.screenSpaceReflectionsEnabled = true;
         if (pipeline.screenSpaceReflections) {
-          pipeline.screenSpaceReflections.strength = renderSettings?.ssrStrength ?? 0.5;
+          pipeline.screenSpaceReflections.strength = renderSettings?.ssrStrength ?? 0.8;
           pipeline.screenSpaceReflections.reflectionSpecularFalloffExponent = 3;
           pipeline.screenSpaceReflections.threshold = 0.5;
           pipeline.screenSpaceReflections.roughnessFactor = 0.1;
@@ -2353,8 +2353,8 @@ const Babylon3DCanvas = forwardRef<
         // Enable Bloom for bright highlights
         pipeline.bloomEnabled = true;
         if (pipeline.bloom) {
-          pipeline.bloom.threshold = renderSettings?.bloomThreshold ?? 0.8;
-          pipeline.bloom.weight = renderSettings?.bloomWeight ?? 0.3;
+          pipeline.bloom.threshold = renderSettings?.bloomThreshold ?? 0.6;
+          pipeline.bloom.weight = renderSettings?.bloomWeight ?? 0.5;
           pipeline.bloom.kernel = 64;
         }
 
@@ -2363,7 +2363,7 @@ const Babylon3DCanvas = forwardRef<
         if (pipeline.depthOfField) {
           pipeline.depthOfField.focusDistance = renderSettings?.dofFocusDistance ?? 5000; // 5m focus distance
           pipeline.depthOfField.focalLength = 50; // 50mm lens
-          pipeline.depthOfField.fStop = renderSettings?.dofFStop ?? 2.8; // f/2.8 aperture
+          pipeline.depthOfField.fStop = renderSettings?.dofFStop ?? 2.0; // f/2.0 aperture
         }
 
         // Enable Image Processing with advanced tone mapping
@@ -2374,7 +2374,7 @@ const Babylon3DCanvas = forwardRef<
           pipeline.imageProcessing.exposure = 1.0;
           pipeline.imageProcessing.contrast = 1.1;
           pipeline.imageProcessing.vignetteEnabled = true;
-          pipeline.imageProcessing.vignetteWeight = renderSettings?.vignetteWeight ?? 1.5;
+          pipeline.imageProcessing.vignetteWeight = renderSettings?.vignetteWeight ?? 2.0;
           pipeline.imageProcessing.vignetteStretch = 0.5;
           pipeline.imageProcessing.vignetteColor = new Color4(0, 0, 0, 0);
           pipeline.imageProcessing.vignetteCameraFov = 0.8;
@@ -2383,20 +2383,20 @@ const Babylon3DCanvas = forwardRef<
         // Enable Chromatic Aberration for lens effect
         pipeline.chromaticAberrationEnabled = true;
         if (pipeline.chromaticAberration) {
-          pipeline.chromaticAberration.aberrationAmount = renderSettings?.chromaticAberration ?? 3;
+          pipeline.chromaticAberration.aberrationAmount = renderSettings?.chromaticAberration ?? 5;
         }
 
         // Enable Grain for film-like quality
         pipeline.grainEnabled = true;
         if (pipeline.grain) {
-          pipeline.grain.intensity = renderSettings?.grainIntensity ?? 5;
+          pipeline.grain.intensity = renderSettings?.grainIntensity ?? 8;
           pipeline.grain.animated = true;
         }
 
         // Sharpen for enhanced detail
         pipeline.sharpenEnabled = true;
         if (pipeline.sharpen) {
-          const sharpenAmount = renderSettings?.sharpenAmount ?? 0.3;
+          const sharpenAmount = renderSettings?.sharpenAmount ?? 0.5;
           pipeline.sharpen.edgeAmount = sharpenAmount;
           pipeline.sharpen.colorAmount = sharpenAmount;
         }
