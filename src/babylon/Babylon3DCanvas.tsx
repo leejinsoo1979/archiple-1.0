@@ -38,6 +38,7 @@ import {
   type WallCorners,
 } from './utils/WallMiterUtils';
 import type { Wall } from '../core/types/Wall';
+import type { Light, LightType } from '../core/types/Light';
 
 // Make earcut available globally for Babylon.js polygon operations
 if (typeof window !== 'undefined') {
@@ -57,6 +58,10 @@ interface Babylon3DCanvasProps {
   showCharacter?: boolean;
   glbModelFile?: File | null;
   photoRealisticMode?: boolean;
+  lights?: Light[];
+  lightPlacementMode?: boolean;
+  selectedLightType?: LightType;
+  onLightPlaced?: (light: Light) => void;
 }
 
 // 2D 좌표(mm)를 Babylon 미터 단위로 변환
@@ -186,7 +191,19 @@ const findNearestWallSnap = (
   return { x, z };
 };
 
-const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode = false, showCharacter = false, glbModelFile, photoRealisticMode = false }: Babylon3DCanvasProps) => {
+const Babylon3DCanvas = ({
+  floorplanData,
+  visible = true,
+  sunSettings,
+  playMode = false,
+  showCharacter = false,
+  glbModelFile,
+  photoRealisticMode = false,
+  lights = [],
+  lightPlacementMode = false,
+  selectedLightType = 'point',
+  onLightPlaced
+}: Babylon3DCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const sceneRef = useRef<Scene | null>(null);
@@ -2084,6 +2101,202 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       }
     }
   }, [photoRealisticMode]);
+
+  // Render lights in 3D scene with visual indicators
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    console.log('[Babylon3DCanvas] Updating lights, count:', lights?.length || 0);
+
+    // Remove all existing light meshes and light objects
+    const lightMeshes = scene.meshes.filter(mesh => mesh.name.startsWith('light_indicator_'));
+    lightMeshes.forEach(mesh => mesh.dispose());
+
+    const babylonLights = scene.lights.filter(light =>
+      light.name.startsWith('userLight_') ||
+      light.name.startsWith('pointLight_') ||
+      light.name.startsWith('spotLight_') ||
+      light.name.startsWith('directionalLight_')
+    );
+    babylonLights.forEach(light => light.dispose());
+
+    if (!lights || lights.length === 0) {
+      console.log('[Babylon3DCanvas] No lights to render');
+      return;
+    }
+
+    // Create visual indicators and Babylon.js lights for each light
+    lights.forEach((light) => {
+      // Convert mm position to meters (Babylon units)
+      const positionMeters = new Vector3(
+        light.position.x * MM_TO_METERS,
+        light.position.y * MM_TO_METERS,
+        -light.position.z * MM_TO_METERS // Flip Z axis
+      );
+
+      // Create visual indicator mesh
+      const indicatorColor = new Color3(
+        light.color.r / 255,
+        light.color.g / 255,
+        light.color.b / 255
+      );
+
+      // Light indicator sphere (small glowing sphere)
+      const indicator = MeshBuilder.CreateSphere(`light_indicator_${light.id}`, {
+        diameter: 0.15 // 15cm diameter
+      }, scene);
+      indicator.position = positionMeters;
+
+      const indicatorMat = new PBRMaterial(`light_indicator_mat_${light.id}`, scene);
+      indicatorMat.albedoColor = indicatorColor;
+      indicatorMat.emissiveColor = indicatorColor;
+      indicatorMat.metallic = 0;
+      indicatorMat.roughness = 0.3;
+      indicator.material = indicatorMat;
+
+      // Add glow to indicator
+      const glowLayer = scene.getGlowLayerByName('glow');
+      if (glowLayer) {
+        glowLayer.addIncludedOnlyMesh(indicator);
+      }
+
+      // Create Babylon.js light based on type
+      if (!light.enabled) {
+        console.log('[Babylon3DCanvas] Light', light.id, 'is disabled, skipping light creation');
+        return;
+      }
+
+      const lightColor = new Color3(
+        light.color.r / 255,
+        light.color.g / 255,
+        light.color.b / 255
+      );
+
+      if (light.type === 'point') {
+        const pointLight = new PointLight(`pointLight_${light.id}`, positionMeters, scene);
+        pointLight.intensity = light.intensity;
+        pointLight.diffuse = lightColor;
+        pointLight.specular = lightColor;
+        if (light.range) {
+          pointLight.range = light.range;
+        }
+
+        // Shadow generator for point light
+        if (light.castShadows) {
+          const shadowGen = new ShadowGenerator(1024, pointLight);
+          shadowGen.useBlurExponentialShadowMap = true;
+          shadowGen.blurKernel = 16;
+        }
+
+        console.log('[Babylon3DCanvas] Created PointLight:', light.id, 'at', positionMeters);
+      } else if (light.type === 'spot') {
+        const direction = light.direction ? new Vector3(
+          light.direction.x,
+          light.direction.y,
+          -light.direction.z // Flip Z
+        ) : new Vector3(0, -1, 0);
+
+        const spotLight = new SpotLight(
+          `spotLight_${light.id}`,
+          positionMeters,
+          direction,
+          light.angle ? (light.angle * Math.PI / 180) : Math.PI / 4, // Convert degrees to radians
+          2, // Exponent
+          scene
+        );
+        spotLight.intensity = light.intensity;
+        spotLight.diffuse = lightColor;
+        spotLight.specular = lightColor;
+        if (light.range) {
+          spotLight.range = light.range;
+        }
+
+        // Shadow generator for spot light
+        if (light.castShadows) {
+          const shadowGen = new ShadowGenerator(1024, spotLight);
+          shadowGen.useBlurExponentialShadowMap = true;
+          shadowGen.blurKernel = 16;
+        }
+
+        console.log('[Babylon3DCanvas] Created SpotLight:', light.id, 'at', positionMeters, 'direction:', direction);
+      } else if (light.type === 'directional') {
+        const direction = light.direction ? new Vector3(
+          light.direction.x,
+          light.direction.y,
+          -light.direction.z // Flip Z
+        ) : new Vector3(0, -1, 0);
+
+        const directionalLight = new DirectionalLight(
+          `directionalLight_${light.id}`,
+          direction,
+          scene
+        );
+        directionalLight.position = positionMeters;
+        directionalLight.intensity = light.intensity;
+        directionalLight.diffuse = lightColor;
+        directionalLight.specular = lightColor;
+
+        // Shadow generator for directional light
+        if (light.castShadows) {
+          const shadowGen = new ShadowGenerator(1024, directionalLight);
+          shadowGen.useBlurExponentialShadowMap = true;
+          shadowGen.blurKernel = 16;
+        }
+
+        console.log('[Babylon3DCanvas] Created DirectionalLight:', light.id, 'at', positionMeters, 'direction:', direction);
+      }
+    });
+
+    console.log('[Babylon3DCanvas] ✅ Rendered', lights.length, 'lights in 3D scene');
+  }, [lights]);
+
+  // Light placement mode - click to place lights
+  useEffect(() => {
+    const scene = sceneRef.current;
+    const canvas = canvasRef.current;
+
+    if (!scene || !canvas || !lightPlacementMode || !onLightPlaced) {
+      return;
+    }
+
+    console.log('[Babylon3DCanvas] Light placement mode active, type:', selectedLightType);
+
+    const handleLightPlacement = (event: PointerEvent) => {
+      if (!scene || !onLightPlaced) return;
+
+      // Get pick ray from mouse position
+      const pickResult = scene.pick(event.offsetX, event.offsetY);
+
+      if (pickResult && pickResult.hit && pickResult.pickedPoint) {
+        const clickPosition = pickResult.pickedPoint;
+
+        // Convert Babylon position (meters) to mm coordinates for Light object
+        const lightPosition = {
+          x: clickPosition.x * 1000, // meters to mm
+          y: clickPosition.y * 1000, // meters to mm
+          z: -clickPosition.z * 1000 // meters to mm (flip Z back)
+        };
+
+        console.log('[Babylon3DCanvas] Light placement clicked at:', lightPosition);
+
+        // Create light with default settings for selected type
+        const { createDefaultLight } = require('../core/types/Light');
+        const newLight = createDefaultLight(selectedLightType, lightPosition);
+
+        // Call callback to add light to state
+        onLightPlaced(newLight);
+
+        console.log('[Babylon3DCanvas] Light placed:', newLight.type, 'at', lightPosition);
+      }
+    };
+
+    canvas.addEventListener('click', handleLightPlacement);
+
+    return () => {
+      canvas.removeEventListener('click', handleLightPlacement);
+    };
+  }, [lightPlacementMode, selectedLightType, onLightPlaced]);
 
   return (
     <div className={styles.container}>
