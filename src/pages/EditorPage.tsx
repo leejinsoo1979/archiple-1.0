@@ -913,11 +913,8 @@ const EditorPage = () => {
                 <span>Single Window</span>
               </button>
               <button className={styles.toolBtn}>
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <rect x="10" y="18" width="14" height="12" stroke="currentColor" strokeWidth="2" fill="none"/>
-                  <rect x="24" y="18" width="14" height="12" stroke="currentColor" strokeWidth="2" fill="none"/>
-                </svg>
-                <span>Double Door</span>
+                <img src="/icons/dualwindow.svg" alt="Dual Window" width="32" height="32" />
+                <span>Dual Window</span>
               </button>
               <button className={styles.toolBtn}>
                 <svg width="32" height="32" viewBox="0 0 48 48">
