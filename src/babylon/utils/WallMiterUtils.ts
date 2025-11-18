@@ -212,12 +212,20 @@ export function calculateWallCorners(
       if (Math.abs(miterAngle) > 0.01) {
         const miterOffset = t / Math.tan(Math.abs(miterAngle));
 
-        // 양쪽 모서리를 벽 방향으로만 같은 거리만큼 당김 (대각선 생성)
-        corners.startLeft.x -= wallDir.x * miterOffset;
-        corners.startLeft.z -= wallDir.z * miterOffset;
-
-        corners.startRight.x -= wallDir.x * miterOffset;
-        corners.startRight.z -= wallDir.z * miterOffset;
+        // miterAngle 부호로 회전 방향 판단
+        if (miterAngle > 0) {
+          // 왼쪽으로 회전: startLeft가 바깥쪽
+          corners.startLeft.x += adjustedConnectedDir.x * miterOffset;
+          corners.startLeft.z += adjustedConnectedDir.z * miterOffset;
+          corners.startRight.x -= wallDir.x * miterOffset;
+          corners.startRight.z -= wallDir.z * miterOffset;
+        } else {
+          // 오른쪽으로 회전: startRight가 바깥쪽
+          corners.startLeft.x -= wallDir.x * miterOffset;
+          corners.startLeft.z -= wallDir.z * miterOffset;
+          corners.startRight.x += adjustedConnectedDir.x * miterOffset;
+          corners.startRight.z += adjustedConnectedDir.z * miterOffset;
+        }
       }
     }
   }
@@ -240,12 +248,20 @@ export function calculateWallCorners(
       if (Math.abs(miterAngle) > 0.01) {
         const miterOffset = t / Math.tan(Math.abs(miterAngle));
 
-        // 양쪽 모서리를 벽 방향으로만 같은 거리만큼 당김 (대각선 생성)
-        corners.endLeft.x += wallDir.x * miterOffset;
-        corners.endLeft.z += wallDir.z * miterOffset;
-
-        corners.endRight.x += wallDir.x * miterOffset;
-        corners.endRight.z += wallDir.z * miterOffset;
+        // miterAngle 부호로 회전 방향 판단
+        if (miterAngle > 0) {
+          // 왼쪽으로 회전: endLeft가 바깥쪽
+          corners.endLeft.x += adjustedConnectedDir.x * miterOffset;
+          corners.endLeft.z += adjustedConnectedDir.z * miterOffset;
+          corners.endRight.x += wallDir.x * miterOffset;
+          corners.endRight.z += wallDir.z * miterOffset;
+        } else {
+          // 오른쪽으로 회전: endRight가 바깥쪽
+          corners.endLeft.x += wallDir.x * miterOffset;
+          corners.endLeft.z += wallDir.z * miterOffset;
+          corners.endRight.x += adjustedConnectedDir.x * miterOffset;
+          corners.endRight.z += adjustedConnectedDir.z * miterOffset;
+        }
       }
     }
   }
