@@ -890,17 +890,11 @@ const EditorPage = () => {
                 title="Place Door (900mm x 2100mm)"
                 onClick={() => setActiveTool(ToolType.DOOR)}
               >
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <rect x="16" y="12" width="16" height="24" stroke="currentColor" strokeWidth="2" fill="none"/>
-                  <line x1="28" y1="24" x2="30" y2="24" stroke="currentColor" strokeWidth="2"/>
-                </svg>
+                <img src="/icons/singledoor.svg" alt="Single Door" width="32" height="32" />
                 <span>Single Door</span>
               </button>
               <button className={styles.toolBtn}>
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <rect x="12" y="12" width="12" height="24" stroke="currentColor" strokeWidth="2" fill="none"/>
-                  <rect x="24" y="12" width="12" height="24" stroke="currentColor" strokeWidth="2" fill="none"/>
-                </svg>
+                <img src="/icons/doubledoor.svg" alt="Double Door" width="32" height="32" />
                 <span>Double Door</span>
               </button>
               <button className={styles.toolBtn}>
