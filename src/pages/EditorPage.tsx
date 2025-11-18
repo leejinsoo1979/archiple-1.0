@@ -88,9 +88,11 @@ const EditorPage = () => {
 
   // Handle light placement from 3D view
   const handleLightPlaced = (light: Light) => {
-    console.log('[EditorPage] Light placed:', light);
-    setLights([...lights, light]);
+    console.log('[EditorPage] ✅ Light placed successfully:', light.type, light.id, 'at position:', light.position);
+    const newLights = [...lights, light];
+    setLights(newLights);
     setSelectedLightId(light.id);
+    console.log('[EditorPage] Total lights:', newLights.length);
     // Keep placement mode active for placing multiple lights
     // User can manually exit by clicking the button again or switching views
   };
@@ -573,6 +575,8 @@ const EditorPage = () => {
                               setSelectedLightType('point');
                               setLightPlacementMode(true);
                               setViewMode('3D');
+                              setPlayMode(false); // Disable play mode during light placement
+                              console.log('[EditorPage] Starting point light placement mode');
                             }
                           }}
                           style={{
@@ -598,6 +602,8 @@ const EditorPage = () => {
                               setSelectedLightType('spot');
                               setLightPlacementMode(true);
                               setViewMode('3D');
+                              setPlayMode(false);
+                              console.log('[EditorPage] Starting spot light placement mode');
                             }
                           }}
                           style={{
@@ -623,6 +629,8 @@ const EditorPage = () => {
                               setSelectedLightType('directional');
                               setLightPlacementMode(true);
                               setViewMode('3D');
+                              setPlayMode(false);
+                              console.log('[EditorPage] Starting directional light placement mode');
                             }
                           }}
                           style={{

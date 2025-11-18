@@ -1,6 +1,8 @@
 import type { Point } from './Point';
 import type { Wall } from './Wall';
 import type { Room } from './Room';
+import type { Door } from './Door';
+import type { Window } from './Window';
 
 /**
  * EditorState represents the complete state of the editor
@@ -9,6 +11,8 @@ export interface EditorState {
   points: Map<string, Point>;
   walls: Map<string, Wall>;
   rooms: Map<string, Room>;
+  doors: Map<string, Door>;
+  windows: Map<string, Window>;
   selectedObjects: Set<string>;
   hoveredObject: string | null;
   currentTool: ToolType;

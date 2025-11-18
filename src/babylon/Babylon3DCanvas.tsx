@@ -2247,16 +2247,22 @@ const Babylon3DCanvas = ({
     const scene = sceneRef.current;
     const canvas = canvasRef.current;
 
-    if (!scene || !canvas || !lightPlacementMode || !onLightPlaced) {
+    if (!scene || !canvas || !lightPlacementMode || !onLightPlaced || playMode) {
+      if (lightPlacementMode && playMode) {
+        console.log('[Babylon3DCanvas] ⚠️ Light placement disabled - playMode is active');
+      }
       return;
     }
 
-    console.log('[Babylon3DCanvas] Light placement mode active, type:', selectedLightType);
+    console.log('[Babylon3DCanvas] ✅ Light placement mode active, type:', selectedLightType);
 
     const handleLightPlacement = (event: PointerEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+
       if (!scene || !onLightPlaced) return;
 
-      console.log('[Babylon3DCanvas] Light placement click detected');
+      console.log('[Babylon3DCanvas] 🖱️ Click detected at', event.offsetX, event.offsetY);
 
       // Get pick ray from mouse position
       const pickResult = scene.pick(event.offsetX, event.offsetY);
@@ -2299,12 +2305,14 @@ const Babylon3DCanvas = ({
       console.log('[Babylon3DCanvas] ✅ Light placed:', newLight.type, 'at', lightPosition);
     };
 
+    console.log('[Babylon3DCanvas] 📌 Registering click event listener for light placement');
     canvas.addEventListener('click', handleLightPlacement);
 
     return () => {
+      console.log('[Babylon3DCanvas] 🗑️ Removing click event listener for light placement');
       canvas.removeEventListener('click', handleLightPlacement);
     };
-  }, [lightPlacementMode, selectedLightType, onLightPlaced]);
+  }, [lightPlacementMode, selectedLightType, onLightPlaced, playMode]);
 
   return (
     <div className={styles.container}>
