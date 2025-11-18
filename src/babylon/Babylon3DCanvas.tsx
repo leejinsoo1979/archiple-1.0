@@ -319,13 +319,13 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
       // Create infinite grid floor
       const createInfiniteGrid = () => {
-        // Create large ground plane (1000m x 1000m - will move with camera)
+        // Create large ground plane (1000m x 1000m - fixed at origin)
         const gridPlane = MeshBuilder.CreateGround(
           'infiniteGrid',
           { width: 1000, height: 1000 },
           scene
         );
-        gridPlane.position.y = -0.01; // Slightly below Y=0 to avoid z-fighting
+        gridPlane.position = new Vector3(0, -0.01, 0); // Fixed at origin, slightly below Y=0
 
         // Create GridMaterial with realistic settings
         const gridMaterial = new GridMaterial('gridMaterial', scene);
@@ -355,17 +355,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         // Lower render priority so it renders below everything else
         gridPlane.renderingGroupId = 0;
 
-        console.log('[Babylon3DCanvas] Infinite grid floor created');
-
-        // Make grid follow camera on XZ plane (infinite effect)
-        scene.onBeforeRenderObservable.add(() => {
-          if (scene.activeCamera) {
-            const cameraPos = scene.activeCamera.position;
-            // Snap grid to camera position (rounded to grid cell for smooth movement)
-            gridPlane.position.x = Math.floor(cameraPos.x);
-            gridPlane.position.z = Math.floor(cameraPos.z);
-          }
-        });
+        console.log('[Babylon3DCanvas] Infinite grid floor created at origin');
 
         return gridPlane;
       };
