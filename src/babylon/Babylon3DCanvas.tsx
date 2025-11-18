@@ -2554,26 +2554,28 @@ const Babylon3DCanvas = forwardRef<
       let clickPosition: Vector3;
 
       if (pickResult && pickResult.hit && pickResult.pickedPoint) {
-        // Clicked on an object - use that position
-        clickPosition = pickResult.pickedPoint;
+        // Clicked on an object - use X,Z position but fix Y to ceiling height
+        clickPosition = pickResult.pickedPoint.clone();
         console.log('[Babylon3DCanvas] Clicked on object at:', clickPosition);
       } else {
-        // Clicked on empty space - place at camera direction, 5 meters away, at height 1.5m
+        // Clicked on empty space - place at camera direction, 5 meters away
         const camera = scene.activeCamera;
         if (!camera) return;
 
         const pickRay = scene.createPickingRay(event.offsetX, event.offsetY, null, camera);
         const distance = 5; // 5 meters from camera
         clickPosition = pickRay.origin.add(pickRay.direction.scale(distance));
-        clickPosition.y = 1.5; // Fix height at 1.5 meters (typical ceiling light height)
 
         console.log('[Babylon3DCanvas] Clicked on empty space, placing at camera direction:', clickPosition);
       }
 
+      // Always place lights at ceiling height (2.4m)
+      clickPosition.y = 2.4; // 2.4 meters = ceiling height
+
       // Convert Babylon position (meters) to mm coordinates for Light object
       const lightPosition = {
         x: clickPosition.x * 1000, // meters to mm
-        y: clickPosition.y * 1000, // meters to mm
+        y: clickPosition.y * 1000, // meters to mm (always 2400mm = ceiling)
         z: -clickPosition.z * 1000 // meters to mm (flip Z back)
       };
 
