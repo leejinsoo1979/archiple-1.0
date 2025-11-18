@@ -742,9 +742,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     // Clear and prepare wall meshes array for snap detection
     wallMeshesRef.current = [];
 
-    // Create walls - TEMPORARY: Use simple box method without miter
-    const ENABLE_MITER = false; // Set to true to enable miter joints
-
+    // Create walls with simple miter joint (trim wall length at connections)
     walls.forEach((wall, wallIndex) => {
       const startPoint = pointMap.get(wall.startPointId);
       const endPoint = pointMap.get(wall.endPointId);
@@ -755,6 +753,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
       // Find doors on this wall
       const wallDoors = doors.filter((door: any) => door.wallId === wall.id);
+
+      // Find connected walls for miter adjustment
+      const connections = findConnectedWalls(walls as Wall[], wall as Wall, pointMap);
 
       // Convert to meters (flip Z axis for correct orientation)
       const startX = startPoint.x * MM_TO_METERS - centerX;
@@ -770,12 +771,34 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
       const angle = Math.atan2(dz, dx);
 
+      // Calculate wall trim for miter joints
+      const halfThickness = wallThickness / 2;
+      let startTrim = 0;
+      let endTrim = 0;
+
+      // If connected at start, trim by half thickness
+      if (connections.startConnected) {
+        startTrim = halfThickness;
+      }
+
+      // If connected at end, trim by half thickness
+      if (connections.endConnected) {
+        endTrim = halfThickness;
+      }
+
+      // Adjusted wall length and position
+      const adjustedLength = wallLengthM - startTrim - endTrim;
+      const trimRatio = (startTrim + endTrim / 2 - endTrim / 2) / wallLengthM;
+
+      const adjustedCenterX = startX + dx * (0.5 + (startTrim - endTrim) / (2 * wallLengthM));
+      const adjustedCenterZ = startZ + dz * (0.5 + (startTrim - endTrim) / (2 * wallLengthM));
+
       if (wallDoors.length === 0) {
         // No doors - create full wall
         const wallMesh = MeshBuilder.CreateBox(
           `wall_${wallIndex}`,
           {
-            width: wallLengthM,
+            width: adjustedLength,
             height: wallHeight,
             depth: wallThickness,
           },
@@ -784,9 +807,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
         wallMesh.rotation.y = -angle;
         wallMesh.position = new Vector3(
-          (startX + endX) / 2,
+          adjustedCenterX,
           wallHeight / 2,
-          (startZ + endZ) / 2
+          adjustedCenterZ
         );
 
         wallMesh.material = wallMaterial;
@@ -800,7 +823,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           shadowGenerator.addShadowCaster(wallMesh);
         }
       } else {
-        // Has doors - split wall into segments
+        // Has doors - split wall into segments with miter trim
         const openings: Array<{ start: number; end: number }> = [];
 
         wallDoors.forEach((door: any) => {
@@ -826,20 +849,33 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           }
         });
 
-        // Create segments
+        // Create segments with miter trim applied
         let currentPos = 0;
         let segIndex = 0;
 
         merged.forEach((opening) => {
           if (currentPos < opening.start) {
-            const segStart = currentPos;
-            const segEnd = opening.start;
-            const segLength = (segEnd - segStart) * wallLengthM;
+            // Calculate segment position with miter trim
+            const segStartRatio = currentPos;
+            const segEndRatio = opening.start;
 
-            const segStartX = startX + dx * segStart;
-            const segStartZ = startZ + dz * segStart;
-            const segEndX = startX + dx * segEnd;
-            const segEndZ = startZ + dz * segEnd;
+            // Convert ratio to actual position (meters)
+            const rawSegStartX = startX + dx * segStartRatio;
+            const rawSegStartZ = startZ + dz * segStartRatio;
+            const rawSegEndX = startX + dx * segEndRatio;
+            const rawSegEndZ = startZ + dz * segEndRatio;
+
+            // Apply miter trim only to first/last segments
+            const isFirstSegment = currentPos === 0;
+            const trimStart = isFirstSegment ? startTrim : 0;
+
+            const segStartX = rawSegStartX + (dx / wallLengthM) * trimStart;
+            const segStartZ = rawSegStartZ + (dz / wallLengthM) * trimStart;
+
+            const segDx = rawSegEndX - rawSegStartX;
+            const segDz = rawSegEndZ - rawSegStartZ;
+            const rawSegLength = Math.sqrt(segDx * segDx + segDz * segDz);
+            const segLength = rawSegLength - trimStart;
 
             const segMesh = MeshBuilder.CreateBox(
               `wall_${wallIndex}_seg_${segIndex++}`,
@@ -853,9 +889,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
             segMesh.rotation.y = -angle;
             segMesh.position = new Vector3(
-              (segStartX + segEndX) / 2,
+              (segStartX + rawSegEndX) / 2,
               wallHeight / 2,
-              (segStartZ + segEndZ) / 2
+              (segStartZ + rawSegEndZ) / 2
             );
 
             segMesh.material = wallMaterial;
@@ -873,12 +909,21 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
         // Final segment
         if (currentPos < 1) {
-          const segStart = currentPos;
-          const segEnd = 1;
-          const segLength = (segEnd - segStart) * wallLengthM;
+          const segStartRatio = currentPos;
+          const segEndRatio = 1;
 
-          const segStartX = startX + dx * segStart;
-          const segStartZ = startZ + dz * segStart;
+          const rawSegStartX = startX + dx * segStartRatio;
+          const rawSegStartZ = startZ + dz * segStartRatio;
+          const rawSegEndX = endX;
+          const rawSegEndZ = endZ;
+
+          // Apply miter trim to end
+          const segEndX = rawSegEndX - (dx / wallLengthM) * endTrim;
+          const segEndZ = rawSegEndZ - (dz / wallLengthM) * endTrim;
+
+          const segDx = segEndX - rawSegStartX;
+          const segDz = segEndZ - rawSegStartZ;
+          const segLength = Math.sqrt(segDx * segDx + segDz * segDz);
 
           const segMesh = MeshBuilder.CreateBox(
             `wall_${wallIndex}_seg_${segIndex}`,
@@ -892,9 +937,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
           segMesh.rotation.y = -angle;
           segMesh.position = new Vector3(
-            (segStartX + endX) / 2,
+            (rawSegStartX + segEndX) / 2,
             wallHeight / 2,
-            (segStartZ + endZ) / 2
+            (rawSegStartZ + segEndZ) / 2
           );
 
           segMesh.material = wallMaterial;

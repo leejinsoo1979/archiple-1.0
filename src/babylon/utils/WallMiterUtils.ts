@@ -210,18 +210,9 @@ export function calculateWallCorners(
         true
       );
 
-      console.log('[Miter] Start connection:', {
-        wallId: wall.id,
-        connectedId: connectedWall.id,
-        atStart,
-        miterAngle: (miterAngle * 180 / Math.PI).toFixed(1) + '°',
-      });
-
       // 각도가 너무 작으면 miter 적용 안 함 (일직선)
       if (Math.abs(miterAngle) > 0.01) {
         const miterOffset = t / Math.tan(Math.abs(miterAngle));
-
-        console.log('[Miter] Start offset:', miterOffset.toFixed(2), 'mm');
 
         // 시작점 코너들을 벽 방향으로 이동
         corners.startLeft.x -= wallDir.x * miterOffset;
