@@ -42,6 +42,9 @@ export class WallLayer extends BaseLayer {
   private selectedWallId: string | null = null;
   private camera: Camera2D | null = null;
   private dimensionHitboxes: DimensionHitbox[] = [];
+  
+  // Angle guide state
+  private angleGuide: { from: Point; angle: number } | null = null;
 
   private config: Required<WallLayerConfig>;
 
@@ -88,6 +91,14 @@ export class WallLayer extends BaseLayer {
   setCamera(camera: Camera2D): void {
     this.camera = camera;
   }
+  
+  setAngleGuide(from: Point | null, angle: number | null): void {
+    if (from && angle !== null) {
+      this.angleGuide = { from, angle };
+    } else {
+      this.angleGuide = null;
+    }
+  }
 
   render(ctx: CanvasRenderingContext2D): void {
     if (!this.visible) return;
@@ -113,6 +124,11 @@ export class WallLayer extends BaseLayer {
     if (this.previewWall) {
       this.renderPreviewWall(ctx, this.previewWall.start, this.previewWall.end);
     }
+    
+    // Render angle guide
+    if (this.angleGuide) {
+      this.renderAngleGuide(ctx, this.angleGuide.from, this.angleGuide.angle);
+    }
 
     this.resetOpacity(ctx);
   }
@@ -137,7 +153,7 @@ export class WallLayer extends BaseLayer {
 
     ctx.strokeStyle = color;
     ctx.lineWidth = thickness;
-    ctx.lineCap = 'square';
+    ctx.lineCap = 'butt'; // 도어 구멍에서 깔끔한 절단을 위해 butt 사용
     ctx.lineJoin = 'miter';
     ctx.miterLimit = 10;
 
@@ -229,7 +245,7 @@ export class WallLayer extends BaseLayer {
     ctx.strokeStyle = this.config.wallColor; // Same color as confirmed walls
     ctx.globalAlpha = 0.5; // 50% transparent for preview
     ctx.lineWidth = thickness;
-    ctx.lineCap = 'square';
+    ctx.lineCap = 'butt';
     ctx.lineJoin = 'miter';
     ctx.miterLimit = 10;
 
@@ -241,6 +257,34 @@ export class WallLayer extends BaseLayer {
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
     ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  /**
+   * Render angle guide line
+   */
+  private renderAngleGuide(ctx: CanvasRenderingContext2D, from: Point, angleDeg: number): void {
+    ctx.save();
+
+    // Convert angle to radians
+    const angleRad = (angleDeg * Math.PI) / 180;
+
+    // Draw a long line in that direction (10000mm = 10m)
+    const length = 10000;
+    const toX = from.x + Math.cos(angleRad) * length;
+    const toY = from.y + Math.sin(angleRad) * length;
+
+    // Dashed line style
+    ctx.strokeStyle = '#3498db'; // Blue guide
+    ctx.lineWidth = 2; // Thin guide line
+    ctx.setLineDash([20, 10]); // Dashed pattern
+    ctx.globalAlpha = 0.6;
+
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(toX, toY);
     ctx.stroke();
 
     ctx.restore();
