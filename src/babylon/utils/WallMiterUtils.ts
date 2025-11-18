@@ -210,22 +210,22 @@ export function calculateWallCorners(
 
       // 각도가 너무 작으면 miter 적용 안 함 (일직선)
       if (Math.abs(miterAngle) > 0.01) {
-        const miterOffset = t / Math.tan(Math.abs(miterAngle));
+        // 절단면과 벽 수직선 사이 각도
+        const cutAngle = Math.PI / 2 - Math.abs(miterAngle);
 
-        // miterAngle 부호로 회전 방향 판단
-        if (miterAngle > 0) {
-          // 왼쪽으로 회전: startLeft가 바깥쪽
-          corners.startLeft.x += adjustedConnectedDir.x * miterOffset;
-          corners.startLeft.z += adjustedConnectedDir.z * miterOffset;
-          corners.startRight.x -= wallDir.x * miterOffset;
-          corners.startRight.z -= wallDir.z * miterOffset;
-        } else {
-          // 오른쪽으로 회전: startRight가 바깥쪽
-          corners.startLeft.x -= wallDir.x * miterOffset;
-          corners.startLeft.z -= wallDir.z * miterOffset;
-          corners.startRight.x += adjustedConnectedDir.x * miterOffset;
-          corners.startRight.z += adjustedConnectedDir.z * miterOffset;
-        }
+        // 모서리별 offset: 바깥쪽은 더 많이, 안쪽은 덜 이동
+        const offsetOuter = t + t * Math.tan(cutAngle);
+        const offsetInner = t - t * Math.tan(cutAngle);
+
+        // miterAngle이 음수면 오른쪽이 바깥, 양수면 왼쪽이 바깥
+        const offsetLeft = miterAngle < 0 ? offsetInner : offsetOuter;
+        const offsetRight = miterAngle < 0 ? offsetOuter : offsetInner;
+
+        // 시작점 코너들을 벽 방향으로 각각 다른 거리만큼 이동
+        corners.startLeft.x -= wallDir.x * offsetLeft;
+        corners.startLeft.z -= wallDir.z * offsetLeft;
+        corners.startRight.x -= wallDir.x * offsetRight;
+        corners.startRight.z -= wallDir.z * offsetRight;
       }
     }
   }
@@ -246,22 +246,21 @@ export function calculateWallCorners(
       const miterAngle = calculateMiterAngle(wallDir, adjustedConnectedDir, true);
 
       if (Math.abs(miterAngle) > 0.01) {
-        const miterOffset = t / Math.tan(Math.abs(miterAngle));
+        // 절단면과 벽 수직선 사이 각도
+        const cutAngle = Math.PI / 2 - Math.abs(miterAngle);
 
-        // miterAngle 부호로 회전 방향 판단
-        if (miterAngle > 0) {
-          // 왼쪽으로 회전: endLeft가 바깥쪽
-          corners.endLeft.x += adjustedConnectedDir.x * miterOffset;
-          corners.endLeft.z += adjustedConnectedDir.z * miterOffset;
-          corners.endRight.x += wallDir.x * miterOffset;
-          corners.endRight.z += wallDir.z * miterOffset;
-        } else {
-          // 오른쪽으로 회전: endRight가 바깥쪽
-          corners.endLeft.x += wallDir.x * miterOffset;
-          corners.endLeft.z += wallDir.z * miterOffset;
-          corners.endRight.x += adjustedConnectedDir.x * miterOffset;
-          corners.endRight.z += adjustedConnectedDir.z * miterOffset;
-        }
+        // 모서리별 offset
+        const offsetOuter = t + t * Math.tan(cutAngle);
+        const offsetInner = t - t * Math.tan(cutAngle);
+
+        const offsetLeft = miterAngle < 0 ? offsetInner : offsetOuter;
+        const offsetRight = miterAngle < 0 ? offsetOuter : offsetInner;
+
+        // 끝점 코너들을 벽 방향으로 각각 다른 거리만큼 이동
+        corners.endLeft.x += wallDir.x * offsetLeft;
+        corners.endLeft.z += wallDir.z * offsetLeft;
+        corners.endRight.x += wallDir.x * offsetRight;
+        corners.endRight.z += wallDir.z * offsetRight;
       }
     }
   }
