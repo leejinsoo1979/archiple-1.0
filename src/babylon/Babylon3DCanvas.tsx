@@ -2403,6 +2403,12 @@ const Babylon3DCanvas = forwardRef<
         console.log('[Babylon3DCanvas] ✅ Photo-realistic pipeline created with SSAO, SSR, Bloom, DOF, ACES tone mapping');
       }
 
+      // Enhance environment reflections for PBR materials
+      if (scene.environmentIntensity !== 1.5) {
+        scene.environmentIntensity = 1.5; // Boost environment reflections
+        console.log('[Babylon3DCanvas] ✅ Environment intensity boosted for PBR reflections');
+      }
+
       // Upgrade shadow quality
       if (sunLight) {
         const shadowGen = sunLight.getShadowGenerator();
@@ -2431,6 +2437,12 @@ const Babylon3DCanvas = forwardRef<
         scene.imageProcessingConfiguration.exposure = 1.0;
         scene.imageProcessingConfiguration.vignetteEnabled = false;
         console.log('[Babylon3DCanvas] ✅ Scene image processing reset to defaults');
+      }
+
+      // Reset environment intensity to standard
+      if (scene.environmentIntensity !== 1.0) {
+        scene.environmentIntensity = 1.0;
+        console.log('[Babylon3DCanvas] ✅ Environment intensity reset to standard');
       }
 
       // Restore standard shadow quality
