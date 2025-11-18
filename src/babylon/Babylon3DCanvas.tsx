@@ -2179,30 +2179,47 @@ const Babylon3DCanvas = ({
     const handleLightPlacement = (event: PointerEvent) => {
       if (!scene || !onLightPlaced) return;
 
+      console.log('[Babylon3DCanvas] Light placement click detected');
+
       // Get pick ray from mouse position
       const pickResult = scene.pick(event.offsetX, event.offsetY);
 
+      let clickPosition: Vector3;
+
       if (pickResult && pickResult.hit && pickResult.pickedPoint) {
-        const clickPosition = pickResult.pickedPoint;
+        // Clicked on an object - use that position
+        clickPosition = pickResult.pickedPoint;
+        console.log('[Babylon3DCanvas] Clicked on object at:', clickPosition);
+      } else {
+        // Clicked on empty space - place at camera direction, 5 meters away, at height 1.5m
+        const camera = scene.activeCamera;
+        if (!camera) return;
 
-        // Convert Babylon position (meters) to mm coordinates for Light object
-        const lightPosition = {
-          x: clickPosition.x * 1000, // meters to mm
-          y: clickPosition.y * 1000, // meters to mm
-          z: -clickPosition.z * 1000 // meters to mm (flip Z back)
-        };
+        const pickRay = scene.createPickingRay(event.offsetX, event.offsetY, null, camera);
+        const distance = 5; // 5 meters from camera
+        clickPosition = pickRay.origin.add(pickRay.direction.scale(distance));
+        clickPosition.y = 1.5; // Fix height at 1.5 meters (typical ceiling light height)
 
-        console.log('[Babylon3DCanvas] Light placement clicked at:', lightPosition);
-
-        // Create light with default settings for selected type
-        const { createDefaultLight } = require('../core/types/Light');
-        const newLight = createDefaultLight(selectedLightType, lightPosition);
-
-        // Call callback to add light to state
-        onLightPlaced(newLight);
-
-        console.log('[Babylon3DCanvas] Light placed:', newLight.type, 'at', lightPosition);
+        console.log('[Babylon3DCanvas] Clicked on empty space, placing at camera direction:', clickPosition);
       }
+
+      // Convert Babylon position (meters) to mm coordinates for Light object
+      const lightPosition = {
+        x: clickPosition.x * 1000, // meters to mm
+        y: clickPosition.y * 1000, // meters to mm
+        z: -clickPosition.z * 1000 // meters to mm (flip Z back)
+      };
+
+      console.log('[Babylon3DCanvas] Light placement position (mm):', lightPosition);
+
+      // Create light with default settings for selected type
+      const { createDefaultLight } = require('../core/types/Light');
+      const newLight = createDefaultLight(selectedLightType, lightPosition);
+
+      // Call callback to add light to state
+      onLightPlaced(newLight);
+
+      console.log('[Babylon3DCanvas] ✅ Light placed:', newLight.type, 'at', lightPosition);
     };
 
     canvas.addEventListener('click', handleLightPlacement);
