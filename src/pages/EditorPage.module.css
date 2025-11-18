@@ -863,8 +863,8 @@
 }
 
 .styleOption.selected {
-  background: #e8f5ff;
-  border-color: #3b82f6;
+  background: #e8f5e9;
+  border-color: #3fae7a;
 }
 
 .stylePreview {
@@ -1017,7 +1017,7 @@
 }
 
 .toggleSwitch input:checked + .toggleSlider {
-  background-color: #3b82f6;
+  background-color: #3fae7a;
 }
 
 .toggleSwitch input:checked + .toggleSlider::before {
@@ -1048,9 +1048,9 @@
 }
 
 .graphicsBtn.active {
-  background: #3b82f6;
+  background: #3fae7a;
   color: white;
-  border-color: #3b82f6;
+  border-color: #3fae7a;
 }
 
 @keyframes dropdownSlideIn {
