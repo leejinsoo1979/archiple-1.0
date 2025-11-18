@@ -21,6 +21,7 @@ import {
   AnimationGroup,
   FollowCamera
 } from '@babylonjs/core';
+import { GridMaterial } from '@babylonjs/materials/grid';
 import '@babylonjs/loaders/glTF';
 import earcut from 'earcut';
 import styles from './Babylon3DCanvas.module.css';
@@ -315,6 +316,61 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       shadowGenerator.useBlurExponentialShadowMap = true;
       shadowGenerator.blurKernel = 32;
       shadowGenerator.darkness = 0.3;
+
+      // Create infinite grid floor
+      const createInfiniteGrid = () => {
+        // Create large ground plane (1000m x 1000m - will move with camera)
+        const gridPlane = MeshBuilder.CreateGround(
+          'infiniteGrid',
+          { width: 1000, height: 1000 },
+          scene
+        );
+        gridPlane.position.y = -0.01; // Slightly below Y=0 to avoid z-fighting
+
+        // Create GridMaterial with realistic settings
+        const gridMaterial = new GridMaterial('gridMaterial', scene);
+
+        // Grid appearance
+        gridMaterial.mainColor = new Color3(0.8, 0.8, 0.8); // Light gray background
+        gridMaterial.lineColor = new Color3(0.4, 0.4, 0.4); // Dark gray lines
+
+        // Grid spacing - 1 unit = 1 meter
+        gridMaterial.gridRatio = 1.0; // 1m grid cells
+        gridMaterial.majorUnitFrequency = 10; // Major line every 10 cells (10m)
+        gridMaterial.minorUnitVisibility = 0.3; // Minor lines at 30% opacity
+
+        // Fade out with distance
+        gridMaterial.opacity = 0.95; // Overall opacity
+        gridMaterial.gridOffset = new Vector3(0, 0, 0);
+
+        // Apply material
+        gridPlane.material = gridMaterial;
+
+        // Enable shadow receiving
+        gridPlane.receiveShadows = true;
+
+        // Disable collisions (don't interfere with character movement)
+        gridPlane.checkCollisions = false;
+
+        // Lower render priority so it renders below everything else
+        gridPlane.renderingGroupId = 0;
+
+        console.log('[Babylon3DCanvas] Infinite grid floor created');
+
+        // Make grid follow camera on XZ plane (infinite effect)
+        scene.onBeforeRenderObservable.add(() => {
+          if (scene.activeCamera) {
+            const cameraPos = scene.activeCamera.position;
+            // Snap grid to camera position (rounded to grid cell for smooth movement)
+            gridPlane.position.x = Math.floor(cameraPos.x);
+            gridPlane.position.z = Math.floor(cameraPos.z);
+          }
+        });
+
+        return gridPlane;
+      };
+
+      createInfiniteGrid();
 
       // Create realistic human character
       const createCharacter = () => {

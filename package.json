@@ -14,6 +14,7 @@
     "@babylonjs/gui": "^8.37.0",
     "@babylonjs/inspector": "^8.37.0",
     "@babylonjs/loaders": "^8.37.0",
+    "@babylonjs/materials": "^8.37.0",
     "@types/earcut": "^3.0.0",
     "earcut": "^3.0.2",
     "opencv.js": "^1.2.1",
