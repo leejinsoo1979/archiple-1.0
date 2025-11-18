@@ -212,14 +212,14 @@ export function calculateWallCorners(
       if (Math.abs(miterAngle) > 0.01) {
         const miterOffset = t / Math.tan(Math.abs(miterAngle));
 
-        // 양쪽 코너를 모두 대각선으로 절단
-        // startLeft: 벽 방향 뒤로 + perpendicular 왼쪽으로
-        corners.startLeft.x -= wallDir.x * miterOffset - perpendicular.x * miterOffset;
-        corners.startLeft.z -= wallDir.z * miterOffset - perpendicular.z * miterOffset;
+        // 양쪽 코너를 안쪽으로 대각선 절단 (모서리 깎기)
+        // startLeft: 벽 방향 뒤로 + 안쪽으로 (perpendicular 반대)
+        corners.startLeft.x -= wallDir.x * miterOffset + perpendicular.x * miterOffset;
+        corners.startLeft.z -= wallDir.z * miterOffset + perpendicular.z * miterOffset;
 
-        // startRight: 벽 방향 뒤로 + perpendicular 오른쪽으로
-        corners.startRight.x -= wallDir.x * miterOffset + perpendicular.x * miterOffset;
-        corners.startRight.z -= wallDir.z * miterOffset + perpendicular.z * miterOffset;
+        // startRight: 벽 방향 뒤로 + 안쪽으로 (perpendicular 방향)
+        corners.startRight.x -= wallDir.x * miterOffset - perpendicular.x * miterOffset;
+        corners.startRight.z -= wallDir.z * miterOffset - perpendicular.z * miterOffset;
       }
     }
   }
@@ -242,14 +242,14 @@ export function calculateWallCorners(
       if (Math.abs(miterAngle) > 0.01) {
         const miterOffset = t / Math.tan(Math.abs(miterAngle));
 
-        // 양쪽 코너를 모두 대각선으로 절단
-        // endLeft: 벽 방향 앞으로 + perpendicular 왼쪽으로
-        corners.endLeft.x += wallDir.x * miterOffset - perpendicular.x * miterOffset;
-        corners.endLeft.z += wallDir.z * miterOffset - perpendicular.z * miterOffset;
+        // 양쪽 코너를 안쪽으로 대각선 절단 (모서리 깎기)
+        // endLeft: 벽 방향 앞으로 + 안쪽으로 (perpendicular 반대)
+        corners.endLeft.x += wallDir.x * miterOffset + perpendicular.x * miterOffset;
+        corners.endLeft.z += wallDir.z * miterOffset + perpendicular.z * miterOffset;
 
-        // endRight: 벽 방향 앞으로 + perpendicular 오른쪽으로
-        corners.endRight.x += wallDir.x * miterOffset + perpendicular.x * miterOffset;
-        corners.endRight.z += wallDir.z * miterOffset + perpendicular.z * miterOffset;
+        // endRight: 벽 방향 앞으로 + 안쪽으로 (perpendicular 방향)
+        corners.endRight.x += wallDir.x * miterOffset - perpendicular.x * miterOffset;
+        corners.endRight.z += wallDir.z * miterOffset - perpendicular.z * miterOffset;
       }
     }
   }
