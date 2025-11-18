@@ -988,11 +988,13 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         }
       } else {
         // Has doors - create wall in TWO layers:
-        // 1. Bottom layer (0 ~ 2050mm): Door opening segments
-        // 2. Top layer (2050mm ~ ceiling): Lintel (full wall)
+        // 1. Bottom layer (0 ~ 2100mm): Door opening segments (door + top frame)
+        // 2. Top layer (2100mm ~ ceiling): Lintel (full wall)
 
         const DOOR_HEIGHT = 2050; // 도어 높이
-        const LINTEL_HEIGHT = wallHeightMM - DOOR_HEIGHT; // 인방 높이
+        const FRAME_WIDTH = 50; // 문틀 너비 (mm)
+        const OPENING_HEIGHT = DOOR_HEIGHT + FRAME_WIDTH; // 타공 높이 (도어 + 상단 문틀)
+        const LINTEL_HEIGHT = wallHeightMM - OPENING_HEIGHT; // 인방 높이
 
         // Need BOTH miter corners (for wall ends) and basic corners (for door openings)
         const basicCorners = calculateBasicWallCorners(wall as Wall, pointMap);
@@ -1008,8 +1010,6 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         const dx = endPoint.x - startPoint.x;
         const dy = endPoint.y - startPoint.y;
         const wallLengthMM = Math.sqrt(dx * dx + dy * dy);
-
-        const FRAME_WIDTH = 50; // 문틀 너비 (mm)
 
         wallDoors.forEach((door: any) => {
           const doorWidthMM = door.width || 900;
@@ -1037,7 +1037,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           }
         });
 
-        // === BOTTOM LAYER: Door opening segments (0 ~ 2050mm) ===
+        // === BOTTOM LAYER: Door opening segments (0 ~ 2100mm) ===
         let currentPos = 0;
         let segIndex = 0;
 
@@ -1051,7 +1051,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
             const segMesh = createWallMeshFromCorners(
               segCorners,
-              DOOR_HEIGHT, // 도어 높이까지만
+              OPENING_HEIGHT, // 도어 + 상단 문틀 높이
               centerX,
               centerZ,
               `wall_${wallIndex}_lower_seg_${segIndex++}`,
@@ -1083,7 +1083,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
           const segMesh = createWallMeshFromCorners(
             segCorners,
-            DOOR_HEIGHT,
+            OPENING_HEIGHT, // 도어 + 상단 문틀 높이
             centerX,
             centerZ,
             `wall_${wallIndex}_lower_seg_${segIndex}`,
@@ -1104,7 +1104,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           }
         }
 
-        // === TOP LAYER: Lintel (2050mm ~ ceiling) - Full wall ===
+        // === TOP LAYER: Lintel (2100mm ~ ceiling) - Full wall ===
         if (LINTEL_HEIGHT > 0) {
           const lintelMesh = createWallMeshFromCorners(
             corners, // Miter corners for full wall
@@ -1113,7 +1113,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
             centerZ,
             `wall_${wallIndex}_lintel`,
             scene,
-            DOOR_HEIGHT, // 도어 높이부터 시작
+            OPENING_HEIGHT, // 도어 + 상단 문틀 높이부터 시작
             false, // skipTopFace: 천장 단면은 그림
             true // skipBottomFace: 하단면 안 그림 (도어 위)
           );
