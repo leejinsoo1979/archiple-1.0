@@ -616,8 +616,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     colors.push(1, 1, 1, 1);
 
     // 천장 단면용 vertex 4개 (y=wallStartHeight+wallHeight)
-    // startHeight > 0 (인방)이면 흰색, 아니면 검정색
-    const topFaceColor = startHeight > 0 ? 1 : 0;
+    // 천장 단면은 항상 검정색 (startHeight 상관없이)
+    const topFaceColor = 0;
     positions.push(c1.x, topY, c1.z); // 8
     colors.push(topFaceColor, topFaceColor, topFaceColor, 1);
     positions.push(c2.x, topY, c2.z); // 9
