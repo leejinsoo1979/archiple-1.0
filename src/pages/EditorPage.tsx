@@ -153,57 +153,6 @@ const EditorPage = () => {
       <header className={styles.header}>
         <div className={styles.headerLeft}>
           <img src="/images/archiple_logo.png" alt="Archiple Studio" className={styles.headerLogo} />
-          <button onClick={handleLoadTestRoom} className={styles.topBtn} title="Load Test Room (2.8m x 2.8m)" style={{ marginLeft: '10px', padding: '5px 10px', fontSize: '11px' }}>
-            TEST ROOM
-          </button>
-
-          {/* Image Import Controls */}
-          <div style={{ marginLeft: '20px', display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              style={{ display: 'none' }}
-              id="imageUpload"
-            />
-            <label htmlFor="imageUpload" className={styles.topBtn} style={{ margin: 0, cursor: 'pointer' }}>
-              이미지 업로드
-            </label>
-
-            {backgroundImage && (
-              <>
-                <label style={{ fontSize: '12px', color: '#666' }}>
-                  스케일: {imageScale.toFixed(1)}x
-                  <input
-                    type="range"
-                    min="0.1"
-                    max="3"
-                    step="0.1"
-                    value={imageScale}
-                    onChange={(e) => setImageScale(parseFloat(e.target.value))}
-                    style={{ marginLeft: '8px', width: '100px' }}
-                  />
-                </label>
-
-                <label style={{ fontSize: '12px', color: '#666' }}>
-                  투명도: {Math.round(imageOpacity * 100)}%
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.1"
-                    value={imageOpacity}
-                    onChange={(e) => setImageOpacity(parseFloat(e.target.value))}
-                    style={{ marginLeft: '8px', width: '100px' }}
-                  />
-                </label>
-
-                <button onClick={handleScan} className={styles.topBtn} style={{ padding: '5px 15px', fontSize: '13px', fontWeight: 'bold' }}>
-                  스캐닝
-                </button>
-              </>
-            )}
-          </div>
         </div>
         <div className={styles.headerCenter}>
           {/* Top Toolbar */}
