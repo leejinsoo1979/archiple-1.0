@@ -210,7 +210,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
       // Create scene with advanced settings
       const scene = new Scene(engine);
-      scene.clearColor = new Color3(0.95, 0.95, 0.97).toColor4(1);
+      // Remove clearColor to show skybox (skybox will provide background)
+      scene.clearColor = new Color3(0.5, 0.7, 1.0).toColor4(0); // Transparent - skybox shows through
       scene.ambientColor = new Color3(0.3, 0.3, 0.3);
       scene.collisionsEnabled = true; // Enable collisions for FPS mode
       scene.gravity = new Vector3(0, 0, 0); // No gravity in FPS mode
@@ -365,15 +366,18 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
       // Create outdoor skybox with clouds
       const createSkybox = () => {
-        // Create large skybox sphere (1000m radius)
-        const skybox = MeshBuilder.CreateSphere(
+        // Create large skybox (1000m cube)
+        const skybox = MeshBuilder.CreateBox(
           'skybox',
-          { diameter: 1000, segments: 32 },
+          { size: 1000 },
           scene
         );
 
         // Create sky material with clouds
         const skyMaterial = new SkyMaterial('skyMaterial', scene);
+
+        // CRITICAL: Disable backface culling to see inside of box
+        skyMaterial.backFaceCulling = false;
 
         // Sky appearance settings
         skyMaterial.turbidity = 10; // Atmospheric haze (1-20, higher = hazier)
