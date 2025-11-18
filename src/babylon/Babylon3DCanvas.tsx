@@ -697,7 +697,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     centerX: number,
     centerZ: number,
     name: string,
-    scene: Scene
+    scene: Scene,
+    swing: 'left' | 'right' | 'double' = 'right'
   ): { doorGroup: Mesh; doorLeaf: Mesh; hotspot: Mesh } => {
     const MM_TO_METERS = 0.001;
     const DOOR_WIDTH = 900; // 900mm
@@ -774,9 +775,14 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     doorLeafMaterial.metallic = 0;
     doorLeafMaterial.roughness = 0.5;
 
+    // 경첩 위치 및 문짝 방향 (swing에 따라)
+    const isLeftHinge = swing === 'left';
+    const hingeX = isLeftHinge ? -(DOOR_WIDTH / 2) : (DOOR_WIDTH / 2);
+    const panelOffsetX = isLeftHinge ? (DOOR_WIDTH / 2) : -(DOOR_WIDTH / 2);
+
     // 문짝 pivot (경첩 위치)
     const doorLeaf = new Mesh(`${name}_leaf`, scene);
-    doorLeaf.position.x = -(DOOR_WIDTH / 2) * MM_TO_METERS; // 좌측 경첩
+    doorLeaf.position.x = hingeX * MM_TO_METERS;
     doorLeaf.parent = doorGroup;
 
     // 문짝 본체
@@ -785,23 +791,24 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       height: DOOR_HEIGHT * MM_TO_METERS,
       depth: FRAME_DEPTH * MM_TO_METERS
     }, scene);
-    doorPanel.position.x = (DOOR_WIDTH / 2) * MM_TO_METERS; // pivot 기준 오른쪽으로 이동
+    doorPanel.position.x = panelOffsetX * MM_TO_METERS;
     doorPanel.material = doorLeafMaterial;
     doorPanel.parent = doorLeaf;
 
-    // 손잡이
+    // 손잡이 (경첩 반대편)
     const handleMaterial = new PBRMaterial(`${name}_handleMat`, scene);
     handleMaterial.albedoColor = new Color3(0.7, 0.7, 0.7); // 은색
     handleMaterial.metallic = 0.8;
     handleMaterial.roughness = 0.2;
 
+    const handleX = isLeftHinge ? (DOOR_WIDTH * 0.85) : (DOOR_WIDTH * 0.15);
     const handle = MeshBuilder.CreateCylinder(`${name}_handle`, {
       diameter: 20 * MM_TO_METERS,
       height: 120 * MM_TO_METERS
     }, scene);
     handle.rotation.z = Math.PI / 2; // 수평으로 회전
     handle.position.set(
-      (DOOR_WIDTH * 0.85) * MM_TO_METERS, // 문 오른쪽 85% 위치
+      handleX * MM_TO_METERS,
       0, // 중간 높이
       (FRAME_DEPTH / 2 + 15) * MM_TO_METERS // 문 앞쪽
     );
@@ -818,7 +825,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       diameter: 0.1
     }, scene);
     hotspot.position.set(
-      (DOOR_WIDTH * 0.85) * MM_TO_METERS,
+      handleX * MM_TO_METERS,
       0,
       (FRAME_DEPTH / 2 + 60) * MM_TO_METERS
     );
@@ -828,7 +835,10 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
     // 문짝 초기 상태 (닫힘)
     doorLeaf.rotation.y = 0;
-    doorLeaf.metadata = { isOpen: false }; // 상태 저장
+    doorLeaf.metadata = {
+      isOpen: false,
+      swing: swing // 열림방향 저장
+    };
 
     console.log('[Babylon3DCanvas] Created door:', name, 'at position', doorCenter3D);
 
@@ -999,9 +1009,13 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         const dy = endPoint.y - startPoint.y;
         const wallLengthMM = Math.sqrt(dx * dx + dy * dy);
 
+        const FRAME_WIDTH = 50; // 문틀 너비 (mm)
+
         wallDoors.forEach((door: any) => {
           const doorWidthMM = door.width || 900;
-          const halfWidth = doorWidthMM / 2;
+          // 타공 크기는 문짝 + 양쪽 문틀 포함
+          const openingWidthMM = doorWidthMM + FRAME_WIDTH * 2;
+          const halfWidth = openingWidthMM / 2;
           // door.position is 0-1 normalized along wall length
           const openingStart = Math.max(0, door.position - halfWidth / wallLengthMM);
           const openingEnd = Math.min(1, door.position + halfWidth / wallLengthMM);
@@ -1125,7 +1139,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
             centerX,
             centerZ,
             `door_${wallIndex}_${doorIndex}`,
-            scene
+            scene,
+            door.swing || 'right' // 2D에서 설정한 열림방향
           );
 
           // Add to shadow caster
@@ -1320,7 +1335,12 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
           if (doorLeaf && doorLeaf.metadata) {
             const isOpen = doorLeaf.metadata.isOpen;
-            const targetRotation = isOpen ? 0 : -Math.PI / 2; // 90 degrees
+            const swing = doorLeaf.metadata.swing || 'right';
+            // swing에 따라 회전 방향 결정
+            // left: 왼쪽 경첩, 반시계방향 (-90도)
+            // right: 오른쪽 경첩, 시계방향 (+90도)
+            const openRotation = swing === 'left' ? -Math.PI / 2 : Math.PI / 2;
+            const targetRotation = isOpen ? 0 : openRotation;
 
             // Smooth animation
             const startRotation = doorLeaf.rotation.y;
