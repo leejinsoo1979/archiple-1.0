@@ -266,9 +266,57 @@ export function calculateWallCorners(
 }
 
 /**
+ * 기본 벽 코너 계산 (Miter 적용 없음, 도어 segment용)
+ *
+ * @param wall 대상 벽
+ * @param pointMap Point ID → Point 매핑
+ * @returns 4개 코너 좌표 (mm 단위, miter 적용 안 함)
+ */
+export function calculateBasicWallCorners(
+  wall: Wall,
+  pointMap: Map<string, Point>
+): WallCorners | null {
+  const startPoint = pointMap.get(wall.startPointId);
+  const endPoint = pointMap.get(wall.endPointId);
+
+  if (!startPoint || !endPoint) return null;
+
+  const wallDir = getWallDirection(wall, pointMap);
+  if (!wallDir) return null;
+
+  const t = wall.thickness / 2; // Half thickness (mm)
+
+  // 벽의 수직 벡터 (오른쪽 방향)
+  const perpendicular = {
+    x: -wallDir.z,
+    z: wallDir.x,
+  };
+
+  // 기본 4개 코너 (miter 적용 없음, mm 단위)
+  return {
+    startLeft: {
+      x: startPoint.x + perpendicular.x * t,
+      z: startPoint.y + perpendicular.z * t,
+    },
+    startRight: {
+      x: startPoint.x - perpendicular.x * t,
+      z: startPoint.y - perpendicular.z * t,
+    },
+    endLeft: {
+      x: endPoint.x + perpendicular.x * t,
+      z: endPoint.y + perpendicular.z * t,
+    },
+    endRight: {
+      x: endPoint.x - perpendicular.x * t,
+      z: endPoint.y - perpendicular.z * t,
+    },
+  };
+}
+
+/**
  * 벽 segment를 생성하기 위한 코너 계산 (문이 있을 때)
  *
- * @param corners 전체 벽의 4개 코너
+ * @param corners 전체 벽의 4개 코너 (miter 적용 안 된 기본 corners 사용 권장)
  * @param segmentStart segment 시작 비율 (0-1)
  * @param segmentEnd segment 끝 비율 (0-1)
  */

@@ -31,6 +31,7 @@ import { EditorEvents } from '../core/events/EditorEvents';
 import {
   findConnectedWalls,
   calculateWallCorners,
+  calculateBasicWallCorners,
   calculateSegmentCorners,
   type WallCorners,
 } from './utils/WallMiterUtils';
@@ -807,7 +808,15 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           shadowGenerator.addShadowCaster(wallMesh);
         }
       } else {
-        // Has doors - split wall into segments with miter joints
+        // Has doors - split wall into segments
+        // Use BASIC corners (no miter) for door segments to get clean cuts
+        const basicCorners = calculateBasicWallCorners(wall as Wall, pointMap);
+
+        if (!basicCorners) {
+          console.error('[Babylon3DCanvas] Failed to calculate basic corners for wall:', wall.id);
+          return;
+        }
+
         const openings: Array<{ start: number; end: number }> = [];
 
         // Calculate wall length for door positioning
@@ -839,7 +848,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           }
         });
 
-        // Create segments using calculateSegmentCorners
+        // Create segments using basic corners for clean door cuts
         let currentPos = 0;
         let segIndex = 0;
 
@@ -848,8 +857,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
             const segStart = currentPos;
             const segEnd = opening.start;
 
-            // Calculate segment corners with miter joints
-            const segCorners = calculateSegmentCorners(corners, segStart, segEnd);
+            // Calculate segment corners from BASIC corners (no miter = clean door cuts)
+            const segCorners = calculateSegmentCorners(basicCorners, segStart, segEnd);
 
             const segMesh = createWallMeshFromCorners(
               segCorners,
@@ -878,7 +887,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           const segStart = currentPos;
           const segEnd = 1;
 
-          const segCorners = calculateSegmentCorners(corners, segStart, segEnd);
+          const segCorners = calculateSegmentCorners(basicCorners, segStart, segEnd);
 
           const segMesh = createWallMeshFromCorners(
             segCorners,
