@@ -5,6 +5,8 @@ import styles from './EditorPage.module.css';
 import { ToolType } from '../core/types/EditorState';
 import { createTestRoom } from '../floorplan/blueprint/BlueprintToBabylonAdapter';
 import { RxCursorArrow } from 'react-icons/rx';
+import { eventBus } from '../core/events/EventBus';
+import { EditorEvents } from '../core/events/EditorEvents';
 
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 
@@ -22,14 +24,26 @@ const EditorPage = () => {
     altitude: 45, // 고도 0-90도
   });
   const [playMode, setPlayMode] = useState(false); // FPS mode toggle
+  const [showCharacter, setShowCharacter] = useState(false); // Character toggle
 
   // Background image state
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
-  const [imageScale, setImageScale] = useState(1.0);
+  const [imageScale, setImageScale] = useState(100); // 100mm per pixel default
   const [imageOpacity, setImageOpacity] = useState(0.5);
+
+  // Ruler calibration state
+  const [rulerVisible, setRulerVisible] = useState(false);
+  const [rulerStart, setRulerStart] = useState<{ x: number; y: number } | null>(null);
+  const [rulerEnd, setRulerEnd] = useState<{ x: number; y: number } | null>(null);
+  const [rulerDistance, setRulerDistance] = useState<string>('');
+  const [isDraggingRuler, setIsDraggingRuler] = useState(false);
 
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Dimension editing state
+  const [editingWallId, setEditingWallId] = useState<string | null>(null);
+  const [dimensionInput, setDimensionInput] = useState<string>('');
 
   // Load test room data (2800mm x 2800mm room with 100mm walls)
   const handleLoadTestRoom = () => {
@@ -48,12 +62,163 @@ const EditorPage = () => {
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
+        // Calculate initial scale to fit image in viewport
+        // Assume typical floor plan: 10m (10000mm) should be ~1000px
+        // So initial scale: 10mm per pixel
+        const initialScale = 10;
+
         setBackgroundImage(img);
+        setImageScale(initialScale);
         setViewMode('2D'); // Switch to 2D to see image
+
+        // Initialize ruler in center of image (in world coordinates)
+        const widthInMm = img.width * initialScale;
+        const heightInMm = img.height * initialScale;
+        const centerX = 0;
+        const centerY = 0;
+        const rulerLength = Math.min(widthInMm, heightInMm) * 0.3; // 30% of smaller dimension
+
+        setRulerStart({ x: centerX - rulerLength / 2, y: centerY });
+        setRulerEnd({ x: centerX + rulerLength / 2, y: centerY });
+        setRulerVisible(true);
+
+        // Reset camera to show full image after a short delay
+        setTimeout(() => {
+          eventBus.emit(EditorEvents.CAMERA_RESET);
+        }, 100);
+      };
+      img.onerror = () => {
+        alert('이미지를 로드할 수 없습니다.');
       };
       img.src = e.target?.result as string;
     };
     reader.readAsDataURL(file);
+  };
+
+  // Handle ruler drag start
+  const handleRulerDragStart = (isStartPoint: boolean) => {
+    setIsDraggingRuler(true);
+  };
+
+  // Handle ruler drag
+  const handleRulerDrag = (worldX: number, worldY: number) => {
+    if (!isDraggingRuler) return;
+    // Always drag the end point
+    setRulerEnd({ x: worldX, y: worldY });
+  };
+
+  // Handle ruler drag end
+  const handleRulerDragEnd = () => {
+    setIsDraggingRuler(false);
+  };
+
+  // Handle ruler distance submit
+  const handleRulerSubmit = () => {
+    if (!rulerStart || !rulerEnd || !rulerDistance || !backgroundImage) {
+      alert('줄자를 조절하고 실제 거리를 입력하세요');
+      return;
+    }
+
+    const realDistanceMm = parseFloat(rulerDistance);
+    if (isNaN(realDistanceMm) || realDistanceMm <= 0) {
+      alert('유효한 거리를 입력하세요');
+      return;
+    }
+
+    // Convert world coordinates (mm) to image pixel coordinates
+    // Background image is centered at origin with current scale
+    const widthInMm = backgroundImage.width * imageScale;
+    const heightInMm = backgroundImage.height * imageScale;
+
+    const pixel1X = (rulerStart.x + widthInMm / 2) / imageScale;
+    const pixel1Y = (rulerStart.y + heightInMm / 2) / imageScale;
+    const pixel2X = (rulerEnd.x + widthInMm / 2) / imageScale;
+    const pixel2Y = (rulerEnd.y + heightInMm / 2) / imageScale;
+
+    // Calculate pixel distance in image
+    const dx = pixel2X - pixel1X;
+    const dy = pixel2Y - pixel1Y;
+    const pixelDistance = Math.sqrt(dx * dx + dy * dy);
+
+    // Calculate mm per pixel
+    const mmPerPixel = realDistanceMm / pixelDistance;
+
+    setImageScale(mmPerPixel);
+    setRulerVisible(false);
+  };
+
+  // Handle dimension click
+  const handleDimensionClick = (wallId: string) => {
+    // Find the wall in floorplanData
+    if (!floorplanData) return;
+
+    const wall = floorplanData.walls.find((w: any) => w.id === wallId);
+    if (!wall) return;
+
+    // Find start and end points
+    const startPoint = floorplanData.points.find((p: any) => p.id === wall.startPointId);
+    const endPoint = floorplanData.points.find((p: any) => p.id === wall.endPointId);
+
+    if (!startPoint || !endPoint) return;
+
+    // Calculate current distance
+    const dx = endPoint.x - startPoint.x;
+    const dy = endPoint.y - startPoint.y;
+    const currentDistance = Math.sqrt(dx * dx + dy * dy);
+
+    setEditingWallId(wallId);
+    setDimensionInput(currentDistance.toFixed(0));
+  };
+
+  // Handle dimension input submit
+  const handleDimensionSubmit = () => {
+    if (!editingWallId || !floorplanData) return;
+
+    const newDistance = parseFloat(dimensionInput);
+    if (isNaN(newDistance) || newDistance <= 0) {
+      alert('유효한 치수를 입력하세요');
+      return;
+    }
+
+    // Find the wall
+    const wall = floorplanData.walls.find((w: any) => w.id === editingWallId);
+    if (!wall) return;
+
+    // Find start and end points
+    const startPoint = floorplanData.points.find((p: any) => p.id === wall.startPointId);
+    const endPoint = floorplanData.points.find((p: any) => p.id === wall.endPointId);
+
+    if (!startPoint || !endPoint) return;
+
+    // Calculate current vector
+    const dx = endPoint.x - startPoint.x;
+    const dy = endPoint.y - startPoint.y;
+    const currentDistance = Math.sqrt(dx * dx + dy * dy);
+
+    if (currentDistance === 0) return;
+
+    // Calculate unit vector
+    const ux = dx / currentDistance;
+    const uy = dy / currentDistance;
+
+    // Update end point to new distance
+    const newEndPoint = {
+      ...endPoint,
+      x: startPoint.x + ux * newDistance,
+      y: startPoint.y + uy * newDistance,
+    };
+
+    // Update floorplan data
+    const updatedData = {
+      ...floorplanData,
+      points: floorplanData.points.map((p: any) =>
+        p.id === endPoint.id ? newEndPoint : p
+      ),
+    };
+
+    setFloorplanData(updatedData);
+    setEditingWallId(null);
+    setDimensionInput('');
   };
 
   // Handle scan button - extract walls and generate 3D
@@ -168,6 +333,15 @@ const EditorPage = () => {
             <button className={styles.topBtn} title="Material">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+              </svg>
+            </button>
+            <button
+              className={`${styles.topBtn} ${showCharacter ? styles.active : ''}`}
+              title="Character"
+              onClick={() => setShowCharacter(!showCharacter)}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
               </svg>
             </button>
             <div style={{ position: 'relative' }}>
@@ -713,6 +887,14 @@ const EditorPage = () => {
             backgroundImage={backgroundImage}
             imageScale={imageScale}
             imageOpacity={imageOpacity}
+            onDimensionClick={handleDimensionClick}
+            rulerVisible={rulerVisible}
+            rulerStart={rulerStart}
+            rulerEnd={rulerEnd}
+            onRulerDragStart={handleRulerDragStart}
+            onRulerDrag={handleRulerDrag}
+            onRulerDragEnd={handleRulerDragEnd}
+            isDraggingRuler={isDraggingRuler}
           />
         </div>
         <div style={{
@@ -729,8 +911,90 @@ const EditorPage = () => {
             visible={playMode || viewMode === '3D'}
             sunSettings={sunSettings}
             playMode={playMode}
+            showCharacter={showCharacter}
           />
         </div>
+
+        {/* Dimension Edit Modal */}
+        {editingWallId && viewMode === '2D' && !playMode && (
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            background: 'white',
+            padding: '24px',
+            borderRadius: '8px',
+            border: '2px solid #3fae7a',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
+            zIndex: 2000,
+            minWidth: '320px',
+          }}>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600', color: '#333' }}>
+              벽 치수 수정
+            </h3>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666', fontWeight: '500' }}>
+                치수 (mm):
+              </label>
+              <input
+                type="number"
+                value={dimensionInput}
+                onChange={(e) => setDimensionInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleDimensionSubmit();
+                  if (e.key === 'Escape') {
+                    setEditingWallId(null);
+                    setDimensionInput('');
+                  }
+                }}
+                autoFocus
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setEditingWallId(null);
+                  setDimensionInput('');
+                }}
+                style={{
+                  padding: '8px 16px',
+                  background: '#f5f5f5',
+                  color: '#666',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                }}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleDimensionSubmit}
+                style={{
+                  padding: '8px 20px',
+                  background: '#3fae7a',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                }}
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Image Controls Overlay */}
         {backgroundImage && viewMode === '2D' && !playMode && (
@@ -739,35 +1003,65 @@ const EditorPage = () => {
             bottom: '20px',
             left: '50%',
             transform: 'translateX(-50%)',
-            background: 'rgba(0, 0, 0, 0.8)',
-            padding: '20px 30px',
-            borderRadius: '12px',
+            background: 'white',
+            padding: '16px 24px',
+            borderRadius: '4px',
+            border: '1px solid #ddd',
             display: 'flex',
-            gap: '30px',
-            alignItems: 'center',
+            flexDirection: 'column',
+            gap: '16px',
             zIndex: 1000,
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+            minWidth: '400px',
           }}>
+            {/* Ruler Guide Instructions */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <label style={{ fontSize: '14px', color: 'white', fontWeight: '600', minWidth: '60px' }}>
-                스케일:
-              </label>
-              <input
-                type="range"
-                min="0.1"
-                max="3"
-                step="0.1"
-                value={imageScale}
-                onChange={(e) => setImageScale(parseFloat(e.target.value))}
-                style={{ width: '200px' }}
-              />
-              <span style={{ fontSize: '14px', color: '#4CAF50', fontWeight: 'bold', minWidth: '50px' }}>
-                {imageScale.toFixed(1)}x
+              <span style={{ fontSize: '13px', color: '#666', fontWeight: '500' }}>
+                🎯 줄자 가이드를 드래그해서 이미지의 알려진 치수에 맞추세요
               </span>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <label style={{ fontSize: '14px', color: 'white', fontWeight: '600', minWidth: '60px' }}>
+            {/* Distance Input (always visible when ruler is present) */}
+            {rulerVisible && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <label style={{ fontSize: '13px', color: '#666', fontWeight: '500', minWidth: '80px' }}>
+                  실제 거리:
+                </label>
+                <input
+                  type="number"
+                  value={rulerDistance}
+                  onChange={(e) => setRulerDistance(e.target.value)}
+                  placeholder="예: 3550"
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '13px',
+                  }}
+                />
+                <span style={{ fontSize: '13px', color: '#666' }}>mm</span>
+                <button
+                  onClick={handleRulerSubmit}
+                  style={{
+                    padding: '8px 20px',
+                    background: '#3fae7a',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    fontSize: '13px',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                  }}
+                >
+                  스케일 적용
+                </button>
+              </div>
+            )}
+
+            {/* Opacity Control */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label style={{ fontSize: '13px', color: '#666', fontWeight: '500', minWidth: '50px' }}>
                 투명도:
               </label>
               <input
@@ -777,34 +1071,32 @@ const EditorPage = () => {
                 step="0.1"
                 value={imageOpacity}
                 onChange={(e) => setImageOpacity(parseFloat(e.target.value))}
-                style={{ width: '200px' }}
+                style={{ flex: 1 }}
               />
-              <span style={{ fontSize: '14px', color: '#4CAF50', fontWeight: 'bold', minWidth: '50px' }}>
+              <span style={{ fontSize: '13px', color: '#333', fontWeight: '500', minWidth: '40px' }}>
                 {Math.round(imageOpacity * 100)}%
               </span>
             </div>
 
+            {/* Scan Button */}
             <button
               onClick={handleScan}
               style={{
-                padding: '12px 32px',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                padding: '10px 20px',
+                background: '#3fae7a',
                 color: 'white',
                 border: 'none',
-                borderRadius: '8px',
-                fontSize: '16px',
-                fontWeight: 'bold',
+                borderRadius: '4px',
+                fontSize: '14px',
+                fontWeight: '500',
                 cursor: 'pointer',
-                boxShadow: '0 4px 8px rgba(102, 126, 234, 0.3)',
-                transition: 'all 0.2s ease',
+                transition: 'all 0.2s',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 6px 12px rgba(102, 126, 234, 0.4)';
+                e.currentTarget.style.background = '#2d9967';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 4px 8px rgba(102, 126, 234, 0.3)';
+                e.currentTarget.style.background = '#3fae7a';
               }}
             >
               스캐닝

@@ -42,14 +42,30 @@ interface FloorplanCanvasProps {
   backgroundImage?: HTMLImageElement | null;
   imageScale?: number;
   imageOpacity?: number;
+  onDimensionClick?: (wallId: string) => void;
+  rulerVisible?: boolean;
+  rulerStart?: { x: number; y: number } | null;
+  rulerEnd?: { x: number; y: number } | null;
+  onRulerDragStart?: () => void;
+  onRulerDrag?: (worldX: number, worldY: number) => void;
+  onRulerDragEnd?: () => void;
+  isDraggingRuler?: boolean;
 }
 
 const FloorplanCanvas = ({
   activeTool,
   onDataChange,
   backgroundImage,
-  imageScale = 1.0,
+  imageScale = 100,
   imageOpacity = 0.5,
+  onDimensionClick,
+  rulerVisible = false,
+  rulerStart = null,
+  rulerEnd = null,
+  onRulerDragStart,
+  onRulerDrag,
+  onRulerDragEnd,
+  isDraggingRuler = false,
 }: FloorplanCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -114,7 +130,7 @@ const FloorplanCanvas = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const backgroundLayer = new BackgroundImageLayer(ctx);
+    const backgroundLayer = new BackgroundImageLayer();
     backgroundLayerRef.current = backgroundLayer;
 
     const gridLayer = new GridLayer({
@@ -307,6 +323,15 @@ const FloorplanCanvas = ({
     eventBus.on(FloorEvents.WALL_SELECTED, (data: any) => {
       wallLayer.setSelectedWall(data.wall.id);
       pointLayer.setSelectedPoints([]); // Clear point selection when wall selected
+    });
+
+    // Wall hover events
+    eventBus.on(FloorEvents.WALL_HOVERED, (data: any) => {
+      wallLayer.setHoveredWall(data.wall.id);
+    });
+
+    eventBus.on(FloorEvents.WALL_HOVER_CLEARED, () => {
+      wallLayer.setHoveredWall(null);
     });
 
     eventBus.on(FloorEvents.POINT_HOVER_CLEARED, () => {
@@ -544,10 +569,27 @@ const FloorplanCanvas = ({
   // Update background image layer when props change
   useEffect(() => {
     const backgroundLayer = backgroundLayerRef.current;
+    const gridLayer = gridLayerRef.current;
+
     if (backgroundLayer) {
       backgroundLayer.setImage(backgroundImage || null);
       backgroundLayer.setScale(imageScale);
       backgroundLayer.setImageOpacity(imageOpacity);
+
+      // Hide grid background when image is present
+      if (gridLayer) {
+        if (backgroundImage) {
+          gridLayer.updateConfig({ backgroundColor: 'transparent' });
+        } else {
+          gridLayer.updateConfig({ backgroundColor: '#ffffff' });
+        }
+      }
+
+      // Force render
+      const renderer = rendererRef.current;
+      if (renderer && backgroundImage) {
+        renderer.render();
+      }
     }
   }, [backgroundImage, imageScale, imageOpacity]);
 
@@ -583,6 +625,42 @@ const FloorplanCanvas = ({
     if (!canvas || !renderer) return;
 
     const handleMouseDown = (event: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const screenX = event.clientX - rect.left;
+      const screenY = event.clientY - rect.top;
+
+      // Check for ruler endpoint drag (left-click on ruler endpoint)
+      if (event.button === 0 && rulerVisible && rulerEnd && onRulerDragStart) {
+        const camera = renderer.getCamera();
+        const endScreen = camera.worldToScreen(rulerEnd.x, rulerEnd.y);
+        const distance = Math.sqrt(
+          Math.pow(screenX - endScreen.x, 2) +
+          Math.pow(screenY - endScreen.y, 2)
+        );
+
+        if (distance < 15) { // 15px hitbox radius
+          event.preventDefault();
+          event.stopPropagation();
+          onRulerDragStart(false); // false = end point
+          canvas.style.cursor = 'grabbing';
+          return;
+        }
+      }
+
+      // Check for dimension click (left-click)
+      if (event.button === 0 && onDimensionClick) {
+        const wallLayer = wallLayerRef.current;
+        if (wallLayer) {
+          const clickedWallId = wallLayer.getDimensionAtPoint(screenX, screenY);
+          if (clickedWallId) {
+            event.preventDefault();
+            event.stopPropagation();
+            onDimensionClick(clickedWallId);
+            return;
+          }
+        }
+      }
+
       // Pan with middle mouse (button 1) or right mouse (button 2)
       // DO NOT use left-click (button 0) to avoid interfering with MouseController
       if (event.button === 1 || event.button === 2) {
@@ -596,6 +674,21 @@ const FloorplanCanvas = ({
     };
 
     const handleMouseMove = (event: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const screenX = event.clientX - rect.left;
+      const screenY = event.clientY - rect.top;
+
+      // Handle ruler dragging
+      if (isDraggingRuler && onRulerDrag) {
+        event.preventDefault();
+        event.stopPropagation();
+        const camera = renderer.getCamera();
+        const worldPos = camera.screenToWorld(screenX, screenY);
+        onRulerDrag(worldPos.x, worldPos.y);
+        return;
+      }
+
+      // Handle panning
       if (isPanningRef.current && lastPanPosRef.current) {
         event.preventDefault();
         event.stopPropagation();
@@ -612,6 +705,16 @@ const FloorplanCanvas = ({
     };
 
     const handleMouseUp = (event: MouseEvent) => {
+      // Handle ruler drag end
+      if (event.button === 0 && isDraggingRuler && onRulerDragEnd) {
+        event.preventDefault();
+        event.stopPropagation();
+        onRulerDragEnd();
+        canvas.style.cursor = 'default';
+        return;
+      }
+
+      // Handle panning end
       if (event.button === 1 || event.button === 2) {
         isPanningRef.current = false;
         lastPanPosRef.current = null;
@@ -637,7 +740,7 @@ const FloorplanCanvas = ({
       canvas.removeEventListener('mouseup', handleMouseUp, true);
       canvas.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, []);
+  }, [onDimensionClick, rulerVisible, rulerEnd, onRulerDragStart, onRulerDrag, onRulerDragEnd, isDraggingRuler]);
 
   // Handle mouse move for coordinate display
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -651,9 +754,84 @@ const FloorplanCanvas = ({
     setMousePos({ x: Math.round(x), y: Math.round(y) });
   };
 
+  // Draw ruler overlay
+  useEffect(() => {
+    if (!rulerVisible || !rulerStart || !rulerEnd) return;
+
+    const canvas = canvasRef.current;
+    const renderer = rendererRef.current;
+    if (!canvas || !renderer) return;
+
+    const camera = renderer.getCamera();
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Redraw the scene first
+    renderer.render();
+
+    // Draw ruler in screen space
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset to screen space
+
+    const startScreen = camera.worldToScreen(rulerStart.x, rulerStart.y);
+    const endScreen = camera.worldToScreen(rulerEnd.x, rulerEnd.y);
+
+    // Draw line
+    ctx.strokeStyle = '#FF0000';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 5]);
+    ctx.beginPath();
+    ctx.moveTo(startScreen.x, startScreen.y);
+    ctx.lineTo(endScreen.x, endScreen.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw start point (fixed, smaller)
+    ctx.fillStyle = '#FF0000';
+    ctx.beginPath();
+    ctx.arc(startScreen.x, startScreen.y, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Draw end point (draggable, larger with ring to indicate interactivity)
+    ctx.fillStyle = '#FF0000';
+    ctx.beginPath();
+    ctx.arc(endScreen.x, endScreen.y, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Draw outer ring on end point
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(endScreen.x, endScreen.y, 12, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Draw distance label
+    const dx = rulerEnd.x - rulerStart.x;
+    const dy = rulerEnd.y - rulerStart.y;
+    const distMm = Math.sqrt(dx * dx + dy * dy);
+    const midX = (startScreen.x + endScreen.x) / 2;
+    const midY = (startScreen.y + endScreen.y) / 2;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillRect(midX - 60, midY - 15, 120, 30);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${distMm.toFixed(0)}mm`, midX, midY);
+
+    ctx.restore();
+  }, [rulerVisible, rulerStart, rulerEnd]);
+
   return (
     <div ref={containerRef} className={styles.canvasContainer}>
-      <canvas ref={canvasRef} className={styles.canvas} onMouseMove={handleMouseMove} />
+      <canvas
+        ref={canvasRef}
+        className={styles.canvas}
+        onMouseMove={handleMouseMove}
+        style={{ cursor: isDraggingRuler ? 'grabbing' : 'default' }}
+      />
     </div>
   );
 };
