@@ -56,6 +56,13 @@ export const FloorEvents = {
   DOOR_PREVIEW_UPDATED: 'floor:door:preview:updated',
   DOOR_PREVIEW_CLEARED: 'floor:door:preview:cleared',
 
+  // Window events
+  WINDOW_ADDED: 'floor:window:added',
+  WINDOW_MODIFIED: 'floor:window:modified',
+  WINDOW_REMOVED: 'floor:window:removed',
+  WINDOW_PREVIEW_UPDATED: 'floor:window:preview:updated',
+  WINDOW_PREVIEW_CLEARED: 'floor:window:preview:cleared',
+
   // Intersection events
   INTERSECTION_DETECTED: 'floor:intersection:detected',
   INTERSECTION_RESOLVED: 'floor:intersection:resolved',

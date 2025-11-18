@@ -2,6 +2,7 @@ import type { Point } from '../types/Point';
 import type { Wall } from '../types/Wall';
 import type { Room } from '../types/Room';
 import type { Door } from '../types/Door';
+import type { Window } from '../types/Window';
 import { Floorplan } from '../../floorplan/blueprint/floorplan';
 import { eventBus } from '../events/EventBus';
 import { FloorEvents } from '../events/FloorEvents';
@@ -13,6 +14,7 @@ import { FloorEvents } from '../events/FloorEvents';
 export class BlueprintObjectManager {
   private floorplan: Floorplan;
   private doors: Map<string, Door> = new Map();
+  private windows: Map<string, Window> = new Map();
 
   constructor() {
     this.floorplan = new Floorplan();
@@ -264,20 +266,53 @@ export class BlueprintObjectManager {
     }
   }
 
+  // Window management
+  addWindow(window: Window): void {
+    console.log('[BlueprintObjectManager] addWindow called:', window);
+    this.windows.set(window.id, window);
+    eventBus.emit(FloorEvents.WINDOW_ADDED, { window });
+  }
+
+  getWindow(id: string): Window | undefined {
+    return this.windows.get(id);
+  }
+
+  getAllWindows(): Window[] {
+    return Array.from(this.windows.values());
+  }
+
+  updateWindow(id: string, updates: Partial<Window>): void {
+    const window = this.windows.get(id);
+    if (window) {
+      Object.assign(window, updates);
+      eventBus.emit(FloorEvents.WINDOW_MODIFIED, { window });
+    }
+  }
+
+  removeWindow(id: string): void {
+    const window = this.windows.get(id);
+    if (window) {
+      this.windows.delete(id);
+      eventBus.emit(FloorEvents.WINDOW_REMOVED, { window });
+    }
+  }
+
   clear(): void {
     const corners = [...this.floorplan.getCorners()];
     const walls = [...this.floorplan.getWalls()];
     corners.forEach(c => c.remove());
     walls.forEach(w => w.remove());
     this.doors.clear();
+    this.windows.clear();
   }
 
-  getCounts(): { points: number; walls: number; rooms: number; doors: number } {
+  getCounts(): { points: number; walls: number; rooms: number; doors: number; windows: number } {
     return {
       points: this.floorplan.getCorners().length,
       walls: this.floorplan.getWalls().length,
       rooms: this.floorplan.getRooms().length,
       doors: this.doors.size,
+      windows: this.windows.size,
     };
   }
 }

@@ -27,6 +27,7 @@ import { WallTool } from './tools/WallTool';
 import { RectangleTool } from './tools/RectangleTool';
 import { SelectTool } from './tools/SelectTool';
 import { DoorTool } from './tools/DoorTool';
+import { WindowTool } from './tools/WindowTool';
 
 // Services
 import { SnapService } from './services/SnapService';
@@ -211,6 +212,9 @@ const FloorplanCanvas = ({
 
     const doorTool = new DoorTool(sceneManager);
     toolManager.registerTool(ToolType.DOOR, doorTool);
+
+    const windowTool = new WindowTool(sceneManager);
+    toolManager.registerTool(ToolType.WINDOW, windowTool);
 
     // Set default tool to SELECT
     toolManager.setActiveTool(ToolType.SELECT);

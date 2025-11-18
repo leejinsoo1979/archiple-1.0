@@ -29,6 +29,9 @@ const EditorPage = () => {
   const [showCharacter, setShowCharacter] = useState(false); // Character toggle
   const [photoRealisticMode, setPhotoRealisticMode] = useState(false); // Photo-realistic rendering
 
+  // Screenshot resolution settings
+  const [screenshotResolution, setScreenshotResolution] = useState<'1080p' | '4k' | '8k'>('4k');
+
   // Rendering settings panel (right sidebar)
   const [renderPanelOpen, setRenderPanelOpen] = useState(false);
   const [renderSettings, setRenderSettings] = useState({
@@ -113,14 +116,25 @@ const EditorPage = () => {
     }
 
     try {
-      // Default to Full HD
-      const imageData = await babylon3DCanvasRef.current.captureRender(1920, 1080);
+      // Resolution mapping
+      const resolutions = {
+        '1080p': { width: 1920, height: 1080 },
+        '4k': { width: 3840, height: 2160 },
+        '8k': { width: 7680, height: 4320 },
+      };
+
+      const { width, height } = resolutions[screenshotResolution];
+      console.log(`[EditorPage] Capturing screenshot at ${screenshotResolution} (${width}x${height})`);
+
+      const imageData = await babylon3DCanvasRef.current.captureRender(width, height);
 
       // Download immediately
       const link = document.createElement('a');
       link.href = imageData;
-      link.download = `render_${Date.now()}.png`;
+      link.download = `render_${screenshotResolution}_${Date.now()}.png`;
       link.click();
+
+      console.log('[EditorPage] ✅ Screenshot downloaded successfully');
     } catch (error) {
       console.error('[EditorPage] Screenshot failed:', error);
       alert('스크린샷 실패: ' + (error as Error).message);
@@ -1354,15 +1368,36 @@ const EditorPage = () => {
                 <path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
               </svg>
             </button>
-            <button
-              className={styles.topBtn}
-              title="Capture Screenshot"
-              onClick={handleCaptureScreenshot}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/>
-              </svg>
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <select
+                value={screenshotResolution}
+                onChange={(e) => setScreenshotResolution(e.target.value as '1080p' | '4k' | '8k')}
+                style={{
+                  padding: '6px 8px',
+                  backgroundColor: '#2a2a2a',
+                  color: '#fff',
+                  border: '1px solid #555',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  height: '32px',
+                }}
+                title="Screenshot Resolution"
+              >
+                <option value="1080p">1080p</option>
+                <option value="4k">4K</option>
+                <option value="8k">8K</option>
+              </select>
+              <button
+                className={styles.topBtn}
+                title="Capture Screenshot"
+                onClick={handleCaptureScreenshot}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/>
+                </svg>
+              </button>
+            </div>
 
             {false && (
               <div className={styles.sunDropdown} style={{ width: '320px', maxHeight: '600px', overflowY: 'auto' }}>
