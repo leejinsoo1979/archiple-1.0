@@ -210,47 +210,21 @@ export function calculateWallCorners(
 
       // 각도가 너무 작으면 miter 적용 안 함 (일직선)
       if (Math.abs(miterAngle) > 0.01) {
-        // miterAngle > 0: 왼쪽으로 회전 → startLeft가 바깥쪽
-        // miterAngle < 0: 오른쪽으로 회전 → startRight가 바깥쪽
-        const isLeftOuter = miterAngle > 0;
+        const miterOffset = t / Math.tan(Math.abs(miterAngle));
 
-        // 연결된 벽의 perpendicular
-        const connectedPerp = {
-          x: -adjustedConnectedDir.z,
-          z: adjustedConnectedDir.x,
-        };
+        // miterAngle > 0: 왼쪽으로 회전 → startRight가 바깥쪽 (더 많이 이동)
+        // miterAngle < 0: 오른쪽으로 회전 → startLeft가 바깥쪽 (더 많이 이동)
 
-        // 연결된 벽의 바깥쪽 모서리 시작점
-        // (왼쪽 회전이면 연결 벽의 오른쪽이 바깥, 오른쪽 회전이면 연결 벽의 왼쪽이 바깥)
-        const connectedOuterStart = {
-          x: startPoint.x + connectedPerp.x * (isLeftOuter ? -t : t),
-          z: startPoint.y + connectedPerp.z * (isLeftOuter ? -t : t),
-        };
-
-        // 현재 벽의 바깥쪽 모서리 시작점
-        const currentOuterStart = isLeftOuter ? corners.startLeft : corners.startRight;
-
-        // 두 바깥 모서리선의 교점 계산
-        // Line 1: currentOuterStart + s * (-wallDir) [뒤 방향]
-        // Line 2: connectedOuterStart + u * adjustedConnectedDir
-        const det = -wallDir.x * adjustedConnectedDir.z - (-wallDir.z) * adjustedConnectedDir.x;
-
-        if (Math.abs(det) > 0.001) {
-          const dx = connectedOuterStart.x - currentOuterStart.x;
-          const dz = connectedOuterStart.z - currentOuterStart.z;
-          const s = (dx * adjustedConnectedDir.z - dz * adjustedConnectedDir.x) / det;
-
-          const intersection = {
-            x: currentOuterStart.x + s * (-wallDir.x),
-            z: currentOuterStart.z + s * (-wallDir.z),
-          };
-
-          // 바깥쪽 코너를 교점으로 설정, 안쪽 코너는 유지
-          if (isLeftOuter) {
-            corners.startLeft = intersection;
-          } else {
-            corners.startRight = intersection;
-          }
+        if (miterAngle > 0) {
+          // 왼쪽 회전: Right가 바깥 (2배), Left는 안쪽 (그대로)
+          corners.startRight.x -= wallDir.x * miterOffset * 2;
+          corners.startRight.z -= wallDir.z * miterOffset * 2;
+          // startLeft는 그대로
+        } else {
+          // 오른쪽 회전: Left가 바깥 (2배), Right는 안쪽 (그대로)
+          corners.startLeft.x -= wallDir.x * miterOffset * 2;
+          corners.startLeft.z -= wallDir.z * miterOffset * 2;
+          // startRight는 그대로
         }
       }
     }
@@ -272,46 +246,21 @@ export function calculateWallCorners(
       const miterAngle = calculateMiterAngle(wallDir, adjustedConnectedDir, true);
 
       if (Math.abs(miterAngle) > 0.01) {
-        // miterAngle > 0: 왼쪽으로 회전 → endLeft가 바깥쪽
-        // miterAngle < 0: 오른쪽으로 회전 → endRight가 바깥쪽
-        const isLeftOuter = miterAngle > 0;
+        const miterOffset = t / Math.tan(Math.abs(miterAngle));
 
-        // 연결된 벽의 perpendicular
-        const connectedPerp = {
-          x: -adjustedConnectedDir.z,
-          z: adjustedConnectedDir.x,
-        };
+        // miterAngle > 0: 왼쪽으로 회전 → endRight가 바깥쪽 (더 많이 이동)
+        // miterAngle < 0: 오른쪽으로 회전 → endLeft가 바깥쪽 (더 많이 이동)
 
-        // 연결된 벽의 바깥쪽 모서리 시작점
-        const connectedOuterStart = {
-          x: endPoint.x + connectedPerp.x * (isLeftOuter ? -t : t),
-          z: endPoint.y + connectedPerp.z * (isLeftOuter ? -t : t),
-        };
-
-        // 현재 벽의 바깥쪽 모서리 끝점
-        const currentOuterEnd = isLeftOuter ? corners.endLeft : corners.endRight;
-
-        // 두 바깥 모서리선의 교점 계산
-        // Line 1: currentOuterEnd + s * wallDir [앞 방향]
-        // Line 2: connectedOuterStart + u * adjustedConnectedDir
-        const det = wallDir.x * adjustedConnectedDir.z - wallDir.z * adjustedConnectedDir.x;
-
-        if (Math.abs(det) > 0.001) {
-          const dx = connectedOuterStart.x - currentOuterEnd.x;
-          const dz = connectedOuterStart.z - currentOuterEnd.z;
-          const s = (dx * adjustedConnectedDir.z - dz * adjustedConnectedDir.x) / det;
-
-          const intersection = {
-            x: currentOuterEnd.x + s * wallDir.x,
-            z: currentOuterEnd.z + s * wallDir.z,
-          };
-
-          // 바깥쪽 코너를 교점으로 설정, 안쪽 코너는 유지
-          if (isLeftOuter) {
-            corners.endLeft = intersection;
-          } else {
-            corners.endRight = intersection;
-          }
+        if (miterAngle > 0) {
+          // 왼쪽 회전: Right가 바깥 (2배), Left는 안쪽 (그대로)
+          corners.endRight.x += wallDir.x * miterOffset * 2;
+          corners.endRight.z += wallDir.z * miterOffset * 2;
+          // endLeft는 그대로
+        } else {
+          // 오른쪽 회전: Left가 바깥 (2배), Right는 안쪽 (그대로)
+          corners.endLeft.x += wallDir.x * miterOffset * 2;
+          corners.endLeft.z += wallDir.z * miterOffset * 2;
+          // endRight는 그대로
         }
       }
     }
