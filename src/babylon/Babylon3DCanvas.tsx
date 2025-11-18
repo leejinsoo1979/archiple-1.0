@@ -9,6 +9,7 @@ import {
   PolygonMeshBuilder,
   PBRMaterial,
   Color3,
+  Color4,
   Texture,
   DirectionalLight,
   ShadowGenerator,
@@ -18,7 +19,6 @@ import {
   Mesh,
   SceneLoader,
   AbstractMesh,
-  AnimationGroup,
   FollowCamera
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials/grid';
@@ -35,7 +35,6 @@ import {
   type WallCorners,
 } from './utils/WallMiterUtils';
 import type { Wall } from '../core/types/Wall';
-import type { Point } from '../core/types/Point';
 
 // Make earcut available globally for Babylon.js polygon operations
 if (typeof window !== 'undefined') {
@@ -138,7 +137,7 @@ const findNearestWallSnap = (
     // Get wall rotation and dimensions (assume wall is aligned with X or Z axis)
     const wallRotation = wallMesh.rotation.y;
     const wallLength = wallMesh.scaling.x; // Length along X when not rotated
-    const wallThickness = wallMesh.scaling.z; // Thickness along Z
+    // const wallThickness = wallMesh.scaling.z; // Thickness along Z
 
     // Determine if wall is horizontal or vertical
     const isVertical = Math.abs(Math.sin(wallRotation)) > 0.5;
@@ -192,7 +191,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
   const fpsCameraRef = useRef<UniversalCamera | null>(null);
   const thirdPersonCameraRef = useRef<FollowCamera | null>(null);
   const characterRef = useRef<AbstractMesh | null>(null);
-  const animationsRef = useRef<AnimationGroup[]>([]);
+  // const animationsRef = useRef<AnimationGroup[]>([]);
   const loadedModelRef = useRef<AbstractMesh | null>(null); // Store loaded GLB model
   const wallMeshesRef = useRef<Mesh[]>([]); // Store wall meshes for snap detection
 
@@ -588,30 +587,48 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     const positions: number[] = [];
     const indices: number[] = [];
     const normals: number[] = [];
+    const colors: number[] = [];
 
-    // 8개 vertex (바닥 4개 + 천장 4개)
-    // 바닥 (y=0)
+    // 바닥 4개 vertex (y=0) - 흰색
     positions.push(c1.x, 0, c1.z); // 0
+    colors.push(1, 1, 1, 1);
     positions.push(c2.x, 0, c2.z); // 1
+    colors.push(1, 1, 1, 1);
     positions.push(c3.x, 0, c3.z); // 2
+    colors.push(1, 1, 1, 1);
     positions.push(c4.x, 0, c4.z); // 3
+    colors.push(1, 1, 1, 1);
 
-    // 천장 (y=wallHeight)
+    // 측면용 윗 vertex 4개 (y=wallHeight) - 흰색 (측면에 그라데이션 방지)
     positions.push(c1.x, wallHeight, c1.z); // 4
+    colors.push(1, 1, 1, 1);
     positions.push(c2.x, wallHeight, c2.z); // 5
+    colors.push(1, 1, 1, 1);
     positions.push(c3.x, wallHeight, c3.z); // 6
+    colors.push(1, 1, 1, 1);
     positions.push(c4.x, wallHeight, c4.z); // 7
+    colors.push(1, 1, 1, 1);
 
-    // Indices (각 면마다 2개의 삼각형)
-    // 바닥 (시계방향) - submesh 0
+    // 천장 단면용 vertex 4개 (y=wallHeight) - 검정색
+    positions.push(c1.x, wallHeight, c1.z); // 8
+    colors.push(0, 0, 0, 1);
+    positions.push(c2.x, wallHeight, c2.z); // 9
+    colors.push(0, 0, 0, 1);
+    positions.push(c3.x, wallHeight, c3.z); // 10
+    colors.push(0, 0, 0, 1);
+    positions.push(c4.x, wallHeight, c4.z); // 11
+    colors.push(0, 0, 0, 1);
+
+    // Indices
+    // 바닥 (시계방향)
     indices.push(0, 2, 1);
     indices.push(0, 3, 2);
 
-    // 천장 (반시계방향 - 위에서 보면 시계방향) - submesh 0
-    indices.push(4, 5, 6);
-    indices.push(4, 6, 7);
+    // 천장 단면 (반시계방향) - 검정색 vertex 사용
+    indices.push(8, 9, 10);
+    indices.push(8, 10, 11);
 
-    // 측면 4개
+    // 측면 4개 - 흰색 vertex 사용 (4-7)
     // Left side (0-1-5-4)
     indices.push(0, 1, 5);
     indices.push(0, 5, 4);
@@ -631,6 +648,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     const vertexData = new VertexData();
     vertexData.positions = positions;
     vertexData.indices = indices;
+    vertexData.colors = colors;
 
     // Normals 자동 계산
     VertexData.ComputeNormals(positions, indices, normals);
@@ -638,6 +656,11 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
     const mesh = new Mesh(name, scene);
     vertexData.applyToMesh(mesh);
+
+    // 얇은 그레이 윤곽선 추가
+    mesh.enableEdgesRendering();
+    mesh.edgesWidth = 1.0; // 얇은 선
+    mesh.edgesColor = new Color4(0.5, 0.5, 0.5, 1); // 그레이색
 
     return mesh;
   };
@@ -1462,7 +1485,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         };
       },
       null, // onProgress
-      (scene, message, exception) => {
+      (_scene, message, exception) => {
         console.error('[Babylon3DCanvas] GLB loading error!');
         console.error('[Babylon3DCanvas] Error message:', message);
         console.error('[Babylon3DCanvas] Error exception:', exception);
