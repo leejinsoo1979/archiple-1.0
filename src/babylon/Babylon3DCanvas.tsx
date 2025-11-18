@@ -795,23 +795,18 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       // Set active camera first
       scene.activeCamera = fpsCamera;
 
-      // Attach control with noPreventDefault = false to allow keyboard input
-      fpsCamera.attachControl(canvas, false);
+      // Focus canvas to receive keyboard input
+      canvas.focus();
 
-      // Ensure keyboard input is enabled
-      if (fpsCamera.inputs && fpsCamera.inputs.attached.keyboard) {
-        console.log('[Babylon3DCanvas] FPS Camera keyboard input exists');
-      } else {
-        console.error('[Babylon3DCanvas] FPS Camera keyboard input NOT found!');
-      }
+      // Attach control with noPreventDefault = true (don't block default events)
+      fpsCamera.attachControl(canvas, true);
 
       console.log('[Babylon3DCanvas] FPS Camera attached, keys configured:', {
         keysUp: fpsCamera.keysUp,
         keysDown: fpsCamera.keysDown,
         keysLeft: fpsCamera.keysLeft,
         keysRight: fpsCamera.keysRight,
-        speed: fpsCamera.speed,
-        attached: fpsCamera.inputs?.attached
+        speed: fpsCamera.speed
       });
 
       let lastCameraPos = fpsCamera.position.clone();
@@ -883,12 +878,17 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
       fpsCamera.detachControl();
       thirdPersonCamera.detachControl();
+
+      // Set active camera first
+      scene.activeCamera = arcCamera;
+
+      // Focus canvas to receive keyboard input
+      canvas.focus();
+
       arcCamera.attachControl(canvas, true);
 
       // Disable camera keyboard controls so character controls work
       arcCamera.inputs.removeByType('ArcRotateCameraKeyboardMoveInput');
-
-      scene.activeCamera = arcCamera;
 
       // Character controls
       const inputMap: { [key: string]: boolean } = {};
@@ -1044,7 +1044,12 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
   return (
     <div className={styles.container}>
-      <canvas ref={canvasRef} className={styles.canvas} />
+      <canvas
+        ref={canvasRef}
+        className={styles.canvas}
+        tabIndex={0}
+        style={{ outline: 'none' }}
+      />
     </div>
   );
 };
