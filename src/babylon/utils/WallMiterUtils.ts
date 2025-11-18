@@ -198,31 +198,40 @@ export function calculateWallCorners(
     if (connectedDir) {
       const atStart = connections.startConnected.atStart;
 
-      // 연결된 벽의 방향 조정 (연결 지점 기준)
-      // atStart=true: 연결된 벽의 시작점이 연결점 → 벽이 나가는 방향
-      // atStart=false: 연결된 벽의 끝점이 연결점 → 벽이 들어오는 방향 (반대로)
+      // 연결된 벽의 방향 조정
       const adjustedConnectedDir = atStart
         ? { x: connectedDir.x, z: connectedDir.z }
         : { x: -connectedDir.x, z: -connectedDir.z };
 
-      // 현재 벽의 방향을 반대로 (시작점에서 나가는 방향)
-      const miterAngle = calculateMiterAngle(
-        { x: -wallDir.x, z: -wallDir.z },
-        adjustedConnectedDir,
-        true
-      );
+      // 현재 벽의 시작점에서 바깥쪽 방향 (반대 방향)
+      const currentDirOut = { x: -wallDir.x, z: -wallDir.z };
+
+      // 두 벡터의 외적으로 회전 방향 판단 (2D cross product)
+      // cross > 0: 반시계 방향 (왼쪽으로 꺾임)
+      // cross < 0: 시계 방향 (오른쪽으로 꺾임)
+      const cross = currentDirOut.x * adjustedConnectedDir.z - currentDirOut.z * adjustedConnectedDir.x;
+
+      const miterAngle = calculateMiterAngle(currentDirOut, adjustedConnectedDir, true);
 
       // 각도가 너무 작으면 miter 적용 안 함 (일직선)
       if (Math.abs(miterAngle) > 0.01) {
         const miterOffset = t / Math.tan(Math.abs(miterAngle));
 
-        // 양쪽 코너를 모두 같은 방향으로 이동 (벽 시작 방향으로 당김)
-        corners.startLeft.x -= wallDir.x * miterOffset;
-        corners.startLeft.z -= wallDir.z * miterOffset;
-        corners.startRight.x -= wallDir.x * miterOffset;
-        corners.startRight.z -= wallDir.z * miterOffset;
+        // 진짜 연귀: 한쪽 코너만 대각선으로 절단
+        // perpendicular 방향을 고려해서 어느 코너를 자를지 결정
+        if (cross > 0) {
+          // 왼쪽으로 꺾임 → startLeft 코너 절단
+          corners.startLeft.x -= wallDir.x * miterOffset + perpendicular.x * miterOffset;
+          corners.startLeft.z -= wallDir.z * miterOffset + perpendicular.z * miterOffset;
+          // startRight는 그대로
+        } else {
+          // 오른쪽으로 꺾임 → startRight 코너 절단
+          corners.startRight.x -= wallDir.x * miterOffset - perpendicular.x * miterOffset;
+          corners.startRight.z -= wallDir.z * miterOffset - perpendicular.z * miterOffset;
+          // startLeft는 그대로
+        }
 
-        console.log(`[WallMiter] START - Wall ${wall.id}: miterAngle=${(miterAngle * 180 / Math.PI).toFixed(1)}°, offset=${miterOffset.toFixed(2)}mm`);
+        console.log(`[WallMiter] START - Wall ${wall.id}: cross=${cross.toFixed(2)}, miterAngle=${(miterAngle * 180 / Math.PI).toFixed(1)}°, offset=${miterOffset.toFixed(2)}mm`);
       }
     }
   }
@@ -235,23 +244,33 @@ export function calculateWallCorners(
     if (connectedDir) {
       const atStart = connections.endConnected.atStart;
 
-      // 연결된 벽의 방향 조정 (연결 지점 기준)
+      // 연결된 벽의 방향 조정
       const adjustedConnectedDir = atStart
         ? { x: connectedDir.x, z: connectedDir.z }
         : { x: -connectedDir.x, z: -connectedDir.z };
+
+      // 두 벡터의 외적으로 회전 방향 판단
+      const cross = wallDir.x * adjustedConnectedDir.z - wallDir.z * adjustedConnectedDir.x;
 
       const miterAngle = calculateMiterAngle(wallDir, adjustedConnectedDir, true);
 
       if (Math.abs(miterAngle) > 0.01) {
         const miterOffset = t / Math.tan(Math.abs(miterAngle));
 
-        // 양쪽 코너를 모두 같은 방향으로 이동 (벽 끝 방향으로 밀어냄)
-        corners.endLeft.x += wallDir.x * miterOffset;
-        corners.endLeft.z += wallDir.z * miterOffset;
-        corners.endRight.x += wallDir.x * miterOffset;
-        corners.endRight.z += wallDir.z * miterOffset;
+        // 진짜 연귀: 한쪽 코너만 대각선으로 절단
+        if (cross > 0) {
+          // 왼쪽으로 꺾임 → endRight 코너 절단
+          corners.endRight.x += wallDir.x * miterOffset - perpendicular.x * miterOffset;
+          corners.endRight.z += wallDir.z * miterOffset - perpendicular.z * miterOffset;
+          // endLeft는 그대로
+        } else {
+          // 오른쪽으로 꺾임 → endLeft 코너 절단
+          corners.endLeft.x += wallDir.x * miterOffset + perpendicular.x * miterOffset;
+          corners.endLeft.z += wallDir.z * miterOffset + perpendicular.z * miterOffset;
+          // endRight는 그대로
+        }
 
-        console.log(`[WallMiter] END - Wall ${wall.id}: miterAngle=${(miterAngle * 180 / Math.PI).toFixed(1)}°, offset=${miterOffset.toFixed(2)}mm`);
+        console.log(`[WallMiter] END - Wall ${wall.id}: cross=${cross.toFixed(2)}, miterAngle=${(miterAngle * 180 / Math.PI).toFixed(1)}°, offset=${miterOffset.toFixed(2)}mm`);
       }
     }
   }
