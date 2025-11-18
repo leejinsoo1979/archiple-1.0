@@ -614,22 +614,26 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     positions.push(c4.x, topY, c4.z); // 7
     colors.push(1, 1, 1, 1);
 
-    // 천장 단면용 vertex 4개 (y=wallStartHeight+wallHeight) - 검정색
+    // 천장 단면용 vertex 4개 (y=wallStartHeight+wallHeight)
+    // startHeight > 0 (인방)이면 흰색, 아니면 검정색
+    const topFaceColor = startHeight > 0 ? 1 : 0;
     positions.push(c1.x, topY, c1.z); // 8
-    colors.push(0, 0, 0, 1);
+    colors.push(topFaceColor, topFaceColor, topFaceColor, 1);
     positions.push(c2.x, topY, c2.z); // 9
-    colors.push(0, 0, 0, 1);
+    colors.push(topFaceColor, topFaceColor, topFaceColor, 1);
     positions.push(c3.x, topY, c3.z); // 10
-    colors.push(0, 0, 0, 1);
+    colors.push(topFaceColor, topFaceColor, topFaceColor, 1);
     positions.push(c4.x, topY, c4.z); // 11
-    colors.push(0, 0, 0, 1);
+    colors.push(topFaceColor, topFaceColor, topFaceColor, 1);
 
     // Indices
-    // 바닥 (시계방향)
-    indices.push(0, 2, 1);
-    indices.push(0, 3, 2);
+    // 바닥 (시계방향) - startHeight === 0 일 때만 생성
+    if (startHeight === 0) {
+      indices.push(0, 2, 1);
+      indices.push(0, 3, 2);
+    }
 
-    // 천장 단면 (반시계방향) - 검정색 vertex 사용
+    // 천장 단면 (반시계방향)
     indices.push(8, 9, 10);
     indices.push(8, 10, 11);
 
