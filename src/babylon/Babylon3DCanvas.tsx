@@ -742,74 +742,35 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     // Clear and prepare wall meshes array for snap detection
     wallMeshesRef.current = [];
 
-    // Create walls with simple miter joint (trim wall length at connections)
+    // Create walls with proper miter joints using WallMiterUtils
     walls.forEach((wall, wallIndex) => {
       const startPoint = pointMap.get(wall.startPointId);
       const endPoint = pointMap.get(wall.endPointId);
       if (!startPoint || !endPoint) return;
 
-      const wallThicknessMM = wall.thickness;
       const wallHeightMM = wall.height || 2400;
 
       // Find doors on this wall
       const wallDoors = doors.filter((door: any) => door.wallId === wall.id);
 
-      // Find connected walls for miter adjustment
+      // Find connected walls and calculate miter joint corners
       const connections = findConnectedWalls(walls as Wall[], wall as Wall, pointMap);
+      const corners = calculateWallCorners(wall as Wall, connections, pointMap);
 
-      // Convert to meters (flip Z axis for correct orientation)
-      const startX = startPoint.x * MM_TO_METERS - centerX;
-      const startZ = -(startPoint.y * MM_TO_METERS) - centerZ;
-      const endX = endPoint.x * MM_TO_METERS - centerX;
-      const endZ = -(endPoint.y * MM_TO_METERS) - centerZ;
-
-      const dx = endX - startX;
-      const dz = endZ - startZ;
-      const wallLengthM = Math.sqrt(dx * dx + dz * dz);
-      const wallThickness = wallThicknessMM * MM_TO_METERS;
-      const wallHeight = wallHeightMM * MM_TO_METERS;
-
-      const angle = Math.atan2(dz, dx);
-
-      // Calculate wall trim for miter joints
-      const halfThickness = wallThickness / 2;
-      let startTrim = 0;
-      let endTrim = 0;
-
-      // If connected at start, trim by half thickness
-      if (connections.startConnected) {
-        startTrim = halfThickness;
+      if (!corners) {
+        console.error('[Babylon3DCanvas] Failed to calculate corners for wall:', wall.id);
+        return;
       }
-
-      // If connected at end, trim by half thickness
-      if (connections.endConnected) {
-        endTrim = halfThickness;
-      }
-
-      // Adjusted wall length and position
-      const adjustedLength = wallLengthM - startTrim - endTrim;
-      const trimRatio = (startTrim + endTrim / 2 - endTrim / 2) / wallLengthM;
-
-      const adjustedCenterX = startX + dx * (0.5 + (startTrim - endTrim) / (2 * wallLengthM));
-      const adjustedCenterZ = startZ + dz * (0.5 + (startTrim - endTrim) / (2 * wallLengthM));
 
       if (wallDoors.length === 0) {
-        // No doors - create full wall
-        const wallMesh = MeshBuilder.CreateBox(
+        // No doors - create full wall with miter joints
+        const wallMesh = createWallMeshFromCorners(
+          corners,
+          wallHeightMM,
+          centerX,
+          centerZ,
           `wall_${wallIndex}`,
-          {
-            width: adjustedLength,
-            height: wallHeight,
-            depth: wallThickness,
-          },
           scene
-        );
-
-        wallMesh.rotation.y = -angle;
-        wallMesh.position = new Vector3(
-          adjustedCenterX,
-          wallHeight / 2,
-          adjustedCenterZ
         );
 
         wallMesh.material = wallMaterial;
@@ -823,14 +784,20 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           shadowGenerator.addShadowCaster(wallMesh);
         }
       } else {
-        // Has doors - split wall into segments with miter trim
+        // Has doors - split wall into segments with miter joints
         const openings: Array<{ start: number; end: number }> = [];
 
+        // Calculate wall length for door positioning
+        const dx = endPoint.x - startPoint.x;
+        const dy = endPoint.y - startPoint.y;
+        const wallLengthMM = Math.sqrt(dx * dx + dy * dy);
+
         wallDoors.forEach((door: any) => {
-          const doorWidthM = door.width * MM_TO_METERS;
-          const halfWidth = doorWidthM / 2;
-          const openingStart = Math.max(0, door.position - halfWidth / wallLengthM);
-          const openingEnd = Math.min(1, door.position + halfWidth / wallLengthM);
+          const doorWidthMM = door.width;
+          const halfWidth = doorWidthMM / 2;
+          // door.position is 0-1 normalized along wall length
+          const openingStart = Math.max(0, door.position - halfWidth / wallLengthMM);
+          const openingEnd = Math.min(1, door.position + halfWidth / wallLengthMM);
           openings.push({ start: openingStart, end: openingEnd });
         });
 
@@ -849,49 +816,25 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           }
         });
 
-        // Create segments with miter trim applied
+        // Create segments using calculateSegmentCorners
         let currentPos = 0;
         let segIndex = 0;
 
         merged.forEach((opening) => {
           if (currentPos < opening.start) {
-            // Calculate segment position with miter trim
-            const segStartRatio = currentPos;
-            const segEndRatio = opening.start;
+            const segStart = currentPos;
+            const segEnd = opening.start;
 
-            // Convert ratio to actual position (meters)
-            const rawSegStartX = startX + dx * segStartRatio;
-            const rawSegStartZ = startZ + dz * segStartRatio;
-            const rawSegEndX = startX + dx * segEndRatio;
-            const rawSegEndZ = startZ + dz * segEndRatio;
+            // Calculate segment corners with miter joints
+            const segCorners = calculateSegmentCorners(corners, segStart, segEnd);
 
-            // Apply miter trim only to first/last segments
-            const isFirstSegment = currentPos === 0;
-            const trimStart = isFirstSegment ? startTrim : 0;
-
-            const segStartX = rawSegStartX + (dx / wallLengthM) * trimStart;
-            const segStartZ = rawSegStartZ + (dz / wallLengthM) * trimStart;
-
-            const segDx = rawSegEndX - rawSegStartX;
-            const segDz = rawSegEndZ - rawSegStartZ;
-            const rawSegLength = Math.sqrt(segDx * segDx + segDz * segDz);
-            const segLength = rawSegLength - trimStart;
-
-            const segMesh = MeshBuilder.CreateBox(
+            const segMesh = createWallMeshFromCorners(
+              segCorners,
+              wallHeightMM,
+              centerX,
+              centerZ,
               `wall_${wallIndex}_seg_${segIndex++}`,
-              {
-                width: segLength,
-                height: wallHeight,
-                depth: wallThickness,
-              },
               scene
-            );
-
-            segMesh.rotation.y = -angle;
-            segMesh.position = new Vector3(
-              (segStartX + rawSegEndX) / 2,
-              wallHeight / 2,
-              (segStartZ + rawSegEndZ) / 2
             );
 
             segMesh.material = wallMaterial;
@@ -909,37 +852,18 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
         // Final segment
         if (currentPos < 1) {
-          const segStartRatio = currentPos;
-          const segEndRatio = 1;
+          const segStart = currentPos;
+          const segEnd = 1;
 
-          const rawSegStartX = startX + dx * segStartRatio;
-          const rawSegStartZ = startZ + dz * segStartRatio;
-          const rawSegEndX = endX;
-          const rawSegEndZ = endZ;
+          const segCorners = calculateSegmentCorners(corners, segStart, segEnd);
 
-          // Apply miter trim to end
-          const segEndX = rawSegEndX - (dx / wallLengthM) * endTrim;
-          const segEndZ = rawSegEndZ - (dz / wallLengthM) * endTrim;
-
-          const segDx = segEndX - rawSegStartX;
-          const segDz = segEndZ - rawSegStartZ;
-          const segLength = Math.sqrt(segDx * segDx + segDz * segDz);
-
-          const segMesh = MeshBuilder.CreateBox(
+          const segMesh = createWallMeshFromCorners(
+            segCorners,
+            wallHeightMM,
+            centerX,
+            centerZ,
             `wall_${wallIndex}_seg_${segIndex}`,
-            {
-              width: segLength,
-              height: wallHeight,
-              depth: wallThickness,
-            },
             scene
-          );
-
-          segMesh.rotation.y = -angle;
-          segMesh.position = new Vector3(
-            (rawSegStartX + segEndX) / 2,
-            wallHeight / 2,
-            (rawSegStartZ + segEndZ) / 2
           );
 
           segMesh.material = wallMaterial;
