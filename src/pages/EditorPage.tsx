@@ -65,14 +65,21 @@ const EditorPage = () => {
   // Handle GLB file upload
   const handleGlbUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !file.name.toLowerCase().endsWith('.glb')) {
-      alert('GLB 파일을 선택하세요');
+    console.log('[EditorPage] File input changed, file:', file);
+
+    if (!file) {
+      console.warn('[EditorPage] No file selected');
       return;
     }
 
+    if (!file.name.toLowerCase().endsWith('.glb')) {
+      alert('GLB 파일을 선택하세요 (현재 파일: ' + file.name + ')');
+      return;
+    }
+
+    console.log('[EditorPage] GLB file selected:', file.name, 'size:', file.size, 'bytes');
     setGlbModelFile(file);
     setViewMode('3D'); // Switch to 3D view
-    console.log('[EditorPage] GLB file selected:', file.name);
   };
 
   // Handle image upload

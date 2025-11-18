@@ -1201,7 +1201,12 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
 
   // GLB model loading and placement with click-to-place
   useEffect(() => {
-    if (!glbModelFile || !sceneRef.current || !canvasRef.current) return;
+    console.log('[Babylon3DCanvas] GLB useEffect triggered, glbModelFile:', glbModelFile?.name, 'scene:', !!sceneRef.current, 'canvas:', !!canvasRef.current);
+
+    if (!glbModelFile || !sceneRef.current || !canvasRef.current) {
+      console.log('[Babylon3DCanvas] GLB loading skipped - missing dependencies');
+      return;
+    }
 
     const scene = sceneRef.current;
     const canvas = canvasRef.current;
@@ -1215,16 +1220,19 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     // Create object URL from File
     const objectUrl = URL.createObjectURL(glbModelFile);
 
-    console.log('[Babylon3DCanvas] Loading GLB file:', glbModelFile.name);
+    console.log('[Babylon3DCanvas] Loading GLB file:', glbModelFile.name, 'from URL:', objectUrl);
 
-    // Load GLB model
+    // Load GLB model - use objectUrl as sceneFilename with empty rootUrl
     SceneLoader.ImportMesh(
-      '', // Load all meshes
-      '',
-      objectUrl,
+      '', // Load all meshes (empty = all)
+      '', // Empty root URL
+      objectUrl, // Full object URL as filename
       scene,
       (meshes) => {
         console.log('[Babylon3DCanvas] GLB loaded successfully:', meshes.length, 'meshes');
+        if (meshes.length > 0) {
+          console.log('[Babylon3DCanvas] First mesh:', meshes[0].name, 'position:', meshes[0].position);
+        }
 
         if (meshes.length === 0) {
           console.warn('[Babylon3DCanvas] No meshes found in GLB file');
@@ -1290,16 +1298,21 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       },
       null, // onProgress
       (scene, message, exception) => {
-        console.error('[Babylon3DCanvas] GLB loading error:', message, exception);
-        alert('GLB 파일 로드 실패: ' + message);
+        console.error('[Babylon3DCanvas] GLB loading error!');
+        console.error('[Babylon3DCanvas] Error message:', message);
+        console.error('[Babylon3DCanvas] Error exception:', exception);
+        alert('GLB 파일 로드 실패: ' + message + '\n콘솔을 확인하세요.');
       }
     );
 
+    console.log('[Babylon3DCanvas] SceneLoader.ImportMesh called');
+
     // Cleanup object URL
     return () => {
+      console.log('[Babylon3DCanvas] Cleaning up GLB object URL');
       URL.revokeObjectURL(objectUrl);
     };
-  }, [glbModelFile, floorplanData]);
+  }, [glbModelFile]); // Remove floorplanData dependency - GLB can load independently
 
   return (
     <div className={styles.container}>
