@@ -543,10 +543,10 @@ const EditorPage = () => {
                     <button onClick={() => setLightPanelOpen(false)} className={styles.closeBtn}>×</button>
                   </div>
                   <div className={styles.dropdownBody}>
-                    {/* Add Light Buttons - Click to place directly */}
+                    {/* Add Light Buttons */}
                     <div className={styles.controlGroup}>
-                      <label>조명 추가 (3D 뷰에서 클릭)</label>
-                      <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                      <label>조명 추가</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
                         <button
                           onClick={() => {
                             setSelectedLightType('point');
@@ -554,19 +554,19 @@ const EditorPage = () => {
                             setViewMode('3D');
                           }}
                           style={{
-                            flex: 1,
-                            padding: '10px',
+                            width: '100%',
+                            padding: '12px',
                             background: lightPlacementMode && selectedLightType === 'point' ? '#e74c3c' : '#3fae7a',
                             color: 'white',
                             border: 'none',
                             borderRadius: '4px',
-                            fontSize: '13px',
+                            fontSize: '14px',
                             fontWeight: '500',
                             cursor: 'pointer',
                             transition: 'all 0.2s',
                           }}
                         >
-                          포인트
+                          {lightPlacementMode && selectedLightType === 'point' ? '배치 중... (3D 클릭)' : '+ 포인트 라이트'}
                         </button>
                         <button
                           onClick={() => {
@@ -575,19 +575,19 @@ const EditorPage = () => {
                             setViewMode('3D');
                           }}
                           style={{
-                            flex: 1,
-                            padding: '10px',
+                            width: '100%',
+                            padding: '12px',
                             background: lightPlacementMode && selectedLightType === 'spot' ? '#e74c3c' : '#3fae7a',
                             color: 'white',
                             border: 'none',
                             borderRadius: '4px',
-                            fontSize: '13px',
+                            fontSize: '14px',
                             fontWeight: '500',
                             cursor: 'pointer',
                             transition: 'all 0.2s',
                           }}
                         >
-                          스포트
+                          {lightPlacementMode && selectedLightType === 'spot' ? '배치 중... (3D 클릭)' : '+ 스포트 라이트'}
                         </button>
                         <button
                           onClick={() => {
@@ -596,34 +596,21 @@ const EditorPage = () => {
                             setViewMode('3D');
                           }}
                           style={{
-                            flex: 1,
-                            padding: '10px',
+                            width: '100%',
+                            padding: '12px',
                             background: lightPlacementMode && selectedLightType === 'directional' ? '#e74c3c' : '#3fae7a',
                             color: 'white',
                             border: 'none',
                             borderRadius: '4px',
-                            fontSize: '13px',
+                            fontSize: '14px',
                             fontWeight: '500',
                             cursor: 'pointer',
                             transition: 'all 0.2s',
                           }}
                         >
-                          방향성
+                          {lightPlacementMode && selectedLightType === 'directional' ? '배치 중... (3D 클릭)' : '+ 방향성 라이트'}
                         </button>
                       </div>
-                      {lightPlacementMode && (
-                        <div style={{
-                          marginTop: '8px',
-                          padding: '8px',
-                          background: '#fff3cd',
-                          border: '1px solid #ffc107',
-                          borderRadius: '4px',
-                          fontSize: '12px',
-                          color: '#856404',
-                        }}>
-                          3D 뷰에서 원하는 위치를 클릭하세요
-                        </div>
-                      )}
                     </div>
 
                     {/* Light List */}

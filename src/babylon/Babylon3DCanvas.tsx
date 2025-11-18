@@ -21,7 +21,8 @@ import {
   AbstractMesh,
   FollowCamera,
   DefaultRenderingPipeline,
-  ImageProcessingConfiguration
+  ImageProcessingConfiguration,
+  CSG
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials/grid';
 import { SkyMaterial } from '@babylonjs/materials/sky';
@@ -994,171 +995,84 @@ const Babylon3DCanvas = ({
         return;
       }
 
-      if (wallDoors.length === 0) {
-        // No doors - create full wall with miter joints
-        const wallMesh = createWallMeshFromCorners(
-          corners,
-          wallHeightMM,
-          centerX,
-          centerZ,
-          `wall_${wallIndex}`,
-          scene
-        );
+      // Create full wall with miter joints
+      let wallMesh = createWallMeshFromCorners(
+        corners,
+        wallHeightMM,
+        centerX,
+        centerZ,
+        `wall_${wallIndex}`,
+        scene
+      );
 
-        wallMesh.material = wallMaterial;
-        wallMesh.receiveShadows = true;
-        wallMesh.checkCollisions = true;
-
-        // Store wall mesh for snap detection
-        wallMeshesRef.current.push(wallMesh);
-
-        if (shadowGenerator) {
-          shadowGenerator.addShadowCaster(wallMesh);
-        }
-      } else {
-        // Has doors - create wall in TWO layers:
-        // 1. Bottom layer (0 ~ 2100mm): Door opening segments (door + top frame)
-        // 2. Top layer (2100mm ~ ceiling): Lintel (full wall)
-
-        const DOOR_HEIGHT = 2050; // 도어 높이
+      // If wall has doors, subtract door openings using CSG
+      if (wallDoors.length > 0) {
+        const DOOR_HEIGHT = 2050; // 도어 높이 (mm)
         const FRAME_WIDTH = 50; // 문틀 너비 (mm)
         const OPENING_HEIGHT = DOOR_HEIGHT + FRAME_WIDTH; // 타공 높이 (도어 + 상단 문틀)
-        const LINTEL_HEIGHT = wallHeightMM - OPENING_HEIGHT; // 인방 높이
+        const OPENING_WIDTH_MM = 900 + FRAME_WIDTH * 2; // 타공 폭 (도어 + 양쪽 문틀)
 
-        // Need BOTH miter corners (for wall ends) and basic corners (for door openings)
-        const basicCorners = calculateBasicWallCorners(wall as Wall, pointMap);
-
-        if (!basicCorners) {
-          console.error('[Babylon3DCanvas] Failed to calculate basic corners for wall:', wall.id);
-          return;
-        }
-
-        const openings: Array<{ start: number; end: number }> = [];
-
-        // Calculate wall length for door positioning
+        // Calculate wall direction and length
         const dx = endPoint.x - startPoint.x;
         const dy = endPoint.y - startPoint.y;
         const wallLengthMM = Math.sqrt(dx * dx + dy * dy);
+        const wallDir = { x: dx / wallLengthMM, y: dy / wallLengthMM };
+        const wallRotationY = Math.atan2(wallDir.x, -wallDir.y);
 
+        // Convert wall mesh to CSG
+        let wallCSG = CSG.FromMesh(wallMesh);
+
+        // Subtract each door opening
         wallDoors.forEach((door: any) => {
-          const doorWidthMM = door.width || 900;
-          // 타공 크기는 문짝 + 양쪽 문틀 포함
-          const openingWidthMM = doorWidthMM + FRAME_WIDTH * 2;
-          const halfWidth = openingWidthMM / 2;
-          // door.position is 0-1 normalized along wall length
-          const openingStart = Math.max(0, door.position - halfWidth / wallLengthMM);
-          const openingEnd = Math.min(1, door.position + halfWidth / wallLengthMM);
-          openings.push({ start: openingStart, end: openingEnd });
-        });
+          // Calculate door center position along wall
+          const doorCenterMM = {
+            x: startPoint.x + wallDir.x * door.position * wallLengthMM,
+            y: startPoint.y + wallDir.y * door.position * wallLengthMM
+          };
 
-        openings.sort((a, b) => a.start - b.start);
-        const merged: Array<{ start: number; end: number }> = [];
-        openings.forEach((opening) => {
-          if (merged.length === 0) {
-            merged.push(opening);
-          } else {
-            const last = merged[merged.length - 1];
-            if (opening.start <= last.end) {
-              last.end = Math.max(last.end, opening.end);
-            } else {
-              merged.push(opening);
-            }
-          }
-        });
+          // Create door opening box (in meters)
+          const openingBox = MeshBuilder.CreateBox(`temp_opening`, {
+            width: OPENING_WIDTH_MM * MM_TO_METERS,
+            height: OPENING_HEIGHT * MM_TO_METERS,
+            depth: (wall.thickness + 100) * MM_TO_METERS // Slightly larger than wall thickness
+          }, scene);
 
-        // === BOTTOM LAYER: Door opening segments (0 ~ 2100mm) ===
-        let currentPos = 0;
-        let segIndex = 0;
-
-        merged.forEach((opening) => {
-          if (currentPos < opening.start) {
-            const segStart = currentPos;
-            const segEnd = opening.start;
-
-            // Segment corners: miter at wall ends, basic at door openings
-            const segCorners = calculateSegmentCorners(corners, basicCorners, segStart, segEnd);
-
-            const segMesh = createWallMeshFromCorners(
-              segCorners,
-              OPENING_HEIGHT, // 도어 + 상단 문틀 높이
-              centerX,
-              centerZ,
-              `wall_${wallIndex}_lower_seg_${segIndex++}`,
-              scene,
-              0, // 바닥부터 시작
-              true, // skipTopFace: 상단면 안 그림 (인방이 덮음)
-              false // skipBottomFace: 하단면 그림 (바닥)
-            );
-
-            segMesh.material = wallMaterial;
-            segMesh.receiveShadows = true;
-            segMesh.checkCollisions = true;
-
-            wallMeshesRef.current.push(segMesh);
-
-            if (shadowGenerator) {
-              shadowGenerator.addShadowCaster(segMesh);
-            }
-          }
-          currentPos = opening.end;
-        });
-
-        // Final bottom segment
-        if (currentPos < 1) {
-          const segStart = currentPos;
-          const segEnd = 1;
-
-          const segCorners = calculateSegmentCorners(corners, basicCorners, segStart, segEnd);
-
-          const segMesh = createWallMeshFromCorners(
-            segCorners,
-            OPENING_HEIGHT, // 도어 + 상단 문틀 높이
-            centerX,
-            centerZ,
-            `wall_${wallIndex}_lower_seg_${segIndex}`,
-            scene,
-            0, // 바닥부터 시작
-            true, // skipTopFace: 상단면 안 그림 (인방이 덮음)
-            false // skipBottomFace: 하단면 그림 (바닥)
+          openingBox.position = new Vector3(
+            doorCenterMM.x * MM_TO_METERS - centerX,
+            (OPENING_HEIGHT / 2) * MM_TO_METERS,
+            -(doorCenterMM.y * MM_TO_METERS) - centerZ
           );
+          openingBox.rotation.y = wallRotationY + Math.PI / 2;
 
-          segMesh.material = wallMaterial;
-          segMesh.receiveShadows = true;
-          segMesh.checkCollisions = true;
+          // Subtract opening from wall
+          const openingCSG = CSG.FromMesh(openingBox);
+          wallCSG = wallCSG.subtract(openingCSG);
 
-          wallMeshesRef.current.push(segMesh);
+          // Dispose temporary box
+          openingBox.dispose();
+        });
 
-          if (shadowGenerator) {
-            shadowGenerator.addShadowCaster(segMesh);
-          }
-        }
+        // Convert CSG back to mesh
+        wallMesh.dispose();
+        wallMesh = wallCSG.toMesh(`wall_${wallIndex}`, wallMaterial, scene);
+      }
 
-        // === TOP LAYER: Lintel (2100mm ~ ceiling) - Full wall ===
-        if (LINTEL_HEIGHT > 0) {
-          const lintelMesh = createWallMeshFromCorners(
-            corners, // Miter corners for full wall
-            LINTEL_HEIGHT, // 인방 높이
-            centerX,
-            centerZ,
-            `wall_${wallIndex}_lintel`,
-            scene,
-            OPENING_HEIGHT, // 도어 + 상단 문틀 높이부터 시작
-            false, // skipTopFace: 천장 단면은 그림
-            true // skipBottomFace: 하단면 안 그림 (도어 위)
-          );
+      // Finalize wall mesh (with or without doors)
+      wallMesh.receiveShadows = true;
+      wallMesh.checkCollisions = true;
+      wallMeshesRef.current.push(wallMesh);
 
-          lintelMesh.material = wallMaterial;
-          lintelMesh.receiveShadows = true;
-          lintelMesh.checkCollisions = true;
+      if (shadowGenerator) {
+        shadowGenerator.addShadowCaster(wallMesh);
+      }
 
-          wallMeshesRef.current.push(lintelMesh);
+      // Enable edge rendering for clean wall edges
+      wallMesh.enableEdgesRendering();
+      wallMesh.edgesWidth = 1.0;
+      wallMesh.edgesColor = new Color4(0.5, 0.5, 0.5, 1);
 
-          if (shadowGenerator) {
-            shadowGenerator.addShadowCaster(lintelMesh);
-          }
-        }
-
-        // === CREATE DOOR MESHES ===
+      // === CREATE DOOR MESHES ===
+      if (wallDoors.length > 0) {
         wallDoors.forEach((door: any, doorIndex: number) => {
           const { doorGroup, doorLeaf, hotspot } = createDoorMesh(
             door.position,

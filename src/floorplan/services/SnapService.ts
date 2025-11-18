@@ -299,7 +299,7 @@ export class SnapService {
   private snapToAxisAlignment(position: Vector2): SnapResult | null {
     if (this.points.length === 0) return null;
 
-    const threshold = 150; // Increased threshold for easier snapping (150mm)
+    const threshold = 500; // Increased threshold for easier snapping (500mm = 50cm)
 
     // Find closest point to align with vertically or horizontally
     let snapPointVertical: Point | null = null;
