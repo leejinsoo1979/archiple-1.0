@@ -20,6 +20,8 @@ export const FloorEvents = {
   WALL_REMOVED: 'floor:wall:removed',
   WALL_SPLIT: 'floor:wall:split',
   WALL_SELECTED: 'floor:wall:selected',
+  WALL_HOVERED: 'floor:wall:hovered',
+  WALL_HOVER_CLEARED: 'floor:wall:hover:cleared',
   WALL_PREVIEW_UPDATED: 'floor:wall:preview:updated',
   WALL_PREVIEW_CLEARED: 'floor:wall:preview:cleared',
 

@@ -26,6 +26,10 @@ export class SelectTool extends BaseTool {
   private isDragging = false;
   private dragStartPos: Vector2 | null = null;
 
+  // Hover state
+  private hoveredPoint: Point | null = null;
+  private hoveredWall: Wall | null = null;
+
   // Config
   private pointSelectRadius = 200; // 200mm selection radius (easier to click)
   private wallSelectDistance = 500; // 500mm distance from wall to select (increased for easier selection)
@@ -110,11 +114,30 @@ export class SelectTool extends BaseTool {
       const hoveredPoint = this.findPointNear(position, allPoints);
 
       if (hoveredPoint) {
+        this.hoveredPoint = hoveredPoint;
+        this.hoveredWall = null;
         eventBus.emit(FloorEvents.POINT_HOVERED, {
           point: hoveredPoint,
         });
+        eventBus.emit(FloorEvents.WALL_HOVER_CLEARED, {});
+        return;
       } else {
+        this.hoveredPoint = null;
         eventBus.emit(FloorEvents.POINT_HOVER_CLEARED, {});
+      }
+
+      // If no point found, check for wall hover
+      const allWalls = this.sceneManager.objectManager.getAllWalls();
+      const hoveredWall = this.findWallNear(position, allWalls, allPoints);
+
+      if (hoveredWall) {
+        this.hoveredWall = hoveredWall;
+        eventBus.emit(FloorEvents.WALL_HOVERED, {
+          wall: hoveredWall,
+        });
+      } else {
+        this.hoveredWall = null;
+        eventBus.emit(FloorEvents.WALL_HOVER_CLEARED, {});
       }
       return;
     }
@@ -331,16 +354,19 @@ export class SelectTool extends BaseTool {
     this.selectedWall = null;
     this.isDragging = false;
     this.dragStartPos = null;
+    this.hoveredPoint = null;
+    this.hoveredWall = null;
 
-    // Clear selection events
+    // Clear selection and hover events
     eventBus.emit(FloorEvents.POINT_SELECTION_CLEARED, {});
     eventBus.emit(FloorEvents.POINT_HOVER_CLEARED, {});
+    eventBus.emit(FloorEvents.WALL_HOVER_CLEARED, {});
   }
 
   getCursor(): string {
     if (this.isDragging) {
       return 'grabbing';
-    } else if (this.selectedPoint || this.selectedWall) {
+    } else if (this.selectedPoint || this.selectedWall || this.hoveredPoint || this.hoveredWall) {
       return 'grab';
     }
     return 'default';

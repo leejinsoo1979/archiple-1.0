@@ -2,26 +2,33 @@ import { BaseLayer } from './Layer';
 
 /**
  * Background image layer for displaying uploaded floor plan images
+ *
+ * Coordinate system:
+ * - Image pixels are converted to world coordinates (mm)
+ * - Scale factor determines mm per pixel (default: 1.0mm/px)
+ * - Image is centered at origin (0, 0) by default
  */
 export class BackgroundImageLayer extends BaseLayer {
   private image: HTMLImageElement | null = null;
-  private scale: number = 1.0;
-  private offsetX: number = 0;
-  private offsetY: number = 0;
+  private pixelToMm: number = 100; // Default: 100mm per pixel
+  private offsetX: number = 0; // World coordinates (mm)
+  private offsetY: number = 0; // World coordinates (mm)
   private imageOpacity: number = 0.5;
-  private ctx: CanvasRenderingContext2D;
 
-  constructor(ctx: CanvasRenderingContext2D) {
+  constructor() {
     super(-1); // z-index: -1 (below grid)
-    this.ctx = ctx;
   }
 
   setImage(image: HTMLImageElement | null): void {
     this.image = image;
   }
 
+  /**
+   * Set scale as mm per pixel
+   * e.g., scale=100 means 1 pixel = 100mm
+   */
   setScale(scale: number): void {
-    this.scale = Math.max(0.1, Math.min(5, scale));
+    this.pixelToMm = Math.max(10, Math.min(1000, scale));
   }
 
   setOffset(x: number, y: number): void {
@@ -34,7 +41,7 @@ export class BackgroundImageLayer extends BaseLayer {
   }
 
   getScale(): number {
-    return this.scale;
+    return this.pixelToMm;
   }
 
   getImageOpacity(): number {
@@ -49,11 +56,17 @@ export class BackgroundImageLayer extends BaseLayer {
     // Set opacity
     ctx.globalAlpha = this.imageOpacity;
 
-    // Draw image with scale at origin
-    const width = this.image.width * this.scale;
-    const height = this.image.height * this.scale;
+    // Convert image pixel dimensions to world coordinates (mm)
+    const widthInMm = this.image.width * this.pixelToMm;
+    const heightInMm = this.image.height * this.pixelToMm;
 
-    ctx.drawImage(this.image, this.offsetX, this.offsetY, width, height);
+    // Center image at origin by default, with optional offset
+    const x = -widthInMm / 2 + this.offsetX;
+    const y = -heightInMm / 2 + this.offsetY;
+
+    // Draw image in world coordinates
+    // The camera transform is already applied by Canvas2DRenderer
+    ctx.drawImage(this.image, x, y, widthInMm, heightInMm);
 
     ctx.restore();
   }

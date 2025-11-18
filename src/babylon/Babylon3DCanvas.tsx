@@ -42,6 +42,8 @@ interface Babylon3DCanvasProps {
     altitude: number;
   };
   playMode?: boolean;
+  showCharacter?: boolean;
+  glbModelFile?: File | null;
 }
 
 // 2D 좌표(mm)를 Babylon 미터 단위로 변환
@@ -96,7 +98,82 @@ const computePlanMetrics = (points?: any[] | null): PlanMetrics | null => {
   };
 };
 
-const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode = false }: Babylon3DCanvasProps) => {
+/**
+ * Find nearest wall and snap to it if within threshold
+ * @param x - Click position X (meters)
+ * @param z - Click position Z (meters)
+ * @param wallMeshes - Array of wall meshes
+ * @returns Snapped position or original position
+ */
+const findNearestWallSnap = (
+  x: number,
+  z: number,
+  wallMeshes: Mesh[]
+): { x: number; z: number } => {
+  const SNAP_THRESHOLD = 0.5; // 0.5m = 500mm snap distance
+
+  if (wallMeshes.length === 0) {
+    return { x, z };
+  }
+
+  let nearestDistance = Infinity;
+  let nearestPoint = { x, z };
+
+  wallMeshes.forEach((wallMesh) => {
+    // Get wall position (center)
+    const wallPos = wallMesh.position;
+    const wallX = wallPos.x;
+    const wallZ = wallPos.z;
+
+    // Get wall rotation and dimensions (assume wall is aligned with X or Z axis)
+    const wallRotation = wallMesh.rotation.y;
+    const wallLength = wallMesh.scaling.x; // Length along X when not rotated
+    const wallThickness = wallMesh.scaling.z; // Thickness along Z
+
+    // Determine if wall is horizontal or vertical
+    const isVertical = Math.abs(Math.sin(wallRotation)) > 0.5;
+
+    let closestX = x;
+    let closestZ = z;
+
+    if (isVertical) {
+      // Vertical wall (aligned with Z axis) - snap to X position
+      closestX = wallX;
+      // Clamp Z to wall length
+      const minZ = wallZ - wallLength / 2;
+      const maxZ = wallZ + wallLength / 2;
+      closestZ = Math.max(minZ, Math.min(maxZ, z));
+    } else {
+      // Horizontal wall (aligned with X axis) - snap to Z position
+      closestZ = wallZ;
+      // Clamp X to wall length
+      const minX = wallX - wallLength / 2;
+      const maxX = wallX + wallLength / 2;
+      closestX = Math.max(minX, Math.min(maxX, x));
+    }
+
+    // Calculate distance
+    const dx = x - closestX;
+    const dz = z - closestZ;
+    const distance = Math.sqrt(dx * dx + dz * dz);
+
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestPoint = { x: closestX, z: closestZ };
+    }
+  });
+
+  // Snap if within threshold
+  if (nearestDistance <= SNAP_THRESHOLD) {
+    console.log('[Wall Snap] Snapped to wall at distance:', nearestDistance.toFixed(3), 'm');
+    return nearestPoint;
+  }
+
+  // No snap - return original position
+  return { x, z };
+};
+
+const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode = false, showCharacter = false, glbModelFile }: Babylon3DCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const sceneRef = useRef<Scene | null>(null);
@@ -106,6 +183,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
   const thirdPersonCameraRef = useRef<FollowCamera | null>(null);
   const characterRef = useRef<AbstractMesh | null>(null);
   const animationsRef = useRef<AnimationGroup[]>([]);
+  const loadedModelRef = useRef<AbstractMesh | null>(null); // Store loaded GLB model
+  const wallMeshesRef = useRef<Mesh[]>([]); // Store wall meshes for snap detection
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -460,6 +539,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     normalTexture.wrapV = Texture.WRAP_ADDRESSMODE;
     floorMaterial.bumpTexture = normalTexture;
 
+    // Clear and prepare wall meshes array for snap detection
+    wallMeshesRef.current = [];
+
     // Create walls - split if doors present
     walls.forEach((wall, wallIndex) => {
       const startPoint = pointMap.get(wall.startPointId);
@@ -524,6 +606,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         wallMesh.material = wallMaterial;
         wallMesh.receiveShadows = true;
         wallMesh.checkCollisions = true;
+
+        // Store wall mesh for snap detection
+        wallMeshesRef.current.push(wallMesh);
 
         if (shadowGenerator) {
           shadowGenerator.addShadowCaster(wallMesh);
@@ -593,6 +678,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
             segMesh.receiveShadows = true;
             segMesh.checkCollisions = true;
 
+            // Store wall segment mesh for snap detection
+            wallMeshesRef.current.push(segMesh);
+
             if (shadowGenerator) {
               shadowGenerator.addShadowCaster(segMesh);
             }
@@ -631,6 +719,9 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
           segMesh.receiveShadows = true;
           segMesh.checkCollisions = true;
 
+          // Store wall segment mesh for snap detection
+          wallMeshesRef.current.push(segMesh);
+
           if (shadowGenerator) {
             shadowGenerator.addShadowCaster(segMesh);
           }
@@ -638,7 +729,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       }
     });
 
-    console.log('[Babylon3DCanvas] Created', walls.length, '3D walls');
+    console.log('[Babylon3DCanvas] Created', walls.length, '3D walls,', wallMeshesRef.current.length, 'wall meshes for snap detection');
 
     // Create floors for each room - ONLY inside walls (polygon shape)
     const { rooms } = floorplanData;
@@ -1059,6 +1150,15 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
     }
   }, [visible]);
 
+  // Control character visibility
+  useEffect(() => {
+    const character = characterRef.current;
+    if (!character) return;
+
+    character.setEnabled(showCharacter);
+    console.log('[Babylon3DCanvas] Character visibility:', showCharacter);
+  }, [showCharacter]);
+
   // Camera reset event
   useEffect(() => {
     const handleCameraReset = () => {
@@ -1098,6 +1198,108 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       eventBus.off(EditorEvents.CAMERA_RESET, handleCameraReset);
     };
   }, [floorplanData]);
+
+  // GLB model loading and placement with click-to-place
+  useEffect(() => {
+    if (!glbModelFile || !sceneRef.current || !canvasRef.current) return;
+
+    const scene = sceneRef.current;
+    const canvas = canvasRef.current;
+
+    // Cleanup previous model if exists
+    if (loadedModelRef.current) {
+      loadedModelRef.current.dispose();
+      loadedModelRef.current = null;
+    }
+
+    // Create object URL from File
+    const objectUrl = URL.createObjectURL(glbModelFile);
+
+    console.log('[Babylon3DCanvas] Loading GLB file:', glbModelFile.name);
+
+    // Load GLB model
+    SceneLoader.ImportMesh(
+      '', // Load all meshes
+      '',
+      objectUrl,
+      scene,
+      (meshes) => {
+        console.log('[Babylon3DCanvas] GLB loaded successfully:', meshes.length, 'meshes');
+
+        if (meshes.length === 0) {
+          console.warn('[Babylon3DCanvas] No meshes found in GLB file');
+          return;
+        }
+
+        // Get root mesh (or parent)
+        const rootMesh = meshes[0];
+        loadedModelRef.current = rootMesh;
+
+        // Initially hide model below ground (will be placed on click)
+        rootMesh.position.y = -1000;
+
+        // Make meshes pickable for future interaction
+        meshes.forEach((mesh) => {
+          mesh.isPickable = true;
+        });
+
+        console.log('[Babylon3DCanvas] GLB loaded. Click on floor to place.');
+
+        // Add click handler for placement
+        const handleCanvasClick = (event: PointerEvent) => {
+          if (!loadedModelRef.current || !scene.activeCamera) return;
+
+          // Get pick ray from mouse position
+          const pickResult = scene.pick(event.offsetX, event.offsetY);
+
+          if (pickResult && pickResult.hit && pickResult.pickedMesh) {
+            const pickedMesh = pickResult.pickedMesh;
+
+            // Check if clicked on floor (mesh name contains 'floor' or 'room')
+            if (pickedMesh.name.toLowerCase().includes('floor') ||
+                pickedMesh.name.toLowerCase().includes('room')) {
+
+              const clickPosition = pickResult.pickedPoint;
+              if (clickPosition && loadedModelRef.current) {
+                // Find nearest wall for snap detection
+                const snappedPosition = findNearestWallSnap(
+                  clickPosition.x,
+                  clickPosition.z,
+                  wallMeshesRef.current
+                );
+
+                // Place model at clicked position (snapped if near wall)
+                loadedModelRef.current.position.x = snappedPosition.x;
+                loadedModelRef.current.position.z = snappedPosition.z;
+                loadedModelRef.current.position.y = 0; // On floor
+
+                console.log('[Babylon3DCanvas] Model placed at:', snappedPosition);
+              }
+            } else {
+              console.log('[Babylon3DCanvas] Click on floor to place model');
+            }
+          }
+        };
+
+        canvas.addEventListener('click', handleCanvasClick);
+
+        // Cleanup
+        return () => {
+          canvas.removeEventListener('click', handleCanvasClick);
+        };
+      },
+      null, // onProgress
+      (scene, message, exception) => {
+        console.error('[Babylon3DCanvas] GLB loading error:', message, exception);
+        alert('GLB 파일 로드 실패: ' + message);
+      }
+    );
+
+    // Cleanup object URL
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [glbModelFile, floorplanData]);
 
   return (
     <div className={styles.container}>

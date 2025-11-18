@@ -25,6 +25,14 @@ export interface WallLayerConfig {
  * - Wall thickness: mm (200mm = 20cm)
  * - Camera transforms mm coordinates to screen px
  */
+interface DimensionHitbox {
+  wallId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export class WallLayer extends BaseLayer {
   private walls: Wall[] = [];
   private points: Map<string, Point> = new Map();
@@ -33,6 +41,7 @@ export class WallLayer extends BaseLayer {
   private hoveredWallId: string | null = null;
   private selectedWallId: string | null = null;
   private camera: Camera2D | null = null;
+  private dimensionHitboxes: DimensionHitbox[] = [];
 
   private config: Required<WallLayerConfig>;
 
@@ -84,6 +93,9 @@ export class WallLayer extends BaseLayer {
     if (!this.visible) return;
 
     this.applyOpacity(ctx);
+
+    // Clear hitboxes for this frame
+    this.dimensionHitboxes = [];
 
     // Render confirmed walls
     this.walls.forEach((wall) => {
@@ -274,24 +286,28 @@ export class WallLayer extends BaseLayer {
     const metrics = ctx.measureText(label);
     const padding = 6;
 
+    const boxX = labelScreen.x - metrics.width / 2 - padding;
+    const boxY = labelScreen.y - 10;
+    const boxWidth = metrics.width + padding * 2;
+    const boxHeight = 20;
+
+    // Store hitbox for click detection
+    this.dimensionHitboxes.push({
+      wallId: wall.id,
+      x: boxX,
+      y: boxY,
+      width: boxWidth,
+      height: boxHeight,
+    });
+
     // Draw label background
     ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-    ctx.fillRect(
-      labelScreen.x - metrics.width / 2 - padding,
-      labelScreen.y - 10,
-      metrics.width + padding * 2,
-      20
-    );
+    ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
 
     // Draw border
     ctx.strokeStyle = '#2c3e50';
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(
-      labelScreen.x - metrics.width / 2 - padding,
-      labelScreen.y - 10,
-      metrics.width + padding * 2,
-      20
-    );
+    ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
     // Draw text
     ctx.fillStyle = '#2c3e50';
@@ -300,6 +316,24 @@ export class WallLayer extends BaseLayer {
     ctx.fillText(label, labelScreen.x, labelScreen.y);
 
     ctx.restore();
+  }
+
+  /**
+   * Check if screen coordinates are clicking a dimension label
+   * Returns wall ID if clicked, null otherwise
+   */
+  getDimensionAtPoint(screenX: number, screenY: number): string | null {
+    for (const hitbox of this.dimensionHitboxes) {
+      if (
+        screenX >= hitbox.x &&
+        screenX <= hitbox.x + hitbox.width &&
+        screenY >= hitbox.y &&
+        screenY <= hitbox.y + hitbox.height
+      ) {
+        return hitbox.wallId;
+      }
+    }
+    return null;
   }
 
 }

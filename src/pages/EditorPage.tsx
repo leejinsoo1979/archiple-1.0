@@ -30,6 +30,10 @@ const EditorPage = () => {
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
   const [imageScale, setImageScale] = useState(100); // 100mm per pixel default
   const [imageOpacity, setImageOpacity] = useState(0.5);
+  const [showBackgroundImage, setShowBackgroundImage] = useState(true);
+
+  // Scanned walls state (overlay on 2D)
+  const [scannedWalls, setScannedWalls] = useState<{ points: any[]; walls: any[] } | null>(null);
 
   // Ruler calibration state
   const [rulerVisible, setRulerVisible] = useState(false);
@@ -41,10 +45,14 @@ const EditorPage = () => {
 
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const glbFileInputRef = useRef<HTMLInputElement>(null);
 
   // Dimension editing state
   const [editingWallId, setEditingWallId] = useState<string | null>(null);
   const [dimensionInput, setDimensionInput] = useState<string>('');
+
+  // GLB model state
+  const [glbModelFile, setGlbModelFile] = useState<File | null>(null);
 
   // Load test room data (2800mm x 2800mm room with 100mm walls)
   const handleLoadTestRoom = () => {
@@ -52,6 +60,19 @@ const EditorPage = () => {
     console.log('[EditorPage] Loading test room:', testData);
     setFloorplanData(testData);
     setViewMode('3D'); // Switch to 3D view to see the result
+  };
+
+  // Handle GLB file upload
+  const handleGlbUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !file.name.toLowerCase().endsWith('.glb')) {
+      alert('GLB 파일을 선택하세요');
+      return;
+    }
+
+    setGlbModelFile(file);
+    setViewMode('3D'); // Switch to 3D view
+    console.log('[EditorPage] GLB file selected:', file.name);
   };
 
   // Handle image upload
@@ -339,21 +360,12 @@ const EditorPage = () => {
         }
       });
 
-      const babylonData = {
-        points,
-        walls,
-        rooms: [],
-        doors: [],
-        floorplan: null,
-      };
+      // Store scanned walls for 2D overlay
+      setScannedWalls({ points, walls });
 
-      console.log('[EditorPage] Generated floorplan data:', babylonData);
+      console.log('[EditorPage] Scanned walls:', walls.length);
 
-      // Set data and switch to 3D
-      setFloorplanData(babylonData);
-      setViewMode('3D');
-
-      alert(`${walls.length}개의 벽이 생성되었습니다!`);
+      alert(`${walls.length}개의 벽이 감지되었습니다! 2D 뷰에서 확인하세요.`);
     } catch (error) {
       console.error('Scan error:', error);
       alert('스캐닝 중 오류가 발생했습니다.');
@@ -677,6 +689,13 @@ const EditorPage = () => {
               onChange={handleImageUpload}
               style={{ display: 'none' }}
             />
+            <input
+              ref={glbFileInputRef}
+              type="file"
+              accept=".glb"
+              onChange={handleGlbUpload}
+              style={{ display: 'none' }}
+            />
             <button className={styles.optionCard}>
               <div className={styles.optionIcon}>
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
@@ -692,6 +711,14 @@ const EditorPage = () => {
                 </svg>
               </div>
               <span>Import</span>
+            </button>
+            <button className={styles.optionCard} onClick={() => glbFileInputRef.current?.click()}>
+              <div className={styles.optionIcon}>
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M21.9 8.89l-1.05-4.37c-.22-.9-1-1.52-1.91-1.52H5.05c-.9 0-1.69.63-1.9 1.52L2.1 8.89c-.24 1.02-.02 2.06.62 2.88.08.11.19.19.28.29V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-6.94c.09-.09.2-.18.28-.28.64-.82.87-1.87.62-2.89zM18.91 4.99l1.05 4.37c.1.42.01.84-.25 1.17-.14.18-.44.47-1.05.47-.83 0-1.52-.64-1.63-1.5l-.5-4.5h2.38zM13 4.99h1.96l.54 4.52c.05.46.23.88.5 1.23.1.15.22.28.36.4-.07.08-.14.16-.22.25v3.61h-3.14V4.99zM5.05 4.99h2.38l-.5 4.5c-.11.86-.8 1.5-1.63 1.5-.61 0-.91-.29-1.05-.47-.25-.33-.35-.75-.25-1.17l1.05-4.36zM5 19v-6.03c.08-.01.15-.03.23-.06.24-.07.48-.23.7-.4.1.17.23.33.39.47.41.37.95.59 1.55.59.64 0 1.24-.25 1.66-.66.23-.23.39-.5.48-.78.09.28.25.54.48.78.42.41 1.02.66 1.66.66.23 0 .45-.03.66-.08v4.51H5zm14 0h-3V5.71l.54 4.79c.1.92.48 1.76 1.07 2.42.1.11.2.2.31.29v5.79z"/>
+                </svg>
+              </div>
+              <span>3D Model</span>
             </button>
             <button className={styles.optionCard}>
               <div className={styles.optionIcon}>
@@ -929,7 +956,7 @@ const EditorPage = () => {
           <FloorplanCanvas
             activeTool={activeTool}
             onDataChange={setFloorplanData}
-            backgroundImage={backgroundImage}
+            backgroundImage={showBackgroundImage ? backgroundImage : null}
             imageScale={imageScale}
             imageOpacity={imageOpacity}
             onDimensionClick={handleDimensionClick}
@@ -941,6 +968,7 @@ const EditorPage = () => {
             onRulerDragEnd={handleRulerDragEnd}
             onRulerLabelClick={handleRulerLabelClick}
             draggingRulerPoint={draggingRulerPoint}
+            scannedWalls={scannedWalls}
           />
         </div>
         <div style={{
@@ -958,6 +986,7 @@ const EditorPage = () => {
             sunSettings={sunSettings}
             playMode={playMode}
             showCharacter={showCharacter}
+            glbModelFile={glbModelFile}
           />
         </div>
 
@@ -1178,24 +1207,49 @@ const EditorPage = () => {
               </div>
             )}
 
-            {/* Opacity Control */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <label style={{ fontSize: '13px', color: '#666', fontWeight: '500', minWidth: '50px' }}>
-                투명도:
+            {/* Image Visibility Toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <label style={{ fontSize: '13px', color: '#666', fontWeight: '500', minWidth: '80px' }}>
+                이미지 표시:
               </label>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                value={imageOpacity}
-                onChange={(e) => setImageOpacity(parseFloat(e.target.value))}
-                style={{ flex: 1 }}
-              />
-              <span style={{ fontSize: '13px', color: '#333', fontWeight: '500', minWidth: '40px' }}>
-                {Math.round(imageOpacity * 100)}%
-              </span>
+              <button
+                onClick={() => setShowBackgroundImage(!showBackgroundImage)}
+                style={{
+                  padding: '8px 16px',
+                  background: showBackgroundImage ? '#3fae7a' : '#f5f5f5',
+                  color: showBackgroundImage ? 'white' : '#666',
+                  border: showBackgroundImage ? 'none' : '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {showBackgroundImage ? '표시됨' : '숨김'}
+              </button>
             </div>
+
+            {/* Opacity Control */}
+            {showBackgroundImage && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <label style={{ fontSize: '13px', color: '#666', fontWeight: '500', minWidth: '50px' }}>
+                  투명도:
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={imageOpacity}
+                  onChange={(e) => setImageOpacity(parseFloat(e.target.value))}
+                  style={{ flex: 1 }}
+                />
+                <span style={{ fontSize: '13px', color: '#333', fontWeight: '500', minWidth: '40px' }}>
+                  {Math.round(imageOpacity * 100)}%
+                </span>
+              </div>
+            )}
 
             {/* Scan Button */}
             <button
