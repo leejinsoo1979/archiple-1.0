@@ -846,6 +846,15 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       thirdPersonCamera.radius = 4;
       thirdPersonCamera.heightOffset = 2;
 
+      // Limit zoom range
+      thirdPersonCamera.lowerRadiusLimit = 2;
+      thirdPersonCamera.upperRadiusLimit = 8;
+
+      // Limit rotation
+      thirdPersonCamera.rotationOffset = 0;
+      thirdPersonCamera.cameraAcceleration = 0.05;
+      thirdPersonCamera.maxCameraSpeed = 1;
+
       fpsCamera.detachControl();
       arcCamera.detachControl();
       thirdPersonCamera.attachControl(canvas, true);
