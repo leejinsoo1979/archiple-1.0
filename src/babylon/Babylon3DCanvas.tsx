@@ -842,7 +842,7 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       window.addEventListener('keyup', onFpsKeyUp);
 
       let lastCameraPos = fpsCamera.position.clone();
-      const moveSpeed = 0.1;
+      const moveSpeed = 0.05; // Movement speed for WASD
 
       const fpsObserver = scene.onBeforeRenderObservable.add(() => {
         if (!fpsCamera || !character) return;
