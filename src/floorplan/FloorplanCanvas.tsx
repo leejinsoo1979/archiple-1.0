@@ -19,6 +19,7 @@ import { PointLayer } from './renderer/layers/PointLayer';
 import { GuideLayer } from './renderer/layers/GuideLayer';
 import { SelectionLayer } from './renderer/layers/SelectionLayer';
 import { DoorLayer } from './renderer/layers/DoorLayer';
+import { WindowLayer } from './renderer/layers/WindowLayer';
 import { BackgroundImageLayer } from './renderer/layers/BackgroundImageLayer';
 
 // Tools
@@ -173,13 +174,15 @@ const FloorplanCanvas = ({
     selectionLayerRef.current = selectionLayer;
 
     const doorLayer = new DoorLayer();
+    const windowLayer = new WindowLayer();
 
-    // Add layers to renderer (z-index order: Background→Grid→Room→Wall→Door→Point→Guide→Selection)
+    // Add layers to renderer (z-index order: Background→Grid→Room→Wall→Door→Window→Point→Guide→Selection)
     renderer.addLayer(backgroundLayer);
     renderer.addLayer(gridLayer);
     renderer.addLayer(roomLayer);
     renderer.addLayer(wallLayer);
     renderer.addLayer(doorLayer);
+    renderer.addLayer(windowLayer);
     renderer.addLayer(pointLayer);
     renderer.addLayer(guideLayer);
     renderer.addLayer(selectionLayer);
@@ -235,8 +238,9 @@ const FloorplanCanvas = ({
       const walls = sceneManager.objectManager.getAllWalls();
       const rooms = sceneManager.objectManager.getAllRooms();
       const doors = sceneManager.objectManager.getAllDoors();
+      const windows = sceneManager.objectManager.getAllWindows();
 
-      console.log('[FloorplanCanvas] updateLayers called:', points.length, 'points', walls.length, 'walls', doors.length, 'doors');
+      console.log('[FloorplanCanvas] updateLayers called:', points.length, 'points', walls.length, 'walls', doors.length, 'doors', windows.length, 'windows');
 
       // Update layer data
       wallLayer.setWalls(walls);
@@ -252,6 +256,10 @@ const FloorplanCanvas = ({
       doorLayer.setWalls(walls);
       doorLayer.setPoints(points);
 
+      windowLayer.setWindows(windows);
+      windowLayer.setWalls(walls);
+      windowLayer.setPoints(points);
+
       // Update stats
       setStats({
         points: points.length,
@@ -265,7 +273,8 @@ const FloorplanCanvas = ({
       if (onDataChange) {
         const floorplan = sceneManager.objectManager.getFloorplan();
         const doors = sceneManager.objectManager.getAllDoors();
-        const babylonData = convertFloorplanToBabylon(floorplan, doors);
+        const windows = sceneManager.objectManager.getAllWindows();
+        const babylonData = convertFloorplanToBabylon(floorplan, doors, windows);
         console.log('[FloorplanCanvas] Sending blueprint data to Babylon:', babylonData);
         onDataChange(babylonData);
       }
@@ -435,6 +444,24 @@ const FloorplanCanvas = ({
     });
 
     eventBus.on(FloorEvents.DOOR_REMOVED, () => {
+      updateLayers();
+    });
+
+    // Window preview events
+    eventBus.on(FloorEvents.WINDOW_PREVIEW_UPDATED, (data: any) => {
+      windowLayer.setPreview(data);
+    });
+
+    eventBus.on(FloorEvents.WINDOW_PREVIEW_CLEARED, () => {
+      windowLayer.clearPreview();
+    });
+
+    // Window add/remove events
+    eventBus.on(FloorEvents.WINDOW_ADDED, () => {
+      updateLayers();
+    });
+
+    eventBus.on(FloorEvents.WINDOW_REMOVED, () => {
       updateLayers();
     });
 

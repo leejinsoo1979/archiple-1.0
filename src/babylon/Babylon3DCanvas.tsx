@@ -28,6 +28,8 @@ import {
   FollowCamera,
   DefaultRenderingPipeline,
   ImageProcessingConfiguration,
+  RenderTargetTexture,
+  Constants,
   CSG
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials/grid';
@@ -256,7 +258,7 @@ const Babylon3DCanvas = forwardRef<
         throw new Error('Scene or Engine not initialized');
       }
 
-      console.log('[Babylon3DCanvas] Capturing render at', width, 'x', height);
+      console.log(`[Babylon3DCanvas] Capturing HIGH-RESOLUTION render at ${width}x${height}`);
 
       return new Promise((resolve, reject) => {
         try {
@@ -266,21 +268,86 @@ const Babylon3DCanvas = forwardRef<
             return;
           }
 
-          // Use Babylon's Tools.CreateScreenshotUsingRenderTarget
-          import('@babylonjs/core').then((BABYLON) => {
-            BABYLON.Tools.CreateScreenshotUsingRenderTarget(
-              engine,
-              camera,
-              { width, height, precision: 1 },
-              (data) => {
-                console.log('[Babylon3DCanvas] ✅ Render captured successfully');
-                resolve(data);
-              },
-              'image/png',
-              1,
-              false
-            );
+          // Create high-resolution RenderTargetTexture
+          const renderTarget = new RenderTargetTexture(
+            'highResRender',
+            { width, height },
+            scene,
+            false, // generateMipMaps
+            true, // doNotChangeAspectRatio
+            Constants.TEXTURETYPE_UNSIGNED_INT,
+            false, // isCube
+            Constants.TEXTURE_NEAREST_SAMPLINGMODE,
+            true, // generateDepthBuffer
+            false, // generateStencilBuffer
+            false, // isMulti
+            Constants.TEXTUREFORMAT_RGBA,
+            false // delayAllocation
+          );
+
+          console.log(`[Babylon3DCanvas] RenderTargetTexture created: ${width}x${height}`);
+
+          // Set active camera
+          renderTarget.activeCamera = camera;
+
+          // Render all meshes
+          renderTarget.renderList = scene.meshes;
+
+          // Render once
+          renderTarget.onAfterRenderObservable.addOnce(() => {
+            // Read pixels from render target - need to use scene.getEngine()
+            const textureSize = renderTarget.getSize();
+            console.log(`[Babylon3DCanvas] RenderTarget actual size: ${textureSize.width}x${textureSize.height}`);
+
+            // Read pixels
+            const pixels = engine.readPixels(0, 0, textureSize.width, textureSize.height, renderTarget);
+
+            // Create canvas to convert pixels to image
+            const canvas = document.createElement('canvas');
+            canvas.width = textureSize.width;
+            canvas.height = textureSize.height;
+            const ctx = canvas.getContext('2d');
+
+            if (!ctx) {
+              renderTarget.dispose();
+              reject(new Error('Failed to create canvas context'));
+              return;
+            }
+
+            // Create ImageData from pixels
+            const imageData = ctx.createImageData(textureSize.width, textureSize.height);
+            imageData.data.set(pixels);
+            ctx.putImageData(imageData, 0, 0);
+
+            // Convert to blob and then data URL
+            canvas.toBlob((blob) => {
+              if (!blob) {
+                renderTarget.dispose();
+                reject(new Error('Failed to create blob from canvas'));
+                return;
+              }
+
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const dataUrl = reader.result as string;
+                console.log(`[Babylon3DCanvas] ✅ High-resolution render captured successfully (${width}x${height})`);
+
+                // Clean up
+                renderTarget.dispose();
+                resolve(dataUrl);
+              };
+              reader.onerror = () => {
+                renderTarget.dispose();
+                reject(new Error('Failed to read blob as data URL'));
+              };
+              reader.readAsDataURL(blob);
+            }, 'image/png');
           });
+
+          // Trigger render
+          scene.incrementRenderId();
+          scene.resetCachedMaterial();
+          renderTarget.render(false, false);
         } catch (error) {
           console.error('[Babylon3DCanvas] ❌ Render capture failed:', error);
           reject(error);

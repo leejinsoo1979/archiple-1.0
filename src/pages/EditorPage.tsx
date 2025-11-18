@@ -1891,7 +1891,11 @@ const EditorPage = () => {
           <div className={styles.toolSection}>
             <h4>Window</h4>
             <div className={styles.toolGrid}>
-              <button className={styles.toolBtn}>
+              <button
+                className={`${styles.toolBtn} ${activeTool === ToolType.WINDOW ? styles.toolBtnActive : ''}`}
+                title="Place Window (1200mm x 1200mm)"
+                onClick={() => setActiveTool(ToolType.WINDOW)}
+              >
                 <img src="/icons/slidingdoor.svg" alt="Single Window" width="32" height="32" />
                 <span>Single Window</span>
               </button>
