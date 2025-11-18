@@ -1962,13 +1962,13 @@ const Babylon3DCanvas = ({
         // Enable Chromatic Aberration for lens effect
         pipeline.chromaticAberrationEnabled = true;
         if (pipeline.chromaticAberration) {
-          pipeline.chromaticAberration.aberrationAmount = 30;
+          pipeline.chromaticAberration.aberrationAmount = 3; // Reduced from 30 to avoid rainbow artifacts
         }
 
         // Enable Grain for film-like quality
         pipeline.grainEnabled = true;
         if (pipeline.grain) {
-          pipeline.grain.intensity = 10;
+          pipeline.grain.intensity = 5; // Reduced from 10 for subtle film grain
           pipeline.grain.animated = true;
         }
 
