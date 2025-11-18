@@ -167,10 +167,13 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       );
       fpsCamera.speed = 0.3; // Movement speed
       fpsCamera.angularSensibility = 2000; // Mouse sensitivity
-      fpsCamera.keysUp.push(87); // W
-      fpsCamera.keysDown.push(83); // S
-      fpsCamera.keysLeft.push(65); // A
-      fpsCamera.keysRight.push(68); // D
+
+      // Set WASD keys (key codes)
+      fpsCamera.keysUp = [87]; // W
+      fpsCamera.keysDown = [83]; // S
+      fpsCamera.keysLeft = [65]; // A
+      fpsCamera.keysRight = [68]; // D
+
       fpsCamera.checkCollisions = true;
       fpsCamera.applyGravity = false;
       fpsCamera.ellipsoid = new Vector3(0.5, 0.9, 0.5); // Collision ellipsoid (radius)
@@ -179,7 +182,8 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
         keysUp: fpsCamera.keysUp,
         keysDown: fpsCamera.keysDown,
         keysLeft: fpsCamera.keysLeft,
-        keysRight: fpsCamera.keysRight
+        keysRight: fpsCamera.keysRight,
+        speed: fpsCamera.speed
       });
 
       fpsCameraRef.current = fpsCamera;
@@ -811,12 +815,17 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       // Set as active camera
       scene.activeCamera = fpsCamera;
 
-      // Attach controls
-      setTimeout(() => {
-        fpsCamera.attachControl(canvas, true);
-        canvas.focus();
-        console.log('[Babylon3DCanvas] FPS Camera activated and focused');
-      }, 100);
+      // Attach controls immediately
+      fpsCamera.attachControl(canvas, true);
+
+      // Focus canvas
+      canvas.focus();
+
+      console.log('[Babylon3DCanvas] FPS Camera activated, inputs attached:', {
+        hasKeyboardInput: !!fpsCamera.inputs?.attached?.keyboard,
+        keysUp: fpsCamera.keysUp,
+        speed: fpsCamera.speed
+      });
 
       let lastCameraPos = fpsCamera.position.clone();
 
@@ -893,13 +902,14 @@ const Babylon3DCanvas = ({ floorplanData, visible = true, sunSettings, playMode 
       // Set as active camera
       scene.activeCamera = arcCamera;
 
-      // Attach controls and disable keyboard
-      setTimeout(() => {
-        arcCamera.attachControl(canvas, true);
-        arcCamera.inputs.removeByType('ArcRotateCameraKeyboardMoveInput');
-        canvas.focus();
-        console.log('[Babylon3DCanvas] 3D Camera activated and keyboard disabled');
-      }, 100);
+      // Attach controls and disable camera keyboard
+      arcCamera.attachControl(canvas, true);
+      arcCamera.inputs.removeByType('ArcRotateCameraKeyboardMoveInput');
+
+      // Focus canvas
+      canvas.focus();
+
+      console.log('[Babylon3DCanvas] 3D Camera activated, keyboard controls removed for character');
 
       // Character controls
       const inputMap: { [key: string]: boolean } = {};
