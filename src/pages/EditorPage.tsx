@@ -898,7 +898,7 @@ const EditorPage = () => {
                 <span>Double Door</span>
               </button>
               <button className={styles.toolBtn}>
-                <img src="/icons/slidingdoor.svg" alt="Sliding Door" width="32" height="32" />
+                <img src="/icons/window.svg" alt="Sliding Door" width="32" height="32" />
                 <span>Sliding Door</span>
               </button>
             </div>
@@ -909,7 +909,7 @@ const EditorPage = () => {
             <h4>Window</h4>
             <div className={styles.toolGrid}>
               <button className={styles.toolBtn}>
-                <img src="/icons/window.svg" alt="Single Window" width="32" height="32" />
+                <img src="/icons/slidingdoor.svg" alt="Single Window" width="32" height="32" />
                 <span>Single Window</span>
               </button>
               <button className={styles.toolBtn}>
