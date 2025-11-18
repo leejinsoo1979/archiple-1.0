@@ -909,11 +909,8 @@ const EditorPage = () => {
             <h4>Window</h4>
             <div className={styles.toolGrid}>
               <button className={styles.toolBtn}>
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <rect x="14" y="18" width="20" height="12" stroke="currentColor" strokeWidth="2" fill="none"/>
-                  <line x1="24" y1="18" x2="24" y2="30" stroke="currentColor" strokeWidth="1"/>
-                </svg>
-                <span>Single Door</span>
+                <img src="/icons/window.svg" alt="Single Window" width="32" height="32" />
+                <span>Single Window</span>
               </button>
               <button className={styles.toolBtn}>
                 <svg width="32" height="32" viewBox="0 0 48 48">
