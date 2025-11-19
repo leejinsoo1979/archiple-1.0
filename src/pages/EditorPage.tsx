@@ -97,6 +97,9 @@ const EditorPage = () => {
   const [renderStyleOpen, setRenderStyleOpen] = useState(false);
   const [renderStyle, setRenderStyle] = useState<'wireframe' | 'hidden-line' | 'solid' | 'realistic'>('solid');
 
+  // Grid visibility state
+  const [showGrid, setShowGrid] = useState(true);
+
   // Handle light placement from 3D view
   const handleLightPlaced = (light: Light) => {
     console.log('[EditorPage] ✅ Light placed successfully:', light.type, light.id, 'at position:', light.position);
@@ -1671,7 +1674,11 @@ const EditorPage = () => {
                 <path d="M3 5v4h2V5h4V3H5c-1.1 0-2 .9-2 2zm2 10H3v4c0 1.1.9 2 2 2h4v-2H5v-4zm14 4h-4v2h4c1.1 0 2-.9 2-2v-4h-2v4zm0-16h-4v2h4v4h2V5c0-1.1-.9-2-2-2z"/>
               </svg>
             </button>
-            <button className={styles.topBtn} title="Grid">
+            <button
+              className={`${styles.topBtn} ${showGrid ? styles.topBtnActive : ''}`}
+              title="Grid"
+              onClick={() => setShowGrid(!showGrid)}
+            >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM8 20H4v-4h4v4zm0-6H4v-4h4v4zm0-6H4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4z"/>
               </svg>
@@ -2093,6 +2100,7 @@ const EditorPage = () => {
             onDataChange={setFloorplanData}
             backgroundImage={showBackgroundImage ? backgroundImage : null}
             renderStyle={renderStyle}
+            showGrid={showGrid}
             imageScale={imageScale}
             imageOpacity={imageOpacity}
             onDimensionClick={handleDimensionClick}

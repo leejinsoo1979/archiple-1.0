@@ -45,6 +45,7 @@ interface FloorplanCanvasProps {
   imageScale?: number;
   imageOpacity?: number;
   renderStyle?: 'wireframe' | 'hidden-line' | 'solid' | 'realistic';
+  showGrid?: boolean;
   onDimensionClick?: (wallId: string) => void;
   rulerVisible?: boolean;
   rulerStart?: { x: number; y: number } | null;
@@ -64,6 +65,7 @@ const FloorplanCanvas = ({
   imageScale = 100,
   imageOpacity = 0.5,
   renderStyle = 'solid',
+  showGrid = true,
   onDimensionClick,
   rulerVisible = false,
   rulerStart = null,
@@ -481,74 +483,42 @@ const FloorplanCanvas = ({
       updateLayers();
     });
 
-    // Room detection on potential room (user manually closed a loop)
-    eventBus.on(FloorEvents.POTENTIAL_ROOM_DETECTED, (data: any) => {
-      console.log('[FloorplanCanvas] User closed loop, creating room from points:', data.points);
-
-      if (!data.points || data.points.length < 3) {
-        console.warn('[FloorplanCanvas] Not enough points to create room');
-        return;
-      }
-
-      const points = sceneManager.objectManager.getAllPoints();
+    // 9. Automatic Room Detection
+    const detectRooms = () => {
       const walls = sceneManager.objectManager.getAllWalls();
-      const rooms = sceneManager.objectManager.getAllRooms();
+      const points = sceneManager.objectManager.getAllPoints();
 
-      // Create room ONLY from the user-defined loop (data.points)
-      const roomPointIds = data.points.map((p: any) => p.id);
+      // Detect rooms
+      const rooms = roomDetectionService.detectRooms(walls, points);
 
-      // Calculate area
-      const roomPointsData = roomPointIds.map((id: string) => points.find((p) => p.id === id)).filter(Boolean);
-      if (roomPointsData.length < 3) return;
+      // Update ObjectManager (replace old rooms with new ones)
+      // Note: In a real app, we might want to preserve room names/properties if the ID matches
+      // For now, we just replace them to ensure geometry is correct
 
-      let area = 0;
-      for (let i = 0; i < roomPointsData.length - 1; i++) {
-        const p1 = roomPointsData[i];
-        const p2 = roomPointsData[i + 1];
-        area += (p1.x * p2.y - p2.x * p1.y);
-      }
-      area = Math.abs(area / 2) / 1000000; // mm² to m²
+      // Clear existing rooms
+      const existingRooms = sceneManager.objectManager.getAllRooms();
+      existingRooms.forEach(r => sceneManager.objectManager.removeRoom(r.id));
 
-      // Find walls connecting consecutive points
-      const roomWalls: string[] = [];
-      for (let i = 0; i < roomPointIds.length; i++) {
-        const currId = roomPointIds[i];
-        const nextId = roomPointIds[(i + 1) % roomPointIds.length];
+      // Add new rooms
+      rooms.forEach(r => sceneManager.objectManager.addRoom(r));
 
-        const wall = walls.find((w: any) =>
-          (w.startPointId === currId && w.endPointId === nextId) ||
-          (w.startPointId === nextId && w.endPointId === currId)
-        );
+      console.log(`[FloorplanCanvas] Detected ${rooms.length} rooms`);
+    };
 
-        if (wall) {
-          roomWalls.push(wall.id);
-        }
-      }
-
-      const room = {
-        id: `room_${Date.now()}`,
-        name: `Room ${Math.floor(Math.random() * 1000)}`,
-        points: roomPointIds,
-        walls: roomWalls,
-        area: area,
-      };
-
-      // Check if room already exists
-      const existing = rooms.find((r) => {
-        const samePoints =
-          r.points.length === room.points.length &&
-          r.points.every((pid) => room.points.includes(pid));
-        return samePoints;
-      });
-
-      if (!existing) {
-        sceneManager.objectManager.addRoom(room);
-        eventBus.emit(FloorEvents.ROOM_DETECTED, { room });
-        console.log('[FloorplanCanvas] Room created:', room.name, room.area.toFixed(2), 'm²');
-      }
-
-      updateLayers();
+    // Listen to wall events for automatic detection
+    // Room detection on wall changes
+    eventBus.on(FloorEvents.WALL_ADDED, detectRooms);
+    eventBus.on(FloorEvents.WALL_REMOVED, () => {
+      detectRooms();
+      updateLayers(); // Update 3D when walls are removed (e.g., during splitting)
     });
+    eventBus.on(FloorEvents.WALL_MODIFIED, detectRooms);
+
+    // Also detect on point moves (geometry changes)
+    eventBus.on(FloorEvents.POINT_UPDATED, detectRooms);
+
+    // Initial detection
+    detectRooms();
 
     // 9. Ensure grid layer size is properly set before first render
     // Use requestAnimationFrame to ensure DOM is fully laid out
@@ -635,6 +605,19 @@ const FloorplanCanvas = ({
       roomLayer.setRenderStyle(renderStyle);
     }
   }, [renderStyle]);
+
+  // Update grid visibility when showGrid changes
+  useEffect(() => {
+    const gridLayer = gridLayerRef.current;
+    if (gridLayer) {
+      gridLayer.visible = showGrid;
+      // Trigger re-render
+      const renderer = rendererRef.current;
+      if (renderer) {
+        renderer.render();
+      }
+    }
+  }, [showGrid]);
 
   // Update background image layer when props change
   useEffect(() => {
