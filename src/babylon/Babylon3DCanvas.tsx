@@ -1327,209 +1327,248 @@ const Babylon3DCanvas = forwardRef<
     // Clear and prepare wall meshes array for snap detection
     wallMeshesRef.current = [];
 
-    // Create walls with proper miter joints using WallMiterUtils
-    walls.forEach((wall, wallIndex) => {
-      const startPoint = pointMap.get(wall.startPointId);
-      const endPoint = pointMap.get(wall.endPointId);
-      if (!startPoint || !endPoint) return;
+    // Toggle between CSG and Miter wall generation
+    // CSG mode is now default for automatic corner alignment
+    const USE_CSG_WALLS = localStorage.getItem('USE_CSG_WALLS') !== 'false'; // Default: true
 
-      const wallHeightMM = wall.height || 2400;
+    if (USE_CSG_WALLS) {
+      console.log('[Babylon3DCanvas] Using CSG-based wall system');
 
-      // Find doors and windows on this wall
-      const wallDoors = doors.filter((door: any) => door.wallId === wall.id);
-      const wallWindows = windows.filter((window: any) => window.wallId === wall.id);
-
-      // Find connected walls and calculate miter joint corners
-      const connections = findConnectedWalls(walls as Wall[], wall as Wall, pointMap);
-      const corners = calculateWallCorners(wall as Wall, connections, pointMap);
-
-      if (!corners) {
-        console.error('[Babylon3DCanvas] Failed to calculate corners for wall:', wall.id);
-        return;
-      }
-
-      // Create full wall with miter joints
-      let wallMesh = createWallMeshFromCorners(
-        corners,
-        wallHeightMM,
-        centerX,
-        centerZ,
-        `wall_${wallIndex}`,
-        scene
+      // Create all walls with CSG trimming
+      const csgWalls = createCSGWalls(
+        walls as Wall[],
+        points, // Use points array from floorplanData
+        2400, // Default wall height
+        scene,
+        { x: centerX, z: centerZ }
       );
 
-      // If wall has doors or windows, subtract openings using CSG
-      if (wallDoors.length > 0 || wallWindows.length > 0) {
-        const DOOR_HEIGHT = 2050; // 도어 높이 (mm)
-        const FRAME_WIDTH = 50; // 문틀 너비 (mm)
-        const OPENING_HEIGHT = DOOR_HEIGHT + FRAME_WIDTH; // 타공 높이 (도어 + 상단 문틀)
-        const OPENING_WIDTH_MM = 900 + FRAME_WIDTH * 2; // 타공 폭 (도어 + 양쪽 문틀)
+      // Apply material to all CSG walls
+      const wallMaterial = new PBRMaterial('wallMaterial', scene);
+      wallMaterial.albedoColor = new Color3(1, 1, 1);
+      wallMaterial.roughness = 0.9;
+      wallMaterial.metallic = 0.0;
 
-        // Calculate wall direction and length
-        const dx = endPoint.x - startPoint.x;
-        const dy = endPoint.y - startPoint.y;
-        const wallLengthMM = Math.sqrt(dx * dx + dy * dy);
-        const wallDir = { x: dx / wallLengthMM, y: dy / wallLengthMM };
-        const wallRotationY = Math.atan2(wallDir.x, -wallDir.y);
+      csgWalls.forEach((wallMesh, index) => {
+        wallMesh.material = wallMaterial;
+        wallMesh.receiveShadows = true;
 
-        // Convert wall mesh to CSG
-        let wallCSG = CSG.FromMesh(wallMesh);
+        if (shadowGenerator) {
+          shadowGenerator.addShadowCaster(wallMesh);
+        }
 
-        // Subtract each door opening
-        wallDoors.forEach((door: any) => {
-          // Calculate door center position along wall
-          const doorCenterMM = {
-            x: startPoint.x + wallDir.x * door.position * wallLengthMM,
-            y: startPoint.y + wallDir.y * door.position * wallLengthMM
-          };
+        // Store for snap detection
+        wallMeshesRef.current.push(wallMesh);
+      });
 
-          // Create door opening box (in meters)
-          const openingBox = MeshBuilder.CreateBox(`temp_door_opening`, {
-            width: OPENING_WIDTH_MM * MM_TO_METERS,
-            height: OPENING_HEIGHT * MM_TO_METERS,
-            depth: (wall.thickness + 100) * MM_TO_METERS // Slightly larger than wall thickness
-          }, scene);
+      console.log(`[Babylon3DCanvas] Created ${csgWalls.length} CSG walls`);
+    } else {
+      console.log('[Babylon3DCanvas] Using Miter-based wall system');
 
-          openingBox.position = new Vector3(
-            doorCenterMM.x * MM_TO_METERS - centerX,
-            (OPENING_HEIGHT / 2) * MM_TO_METERS,
-            -(doorCenterMM.y * MM_TO_METERS) - centerZ
-          );
-          openingBox.rotation.y = wallRotationY + Math.PI / 2;
+      // Create walls with proper miter joints using WallMiterUtils
+      walls.forEach((wall, wallIndex) => {
+        const startPoint = pointMap.get(wall.startPointId);
+        const endPoint = pointMap.get(wall.endPointId);
+        if (!startPoint || !endPoint) return;
 
-          // Subtract opening from wall
-          const openingCSG = CSG.FromMesh(openingBox);
-          wallCSG = wallCSG.subtract(openingCSG);
+        const wallHeightMM = wall.height || 2400;
 
-          // Dispose temporary box
-          openingBox.dispose();
-        });
+        // Find doors and windows on this wall
+        const wallDoors = doors.filter((door: any) => door.wallId === wall.id);
+        const wallWindows = windows.filter((window: any) => window.wallId === wall.id);
 
-        // Subtract each window opening
-        wallWindows.forEach((window: any) => {
-          const windowWidth = window.width || 1200;
-          const windowHeight = window.height || 1200;
-          const windowSillHeight = window.sillHeight || 900;
-          const WINDOW_FRAME_WIDTH = 50;
+        // Find connected walls and calculate miter joint corners
+        const connections = findConnectedWalls(walls as Wall[], wall as Wall, pointMap);
+        const corners = calculateWallCorners(wall as Wall, connections, pointMap);
 
-          // Calculate window center position along wall
-          const windowCenterMM = {
-            x: startPoint.x + wallDir.x * window.position * wallLengthMM,
-            y: startPoint.y + wallDir.y * window.position * wallLengthMM
-          };
+        if (!corners) {
+          console.error('[Babylon3DCanvas] Failed to calculate corners for wall:', wall.id);
+          return;
+        }
 
-          // Create window opening box (in meters)
-          const windowOpeningBox = MeshBuilder.CreateBox(`temp_window_opening`, {
-            width: (windowWidth + WINDOW_FRAME_WIDTH * 2) * MM_TO_METERS,
-            height: (windowHeight + WINDOW_FRAME_WIDTH * 2) * MM_TO_METERS,
-            depth: (wall.thickness + 100) * MM_TO_METERS
-          }, scene);
+        // Create full wall with miter joints
+        let wallMesh = createWallMeshFromCorners(
+          corners,
+          wallHeightMM,
+          centerX,
+          centerZ,
+          `wall_${wallIndex}`,
+          scene
+        );
 
-          // Window center Y position (from floor)
-          const windowCenterY = (windowSillHeight + windowHeight / 2) * MM_TO_METERS;
+        // If wall has doors or windows, subtract openings using CSG
+        if (wallDoors.length > 0 || wallWindows.length > 0) {
+          const DOOR_HEIGHT = 2050; // 도어 높이 (mm)
+          const FRAME_WIDTH = 50; // 문틀 너비 (mm)
+          const OPENING_HEIGHT = DOOR_HEIGHT + FRAME_WIDTH; // 타공 높이 (도어 + 상단 문틀)
+          const OPENING_WIDTH_MM = 900 + FRAME_WIDTH * 2; // 타공 폭 (도어 + 양쪽 문틀)
 
-          windowOpeningBox.position = new Vector3(
-            windowCenterMM.x * MM_TO_METERS - centerX,
-            windowCenterY,
-            -(windowCenterMM.y * MM_TO_METERS) - centerZ
-          );
-          windowOpeningBox.rotation.y = wallRotationY + Math.PI / 2;
+          // Calculate wall direction and length
+          const dx = endPoint.x - startPoint.x;
+          const dy = endPoint.y - startPoint.y;
+          const wallLengthMM = Math.sqrt(dx * dx + dy * dy);
+          const wallDir = { x: dx / wallLengthMM, y: dy / wallLengthMM };
+          const wallRotationY = Math.atan2(wallDir.x, -wallDir.y);
 
-          // Subtract opening from wall
-          const windowOpeningCSG = CSG.FromMesh(windowOpeningBox);
-          wallCSG = wallCSG.subtract(windowOpeningCSG);
+          // Convert wall mesh to CSG
+          let wallCSG = CSG.FromMesh(wallMesh);
 
-          // Dispose temporary box
-          windowOpeningBox.dispose();
-        });
+          // Subtract each door opening
+          wallDoors.forEach((door: any) => {
+            // Calculate door center position along wall
+            const doorCenterMM = {
+              x: startPoint.x + wallDir.x * door.position * wallLengthMM,
+              y: startPoint.y + wallDir.y * door.position * wallLengthMM
+            };
 
-        // Convert CSG back to mesh
-        wallMesh.dispose();
-        wallMesh = wallCSG.toMesh(`wall_${wallIndex}`, wallMaterial, scene);
-      }
+            // Create door opening box (in meters)
+            const openingBox = MeshBuilder.CreateBox(`temp_door_opening`, {
+              width: OPENING_WIDTH_MM * MM_TO_METERS,
+              height: OPENING_HEIGHT * MM_TO_METERS,
+              depth: (wall.thickness + 100) * MM_TO_METERS // Slightly larger than wall thickness
+            }, scene);
 
-      // Finalize wall mesh (with or without doors)
-      wallMesh.receiveShadows = true;
-      wallMesh.checkCollisions = true;
-      wallMeshesRef.current.push(wallMesh);
+            openingBox.position = new Vector3(
+              doorCenterMM.x * MM_TO_METERS - centerX,
+              (OPENING_HEIGHT / 2) * MM_TO_METERS,
+              -(doorCenterMM.y * MM_TO_METERS) - centerZ
+            );
+            openingBox.rotation.y = wallRotationY + Math.PI / 2;
 
-      if (shadowGenerator) {
-        shadowGenerator.addShadowCaster(wallMesh);
-      }
+            // Subtract opening from wall
+            const openingCSG = CSG.FromMesh(openingBox);
+            wallCSG = wallCSG.subtract(openingCSG);
 
-      // Enable edge rendering for clean wall edges
-      wallMesh.enableEdgesRendering();
-      wallMesh.edgesWidth = 1.0;
-      wallMesh.edgesColor = new Color4(0.5, 0.5, 0.5, 1);
+            // Dispose temporary box
+            openingBox.dispose();
+          });
 
-      // === CREATE DOOR MESHES ===
-      if (wallDoors.length > 0) {
-        wallDoors.forEach((door: any, doorIndex: number) => {
-          const { doorGroup, doorLeaf, hotspot } = createDoorMesh(
-            door.position,
-            { x: startPoint.x, y: startPoint.y },
-            { x: endPoint.x, y: endPoint.y },
-            wall.thickness,
-            centerX,
-            centerZ,
-            `door_${wallIndex}_${doorIndex}`,
-            scene,
-            door.swing || 'right' // 2D에서 설정한 열림방향
-          );
+          // Subtract each window opening
+          wallWindows.forEach((window: any) => {
+            const windowWidth = window.width || 1200;
+            const windowHeight = window.height || 1200;
+            const windowSillHeight = window.sillHeight || 900;
+            const WINDOW_FRAME_WIDTH = 50;
 
-          // Add to shadow caster
-          if (shadowGenerator) {
-            doorGroup.getChildMeshes().forEach((mesh) => {
-              shadowGenerator.addShadowCaster(mesh);
-            });
-          }
+            // Calculate window center position along wall
+            const windowCenterMM = {
+              x: startPoint.x + wallDir.x * window.position * wallLengthMM,
+              y: startPoint.y + wallDir.y * window.position * wallLengthMM
+            };
 
-          // Store door leaf for interaction
-          doorLeaf.metadata = {
-            ...doorLeaf.metadata,
-            hotspot: hotspot,
-            wallIndex,
-            doorIndex
-          };
-        });
-      }
+            // Create window opening box (in meters)
+            const windowOpeningBox = MeshBuilder.CreateBox(`temp_window_opening`, {
+              width: (windowWidth + WINDOW_FRAME_WIDTH * 2) * MM_TO_METERS,
+              height: (windowHeight + WINDOW_FRAME_WIDTH * 2) * MM_TO_METERS,
+              depth: (wall.thickness + 100) * MM_TO_METERS
+            }, scene);
 
-      // === CREATE WINDOW MESHES ===
-      if (wallWindows.length > 0) {
-        wallWindows.forEach((window: any, windowIndex: number) => {
-          const { windowGroup, slidingPane, hotspot } = createSlidingWindowMesh(
-            window.position,
-            { x: startPoint.x, y: startPoint.y },
-            { x: endPoint.x, y: endPoint.y },
-            wall.thickness,
-            window.width || 1200,
-            window.height || 1200,
-            window.sillHeight || 900,
-            centerX,
-            centerZ,
-            `window_${wallIndex}_${windowIndex}`,
-            scene
-          );
+            // Window center Y position (from floor)
+            const windowCenterY = (windowSillHeight + windowHeight / 2) * MM_TO_METERS;
 
-          // Add to shadow caster
-          if (shadowGenerator) {
-            windowGroup.getChildMeshes().forEach((mesh) => {
-              shadowGenerator.addShadowCaster(mesh);
-            });
-          }
+            windowOpeningBox.position = new Vector3(
+              windowCenterMM.x * MM_TO_METERS - centerX,
+              windowCenterY,
+              -(windowCenterMM.y * MM_TO_METERS) - centerZ
+            );
+            windowOpeningBox.rotation.y = wallRotationY + Math.PI / 2;
 
-          // Store sliding pane for interaction
-          slidingPane.metadata = {
-            ...slidingPane.metadata,
-            hotspot: hotspot,
-            wallIndex,
-            windowIndex
-          };
-        });
-      }
-    });
+            // Subtract opening from wall
+            const windowOpeningCSG = CSG.FromMesh(windowOpeningBox);
+            wallCSG = wallCSG.subtract(windowOpeningCSG);
 
-    console.log('[Babylon3DCanvas] Created', walls.length, '3D walls,', wallMeshesRef.current.length, 'wall meshes for snap detection');
+            // Dispose temporary box
+            windowOpeningBox.dispose();
+          });
+
+          // Convert CSG back to mesh
+          wallMesh.dispose();
+          wallMesh = wallCSG.toMesh(`wall_${wallIndex}`, wallMaterial, scene);
+        }
+
+        // Finalize wall mesh (with or without doors)
+        wallMesh.receiveShadows = true;
+        wallMesh.checkCollisions = true;
+        wallMeshesRef.current.push(wallMesh);
+
+        if (shadowGenerator) {
+          shadowGenerator.addShadowCaster(wallMesh);
+        }
+
+        // Enable edge rendering for clean wall edges
+        wallMesh.enableEdgesRendering();
+        wallMesh.edgesWidth = 1.0;
+        wallMesh.edgesColor = new Color4(0.5, 0.5, 0.5, 1);
+
+        // === CREATE DOOR MESHES ===
+        if (wallDoors.length > 0) {
+          wallDoors.forEach((door: any, doorIndex: number) => {
+            const { doorGroup, doorLeaf, hotspot } = createDoorMesh(
+              door.position,
+              { x: startPoint.x, y: startPoint.y },
+              { x: endPoint.x, y: endPoint.y },
+              wall.thickness,
+              centerX,
+              centerZ,
+              `door_${wallIndex}_${doorIndex}`,
+              scene,
+              door.swing || 'right' // 2D에서 설정한 열림방향
+            );
+
+            // Add to shadow caster
+            if (shadowGenerator) {
+              doorGroup.getChildMeshes().forEach((mesh) => {
+                shadowGenerator.addShadowCaster(mesh);
+              });
+            }
+
+            // Store door leaf for interaction
+            doorLeaf.metadata = {
+              ...doorLeaf.metadata,
+              hotspot: hotspot,
+              wallIndex,
+              doorIndex
+            };
+          });
+        }
+
+        // === CREATE WINDOW MESHES ===
+        if (wallWindows.length > 0) {
+          wallWindows.forEach((window: any, windowIndex: number) => {
+            const { windowGroup, slidingPane, hotspot } = createSlidingWindowMesh(
+              window.position,
+              { x: startPoint.x, y: startPoint.y },
+              { x: endPoint.x, y: endPoint.y },
+              wall.thickness,
+              window.width || 1200,
+              window.height || 1200,
+              window.sillHeight || 900,
+              centerX,
+              centerZ,
+              `window_${wallIndex}_${windowIndex}`,
+              scene
+            );
+
+            // Add to shadow caster
+            if (shadowGenerator) {
+              windowGroup.getChildMeshes().forEach((mesh) => {
+                shadowGenerator.addShadowCaster(mesh);
+              });
+            }
+
+            // Store sliding pane for interaction
+            slidingPane.metadata = {
+              ...slidingPane.metadata,
+              hotspot: hotspot,
+              wallIndex,
+              windowIndex
+            };
+          });
+        }
+      });
+    } // End of USE_CSG_WALLS else block
+
+    console.log('[Babylon3DCanvas] Created', walls.length, '3D walls in', USE_CSG_WALLS ? 'CSG' : 'Miter', 'mode,', wallMeshesRef.current.length, 'wall meshes for snap detection');
 
     // Create floors for each room - ONLY inside walls (polygon shape)
     const { rooms } = floorplanData;
@@ -2938,7 +2977,8 @@ const Babylon3DCanvas = forwardRef<
           albedoTexture: material instanceof PBRMaterial ? material.albedoTexture : null,
           diffuseTexture: material instanceof StandardMaterial ? material.diffuseTexture : null,
           alpha: material.alpha,
-          wireframe: material.wireframe
+          wireframe: material.wireframe,
+          transparencyMode: material.transparencyMode
         };
       }
 
@@ -2949,6 +2989,7 @@ const Babylon3DCanvas = forwardRef<
           // 화이트 모델: 모든 표면 연한 회색 (음영 있음)
           material.wireframe = false;
           material.alpha = 1.0;
+          material.transparencyMode = originalProps.transparencyMode;
           mesh.disableEdgesRendering();
 
           if (material instanceof PBRMaterial) {
@@ -2983,6 +3024,7 @@ const Babylon3DCanvas = forwardRef<
           // 스케치: 바닥만 나무 텍스처, 벽은 연한 회색
           material.wireframe = false;
           material.alpha = 1.0;
+          material.transparencyMode = originalProps.transparencyMode;
           mesh.enableEdgesRendering();
           mesh.edgesWidth = 1.0;
           mesh.edgesColor = new Color4(0.3, 0.3, 0.3, 1);
@@ -3013,6 +3055,7 @@ const Babylon3DCanvas = forwardRef<
           // 재질: 바닥은 나무 텍스처, 벽은 하얀색
           material.wireframe = false;
           material.alpha = 1.0;
+          material.transparencyMode = originalProps.transparencyMode;
           mesh.disableEdgesRendering();
 
           if (isFloor) {
