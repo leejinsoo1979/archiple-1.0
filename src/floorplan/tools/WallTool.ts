@@ -148,9 +148,11 @@ export class WallTool extends BaseTool {
     console.log('[WallTool] Start drawing at', position);
 
     // Use existing point or create new one
-    if (existingPoint) {
+    // Check if existingPoint is a temporary wall snap point
+    if (existingPoint && existingPoint.id !== 'wall-snap-temp') {
       this.startPoint = existingPoint;
     } else {
+      // Create new point (either no existing point or wall snap temp point)
       const tempPoint = this.createPoint(position);
       this.startPoint = this.sceneManager.objectManager.addPoint(tempPoint);
     }
@@ -177,9 +179,11 @@ export class WallTool extends BaseTool {
 
     // Create or reuse end point
     let endPoint: Point;
-    if (existingPoint) {
+    // Check if existingPoint is a temporary wall snap point
+    if (existingPoint && existingPoint.id !== 'wall-snap-temp') {
       endPoint = existingPoint;
     } else {
+      // Create new point (either no existing point or wall snap temp point)
       const tempPoint = this.createPoint(position);
       endPoint = this.sceneManager.objectManager.addPoint(tempPoint);
       // NOTE: POINT_ADDED event is emitted by BlueprintObjectManager, no need to emit here

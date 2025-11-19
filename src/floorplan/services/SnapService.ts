@@ -48,7 +48,7 @@ export class SnapService {
     this.config = {
       enabled: true,
       pointSnapEnabled: true,
-      wallSnapEnabled: false, // DISABLED - causes wall disappearing bug
+      wallSnapEnabled: true, // ENABLED - snap to existing walls
       gridSnapEnabled: false, // DISABLED - free drawing with 1mm precision
       angleSnapEnabled: true, // ENABLED - angle guides (0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°)
       orthogonalSnapEnabled: false, // DISABLED by default - enable with Shift key
