@@ -404,6 +404,7 @@ const FloorplanCanvas = ({
       guideLayer.setDistanceMeasurement(null, null);
       guideLayer.setAngleGuide(null, null);
       guideLayer.setGridSnapPoint(null);
+      guideLayer.setAngleMeasurement(null, null);
     });
 
     // Distance measurement events
@@ -413,6 +414,15 @@ const FloorplanCanvas = ({
 
     eventBus.on(FloorEvents.DISTANCE_MEASUREMENT_CLEARED, () => {
       guideLayer.setDistanceMeasurement(null, null);
+    });
+
+    // Angle measurement events
+    eventBus.on(FloorEvents.ANGLE_MEASUREMENT_UPDATED, (data: any) => {
+      guideLayer.setAngleMeasurement(data.point, data.angle);
+    });
+
+    eventBus.on(FloorEvents.ANGLE_MEASUREMENT_CLEARED, () => {
+      guideLayer.setAngleMeasurement(null, null);
     });
 
     // Rectangle preview

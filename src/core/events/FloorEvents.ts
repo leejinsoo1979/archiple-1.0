@@ -33,6 +33,8 @@ export const FloorEvents = {
   // Measurement events
   DISTANCE_MEASUREMENT_UPDATED: 'floor:measurement:distance:updated',
   DISTANCE_MEASUREMENT_CLEARED: 'floor:measurement:distance:cleared',
+  ANGLE_MEASUREMENT_UPDATED: 'floor:measurement:angle:updated',
+  ANGLE_MEASUREMENT_CLEARED: 'floor:measurement:angle:cleared',
 
   // Rectangle tool events
   RECTANGLE_PREVIEW_UPDATED: 'floor:rectangle:preview:updated',

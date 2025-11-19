@@ -125,6 +125,34 @@ export class WallTool extends BaseTool {
         id: 'preview',
       },
     });
+
+    // Emit angle measurement event if there's a previous wall
+    if (this.wallChain.length >= 2) {
+      const prevPoint = this.wallChain[this.wallChain.length - 2];
+      const currentPoint = this.wallChain[this.wallChain.length - 1];
+
+      // Calculate angle between previous wall and current preview wall
+      const prevDx = currentPoint.x - prevPoint.x;
+      const prevDy = currentPoint.y - prevPoint.y;
+      const currentDx = this.currentPreviewEnd.x - currentPoint.x;
+      const currentDy = this.currentPreviewEnd.y - currentPoint.y;
+
+      const prevAngle = Math.atan2(prevDy, prevDx);
+      const currentAngle = Math.atan2(currentDy, currentDx);
+      let angleDiff = ((currentAngle - prevAngle) * 180) / Math.PI;
+
+      // Normalize to -180 to 180 range
+      while (angleDiff > 180) angleDiff -= 360;
+      while (angleDiff < -180) angleDiff += 360;
+
+      eventBus.emit(FloorEvents.ANGLE_MEASUREMENT_UPDATED, {
+        point: currentPoint,
+        angle: angleDiff,
+      });
+    } else {
+      // Clear angle measurement if no previous wall
+      eventBus.emit(FloorEvents.ANGLE_MEASUREMENT_CLEARED, {});
+    }
   }
 
   handleMouseUp(_position: Vector2, _event: MouseEvent): void {
@@ -351,6 +379,7 @@ export class WallTool extends BaseTool {
 
     eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
     eventBus.emit(FloorEvents.DISTANCE_MEASUREMENT_CLEARED, {});
+    eventBus.emit(FloorEvents.ANGLE_MEASUREMENT_CLEARED, {});
 
     this.snapService.setLastPoint(null);
     this.snapService.updateConfig({ orthogonalSnapEnabled: false });

@@ -24,6 +24,7 @@ export class GuideLayer extends BaseLayer {
   private angleGuide: { from: Point; angle: number } | null = null;
   private gridSnapPoint: Point | null = null;
   private distanceMeasurement: { from: Point; to: Point; distance: number } | null = null;
+  private angleMeasurement: { point: Point; angle: number } | null = null;
   private orthogonalGuides: { from: Point; to: Point; type: 'horizontal' | 'vertical' } | null = null;
   private rectanglePreview: Point[] | null = null;
   private verticalGuide: { x: number; fromY: number; toY: number } | null = null;
@@ -83,6 +84,14 @@ export class GuideLayer extends BaseLayer {
 
   setRectanglePreview(corners: Point[] | null): void {
     this.rectanglePreview = corners;
+  }
+
+  setAngleMeasurement(point: Point | null, angle: number | null): void {
+    if (point && angle !== null) {
+      this.angleMeasurement = { point, angle };
+    } else {
+      this.angleMeasurement = null;
+    }
   }
 
   setVerticalGuide(x: number, fromY: number, toY: number): void {
@@ -151,6 +160,11 @@ export class GuideLayer extends BaseLayer {
         this.distanceMeasurement.to,
         this.distanceMeasurement.distance
       );
+    }
+
+    // Render angle measurement
+    if (this.angleMeasurement) {
+      this.renderAngleMeasurement(ctx, this.angleMeasurement.point, this.angleMeasurement.angle);
     }
 
     this.resetOpacity(ctx);
@@ -551,6 +565,51 @@ export class GuideLayer extends BaseLayer {
     const leftX = corners[0].x;
     const leftMidY = (corners[0].y + corners[3].y) / 2;
     this.renderDimensionLabel(ctx, heightLabel, leftX - 400, leftMidY); // 400mm offset
+
+    ctx.restore();
+  }
+
+  private renderAngleMeasurement(ctx: CanvasRenderingContext2D, point: Point, angle: number): void {
+    if (!this.camera) return;
+
+    ctx.save();
+
+    // Offset from corner point (world space)
+    const offsetMm = 400; // 400mm = 40cm offset from corner
+
+    // Position angle label offset from corner point
+    const labelX = point.x + offsetMm;
+    const labelY = point.y - offsetMm;
+
+    // Convert to screen space
+    const screenPos = this.camera.worldToScreen(labelX, labelY);
+
+    // Apply screen transform
+    this.camera.applyScreenTransform(ctx);
+
+    // Format angle text
+    const angleText = `${angle.toFixed(1)}°`;
+
+    ctx.font = 'bold 13px system-ui';
+    const metrics = ctx.measureText(angleText);
+    const padding = 8;
+
+    const boxWidth = metrics.width + padding * 2;
+    const boxHeight = 24;
+    const boxX = screenPos.x - boxWidth / 2;
+    const boxY = screenPos.y - boxHeight / 2;
+
+    // Blue background (like reference image)
+    ctx.fillStyle = 'rgba(52, 152, 219, 0.95)';
+    ctx.beginPath();
+    ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 4);
+    ctx.fill();
+
+    // White text
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(angleText, screenPos.x, screenPos.y);
 
     ctx.restore();
   }
