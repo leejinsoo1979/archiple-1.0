@@ -221,10 +221,9 @@ const findNearestWallSnap = (
   return { x, z };
 };
 
-const Babylon3DCanvas = forwardRef<
-  { captureRender: (width: number, height: number) => Promise<string> },
-  Babylon3DCanvasProps
->(({
+type Babylon3DCanvasRef = { captureRender: (width: number, height: number) => Promise<string> };
+
+const Babylon3DCanvas = forwardRef<Babylon3DCanvasRef, Babylon3DCanvasProps>(({
   floorplanData,
   visible = true,
   sunSettings,
