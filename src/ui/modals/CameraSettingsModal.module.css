@@ -5,24 +5,22 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.2);
   z-index: 9998;
-  backdrop-filter: blur(4px);
+  pointer-events: all;
 }
 
 /* Modal */
 .modal {
   position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: #2c2c2c;
+  top: 80px;
+  right: 20px;
+  background: rgba(44, 44, 44, 0.95);
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
   z-index: 9999;
-  width: 90%;
-  max-width: 480px;
-  max-height: 90vh;
+  width: 360px;
+  max-height: calc(100vh - 100px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
