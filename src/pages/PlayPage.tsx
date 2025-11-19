@@ -9,6 +9,8 @@ const PlayPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [isPlaying, setIsPlaying] = useState(true);
+
   useEffect(() => {
     // Override App.css styles for full-screen experience
     const root = document.getElementById('root');
@@ -118,21 +120,47 @@ const PlayPage = () => {
         <Babylon3DCanvas
           floorplanData={floorplanData}
           visible={true}
-          playMode={true}
+          playMode={isPlaying}
         />
       </div>
 
-      {/* Floating Controls Info */}
-      <div className={styles.controlsOverlay}>
-        <div className={styles.controlsInfo}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="16" x2="12" y2="12" />
-            <line x1="12" y1="8" x2="12.01" y2="8" />
-          </svg>
-          <span>WASD to move • Mouse to look • Double-click floor to teleport • Click doors/windows to interact</span>
-        </div>
+      {/* Play/Stop Control */}
+      <div className={styles.playControl}>
+        <button
+          className={`${styles.playBtn} ${isPlaying ? styles.stopBtn : ''}`}
+          onClick={() => setIsPlaying(!isPlaying)}
+        >
+          {isPlaying ? (
+            <>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="4" y="4" width="16" height="16" rx="2" />
+              </svg>
+              Stop Play Mode
+            </>
+          ) : (
+            <>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+              Start Play Mode
+            </>
+          )}
+        </button>
       </div>
+
+      {/* Floating Controls Info - Only show in Play Mode */}
+      {isPlaying && (
+        <div className={styles.controlsOverlay}>
+          <div className={styles.controlsInfo}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
+            <span>WASD to move • Mouse to look • Double-click anywhere to teleport • Click doors/windows to interact</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

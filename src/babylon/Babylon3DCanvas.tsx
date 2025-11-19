@@ -1970,41 +1970,51 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       if (pickResult && pickResult.hit && pickResult.pickedPoint) {
         const pickedMesh = pickResult.pickedMesh;
 
-        // Only teleport if clicked on floor
-        if (pickedMesh && pickedMesh.name.includes('floor')) {
-          const targetPosition = pickResult.pickedPoint.clone();
-          // Keep camera at eye height
-          targetPosition.y = DEFAULT_CAMERA_HEIGHT;
-
-          console.log('[Babylon3DCanvas] Teleporting to:', targetPosition);
-
-          // Smooth camera movement animation
-          const startPosition = fpsCamera.position.clone();
-          const duration = 800; // 0.8 seconds
-          const startTime = performance.now();
-
-          const animate = () => {
-            const elapsed = performance.now() - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-
-            // Ease-in-out cubic
-            const eased = progress < 0.5
-              ? 4 * progress * progress * progress
-              : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-
-            fpsCamera.position.x = startPosition.x + (targetPosition.x - startPosition.x) * eased;
-            fpsCamera.position.y = startPosition.y + (targetPosition.y - startPosition.y) * eased;
-            fpsCamera.position.z = startPosition.z + (targetPosition.z - startPosition.z) * eased;
-
-            if (progress < 1) {
-              requestAnimationFrame(animate);
-            } else {
-              console.log('[Babylon3DCanvas] Teleport complete');
-            }
-          };
-
-          animate();
+        // Ignore if clicked on door/window interactive elements or character
+        if (pickedMesh && (
+          pickedMesh.name.includes('door_') ||
+          pickedMesh.name.includes('window_') ||
+          pickedMesh.name.includes('_hotspot') ||
+          pickedMesh.name.includes('head') ||
+          pickedMesh.name.includes('torso') ||
+          pickedMesh.name.includes('Arm') ||
+          pickedMesh.name.includes('Leg')
+        )) {
+          return;
         }
+
+        const targetPosition = pickResult.pickedPoint.clone();
+        // Keep camera at eye height
+        targetPosition.y = DEFAULT_CAMERA_HEIGHT;
+
+        console.log('[Babylon3DCanvas] Teleporting to:', targetPosition);
+
+        // Smooth camera movement animation (slower)
+        const startPosition = fpsCamera.position.clone();
+        const duration = 1500; // 1.5 seconds (slower)
+        const startTime = performance.now();
+
+        const animate = () => {
+          const elapsed = performance.now() - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+
+          // Ease-in-out cubic (smoother)
+          const eased = progress < 0.5
+            ? 4 * progress * progress * progress
+            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+          fpsCamera.position.x = startPosition.x + (targetPosition.x - startPosition.x) * eased;
+          fpsCamera.position.y = startPosition.y + (targetPosition.y - startPosition.y) * eased;
+          fpsCamera.position.z = startPosition.z + (targetPosition.z - startPosition.z) * eased;
+
+          if (progress < 1) {
+            requestAnimationFrame(animate);
+          } else {
+            console.log('[Babylon3DCanvas] Teleport complete');
+          }
+        };
+
+        animate();
       }
     };
 
