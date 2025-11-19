@@ -3335,6 +3335,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     // ===== TOUCH MODE (ShapeSpark style) =====
     if (controlMode === 'touch') {
       let lastTouchX = 0;
+      let lastTouchY = 0;
       let isTouching = false;
 
       const handleTouchStart = (e: TouchEvent) => {
@@ -3342,6 +3343,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
         const touch = e.touches[0];
         lastTouchX = touch.clientX;
+        lastTouchY = touch.clientY;
         isTouching = true;
       };
 
@@ -3350,11 +3352,18 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
         const touch = e.touches[0];
         const deltaX = touch.clientX - lastTouchX;
+        const deltaY = touch.clientY - lastTouchY;
         lastTouchX = touch.clientX;
+        lastTouchY = touch.clientY;
 
-        // Rotate camera based on horizontal drag
-        const rotationSensitivity = 0.005;
+        // Rotate camera: horizontal drag = yaw, vertical drag = pitch
+        const rotationSensitivity = 0.003;
         fpsCamera.rotation.y -= deltaX * rotationSensitivity;
+        fpsCamera.rotation.x -= deltaY * rotationSensitivity;
+
+        // Limit vertical rotation to avoid gimbal lock
+        const maxPitch = Math.PI / 2.5; // ~72 degrees up/down
+        fpsCamera.rotation.x = Math.max(-maxPitch, Math.min(maxPitch, fpsCamera.rotation.x));
       };
 
       const handleTouchEnd = () => {
@@ -3485,9 +3494,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
       // Apply joystick movement and rotation in render loop
       const renderLoopObserver = scene.onBeforeRenderObservable.add(() => {
-        // Left joystick - Movement
+        // Left joystick - Movement with collision detection
         if (leftJoystickActive) {
-          const movementSpeed = 0.1;
+          const movementSpeed = 0.03; // Reduced from 0.1 for better control
           const forward = fpsCamera.getDirection(new Vector3(0, 0, 1));
           const right = fpsCamera.getDirection(new Vector3(1, 0, 0));
 
@@ -3500,12 +3509,13 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
             .scale(-leftJoystickDelta.y * movementSpeed)
             .add(right.scale(leftJoystickDelta.x * movementSpeed));
 
-          fpsCamera.position.addInPlace(movement);
+          // Use moveWithCollisions for wall collision detection
+          fpsCamera.moveWithCollisions(movement);
         }
 
         // Right joystick - Rotation
         if (rightJoystickActive) {
-          const rotationSpeed = 0.05;
+          const rotationSpeed = 0.02; // Reduced from 0.05 for smoother control
           fpsCamera.rotation.y -= rightJoystickDelta.x * rotationSpeed;
         }
       });
