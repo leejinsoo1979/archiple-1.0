@@ -21,14 +21,29 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, floor
     setExportType('link');
 
     try {
-      // Use floorplan data or create empty default structure
-      const dataToExport = floorplanData || {
-        walls: [],
-        points: [],
-        rooms: [],
-        doors: [],
-        windows: [],
+      // Serialize floorplan data to remove circular references
+      const serializeData = (data: any) => {
+        if (!data) {
+          return {
+            walls: [],
+            points: [],
+            rooms: [],
+            doors: [],
+            windows: [],
+          };
+        }
+
+        // Extract only serializable data, excluding the floorplan object with circular refs
+        return {
+          points: data.points || [],
+          walls: data.walls || [],
+          rooms: data.rooms || [],
+          doors: data.doors || [],
+          windows: data.windows || [],
+        };
       };
+
+      const dataToExport = serializeData(floorplanData);
 
       console.log('[Export] Exporting data:', dataToExport);
 
