@@ -223,23 +223,26 @@ const findNearestWallSnap = (
 
 type Babylon3DCanvasRef = { captureRender: (width: number, height: number) => Promise<string> };
 
-const Babylon3DCanvas = forwardRef<Babylon3DCanvasRef, Babylon3DCanvasProps>(({
-  floorplanData,
-  visible = true,
-  sunSettings,
-  playMode = false,
-  showCharacter = false,
-  glbModelFile,
-  photoRealisticMode = false,
-  displayStyle = 'material',
-  showGrid = true,
-  renderSettings,
-  lights = [],
-  lightPlacementMode = false,
-  selectedLightType = 'point',
-  onLightPlaced,
-  onLightMoved
-}, ref) => {
+const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
+  {
+    floorplanData,
+    visible = true,
+    sunSettings,
+    playMode = false,
+    showCharacter = false,
+    glbModelFile,
+    photoRealisticMode = false,
+    displayStyle = 'material',
+    showGrid = true,
+    renderSettings,
+    lights = [],
+    lightPlacementMode = false,
+    selectedLightType = 'point',
+    onLightPlaced,
+    onLightMoved
+  }: Babylon3DCanvasProps,
+  ref: React.ForwardedRef<Babylon3DCanvasRef>
+) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const sceneRef = useRef<Scene | null>(null);
@@ -3206,7 +3209,5 @@ const Babylon3DCanvas = forwardRef<Babylon3DCanvasRef, Babylon3DCanvasProps>(({
     </div>
   );
 });
-
-Babylon3DCanvas.displayName = 'Babylon3DCanvas';
 
 export default Babylon3DCanvas;
