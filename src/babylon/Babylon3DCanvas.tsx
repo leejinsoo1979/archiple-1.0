@@ -511,7 +511,7 @@ const Babylon3DCanvas = forwardRef<
         const gridMaterial = new GridMaterial('gridMaterial', scene);
 
         // Grid appearance - natural look
-        gridMaterial.mainColor = new Color3(0.8, 0.8, 0.8); // Light gray background
+        gridMaterial.mainColor = new Color3(1, 1, 1); // White background
         gridMaterial.lineColor = new Color3(0.4, 0.4, 0.4); // Dark gray lines
 
         // Grid spacing - 1 unit = 1 meter
