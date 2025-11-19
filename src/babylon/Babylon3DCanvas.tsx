@@ -68,6 +68,7 @@ interface Babylon3DCanvasProps {
   showCharacter?: boolean;
   glbModelFile?: File | null;
   photoRealisticMode?: boolean;
+  displayStyle?: 'material' | 'white' | 'sketch' | 'transparent';
   renderSettings?: {
     ssaoRadius: number;
     ssaoStrength: number;
@@ -226,6 +227,7 @@ const Babylon3DCanvas = forwardRef<
   showCharacter = false,
   glbModelFile,
   photoRealisticMode = false,
+  displayStyle = 'material',
   renderSettings,
   lights = [],
   lightPlacementMode = false,
@@ -2908,6 +2910,63 @@ const Babylon3DCanvas = forwardRef<
       canvas.removeEventListener('click', handleLightPlacement);
     };
   }, [lightPlacementMode, selectedLightType, onLightPlaced, playMode]);
+
+  // Apply display style to all meshes
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    console.log('[Babylon3DCanvas] Applying display style:', displayStyle);
+
+    // Get all meshes in the scene
+    scene.meshes.forEach((mesh) => {
+      if (!mesh.material) return;
+
+      const material = mesh.material;
+
+      switch (displayStyle) {
+        case 'white':
+          // White model mode - all surfaces pure white
+          if (material instanceof StandardMaterial || material instanceof PBRMaterial) {
+            const tempColor = material.albedoColor || material.diffuseColor || Color3.White();
+            material.albedoColor = Color3.White();
+            material.diffuseColor = Color3.White();
+            (material as any)._originalColor = tempColor; // Store original
+          }
+          break;
+
+        case 'sketch':
+          // Sketch mode - wireframe with edges
+          material.wireframe = true;
+          mesh.enableEdgesRendering();
+          mesh.edgesWidth = 2.0;
+          mesh.edgesColor = new Color4(0, 0, 0, 1);
+          break;
+
+        case 'transparent':
+          // Transparent mode - semi-transparent surfaces
+          material.alpha = 0.3;
+          material.transparencyMode = 2; // ALPHABLEND
+          break;
+
+        case 'material':
+        default:
+          // Material mode - restore original materials
+          material.wireframe = false;
+          material.alpha = 1.0;
+          mesh.disableEdgesRendering();
+
+          // Restore original color if available
+          if ((material as any)._originalColor) {
+            if (material instanceof StandardMaterial || material instanceof PBRMaterial) {
+              material.albedoColor = (material as any)._originalColor;
+              material.diffuseColor = (material as any)._originalColor;
+            }
+          }
+          break;
+      }
+    });
+  }, [displayStyle]);
 
   return (
     <div className={styles.container}>
