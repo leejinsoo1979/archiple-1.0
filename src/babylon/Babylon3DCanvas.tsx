@@ -3334,7 +3334,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
     // ===== TOUCH MODE (ShapeSpark style) =====
     if (controlMode === 'touch') {
-      let touchStartX = 0;
       let lastTouchX = 0;
       let isTouching = false;
 
@@ -3342,7 +3341,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         if (e.touches.length !== 1) return;
 
         const touch = e.touches[0];
-        touchStartX = touch.clientX;
         lastTouchX = touch.clientX;
         isTouching = true;
       };
