@@ -317,60 +317,135 @@ export class GuideLayer extends BaseLayer {
     ctx.save();
 
     // Distance is already in mm
-    const millimeters = distance;
-
-    // Calculate label position in world space (mm)
-    const midX = (from.x + to.x) / 2;
-    const midY = (from.y + to.y) / 2;
+    const distanceMm = distance;
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     const angle = Math.atan2(dy, dx);
 
-    // Offset label perpendicular to wall in world space (mm)
-    const offsetDistanceMm = 250; // 250mm = 25cm offset
-    const labelWorldX = midX - Math.sin(angle) * offsetDistanceMm;
-    const labelWorldY = midY + Math.cos(angle) * offsetDistanceMm;
+    // Offset perpendicular to line in world space (mm)
+    const offsetDistanceMm = 400; // 400mm offset for dimension line
+    const extensionOverhang = 100; // Extension line extends 100mm beyond dimension line
+
+    // Calculate perpendicular offset direction
+    const perpX = -Math.sin(angle);
+    const perpY = Math.cos(angle);
+
+    // Extension line start points (at line endpoints)
+    const ext1StartX = from.x;
+    const ext1StartY = from.y;
+    const ext2StartX = to.x;
+    const ext2StartY = to.y;
+
+    // Extension line end points (beyond dimension line)
+    const ext1EndX = from.x + perpX * (offsetDistanceMm + extensionOverhang);
+    const ext1EndY = from.y + perpY * (offsetDistanceMm + extensionOverhang);
+    const ext2EndX = to.x + perpX * (offsetDistanceMm + extensionOverhang);
+    const ext2EndY = to.y + perpY * (offsetDistanceMm + extensionOverhang);
+
+    // Dimension line points
+    const dim1X = from.x + perpX * offsetDistanceMm;
+    const dim1Y = from.y + perpY * offsetDistanceMm;
+    const dim2X = to.x + perpX * offsetDistanceMm;
+    const dim2Y = to.y + perpY * offsetDistanceMm;
 
     // Convert to screen space
-    const labelScreen = this.camera.worldToScreen(labelWorldX, labelWorldY);
+    const ext1Start = this.camera.worldToScreen(ext1StartX, ext1StartY);
+    const ext1End = this.camera.worldToScreen(ext1EndX, ext1EndY);
+    const ext2Start = this.camera.worldToScreen(ext2StartX, ext2StartY);
+    const ext2End = this.camera.worldToScreen(ext2EndX, ext2EndY);
+    const dim1 = this.camera.worldToScreen(dim1X, dim1Y);
+    const dim2 = this.camera.worldToScreen(dim2X, dim2Y);
 
-    // Format label in mm only
-    const label = `${Math.round(millimeters)}mm`;
+    // Midpoint for label
+    const labelX = (dim1.x + dim2.x) / 2;
+    const labelY = (dim1.y + dim2.y) / 2;
 
     // Reset transform to screen space (with DPI scaling)
     this.camera.applyScreenTransform(ctx);
 
-    ctx.font = 'bold 13px system-ui';
-    const metrics = ctx.measureText(label);
-    const padding = 6;
-
-    // Check current theme for color selection
     const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+    const dimColor = isDarkMode ? '#90CAF9' : '#2c3e50';
+    const textColor = isDarkMode ? '#E0E0E0' : '#2c3e50';
 
-    // Draw label background - 다크모드 대응
-    ctx.fillStyle = isDarkMode ? 'rgba(45, 45, 45, 0.95)' : 'rgba(255, 255, 255, 0.95)';
-    ctx.fillRect(
-      labelScreen.x - metrics.width / 2 - padding,
-      labelScreen.y - 10,
-      metrics.width + padding * 2,
-      20
-    );
+    // Draw extension lines (thin, dashed)
+    ctx.strokeStyle = dimColor;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.globalAlpha = 0.7;
 
-    // Draw border - 다크모드 대응
-    ctx.strokeStyle = isDarkMode ? '#90CAF9' : '#2c3e50';
+    ctx.beginPath();
+    ctx.moveTo(ext1Start.x, ext1Start.y);
+    ctx.lineTo(ext1End.x, ext1End.y);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(ext2Start.x, ext2Start.y);
+    ctx.lineTo(ext2End.x, ext2End.y);
+    ctx.stroke();
+
+    // Draw dimension line (solid)
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1.0;
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(
-      labelScreen.x - metrics.width / 2 - padding,
-      labelScreen.y - 10,
-      metrics.width + padding * 2,
-      20
-    );
 
-    // Draw text - 다크모드 대응
-    ctx.fillStyle = isDarkMode ? '#E0E0E0' : '#2c3e50';
+    ctx.beginPath();
+    ctx.moveTo(dim1.x, dim1.y);
+    ctx.lineTo(dim2.x, dim2.y);
+    ctx.stroke();
+
+    // Draw arrows at dimension line ends
+    const arrowSize = 8;
+    const arrowAngle = Math.atan2(dim2.y - dim1.y, dim2.x - dim1.x);
+
+    // Arrow at start (pointing inward)
+    ctx.fillStyle = dimColor;
+    ctx.beginPath();
+    ctx.moveTo(dim1.x, dim1.y);
+    ctx.lineTo(
+      dim1.x - arrowSize * Math.cos(arrowAngle - Math.PI / 6),
+      dim1.y - arrowSize * Math.sin(arrowAngle - Math.PI / 6)
+    );
+    ctx.lineTo(
+      dim1.x - arrowSize * Math.cos(arrowAngle + Math.PI / 6),
+      dim1.y - arrowSize * Math.sin(arrowAngle + Math.PI / 6)
+    );
+    ctx.closePath();
+    ctx.fill();
+
+    // Arrow at end (pointing inward)
+    ctx.beginPath();
+    ctx.moveTo(dim2.x, dim2.y);
+    ctx.lineTo(
+      dim2.x + arrowSize * Math.cos(arrowAngle - Math.PI / 6),
+      dim2.y + arrowSize * Math.sin(arrowAngle - Math.PI / 6)
+    );
+    ctx.lineTo(
+      dim2.x + arrowSize * Math.cos(arrowAngle + Math.PI / 6),
+      dim2.y + arrowSize * Math.sin(arrowAngle + Math.PI / 6)
+    );
+    ctx.closePath();
+    ctx.fill();
+
+    // Draw dimension text with background
+    const label = `${Math.round(distanceMm)}mm`;
+    ctx.font = 'bold 12px system-ui';
+    const metrics = ctx.measureText(label);
+    const padding = 4;
+
+    const boxX = labelX - metrics.width / 2 - padding;
+    const boxY = labelY - 8;
+    const boxWidth = metrics.width + padding * 2;
+    const boxHeight = 16;
+
+    // Draw text background
+    ctx.fillStyle = isDarkMode ? 'rgba(30, 30, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+    ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+
+    // Draw text
+    ctx.fillStyle = textColor;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(label, labelScreen.x, labelScreen.y);
+    ctx.fillText(label, labelX, labelY);
 
     ctx.restore();
   }
