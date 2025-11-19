@@ -36,6 +36,7 @@ export class GridLayer extends BaseLayer {
   setSize(width: number, height: number): void {
     this.width = width;
     this.height = height;
+    console.log('[GridLayer] Size set to:', width, 'x', height);
   }
 
   updateConfig(config: Partial<GridLayerConfig>): void {
@@ -48,7 +49,12 @@ export class GridLayer extends BaseLayer {
   }
 
   render(ctx: CanvasRenderingContext2D): void {
-    if (!this.visible || this.width === 0 || this.height === 0) return;
+    if (!this.visible || this.width === 0 || this.height === 0) {
+      if (this.width === 0 || this.height === 0) {
+        console.warn('[GridLayer] Skipping render - dimensions not set:', this.width, 'x', this.height);
+      }
+      return;
+    }
 
     this.applyOpacity(ctx);
 

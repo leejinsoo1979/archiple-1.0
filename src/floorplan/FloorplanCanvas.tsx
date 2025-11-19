@@ -540,8 +540,20 @@ const FloorplanCanvas = ({
       updateLayers();
     });
 
-    // 9. Force initial render to ensure camera transform is applied
-    renderer.render();
+    // 9. Ensure grid layer size is properly set before first render
+    // Use requestAnimationFrame to ensure DOM is fully laid out
+    requestAnimationFrame(() => {
+      // Double-check canvas dimensions in case container wasn't fully sized initially
+      if (container.clientWidth > 0 && container.clientHeight > 0) {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+        gridLayer.setSize(canvas.width, canvas.height);
+        renderer.resize(canvas.width, canvas.height);
+      }
+
+      // Force initial render to ensure camera transform is applied and grid is visible
+      renderer.render();
+    });
 
     // 10. Start rendering loop
     renderer.start();
