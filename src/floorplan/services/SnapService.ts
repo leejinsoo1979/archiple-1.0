@@ -1,17 +1,19 @@
 import { Vector2 } from '../../core/math/Vector2';
 import type { Point } from '../../core/types/Point';
+import type { Wall } from '../../core/types/Wall';
 import { eventBus } from '../../core/events/EventBus';
 import { FloorEvents } from '../../core/events/FloorEvents';
 
 export interface SnapResult {
   position: Vector2;
-  snappedTo: 'point' | 'grid' | 'midpoint' | 'perpendicular' | 'angle' | 'none';
+  snappedTo: 'point' | 'wall' | 'grid' | 'midpoint' | 'perpendicular' | 'angle' | 'none';
   snapPoint?: Point;
 }
 
 export interface SnapConfig {
   enabled: boolean;
   pointSnapEnabled: boolean;
+  wallSnapEnabled: boolean;
   gridSnapEnabled: boolean;
   angleSnapEnabled: boolean;
   orthogonalSnapEnabled: boolean; // Force horizontal/vertical only
@@ -19,6 +21,7 @@ export interface SnapConfig {
   midpointSnapEnabled: boolean;
 
   pointSnapThreshold: number; // In world space (mm)
+  wallSnapThreshold: number; // Distance to snap to wall (mm)
   gridSize: number;
   angleSnapDegrees: number[];
   orthogonalAngles: number[]; // [0, 90, 180, 270] for strict horizontal/vertical
@@ -37,18 +40,22 @@ export interface SnapConfig {
 export class SnapService {
   private config: SnapConfig;
   private points: Point[] = [];
+  private walls: Wall[] = [];
+  private pointMap: Map<string, Point> = new Map();
   private lastPoint: Vector2 | null = null;
 
   constructor(config?: Partial<SnapConfig>) {
     this.config = {
       enabled: true,
       pointSnapEnabled: true,
+      wallSnapEnabled: true, // ENABLED - snap to existing walls
       gridSnapEnabled: false, // DISABLED - free drawing with 1mm precision
       angleSnapEnabled: true, // ENABLED - angle guides (0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°)
       orthogonalSnapEnabled: false, // DISABLED by default - enable with Shift key
       perpendicularSnapEnabled: false, // DISABLED - free drawing
       midpointSnapEnabled: false, // DISABLED - free drawing
       pointSnapThreshold: 150, // 150mm = 15cm snap range (zoom independent)
+      wallSnapThreshold: 50, // 50mm = 5cm snap range for walls
       gridSize: 100, // 100mm grid display only
       angleSnapDegrees: [0, 45, 90, 135, 180, 225, 270, 315], // 8-direction angle snap
       orthogonalAngles: [0, 90, 180, 270], // Orthogonal angles for Shift key
@@ -68,6 +75,16 @@ export class SnapService {
    */
   setPoints(points: Point[]): void {
     this.points = points;
+    // Update point map
+    this.pointMap.clear();
+    points.forEach(p => this.pointMap.set(p.id, p));
+  }
+
+  /**
+   * Set available walls for snapping
+   */
+  setWalls(walls: Wall[]): void {
+    this.walls = walls;
   }
 
   /**
@@ -114,7 +131,16 @@ export class SnapService {
       }
     }
 
-    // 2. Orthogonal snap (when Shift key pressed)
+    // 2. Wall snap (snap to existing walls)
+    if (this.config.wallSnapEnabled) {
+      const wallSnap = this.snapToWall(position);
+      if (wallSnap) {
+        console.log('[SnapService] Wall snap triggered');
+        return wallSnap;
+      }
+    }
+
+    // 3. Orthogonal snap (when Shift key pressed)
     if (this.config.orthogonalSnapEnabled && this.lastPoint) {
       const orthogonalSnap = this.snapToOrthogonal(position, this.lastPoint);
       if (orthogonalSnap) {
@@ -123,7 +149,7 @@ export class SnapService {
       }
     }
 
-    // 2.5 Intersection Snap (Smart Guides) - HIGH PRIORITY
+    // 3.5 Intersection Snap (Smart Guides) - HIGH PRIORITY
     // Automatically finds rectangle corners
     if (this.lastPoint) {
       const intersectionSnap = this.snapToIntersection(position, this.lastPoint);
@@ -133,7 +159,7 @@ export class SnapService {
       }
     }
 
-    // 3. Axis alignment snap - SECOND PRIORITY (before angle snap)
+    // 4. Axis alignment snap - SECOND PRIORITY (before angle snap)
     // Locks axis when aligned with existing points
     const axisSnap = this.snapToAxisAlignment(position);
     if (axisSnap) {
@@ -141,7 +167,7 @@ export class SnapService {
       return axisSnap;
     }
 
-    // 4. Angle snap (when drawing from a point)
+    // 5. Angle snap (when drawing from a point)
     if (this.config.angleSnapEnabled && this.lastPoint && !this.config.orthogonalSnapEnabled) {
       const angleSnap = this.snapToAngle(position, this.lastPoint);
       if (angleSnap) {
@@ -150,13 +176,13 @@ export class SnapService {
       }
     }
 
-    // 5. Midpoint snap
+    // 6. Midpoint snap
     if (this.config.midpointSnapEnabled) {
       const midpointSnap = this.snapToMidpoint(position);
       if (midpointSnap) return midpointSnap;
     }
 
-    // 6. Grid snap (lowest priority)
+    // 7. Grid snap (lowest priority)
     if (this.config.gridSnapEnabled) {
       return this.snapToGrid(position);
     }
@@ -170,6 +196,80 @@ export class SnapService {
       ),
       snappedTo: 'none'
     };
+  }
+
+  /**
+   * Snap to nearest wall
+   * Finds closest point on any wall within threshold
+   */
+  private snapToWall(position: Vector2): SnapResult | null {
+    if (this.walls.length === 0) return null;
+
+    let nearestWall: Wall | null = null;
+    let nearestPoint: Vector2 | null = null;
+    let minDistance = this.config.wallSnapThreshold;
+
+    for (const wall of this.walls) {
+      const startPt = this.pointMap.get(wall.startPointId);
+      const endPt = this.pointMap.get(wall.endPointId);
+
+      if (!startPt || !endPt) continue;
+
+      const wallStart = new Vector2(startPt.x, startPt.y);
+      const wallEnd = new Vector2(endPt.x, endPt.y);
+
+      // Calculate closest point on wall line segment
+      const closestPoint = this.closestPointOnLineSegment(position, wallStart, wallEnd);
+      const distance = position.distanceTo(closestPoint);
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearestWall = wall;
+        nearestPoint = closestPoint;
+      }
+    }
+
+    if (nearestWall && nearestPoint) {
+      // Create a temporary point for snap indicator
+      const snapPoint: Point = {
+        id: 'wall-snap-temp',
+        x: nearestPoint.x,
+        y: nearestPoint.y,
+        connectedWalls: []
+      };
+
+      return {
+        position: nearestPoint,
+        snappedTo: 'wall',
+        snapPoint: snapPoint,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Calculate closest point on line segment
+   */
+  private closestPointOnLineSegment(point: Vector2, lineStart: Vector2, lineEnd: Vector2): Vector2 {
+    const px = point.x - lineStart.x;
+    const py = point.y - lineStart.y;
+    const lx = lineEnd.x - lineStart.x;
+    const ly = lineEnd.y - lineStart.y;
+    const lineLengthSq = lx * lx + ly * ly;
+
+    if (lineLengthSq === 0) {
+      return lineStart.clone();
+    }
+
+    const t = Math.max(0, Math.min(1, (px * lx + py * ly) / lineLengthSq));
+    const closestX = lineStart.x + t * lx;
+    const closestY = lineStart.y + t * ly;
+
+    return new Vector2(
+      this.snapToPrecision(closestX),
+      this.snapToPrecision(closestY)
+    );
   }
 
   /**
