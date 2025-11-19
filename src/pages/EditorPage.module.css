@@ -55,13 +55,11 @@
   gap: 16px;
 }
 
-/* Logo with theme color using CSS mask */
+/* Logo SVG with theme color */
 .headerLogo {
   height: 36px;
   width: auto;
-  -webkit-mask: url('/images/archiple_logo.png') no-repeat center / contain;
-  mask: url('/images/archiple_logo.png') no-repeat center / contain;
-  background-color: var(--theme-color);
+  display: block;
 }
 
 .headerCenter {

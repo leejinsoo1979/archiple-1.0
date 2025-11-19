@@ -529,7 +529,24 @@ const EditorPage = () => {
       {/* Header */}
       <header className={styles.header}>
         <div className={styles.headerLeft}>
-          <img src="/images/archiple_logo.png" alt="Archiple Studio" className={styles.headerLogo} />
+          <svg className={styles.headerLogo} width="200" height="50" viewBox="0 0 200 50" xmlns="http://www.w3.org/2000/svg">
+            {/* House Icon */}
+            <g transform="translate(5, 5)">
+              <path d="M20 10 L10 20 L10 35 L15 35 L15 25 L25 25 L25 35 L30 35 L30 20 Z" fill="var(--theme-color)"/>
+              <rect x="18" y="27" width="4" height="8" fill="var(--theme-color)" opacity="0.8"/>
+            </g>
+
+            {/* ARCHIPLE Text */}
+            <text x="50" y="32" fontFamily="Arial, sans-serif" fontSize="24" fontWeight="300" fill="var(--theme-color)" letterSpacing="2">
+              ARCHIPLE
+            </text>
+
+            {/* STUDIO Badge */}
+            <rect x="165" y="12" width="70" height="26" rx="4" fill="var(--theme-color)"/>
+            <text x="200" y="31" fontFamily="Arial, sans-serif" fontSize="14" fontWeight="600" fill="white" textAnchor="middle">
+              STUDIO
+            </text>
+          </svg>
         </div>
         <div className={styles.headerCenter}>
           {/* Top Toolbar */}
