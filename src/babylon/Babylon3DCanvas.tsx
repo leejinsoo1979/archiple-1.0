@@ -425,7 +425,7 @@ const Babylon3DCanvas = forwardRef<
       fpsCamera.fov = 1.3; // 75 degrees (default 0.8 = 45 degrees is too narrow)
       fpsCamera.minZ = 0.05; // Near clipping plane: 5cm (prevent objects from disappearing when close)
       fpsCamera.maxZ = 1000; // Far clipping plane: 1000m
-      fpsCamera.speed = 0.15; // Movement speed (meters/sec)
+      fpsCamera.speed = 0.08; // Movement speed (meters/sec)
       fpsCamera.angularSensibility = 2000; // Mouse sensitivity
 
       // Set WASD keys (key codes)
