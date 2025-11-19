@@ -8,6 +8,7 @@ import {
   MeshBuilder,
   PolygonMeshBuilder,
   PBRMaterial,
+  StandardMaterial,
   Color3,
   Color4,
   Texture,
