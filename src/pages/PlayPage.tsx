@@ -1,9 +1,8 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { db } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import Babylon3DCanvas from '../babylon/Babylon3DCanvas';
-import { VirtualJoystick } from '../ui/controls/VirtualJoystick';
 import styles from './PlayPage.module.css';
 
 const PlayPage = () => {
@@ -14,17 +13,6 @@ const PlayPage = () => {
 
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
-  const joystickInput = useRef({ x: 0, y: 0 });
-
-  const handleJoystickMove = (x: number, y: number) => {
-    joystickInput.current = { x, y };
-
-    // Simulate keyboard input for Babylon camera
-    const event = new CustomEvent('joystickMove', {
-      detail: { x, y }
-    });
-    window.dispatchEvent(event);
-  };
 
   useEffect(() => {
     // Override App.css styles for full-screen experience
@@ -204,14 +192,9 @@ const PlayPage = () => {
               <line x1="12" y1="16" x2="12" y2="12" />
               <line x1="12" y1="8" x2="12.01" y2="8" />
             </svg>
-            <span>Joystick to move • Swipe to look • Tap floor to teleport • Tap doors/windows to interact</span>
+            <span>Touch and drag to move • Swipe to look • Tap floor to teleport • Tap doors/windows to interact</span>
           </div>
         </div>
-      )}
-
-      {/* Virtual Joystick - Mobile Only */}
-      {isMobile && isPlaying && (
-        <VirtualJoystick onMove={handleJoystickMove} />
       )}
     </div>
   );

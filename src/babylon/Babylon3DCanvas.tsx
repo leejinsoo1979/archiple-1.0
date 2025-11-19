@@ -3321,37 +3321,84 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     cameraSettings.depthOfField,
   ]);
 
-  // Handle virtual joystick input for mobile (play mode only)
+  // Handle touch drag movement for mobile (ShapeSpark style)
   useEffect(() => {
     if (!playMode) return;
 
-    const handleJoystickMove = (e: CustomEvent) => {
-      const { x, y } = e.detail;
-      const fpsCamera = fpsCameraRef.current;
-      if (!fpsCamera) return;
+    const canvas = canvasRef.current;
+    const fpsCamera = fpsCameraRef.current;
+    if (!canvas || !fpsCamera) return;
 
-      // Convert joystick input to camera movement
-      const speed = 0.1; // Movement speed multiplier
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let isTouching = false;
+    let touchMoveInterval: number | null = null;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return; // Only single touch for movement
+
+      const touch = e.touches[0];
+      touchStartX = touch.clientX;
+      touchStartY = touch.clientY;
+      isTouching = true;
+
+      // Start continuous movement while touching
+      if (touchMoveInterval) clearInterval(touchMoveInterval);
+      touchMoveInterval = window.setInterval(() => {
+        if (!isTouching) return;
+        // Movement will be handled in touchmove
+      }, 16); // ~60fps
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isTouching || e.touches.length !== 1) return;
+
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - touchStartX;
+      const deltaY = touch.clientY - touchStartY;
+
+      // Convert touch drag to movement direction
+      const sensitivity = 0.003; // Lower = slower movement
+      const maxDistance = 100; // Max pixels for full speed
+
+      // Normalize delta to -1 to 1 range
+      const normalizedX = Math.max(-1, Math.min(1, deltaX / maxDistance));
+      const normalizedY = Math.max(-1, Math.min(1, deltaY / maxDistance));
 
       // Get camera's direction vectors
       const forward = fpsCamera.getDirection(new Vector3(0, 0, 1));
       const right = fpsCamera.getDirection(new Vector3(1, 0, 0));
 
-      // Ensure Y movement stays at camera height (no flying)
+      // Keep movement horizontal
       forward.y = 0;
       right.y = 0;
       forward.normalize();
       right.normalize();
 
-      // Apply movement based on joystick input
-      // y controls forward/backward, x controls left/right
-      const movement = forward.scale(-y * speed).add(right.scale(x * speed));
+      // Apply movement: drag down = forward, drag up = backward, drag left/right = strafe
+      const movement = forward.scale(-normalizedY * sensitivity).add(right.scale(normalizedX * sensitivity));
       fpsCamera.position.addInPlace(movement);
     };
 
-    window.addEventListener('joystickMove', handleJoystickMove as EventListener);
+    const handleTouchEnd = () => {
+      isTouching = false;
+      if (touchMoveInterval) {
+        clearInterval(touchMoveInterval);
+        touchMoveInterval = null;
+      }
+    };
+
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: true });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: true });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: true });
+    canvas.addEventListener('touchcancel', handleTouchEnd, { passive: true });
+
     return () => {
-      window.removeEventListener('joystickMove', handleJoystickMove as EventListener);
+      canvas.removeEventListener('touchstart', handleTouchStart);
+      canvas.removeEventListener('touchmove', handleTouchMove);
+      canvas.removeEventListener('touchend', handleTouchEnd);
+      canvas.removeEventListener('touchcancel', handleTouchEnd);
+      if (touchMoveInterval) clearInterval(touchMoveInterval);
     };
   }, [playMode]);
 
