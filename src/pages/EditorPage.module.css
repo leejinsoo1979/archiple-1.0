@@ -55,7 +55,7 @@
   gap: 16px;
 }
 
-/* Original logo with theme color filter */
+/* Original logo with theme color using mask */
 .logoWrapper {
   position: relative;
   height: 36px;
@@ -67,20 +67,26 @@
   height: 100%;
   width: auto;
   display: block;
-  filter: brightness(0) saturate(100%);
-  position: relative;
+  opacity: 0;
+  position: absolute;
 }
 
-.logoWrapper::after {
+.logoWrapper::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
+  height: 36px;
+  width: 180px;
   background: var(--theme-color);
-  mix-blend-mode: screen;
-  pointer-events: none;
+  -webkit-mask-image: url('/images/archiple_logo.png');
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: left center;
+  mask-image: url('/images/archiple_logo.png');
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: left center;
 }
 
 .headerCenter {
