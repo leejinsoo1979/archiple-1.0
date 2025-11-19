@@ -1970,16 +1970,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       if (pickResult && pickResult.hit && pickResult.pickedPoint) {
         const pickedMesh = pickResult.pickedMesh;
 
-        // Ignore if clicked on door/window interactive elements or character
-        if (pickedMesh && (
-          pickedMesh.name.includes('door_') ||
-          pickedMesh.name.includes('window_') ||
-          pickedMesh.name.includes('_hotspot') ||
-          pickedMesh.name.includes('head') ||
-          pickedMesh.name.includes('torso') ||
-          pickedMesh.name.includes('Arm') ||
-          pickedMesh.name.includes('Leg')
-        )) {
+        // Only teleport if clicked on floor
+        if (!pickedMesh || !pickedMesh.name.includes('floor')) {
+          console.log('[Babylon3DCanvas] Teleport cancelled - not a floor surface:', pickedMesh?.name);
           return;
         }
 
