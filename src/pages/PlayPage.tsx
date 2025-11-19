@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { db } from '../lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import Babylon3DCanvas from '../babylon/Babylon3DCanvas';
 import styles from './PlayPage.module.css';
 
@@ -56,31 +58,35 @@ const PlayPage = () => {
   }, []);
 
   useEffect(() => {
-    // Load the exported project data
-    if (!projectId) {
-      setError('No project ID provided');
-      setLoading(false);
-      return;
-    }
+    // Load the exported project data from Firestore
+    const loadProject = async () => {
+      if (!projectId) {
+        setError('No project ID provided');
+        setLoading(false);
+        return;
+      }
 
-    const storageKey = `archiple_export_${projectId}`;
-    const exportedData = localStorage.getItem(storageKey);
+      try {
+        const projectDoc = doc(db, 'projects', projectId);
+        const projectSnap = await getDoc(projectDoc);
 
-    if (!exportedData) {
-      setError('Project not found. The link may be invalid or expired.');
-      setLoading(false);
-      return;
-    }
+        if (!projectSnap.exists()) {
+          setError('Project not found. The link may be invalid or expired.');
+          setLoading(false);
+          return;
+        }
 
-    try {
-      const data = JSON.parse(exportedData);
-      setFloorplanData(data.floorplanData);
-      setLoading(false);
-    } catch (err) {
-      console.error('Failed to load project:', err);
-      setError('Failed to load project data');
-      setLoading(false);
-    }
+        const data = projectSnap.data();
+        setFloorplanData(data.floorplanData);
+        setLoading(false);
+      } catch (err) {
+        console.error('Failed to load project:', err);
+        setError('Failed to load project data');
+        setLoading(false);
+      }
+    };
+
+    loadProject();
   }, [projectId]);
 
   if (loading) {

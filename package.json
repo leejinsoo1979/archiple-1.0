@@ -17,6 +17,7 @@
     "@babylonjs/materials": "^8.37.0",
     "@types/earcut": "^3.0.0",
     "earcut": "^3.0.2",
+    "firebase": "^12.6.0",
     "opencv.js": "^1.2.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

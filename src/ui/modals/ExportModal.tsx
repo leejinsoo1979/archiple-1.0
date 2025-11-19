@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useExportStore } from '../../stores/exportStore';
+import { db } from '../../lib/firebase';
+import { collection, doc, setDoc } from 'firebase/firestore';
 import styles from './ExportModal.module.css';
 
 interface ExportModalProps {
@@ -57,48 +59,16 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, floor
         mode: 'play', // Always export in play mode
       };
 
+      // Save to Firestore
       try {
-        // Check localStorage usage before saving
-        let totalSize = 0;
-        for (let key in localStorage) {
-          if (localStorage.hasOwnProperty(key)) {
-            totalSize += localStorage[key].length + key.length;
-          }
-        }
-        console.log('[Export] Current localStorage usage:', (totalSize / 1024).toFixed(2), 'KB');
+        const projectsRef = collection(db, 'projects');
+        const projectDoc = doc(projectsRef, projectId);
 
-        const jsonData = JSON.stringify(exportData);
-        console.log('[Export] Data to save size:', (jsonData.length / 1024).toFixed(2), 'KB');
-        console.log('[Export] Total would be:', ((totalSize + jsonData.length) / 1024).toFixed(2), 'KB');
-
-        // Try to save
-        localStorage.setItem(`archiple_export_${projectId}`, jsonData);
-        console.log('[Export] Successfully saved to localStorage');
-      } catch (storageError) {
-        console.error('[Export] Storage error:', storageError);
-        console.log('[Export] Attempting to clear old exports...');
-
-        // Try to clear old exports to make space
-        try {
-          const keysToRemove: string[] = [];
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.startsWith('archiple_export_')) {
-              keysToRemove.push(key);
-            }
-          }
-
-          console.log('[Export] Found', keysToRemove.length, 'old exports to remove');
-          keysToRemove.forEach(key => localStorage.removeItem(key));
-
-          // Try saving again
-          const jsonData = JSON.stringify(exportData);
-          localStorage.setItem(`archiple_export_${projectId}`, jsonData);
-          console.log('[Export] Successfully saved after clearing old exports');
-        } catch (retryError) {
-          console.error('[Export] Retry failed:', retryError);
-          throw new Error(`Failed to save project data. Storage error: ${storageError instanceof Error ? storageError.message : 'Unknown error'}`);
-        }
+        await setDoc(projectDoc, exportData);
+        console.log('[Export] Successfully saved to Firestore');
+      } catch (firebaseError) {
+        console.error('[Export] Firebase error:', firebaseError);
+        throw new Error(`Failed to save project data. ${firebaseError instanceof Error ? firebaseError.message : 'Unknown error'}`);
       }
 
       // Create the shareable URL
