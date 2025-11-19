@@ -56,7 +56,13 @@
 }
 
 .headerLogo {
+  display: flex;
+  align-items: center;
   height: 36px;
+}
+
+.headerLogo svg {
+  height: 100%;
   width: auto;
 }
 
