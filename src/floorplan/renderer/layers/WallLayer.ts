@@ -466,31 +466,36 @@ export class WallLayer extends BaseLayer {
     const distanceMm = Math.sqrt(dx * dx + dy * dy);
     const angle = Math.atan2(dy, dx);
 
-    // Offset perpendicular to wall in world space (mm)
-    const offsetDistanceMm = 400; // 400mm offset for dimension line
+    // CAD-style configuration
+    const wallHalfThickness = this.config.wallThickness / 2; // 50mm (half of 100mm)
+    const extensionGap = 100; // 100mm gap from wall surface
+    const offsetDistanceMm = 600; // 600mm offset for dimension line from wall surface
     const extensionOverhang = 100; // Extension line extends 100mm beyond dimension line
 
-    // Calculate perpendicular offset direction
+    // Calculate perpendicular offset direction (to the left of the wall direction)
     const perpX = -Math.sin(angle);
     const perpY = Math.cos(angle);
 
-    // Extension line start points (at wall endpoints)
-    const ext1StartX = startPoint.x;
-    const ext1StartY = startPoint.y;
-    const ext2StartX = endPoint.x;
-    const ext2StartY = endPoint.y;
+    // Start extension lines from wall surface (center + half thickness)
+    const surfaceOffset = wallHalfThickness + extensionGap;
+    const ext1StartX = startPoint.x + perpX * surfaceOffset;
+    const ext1StartY = startPoint.y + perpY * surfaceOffset;
+    const ext2StartX = endPoint.x + perpX * surfaceOffset;
+    const ext2StartY = endPoint.y + perpY * surfaceOffset;
 
     // Extension line end points (beyond dimension line)
-    const ext1EndX = startPoint.x + perpX * (offsetDistanceMm + extensionOverhang);
-    const ext1EndY = startPoint.y + perpY * (offsetDistanceMm + extensionOverhang);
-    const ext2EndX = endPoint.x + perpX * (offsetDistanceMm + extensionOverhang);
-    const ext2EndY = endPoint.y + perpY * (offsetDistanceMm + extensionOverhang);
+    const totalExtension = wallHalfThickness + extensionGap + offsetDistanceMm + extensionOverhang;
+    const ext1EndX = startPoint.x + perpX * totalExtension;
+    const ext1EndY = startPoint.y + perpY * totalExtension;
+    const ext2EndX = endPoint.x + perpX * totalExtension;
+    const ext2EndY = endPoint.y + perpY * totalExtension;
 
-    // Dimension line points
-    const dim1X = startPoint.x + perpX * offsetDistanceMm;
-    const dim1Y = startPoint.y + perpY * offsetDistanceMm;
-    const dim2X = endPoint.x + perpX * offsetDistanceMm;
-    const dim2Y = endPoint.y + perpY * offsetDistanceMm;
+    // Dimension line points (offset from wall surface)
+    const dimOffset = wallHalfThickness + extensionGap + offsetDistanceMm;
+    const dim1X = startPoint.x + perpX * dimOffset;
+    const dim1Y = startPoint.y + perpY * dimOffset;
+    const dim2X = endPoint.x + perpX * dimOffset;
+    const dim2Y = endPoint.y + perpY * dimOffset;
 
     // Convert to screen space
     const ext1Start = this.camera.worldToScreen(ext1StartX, ext1StartY);
@@ -508,14 +513,14 @@ export class WallLayer extends BaseLayer {
     this.camera.applyScreenTransform(ctx);
 
     const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
-    const dimColor = isDarkMode ? '#90CAF9' : '#2c3e50';
-    const textColor = isDarkMode ? '#E0E0E0' : '#2c3e50';
+    const dimColor = isDarkMode ? '#90CAF9' : '#666666';
+    const textColor = isDarkMode ? '#E0E0E0' : '#333333';
 
-    // Draw extension lines (thin, dashed)
+    // Draw extension lines (thin, solid) - CAD style
     ctx.strokeStyle = dimColor;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.globalAlpha = 0.7;
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1.0;
 
     ctx.beginPath();
     ctx.moveTo(ext1Start.x, ext1Start.y);
@@ -527,78 +532,74 @@ export class WallLayer extends BaseLayer {
     ctx.lineTo(ext2End.x, ext2End.y);
     ctx.stroke();
 
-    // Draw dimension line (solid)
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1.0;
-    ctx.lineWidth = 1.5;
-
+    // Draw dimension line (thin, solid)
+    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(dim1.x, dim1.y);
     ctx.lineTo(dim2.x, dim2.y);
     ctx.stroke();
 
-    // Draw arrows at dimension line ends
-    const arrowSize = 8;
-    const arrowAngle = Math.atan2(dim2.y - dim1.y, dim2.x - dim1.x);
+    // Draw tick marks (oblique strokes) instead of arrows - CAD style
+    const tickSize = 4;
+    const dimLineAngle = Math.atan2(dim2.y - dim1.y, dim2.x - dim1.x);
+    const tickAngle = Math.PI / 4; // 45 degrees
 
-    // Arrow at start (pointing inward)
-    ctx.fillStyle = dimColor;
+    ctx.lineWidth = 1.5;
+
+    // Tick at start
     ctx.beginPath();
-    ctx.moveTo(dim1.x, dim1.y);
-    ctx.lineTo(
-      dim1.x - arrowSize * Math.cos(arrowAngle - Math.PI / 6),
-      dim1.y - arrowSize * Math.sin(arrowAngle - Math.PI / 6)
+    ctx.moveTo(
+      dim1.x - tickSize * Math.cos(dimLineAngle - tickAngle),
+      dim1.y - tickSize * Math.sin(dimLineAngle - tickAngle)
     );
     ctx.lineTo(
-      dim1.x - arrowSize * Math.cos(arrowAngle + Math.PI / 6),
-      dim1.y - arrowSize * Math.sin(arrowAngle + Math.PI / 6)
+      dim1.x + tickSize * Math.cos(dimLineAngle + tickAngle),
+      dim1.y + tickSize * Math.sin(dimLineAngle + tickAngle)
     );
-    ctx.closePath();
-    ctx.fill();
+    ctx.stroke();
 
-    // Arrow at end (pointing inward)
+    // Tick at end
     ctx.beginPath();
-    ctx.moveTo(dim2.x, dim2.y);
-    ctx.lineTo(
-      dim2.x + arrowSize * Math.cos(arrowAngle - Math.PI / 6),
-      dim2.y + arrowSize * Math.sin(arrowAngle - Math.PI / 6)
+    ctx.moveTo(
+      dim2.x - tickSize * Math.cos(dimLineAngle - tickAngle),
+      dim2.y - tickSize * Math.sin(dimLineAngle - tickAngle)
     );
     ctx.lineTo(
-      dim2.x + arrowSize * Math.cos(arrowAngle + Math.PI / 6),
-      dim2.y + arrowSize * Math.sin(arrowAngle + Math.PI / 6)
+      dim2.x + tickSize * Math.cos(dimLineAngle + tickAngle),
+      dim2.y + tickSize * Math.sin(dimLineAngle + tickAngle)
     );
-    ctx.closePath();
-    ctx.fill();
+    ctx.stroke();
 
-    // Draw dimension text with background
+    // Draw dimension text - rotated to align with dimension line
     const label = `${distanceMm.toFixed(0)}mm`;
-    ctx.font = 'bold 12px system-ui';
+    ctx.font = '12px system-ui';
     const metrics = ctx.measureText(label);
-    const padding = 4;
 
-    const boxX = labelX - metrics.width / 2 - padding;
-    const boxY = labelY - 8;
+    ctx.save();
+    ctx.translate(labelX, labelY);
+
+    // Rotate text to align with dimension line
+    // Keep text readable (not upside down)
+    let textAngle = dimLineAngle;
+    if (textAngle > Math.PI / 2 || textAngle <= -Math.PI / 2) {
+      textAngle += Math.PI;
+    }
+    ctx.rotate(textAngle);
+
+    // Draw text background (small white box)
+    const padding = 3;
     const boxWidth = metrics.width + padding * 2;
-    const boxHeight = 16;
-
-    // Store hitbox for click detection
-    this.dimensionHitboxes.push({
-      wallId: wall.id,
-      x: boxX,
-      y: boxY,
-      width: boxWidth,
-      height: boxHeight,
-    });
-
-    // Draw text background
+    const boxHeight = 14;
     ctx.fillStyle = isDarkMode ? 'rgba(30, 30, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)';
-    ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+    ctx.fillRect(-boxWidth / 2, -boxHeight / 2 - 2, boxWidth, boxHeight);
 
-    // Draw text
+    // Draw text above the line
     ctx.fillStyle = textColor;
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, labelX, labelY);
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(label, 0, -4);
+
+    ctx.restore();
 
     ctx.restore();
   }
