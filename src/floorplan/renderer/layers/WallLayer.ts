@@ -589,34 +589,69 @@ export class WallLayer extends BaseLayer {
     ctx.lineTo(dim2.x, dim2.y);
     ctx.stroke();
 
-    // Draw tick marks (oblique strokes) instead of arrows - CAD style
-    const tickSize = 4;
+    // Draw arrows at dimension line endpoints - CAD style
+    const arrowSize = 6;
     const dimLineAngle = Math.atan2(dim2.y - dim1.y, dim2.x - dim1.x);
-    const tickAngle = Math.PI / 4; // 45 degrees
+    const arrowAngle = Math.PI / 6; // 30 degrees
 
     ctx.lineWidth = 1.5;
 
-    // Tick at start
+    // Arrow at start (pointing right along dimension line)
     ctx.beginPath();
-    ctx.moveTo(
-      dim1.x - tickSize * Math.cos(dimLineAngle - tickAngle),
-      dim1.y - tickSize * Math.sin(dimLineAngle - tickAngle)
-    );
+    ctx.moveTo(dim1.x, dim1.y);
     ctx.lineTo(
-      dim1.x + tickSize * Math.cos(dimLineAngle + tickAngle),
-      dim1.y + tickSize * Math.sin(dimLineAngle + tickAngle)
+      dim1.x - arrowSize * Math.cos(dimLineAngle - arrowAngle),
+      dim1.y - arrowSize * Math.sin(dimLineAngle - arrowAngle)
+    );
+    ctx.moveTo(dim1.x, dim1.y);
+    ctx.lineTo(
+      dim1.x - arrowSize * Math.cos(dimLineAngle + arrowAngle),
+      dim1.y - arrowSize * Math.sin(dimLineAngle + arrowAngle)
     );
     ctx.stroke();
 
-    // Tick at end
+    // Arrow at end (pointing left along dimension line)
+    ctx.beginPath();
+    ctx.moveTo(dim2.x, dim2.y);
+    ctx.lineTo(
+      dim2.x + arrowSize * Math.cos(dimLineAngle - arrowAngle),
+      dim2.y + arrowSize * Math.sin(dimLineAngle - arrowAngle)
+    );
+    ctx.moveTo(dim2.x, dim2.y);
+    ctx.lineTo(
+      dim2.x + arrowSize * Math.cos(dimLineAngle + arrowAngle),
+      dim2.y + arrowSize * Math.sin(dimLineAngle + arrowAngle)
+    );
+    ctx.stroke();
+
+    // Draw slashes at extension line endpoints
+    const slashSize = 5;
+    const slashAngle = Math.PI / 4; // 45 degrees
+
+    // Extension line angles (perpendicular to wall)
+    const extAngle = Math.atan2(ext1End.y - ext1Start.y, ext1End.x - ext1Start.x);
+
+    // Slash at extension line 1 end
     ctx.beginPath();
     ctx.moveTo(
-      dim2.x - tickSize * Math.cos(dimLineAngle - tickAngle),
-      dim2.y - tickSize * Math.sin(dimLineAngle - tickAngle)
+      ext1End.x - slashSize * Math.cos(extAngle - slashAngle),
+      ext1End.y - slashSize * Math.sin(extAngle - slashAngle)
     );
     ctx.lineTo(
-      dim2.x + tickSize * Math.cos(dimLineAngle + tickAngle),
-      dim2.y + tickSize * Math.sin(dimLineAngle + tickAngle)
+      ext1End.x + slashSize * Math.cos(extAngle + slashAngle),
+      ext1End.y + slashSize * Math.sin(extAngle + slashAngle)
+    );
+    ctx.stroke();
+
+    // Slash at extension line 2 end
+    ctx.beginPath();
+    ctx.moveTo(
+      ext2End.x - slashSize * Math.cos(extAngle - slashAngle),
+      ext2End.y - slashSize * Math.sin(extAngle - slashAngle)
+    );
+    ctx.lineTo(
+      ext2End.x + slashSize * Math.cos(extAngle + slashAngle),
+      ext2End.y + slashSize * Math.sin(extAngle + slashAngle)
     );
     ctx.stroke();
 
@@ -636,14 +671,7 @@ export class WallLayer extends BaseLayer {
     }
     ctx.rotate(textAngle);
 
-    // Draw text background (small white box)
-    const padding = 3;
-    const boxWidth = metrics.width + padding * 2;
-    const boxHeight = 14;
-    ctx.fillStyle = isDarkMode ? 'rgba(30, 30, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)';
-    ctx.fillRect(-boxWidth / 2, -boxHeight / 2 - 2, boxWidth, boxHeight);
-
-    // Draw text above the line
+    // Draw text without background
     ctx.fillStyle = textColor;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
