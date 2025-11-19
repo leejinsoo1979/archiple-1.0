@@ -103,6 +103,9 @@ export class WindowLayer extends BaseLayer {
     const halfWidth = windowWidth / 2;
     const frameWidth = window.frameWidth || 50;
 
+    // Check current theme for color selection
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+
     ctx.save();
 
     // Window opening endpoints
@@ -115,8 +118,10 @@ export class WindowLayer extends BaseLayer {
       y: wallY + Math.sin(wallAngle) * halfWidth,
     };
 
-    // Draw window opening (main line)
-    ctx.strokeStyle = isPreview ? '#2196F3' : '#00BCD4';
+    // Draw window opening (main line) - 다크모드 대응
+    ctx.strokeStyle = isPreview
+      ? (isDarkMode ? '#64B5F6' : '#2196F3')
+      : (isDarkMode ? '#4DD0E1' : '#00BCD4');
     ctx.lineWidth = 15;
     ctx.lineCap = 'round';
     if (isPreview) {
@@ -128,9 +133,11 @@ export class WindowLayer extends BaseLayer {
     ctx.lineTo(openingEnd.x, openingEnd.y);
     ctx.stroke();
 
-    // Draw center divider (for sliding windows)
+    // Draw center divider (for sliding windows) - 다크모드 대응
     if (window.type === 'sliding') {
-      ctx.strokeStyle = isPreview ? '#1976D2' : '#0097A7';
+      ctx.strokeStyle = isPreview
+        ? (isDarkMode ? '#42A5F5' : '#1976D2')
+        : (isDarkMode ? '#26C6DA' : '#0097A7');
       ctx.lineWidth = 8;
 
       ctx.beginPath();
@@ -150,9 +157,11 @@ export class WindowLayer extends BaseLayer {
       ctx.stroke();
     }
 
-    // Draw opening edges (window frame markers)
+    // Draw opening edges (window frame markers) - 다크모드 대응
     ctx.globalAlpha = 1.0;
-    ctx.strokeStyle = isPreview ? '#64B5F6' : '#4DD0E1';
+    ctx.strokeStyle = isPreview
+      ? (isDarkMode ? '#90CAF9' : '#64B5F6')
+      : (isDarkMode ? '#80DEEA' : '#4DD0E1');
     ctx.lineWidth = 10;
 
     // Perpendicular direction for edge markers
@@ -177,8 +186,10 @@ export class WindowLayer extends BaseLayer {
     );
     ctx.stroke();
 
-    // Draw glass indicator (parallel lines)
-    ctx.strokeStyle = isPreview ? 'rgba(33, 150, 243, 0.4)' : 'rgba(0, 188, 212, 0.4)';
+    // Draw glass indicator (parallel lines) - 다크모드 대응
+    ctx.strokeStyle = isPreview
+      ? (isDarkMode ? 'rgba(100, 181, 246, 0.5)' : 'rgba(33, 150, 243, 0.4)')
+      : (isDarkMode ? 'rgba(77, 208, 225, 0.5)' : 'rgba(0, 188, 212, 0.4)');
     ctx.lineWidth = 2;
 
     const glassOffset1 = frameWidth * 0.3;

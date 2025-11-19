@@ -99,6 +99,9 @@ export class DoorLayer extends BaseLayer {
     const doorWidth = door.width; // 900mm
     const halfWidth = doorWidth / 2;
 
+    // Check current theme for color selection
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+
     ctx.save();
 
     // Door opening endpoints
@@ -117,8 +120,10 @@ export class DoorLayer extends BaseLayer {
     // Hinge point (where door rotates)
     const hingePoint = swingDirection === 1 ? openingStart : openingEnd;
 
-    // Draw door swing arc (90도 호) - 더 굵고 명확하게
-    ctx.strokeStyle = isPreview ? '#4CAF50' : '#1976D2';
+    // Draw door swing arc (90도 호) - 더 굵고 명확하게, 다크모드 대응
+    ctx.strokeStyle = isPreview
+      ? (isDarkMode ? '#81C784' : '#4CAF50')
+      : (isDarkMode ? '#64B5F6' : '#1976D2');
     ctx.lineWidth = 15;
     ctx.lineCap = 'round';
     if (isPreview) {
@@ -140,8 +145,10 @@ export class DoorLayer extends BaseLayer {
     );
     ctx.stroke();
 
-    // Draw door slab (closed position) - 더 굵게
-    ctx.strokeStyle = isPreview ? '#388E3C' : '#0D47A1';
+    // Draw door slab (closed position) - 더 굵게, 다크모드 대응
+    ctx.strokeStyle = isPreview
+      ? (isDarkMode ? '#66BB6A' : '#388E3C')
+      : (isDarkMode ? '#42A5F5' : '#0D47A1');
     ctx.lineWidth = 20;
     ctx.lineCap = 'round';
 
@@ -150,15 +157,19 @@ export class DoorLayer extends BaseLayer {
     ctx.lineTo(openingEnd.x, openingEnd.y);
     ctx.stroke();
 
-    // Draw hinge marker (rotation point) - 더 크게
-    ctx.fillStyle = isPreview ? '#4CAF50' : '#E53935';
+    // Draw hinge marker (rotation point) - 더 크게, 다크모드 대응
+    ctx.fillStyle = isPreview
+      ? (isDarkMode ? '#81C784' : '#4CAF50')
+      : (isDarkMode ? '#EF5350' : '#E53935');
     ctx.beginPath();
     ctx.arc(hingePoint.x, hingePoint.y, 20, 0, Math.PI * 2);
     ctx.fill();
 
-    // Draw opening edges (문틀 표시)
+    // Draw opening edges (문틀 표시) - 다크모드 대응
     ctx.globalAlpha = 1.0;
-    ctx.strokeStyle = isPreview ? '#66BB6A' : '#42A5F5';
+    ctx.strokeStyle = isPreview
+      ? (isDarkMode ? '#A5D6A7' : '#66BB6A')
+      : (isDarkMode ? '#90CAF9' : '#42A5F5');
     ctx.lineWidth = 10;
 
     // Perpendicular direction for edge markers
