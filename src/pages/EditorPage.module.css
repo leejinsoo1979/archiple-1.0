@@ -205,8 +205,8 @@
 .leftPanel {
   width: 310px;
   height: 100%;
-  background: white;
-  border-right: 1px solid #ddd;
+  background: var(--bg-primary);
+  border-right: 1px solid var(--border-color);
   overflow-y: auto;
   flex-shrink: 0;
   z-index: 150;
@@ -214,13 +214,13 @@
 
 .panelHeader {
   padding: 16px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-light);
   display: flex;
   justify-content: space-between;
   align-items: center;
   position: sticky;
   top: 0;
-  background: white;
+  background: var(--bg-primary);
   z-index: 10;
 }
 
@@ -228,6 +228,7 @@
   margin: 0;
   font-size: 16px;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
 .panelHeader button {
@@ -235,7 +236,7 @@
   background: none;
   font-size: 24px;
   cursor: pointer;
-  color: #999;
+  color: var(--text-secondary);
   padding: 0;
   width: 24px;
   height: 24px;
@@ -243,7 +244,7 @@
 }
 
 .panelHeader button:hover {
-  color: #333;
+  color: var(--text-primary);
 }
 
 .createRoomOptions {
@@ -251,14 +252,14 @@
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
   padding: 16px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .optionCard {
   aspect-ratio: 1.2;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  background: white;
+  background: var(--bg-primary);
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
@@ -267,19 +268,19 @@
   justify-content: center;
   gap: 8px;
   font-size: 12px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .optionCard:hover {
-  border-color: #3fae7a;
-  box-shadow: 0 2px 8px rgba(63, 174, 122, 0.2);
+  border-color: var(--theme-color);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--theme-color) 20%, transparent);
 }
 
 .optionIcon {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .optionIcon svg {
@@ -288,14 +289,14 @@
 
 .toolSection {
   padding: 20px 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .toolSection h4 {
   margin: 0 0 16px 0;
   font-size: 13px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .toolGrid {
@@ -306,9 +307,9 @@
 
 .toolBtn {
   aspect-ratio: 1;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: white;
+  background: var(--bg-primary);
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
@@ -317,20 +318,20 @@
   justify-content: center;
   gap: 6px;
   padding: 8px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .toolBtn:hover {
-  border-color: #3fae7a;
-  background: #f8fdfb;
-  color: #3fae7a;
+  border-color: var(--theme-color);
+  background: color-mix(in srgb, var(--theme-color) 5%, var(--bg-primary));
+  color: var(--theme-color);
 }
 
 .toolBtnActive {
-  border-color: #3fae7a;
-  background: #e8f9f3;
-  color: #3fae7a;
-  box-shadow: 0 0 0 2px rgba(63, 174, 122, 0.2);
+  border-color: var(--theme-color);
+  background: color-mix(in srgb, var(--theme-color) 15%, var(--bg-primary));
+  color: var(--theme-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-color) 20%, transparent);
 }
 
 .toolBtn svg {
@@ -342,7 +343,7 @@
   font-size: 10px;
   text-align: center;
   line-height: 1.2;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 /* ===== TOP TOOLBAR ===== */
@@ -350,7 +351,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  background: white;
+  background: var(--bg-primary);
   border-radius: 8px;
   padding: 8px 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
@@ -368,15 +369,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  color: var(--text-primary);
 }
 
 .topBtn:hover {
-  background: #f5f5f5;
+  background: var(--bg-tertiary);
 }
 
 .topBtn.active {
-  background: #e8f5e9;
-  color: #3fae7a;
+  background: color-mix(in srgb, var(--theme-color) 15%, var(--bg-primary));
+  color: var(--theme-color);
 }
 
 /* Sun Dropdown - Ultra Modern Trendy Design */
@@ -627,7 +629,7 @@
 .playBtn {
   padding: 8px 20px;
   border: none;
-  background: #3fae7a;
+  background: var(--theme-color);
   color: white;
   border-radius: 6px;
   cursor: pointer;
@@ -637,14 +639,14 @@
 }
 
 .playBtn:hover {
-  background: #2d9967;
+  opacity: 0.9;
 }
 
 /* ===== MAIN VIEWPORT ===== */
 .viewport {
   flex: 1;
   position: relative;
-  background: #e8e8e8;
+  background: var(--bg-secondary);
 }
 
 /* ===== VIEW MODE TOGGLE ===== */
@@ -654,7 +656,7 @@
   right: 16px;
   display: flex;
   gap: 0;
-  background: white;
+  background: var(--bg-primary);
   border-radius: 6px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   z-index: 100;
@@ -664,13 +666,13 @@
 .viewModeBtn {
   padding: 8px 20px;
   border: none;
-  background: white;
-  color: #666;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
   transition: all 0.2s;
-  border-right: 1px solid #e0e0e0;
+  border-right: 1px solid var(--border-color);
 }
 
 .viewModeBtn:last-child {
@@ -678,11 +680,11 @@
 }
 
 .viewModeBtn:hover {
-  background: #f5f5f5;
+  background: var(--bg-tertiary);
 }
 
 .viewModeBtnActive {
-  background: #3fae7a !important;
+  background: var(--theme-color) !important;
   color: white !important;
 }
 
@@ -694,7 +696,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: white;
+  background: var(--bg-primary);
   border-radius: 6px;
   padding: 8px 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -704,27 +706,27 @@
 .zoomBtn {
   width: 28px;
   height: 28px;
-  border: 1px solid #e0e0e0;
-  background: white;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
   border-radius: 4px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .zoomBtn:hover {
-  background: #f5f5f5;
-  border-color: #3fae7a;
-  color: #3fae7a;
+  background: var(--bg-tertiary);
+  border-color: var(--theme-color);
+  color: var(--theme-color);
 }
 
 .zoomLabel {
   font-size: 12px;
   font-weight: 500;
-  color: #666;
+  color: var(--text-secondary);
   min-width: 45px;
   text-align: center;
 }
@@ -733,8 +735,8 @@
 .rightPanel {
   width: 320px;
   height: 100%;
-  background: white;
-  border-left: 1px solid #ddd;
+  background: var(--bg-primary);
+  border-left: 1px solid var(--border-color);
   overflow-y: auto;
   flex-shrink: 0;
   z-index: 150;
@@ -742,14 +744,14 @@
 
 .settingsSection {
   padding: 20px 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .settingsSection h4 {
   margin: 0 0 16px 0;
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -764,16 +766,18 @@
 
 .settingRow label {
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .settingRow input[type="text"] {
   width: 120px;
   padding: 6px 10px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   font-size: 13px;
   text-align: right;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .settingRow input[type="checkbox"] {
@@ -786,42 +790,46 @@
 .editBtn {
   width: 100%;
   padding: 10px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: white;
+  background: var(--bg-primary);
   cursor: pointer;
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
   transition: all 0.2s;
   margin-top: 12px;
 }
 
 .deleteBtn:hover,
 .editBtn:hover {
-  border-color: #3fae7a;
-  color: #3fae7a;
+  border-color: var(--theme-color);
+  color: var(--theme-color);
 }
 
 /* ===== SCROLLBAR STYLING ===== */
 .leftPanel::-webkit-scrollbar,
-.rightPanel::-webkit-scrollbar {
+.rightPanel::-webkit-scrollbar,
+.themeSettingsPanel::-webkit-scrollbar {
   width: 6px;
 }
 
 .leftPanel::-webkit-scrollbar-track,
-.rightPanel::-webkit-scrollbar-track {
-  background: #f5f5f5;
+.rightPanel::-webkit-scrollbar-track,
+.themeSettingsPanel::-webkit-scrollbar-track {
+  background: var(--bg-tertiary);
 }
 
 .leftPanel::-webkit-scrollbar-thumb,
-.rightPanel::-webkit-scrollbar-thumb {
-  background: #ccc;
+.rightPanel::-webkit-scrollbar-thumb,
+.themeSettingsPanel::-webkit-scrollbar-thumb {
+  background: var(--border-color);
   border-radius: 3px;
 }
 
 .leftPanel::-webkit-scrollbar-thumb:hover,
-.rightPanel::-webkit-scrollbar-thumb:hover {
-  background: #aaa;
+.rightPanel::-webkit-scrollbar-thumb:hover,
+.themeSettingsPanel::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
 }
 
 /* ===== 3D VIEW OPTIONS DROPDOWN ===== */
@@ -835,9 +843,9 @@
   left: 50%;
   transform: translateX(-50%);
   width: 380px;
-  background: white;
+  background: var(--bg-primary);
   border-radius: 12px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border-color);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   z-index: 1000;
   overflow: hidden;
@@ -852,12 +860,12 @@
   margin: 0 0 12px 0;
   font-size: 13px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .dropdownDivider {
   height: 1px;
-  background: #e8e8e8;
+  background: var(--border-light);
   margin: 0;
 }
 
@@ -875,7 +883,7 @@
   align-items: center;
   gap: 8px;
   padding: 12px;
-  background: #f8f8f8;
+  background: var(--bg-tertiary);
   border: 2px solid transparent;
   border-radius: 8px;
   cursor: pointer;
@@ -883,12 +891,12 @@
 }
 
 .styleOption:hover {
-  background: #f0f0f0;
+  background: var(--bg-secondary);
 }
 
 .styleOption.selected {
-  background: #e8f5e9;
-  border-color: #3fae7a;
+  background: color-mix(in srgb, var(--theme-color) 15%, var(--bg-primary));
+  border-color: var(--theme-color);
 }
 
 .stylePreview {
@@ -896,7 +904,7 @@
   height: 80px;
   border-radius: 6px;
   overflow: hidden;
-  background: white;
+  background: var(--bg-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -977,7 +985,7 @@
 .styleLabel {
   font-size: 12px;
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .styleNumber {
@@ -985,8 +993,8 @@
   top: 8px;
   right: 8px;
   font-size: 11px;
-  color: #999;
-  background: white;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -1001,7 +1009,7 @@
 .toggleLabel {
   font-size: 13px;
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .toggleSwitch {
@@ -1023,7 +1031,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #ccc;
+  background-color: var(--border-color);
   border-radius: 24px;
   transition: 0.3s;
 }
@@ -1041,7 +1049,7 @@
 }
 
 .toggleSwitch input:checked + .toggleSlider {
-  background-color: #3fae7a;
+  background-color: var(--theme-color);
 }
 
 .toggleSwitch input:checked + .toggleSlider::before {
@@ -1057,24 +1065,24 @@
 .graphicsBtn {
   flex: 1;
   padding: 8px 12px;
-  background: #f8f8f8;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
-  color: #666;
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .graphicsBtn:hover {
-  background: #f0f0f0;
+  background: var(--bg-secondary);
 }
 
 .graphicsBtn.active {
-  background: #3fae7a;
+  background: var(--theme-color);
   color: white;
-  border-color: #3fae7a;
+  border-color: var(--theme-color);
 }
 
 @keyframes dropdownSlideIn {
