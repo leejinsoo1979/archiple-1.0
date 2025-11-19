@@ -707,12 +707,20 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
       // Render loop
       // Create GizmoManager for light manipulation
+      // Create GizmoManager for light manipulation
       const gizmoManager = new GizmoManager(scene);
       gizmoManager.positionGizmoEnabled = true;
       gizmoManager.rotationGizmoEnabled = false;
       gizmoManager.scaleGizmoEnabled = false;
       gizmoManager.boundingBoxGizmoEnabled = false;
       gizmoManager.usePointerToAttachGizmos = false; // Manual attachment
+      gizmoManager.clearGizmoOnEmptyPointerEvent = true; // Auto-deselect
+
+      // Make gizmo bigger and easier to grab
+      if (gizmoManager.gizmos.positionGizmo) {
+        gizmoManager.gizmos.positionGizmo.scaleRatio = 2.0;
+      }
+
       gizmoManagerRef.current = gizmoManager;
 
       engine.runRenderLoop(() => {
@@ -1950,14 +1958,66 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       }
     };
 
+    // Double-click to teleport in play mode
+    const handleDoubleClick = (evt: MouseEvent) => {
+      if (!scene || !playMode) return;
+
+      const fpsCamera = fpsCameraRef.current;
+      if (!fpsCamera) return;
+
+      const pickResult = scene.pick(evt.offsetX, evt.offsetY);
+
+      if (pickResult && pickResult.hit && pickResult.pickedPoint) {
+        const pickedMesh = pickResult.pickedMesh;
+
+        // Only teleport if clicked on floor
+        if (pickedMesh && pickedMesh.name.includes('floor')) {
+          const targetPosition = pickResult.pickedPoint.clone();
+          // Keep camera at eye height
+          targetPosition.y = DEFAULT_CAMERA_HEIGHT;
+
+          console.log('[Babylon3DCanvas] Teleporting to:', targetPosition);
+
+          // Smooth camera movement animation
+          const startPosition = fpsCamera.position.clone();
+          const duration = 800; // 0.8 seconds
+          const startTime = performance.now();
+
+          const animate = () => {
+            const elapsed = performance.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+
+            // Ease-in-out cubic
+            const eased = progress < 0.5
+              ? 4 * progress * progress * progress
+              : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+            fpsCamera.position.x = startPosition.x + (targetPosition.x - startPosition.x) * eased;
+            fpsCamera.position.y = startPosition.y + (targetPosition.y - startPosition.y) * eased;
+            fpsCamera.position.z = startPosition.z + (targetPosition.z - startPosition.z) * eased;
+
+            if (progress < 1) {
+              requestAnimationFrame(animate);
+            } else {
+              console.log('[Babylon3DCanvas] Teleport complete');
+            }
+          };
+
+          animate();
+        }
+      }
+    };
+
     const canvas = canvasRef.current;
     if (canvas) {
       canvas.addEventListener('pointermove', handlePointerMove as any);
       canvas.addEventListener('pointerdown', handlePointerDown as any);
+      canvas.addEventListener('dblclick', handleDoubleClick as any);
 
       return () => {
         canvas.removeEventListener('pointermove', handlePointerMove as any);
         canvas.removeEventListener('pointerdown', handlePointerDown as any);
+        canvas.removeEventListener('dblclick', handleDoubleClick as any);
       };
     }
   }, [floorplanData, playMode]);
@@ -2926,6 +2986,63 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
     console.log('[Babylon3DCanvas] ✅ Light placement mode active, type:', selectedLightType);
 
+    // Create Ghost Light (Preview)
+    let ghostLightMesh: Mesh | null = null;
+
+    // Create a visual indicator for the ghost light
+    const createGhostLight = () => {
+      if (ghostLightMesh) return;
+
+      // Create a sphere to represent the light
+      ghostLightMesh = MeshBuilder.CreateSphere('ghostLight', { diameter: 0.3 }, scene);
+      ghostLightMesh.isPickable = false; // Don't block clicks
+
+      // Create material
+      const material = new PBRMaterial('ghostLightMat', scene);
+      material.emissiveColor = new Color3(1, 1, 0.5); // Warm yellow
+      material.alpha = 0.5; // Semi-transparent
+      material.unlit = true;
+      ghostLightMesh.material = material;
+
+      // Add a light source to it for preview effect? 
+      // Maybe too heavy. Just the mesh is enough for positioning.
+    };
+
+    createGhostLight();
+
+    const getPlacementPosition = (evt: PointerEvent | MouseEvent): Vector3 | null => {
+      const pickResult = scene.pick(evt.offsetX, evt.offsetY);
+
+      if (pickResult && pickResult.hit && pickResult.pickedPoint) {
+        // Clicked on an object - use X,Z position but fix Y to ceiling height
+        const pos = pickResult.pickedPoint.clone();
+        pos.y = 2.4; // Ceiling height
+        return pos;
+      }
+
+      // If no hit (empty space), project from camera
+      const camera = scene.activeCamera;
+      if (!camera) return null;
+
+      const pickRay = scene.createPickingRay(evt.offsetX, evt.offsetY, null, camera);
+      const distance = 5; // 5 meters from camera
+      const pos = pickRay.origin.add(pickRay.direction.scale(distance));
+      pos.y = 2.4; // Ceiling height
+      return pos;
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!ghostLightMesh) return;
+
+      const pos = getPlacementPosition(event);
+      if (pos) {
+        ghostLightMesh.position = pos;
+        ghostLightMesh.isVisible = true;
+      } else {
+        ghostLightMesh.isVisible = false;
+      }
+    };
+
     const handleLightPlacement = (event: PointerEvent) => {
       event.preventDefault();
       event.stopPropagation();
@@ -2934,29 +3051,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
       console.log('[Babylon3DCanvas] 🖱️ Click detected at', event.offsetX, event.offsetY);
 
-      // Get pick ray from mouse position
-      const pickResult = scene.pick(event.offsetX, event.offsetY);
+      const clickPosition = getPlacementPosition(event);
 
-      let clickPosition: Vector3;
-
-      if (pickResult && pickResult.hit && pickResult.pickedPoint) {
-        // Clicked on an object - use X,Z position but fix Y to ceiling height
-        clickPosition = pickResult.pickedPoint.clone();
-        console.log('[Babylon3DCanvas] Clicked on object at:', clickPosition);
-      } else {
-        // Clicked on empty space - place at camera direction, 5 meters away
-        const camera = scene.activeCamera;
-        if (!camera) return;
-
-        const pickRay = scene.createPickingRay(event.offsetX, event.offsetY, null, camera);
-        const distance = 5; // 5 meters from camera
-        clickPosition = pickRay.origin.add(pickRay.direction.scale(distance));
-
-        console.log('[Babylon3DCanvas] Clicked on empty space, placing at camera direction:', clickPosition);
-      }
-
-      // Always place lights at ceiling height (2.4m)
-      clickPosition.y = 2.4; // 2.4 meters = ceiling height
+      if (!clickPosition) return;
 
       // Convert Babylon position (meters) to mm coordinates for Light object
       const lightPosition = {
@@ -2978,10 +3075,18 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
     console.log('[Babylon3DCanvas] 📌 Registering click event listener for light placement');
     canvas.addEventListener('click', handleLightPlacement);
+    canvas.addEventListener('pointermove', handlePointerMove);
 
     return () => {
       console.log('[Babylon3DCanvas] 🗑️ Removing click event listener for light placement');
       canvas.removeEventListener('click', handleLightPlacement);
+      canvas.removeEventListener('pointermove', handlePointerMove);
+
+      // Cleanup ghost light
+      if (ghostLightMesh) {
+        ghostLightMesh.dispose();
+        ghostLightMesh = null;
+      }
     };
   }, [lightPlacementMode, selectedLightType, onLightPlaced, playMode]);
 

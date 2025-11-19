@@ -130,7 +130,7 @@ const PlayPage = () => {
             <line x1="12" y1="16" x2="12" y2="12" />
             <line x1="12" y1="8" x2="12.01" y2="8" />
           </svg>
-          <span>WASD to move • Mouse to look • Click doors/windows to interact</span>
+          <span>WASD to move • Mouse to look • Double-click floor to teleport • Click doors/windows to interact</span>
         </div>
       </div>
     </div>
