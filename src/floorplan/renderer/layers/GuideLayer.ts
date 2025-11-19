@@ -181,13 +181,22 @@ export class GuideLayer extends BaseLayer {
       ctx.lineTo(1000000, y);
       ctx.stroke();
 
-      // 라벨
-      ctx.shadowBlur = 0; // Remove shadow for text
-      ctx.fillStyle = this.config.orthogonalGuideColor;
-      ctx.font = 'bold 12px system-ui';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'bottom';
-      ctx.fillText('수평', guide.from.x + 10, y - 5);
+      // 라벨 (Screen Space)
+      if (this.camera) {
+        const screenPos = this.camera.worldToScreen(guide.from.x, y);
+
+        ctx.save();
+        this.camera.applyScreenTransform(ctx);
+
+        ctx.shadowBlur = 0; // Remove shadow for text
+        ctx.fillStyle = this.config.orthogonalGuideColor;
+        ctx.font = 'bold 12px system-ui';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('수평', screenPos.x + 10, screenPos.y - 5);
+
+        ctx.restore();
+      }
     } else {
       // 수직 가이드 (캔버스 전체 높이)
       const x = guide.from.x;
@@ -196,13 +205,22 @@ export class GuideLayer extends BaseLayer {
       ctx.lineTo(x, 1000000);
       ctx.stroke();
 
-      // 라벨
-      ctx.shadowBlur = 0; // Remove shadow for text
-      ctx.fillStyle = this.config.orthogonalGuideColor;
-      ctx.font = 'bold 12px system-ui';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      ctx.fillText('수직', x + 5, guide.from.y + 10);
+      // 라벨 (Screen Space)
+      if (this.camera) {
+        const screenPos = this.camera.worldToScreen(x, guide.from.y);
+
+        ctx.save();
+        this.camera.applyScreenTransform(ctx);
+
+        ctx.shadowBlur = 0; // Remove shadow for text
+        ctx.fillStyle = this.config.orthogonalGuideColor;
+        ctx.font = 'bold 12px system-ui';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText('수직', screenPos.x + 5, screenPos.y + 10);
+
+        ctx.restore();
+      }
     }
 
     ctx.restore();
@@ -316,39 +334,41 @@ export class GuideLayer extends BaseLayer {
 
     ctx.save();
 
-    // Distance is already in mm
-    const distanceMm = distance;
+    // CAD Style Configuration
+    const offsetDistanceMm = 600; // Increased offset for CAD style
+    const extensionGap = 100; // Gap from wall
+    const extensionOverhang = 100; // Extension beyond dimension line
+
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     const angle = Math.atan2(dy, dx);
 
-    // Offset perpendicular to line in world space (mm)
-    const offsetDistanceMm = 400; // 400mm offset for dimension line
-    const extensionOverhang = 100; // Extension line extends 100mm beyond dimension line
-
     // Calculate perpendicular offset direction
-    const perpX = -Math.sin(angle);
-    const perpY = Math.cos(angle);
+    // Flip signs to switch from Right-side to Left-side offset (Outside for Clockwise)
+    const perpX = Math.sin(angle);
+    const perpY = -Math.cos(angle);
 
-    // Extension line start points (at line endpoints)
-    const ext1StartX = from.x;
-    const ext1StartY = from.y;
-    const ext2StartX = to.x;
-    const ext2StartY = to.y;
+    // Extension Lines
+    // Start after gap
+    const ext1StartX = from.x + perpX * extensionGap;
+    const ext1StartY = from.y + perpY * extensionGap;
+    const ext2StartX = to.x + perpX * extensionGap;
+    const ext2StartY = to.y + perpY * extensionGap;
 
-    // Extension line end points (beyond dimension line)
-    const ext1EndX = from.x + perpX * (offsetDistanceMm + extensionOverhang);
-    const ext1EndY = from.y + perpY * (offsetDistanceMm + extensionOverhang);
-    const ext2EndX = to.x + perpX * (offsetDistanceMm + extensionOverhang);
-    const ext2EndY = to.y + perpY * (offsetDistanceMm + extensionOverhang);
+    // End after dimension line
+    const totalOffset = offsetDistanceMm + extensionOverhang;
+    const ext1EndX = from.x + perpX * totalOffset;
+    const ext1EndY = from.y + perpY * totalOffset;
+    const ext2EndX = to.x + perpX * totalOffset;
+    const ext2EndY = to.y + perpY * totalOffset;
 
-    // Dimension line points
+    // Dimension Line
     const dim1X = from.x + perpX * offsetDistanceMm;
     const dim1Y = from.y + perpY * offsetDistanceMm;
     const dim2X = to.x + perpX * offsetDistanceMm;
     const dim2Y = to.y + perpY * offsetDistanceMm;
 
-    // Convert to screen space
+    // Convert to Screen Space (Logical Pixels)
     const ext1Start = this.camera.worldToScreen(ext1StartX, ext1StartY);
     const ext1End = this.camera.worldToScreen(ext1EndX, ext1EndY);
     const ext2Start = this.camera.worldToScreen(ext2StartX, ext2StartY);
@@ -356,22 +376,17 @@ export class GuideLayer extends BaseLayer {
     const dim1 = this.camera.worldToScreen(dim1X, dim1Y);
     const dim2 = this.camera.worldToScreen(dim2X, dim2Y);
 
-    // Midpoint for label
-    const labelX = (dim1.x + dim2.x) / 2;
-    const labelY = (dim1.y + dim2.y) / 2;
-
-    // Reset transform to screen space (with DPI scaling)
+    // Apply Screen Transform (for DPI)
     this.camera.applyScreenTransform(ctx);
 
     const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
-    const dimColor = isDarkMode ? '#90CAF9' : '#2c3e50';
+    const lineColor = isDarkMode ? '#90CAF9' : '#2c3e50';
     const textColor = isDarkMode ? '#E0E0E0' : '#2c3e50';
 
-    // Draw extension lines (thin, dashed)
-    ctx.strokeStyle = dimColor;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.globalAlpha = 0.7;
+    // Draw Extension Lines (Thin, Solid)
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 0.5; // Thinner
+    ctx.setLineDash([]); // Solid
 
     ctx.beginPath();
     ctx.moveTo(ext1Start.x, ext1Start.y);
@@ -383,70 +398,55 @@ export class GuideLayer extends BaseLayer {
     ctx.lineTo(ext2End.x, ext2End.y);
     ctx.stroke();
 
-    // Draw dimension line (solid)
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1.0;
-    ctx.lineWidth = 1.5;
-
+    // Draw Dimension Line
+    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(dim1.x, dim1.y);
     ctx.lineTo(dim2.x, dim2.y);
     ctx.stroke();
 
-    // Draw arrows at dimension line ends
-    const arrowSize = 8;
-    const arrowAngle = Math.atan2(dim2.y - dim1.y, dim2.x - dim1.x);
+    // Draw Ticks (Oblique strokes) instead of arrows for CAD style
+    const tickSize = 4;
+    ctx.lineWidth = 1.5;
 
-    // Arrow at start (pointing inward)
-    ctx.fillStyle = dimColor;
+    // Tick 1
     ctx.beginPath();
-    ctx.moveTo(dim1.x, dim1.y);
-    ctx.lineTo(
-      dim1.x - arrowSize * Math.cos(arrowAngle - Math.PI / 6),
-      dim1.y - arrowSize * Math.sin(arrowAngle - Math.PI / 6)
-    );
-    ctx.lineTo(
-      dim1.x - arrowSize * Math.cos(arrowAngle + Math.PI / 6),
-      dim1.y - arrowSize * Math.sin(arrowAngle + Math.PI / 6)
-    );
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(dim1.x - tickSize, dim1.y + tickSize);
+    ctx.lineTo(dim1.x + tickSize, dim1.y - tickSize);
+    ctx.stroke();
 
-    // Arrow at end (pointing inward)
+    // Tick 2
     ctx.beginPath();
-    ctx.moveTo(dim2.x, dim2.y);
-    ctx.lineTo(
-      dim2.x + arrowSize * Math.cos(arrowAngle - Math.PI / 6),
-      dim2.y + arrowSize * Math.sin(arrowAngle - Math.PI / 6)
-    );
-    ctx.lineTo(
-      dim2.x + arrowSize * Math.cos(arrowAngle + Math.PI / 6),
-      dim2.y + arrowSize * Math.sin(arrowAngle + Math.PI / 6)
-    );
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(dim2.x - tickSize, dim2.y + tickSize);
+    ctx.lineTo(dim2.x + tickSize, dim2.y - tickSize);
+    ctx.stroke();
 
-    // Draw dimension text with background
-    const label = `${Math.round(distanceMm)}mm`;
-    ctx.font = 'bold 12px system-ui';
-    const metrics = ctx.measureText(label);
-    const padding = 4;
+    // Draw Text
+    const midX = (dim1.x + dim2.x) / 2;
+    const midY = (dim1.y + dim2.y) / 2;
 
-    const boxX = labelX - metrics.width / 2 - padding;
-    const boxY = labelY - 8;
-    const boxWidth = metrics.width + padding * 2;
-    const boxHeight = 16;
+    ctx.save();
+    ctx.translate(midX, midY);
 
-    // Draw text background
-    ctx.fillStyle = isDarkMode ? 'rgba(30, 30, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)';
-    ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+    // Rotate text to align with line
+    // Ensure text is readable (not upside down)
+    let textAngle = angle;
+    if (textAngle > Math.PI / 2 || textAngle <= -Math.PI / 2) {
+      textAngle += Math.PI;
+    }
+    ctx.rotate(textAngle);
 
-    // Draw text
+    // Text Style
     ctx.fillStyle = textColor;
+    ctx.font = '12px system-ui'; // Regular font
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, labelX, labelY);
+    ctx.textBaseline = 'bottom'; // Draw above the line
 
+    const label = `${Math.round(distance)}mm`;
+    // Offset slightly above line (-4px)
+    ctx.fillText(label, 0, -4);
+
+    ctx.restore();
     ctx.restore();
   }
 

@@ -37,8 +37,9 @@ export class Camera2D {
    */
   setSize(width: number, height: number, dpr: number = 1): void {
     this.dpr = dpr;
-    this.viewport.canvasWidth = width;
-    this.viewport.canvasHeight = height;
+    // Store logical pixels in viewport (Physical / DPR)
+    this.viewport.canvasWidth = width / dpr;
+    this.viewport.canvasHeight = height / dpr;
   }
 
   /**
@@ -111,11 +112,7 @@ export class Camera2D {
    * @param screenY - Logical screen Y (CSS pixels)
    */
   screenToWorld(screenX: number, screenY: number): Vector2 {
-    // Convert logical pixels to physical pixels before transforming
-    const physicalX = screenX * this.dpr;
-    const physicalY = screenY * this.dpr;
-
-    const pointPx: PointPX = { x: physicalX, y: physicalY };
+    const pointPx: PointPX = { x: screenX, y: screenY };
     const pointMm = screenToWorld(pointPx, this.viewport);
     return new Vector2(pointMm.x, pointMm.y);
   }
@@ -127,9 +124,7 @@ export class Camera2D {
   worldToScreen(worldX: number, worldY: number): Vector2 {
     const pointMm: PointMM = { x: worldX, y: worldY };
     const pointPx = worldToScreen(pointMm, this.viewport);
-
-    // Convert physical pixels back to logical pixels
-    return new Vector2(pointPx.x / this.dpr, pointPx.y / this.dpr);
+    return new Vector2(pointPx.x, pointPx.y);
   }
 
   /**
