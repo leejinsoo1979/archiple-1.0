@@ -95,7 +95,7 @@ const EditorPage = () => {
 
   // Render style state (for header panel)
   const [renderStyleOpen, setRenderStyleOpen] = useState(false);
-  const [renderStyle, setRenderStyle] = useState<'wireframe' | 'solid' | 'textured'>('solid');
+  const [renderStyle, setRenderStyle] = useState<'wireframe' | 'hidden-line' | 'solid' | 'realistic'>('solid');
 
   // Handle light placement from 3D view
   const handleLightPlaced = (light: Light) => {
@@ -2092,6 +2092,7 @@ const EditorPage = () => {
             activeTool={activeTool}
             onDataChange={setFloorplanData}
             backgroundImage={showBackgroundImage ? backgroundImage : null}
+            renderStyle={renderStyle}
             imageScale={imageScale}
             imageOpacity={imageOpacity}
             onDimensionClick={handleDimensionClick}
@@ -2526,6 +2527,22 @@ const EditorPage = () => {
 
             <div className={styles.styleOption}>
               <button
+                className={`${styles.styleBtn} ${renderStyle === 'hidden-line' ? styles.active : ''}`}
+                onClick={() => setRenderStyle('hidden-line')}
+              >
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                  <polyline points="7.5 4.21 12 6.81 16.5 4.21"/>
+                  <polyline points="7.5 19.79 12 17.19 16.5 19.79"/>
+                  <line x1="3.27" y1="6.96" x2="12" y2="12.01"/>
+                  <line x1="12" y1="12.01" x2="20.73" y2="6.96"/>
+                </svg>
+                <span>Hidden Line</span>
+              </button>
+            </div>
+
+            <div className={styles.styleOption}>
+              <button
                 className={`${styles.styleBtn} ${renderStyle === 'solid' ? styles.active : ''}`}
                 onClick={() => setRenderStyle('solid')}
               >
@@ -2538,16 +2555,22 @@ const EditorPage = () => {
 
             <div className={styles.styleOption}>
               <button
-                className={`${styles.styleBtn} ${renderStyle === 'textured' ? styles.active : ''}`}
-                onClick={() => setRenderStyle('textured')}
+                className={`${styles.styleBtn} ${renderStyle === 'realistic' ? styles.active : ''}`}
+                onClick={() => setRenderStyle('realistic')}
               >
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9zM12 4.15L5 8.09v7.82l7 3.94 7-3.94V8.09l-7-3.94z"/>
-                  <circle cx="8" cy="10" r="1"/>
-                  <circle cx="16" cy="10" r="1"/>
-                  <circle cx="12" cy="14" r="1"/>
+                  <defs>
+                    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" style={{stopColor: 'currentColor', stopOpacity: 1}} />
+                      <stop offset="100%" style={{stopColor: 'currentColor', stopOpacity: 0.3}} />
+                    </linearGradient>
+                  </defs>
+                  <path fill="url(#grad1)" d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9z"/>
+                  <circle cx="8" cy="10" r="1" fill="currentColor" opacity="0.6"/>
+                  <circle cx="16" cy="10" r="1" fill="currentColor" opacity="0.6"/>
+                  <circle cx="12" cy="14" r="1" fill="currentColor" opacity="0.6"/>
                 </svg>
-                <span>Textured</span>
+                <span>Realistic</span>
               </button>
             </div>
           </div>

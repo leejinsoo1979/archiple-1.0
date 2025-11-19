@@ -28,6 +28,7 @@ export class RoomLayer extends BaseLayer {
   private points: Map<string, Point> = new Map();
   private selectedRoomIds: Set<string> = new Set();
   private hoveredRoomId: string | null = null;
+  private renderStyle: 'wireframe' | 'hidden-line' | 'solid' | 'realistic' = 'solid';
 
   private config: Required<RoomLayerConfig>;
   private woodPattern: CanvasPattern | null = null;
@@ -87,6 +88,10 @@ export class RoomLayer extends BaseLayer {
     this.hoveredRoomId = roomId;
   }
 
+  setRenderStyle(style: 'wireframe' | 'hidden-line' | 'solid' | 'realistic'): void {
+    this.renderStyle = style;
+  }
+
   render(ctx: CanvasRenderingContext2D): void {
     if (!this.visible) return;
 
@@ -113,7 +118,7 @@ export class RoomLayer extends BaseLayer {
 
     if (roomPoints.length < 3) return;
 
-    // Determine fill style
+    // Determine fill style based on render mode
     let fillStyle: string | CanvasPattern = this.config.fillColor;
     let fillOpacity = this.config.fillOpacity;
 
@@ -123,16 +128,33 @@ export class RoomLayer extends BaseLayer {
     } else if (isSelected) {
       fillStyle = this.config.selectedFillColor;
       fillOpacity = 0.4;
-    } else if (this.woodPattern) {
-      // Use wood pattern for normal rooms
-      fillStyle = this.woodPattern;
-      fillOpacity = 1.0;
+    } else {
+      // Apply render style for normal rooms
+      switch (this.renderStyle) {
+        case 'realistic':
+          if (this.woodPattern) {
+            fillStyle = this.woodPattern;
+            fillOpacity = 1.0;
+          }
+          break;
+        case 'solid':
+          fillStyle = this.config.fillColor;
+          fillOpacity = this.config.fillOpacity;
+          break;
+        case 'hidden-line':
+          const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+          fillStyle = isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)';
+          fillOpacity = 1.0;
+          break;
+        case 'wireframe':
+          // No fill for wireframe mode
+          fillOpacity = 0;
+          break;
+      }
     }
 
-    // Draw polygon fill
+    // Draw polygon
     ctx.save();
-    ctx.fillStyle = fillStyle;
-    ctx.globalAlpha = fillOpacity;
 
     ctx.beginPath();
     ctx.moveTo(roomPoints[0].x, roomPoints[0].y);
@@ -140,12 +162,18 @@ export class RoomLayer extends BaseLayer {
       ctx.lineTo(roomPoints[i].x, roomPoints[i].y);
     }
     ctx.closePath();
-    ctx.fill();
 
-    // Draw polygon stroke
+    // Fill (if not wireframe)
+    if (this.renderStyle !== 'wireframe' || isHovered || isSelected) {
+      ctx.fillStyle = fillStyle;
+      ctx.globalAlpha = fillOpacity;
+      ctx.fill();
+    }
+
+    // Stroke
     ctx.globalAlpha = 1.0;
     ctx.strokeStyle = this.config.strokeColor;
-    ctx.lineWidth = this.config.strokeWidth;
+    ctx.lineWidth = this.renderStyle === 'wireframe' ? 1.5 : this.config.strokeWidth;
     ctx.stroke();
 
     ctx.restore();

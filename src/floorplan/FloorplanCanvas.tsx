@@ -44,6 +44,7 @@ interface FloorplanCanvasProps {
   backgroundImage?: HTMLImageElement | null;
   imageScale?: number;
   imageOpacity?: number;
+  renderStyle?: 'wireframe' | 'hidden-line' | 'solid' | 'realistic';
   onDimensionClick?: (wallId: string) => void;
   rulerVisible?: boolean;
   rulerStart?: { x: number; y: number } | null;
@@ -62,6 +63,7 @@ const FloorplanCanvas = ({
   backgroundImage,
   imageScale = 100,
   imageOpacity = 0.5,
+  renderStyle = 'solid',
   onDimensionClick,
   rulerVisible = false,
   rulerStart = null,
@@ -621,6 +623,18 @@ const FloorplanCanvas = ({
       sceneManager.setTool(activeTool);
     }
   }, [activeTool]);
+
+  // Update render style for layers when it changes
+  useEffect(() => {
+    const wallLayer = wallLayerRef.current;
+    const roomLayer = roomLayerRef.current;
+    if (wallLayer) {
+      wallLayer.setRenderStyle(renderStyle);
+    }
+    if (roomLayer) {
+      roomLayer.setRenderStyle(renderStyle);
+    }
+  }, [renderStyle]);
 
   // Update background image layer when props change
   useEffect(() => {

@@ -46,6 +46,7 @@ export class WallLayer extends BaseLayer {
   private selectedWallId: string | null = null;
   private camera: Camera2D | null = null;
   private dimensionHitboxes: DimensionHitbox[] = [];
+  private renderStyle: 'wireframe' | 'hidden-line' | 'solid' | 'realistic' = 'solid';
 
   // Angle guide state
   private angleGuide: { from: Point; angle: number } | null = null;
@@ -103,6 +104,10 @@ export class WallLayer extends BaseLayer {
 
   setCamera(camera: Camera2D): void {
     this.camera = camera;
+  }
+
+  setRenderStyle(style: 'wireframe' | 'hidden-line' | 'solid' | 'realistic'): void {
+    this.renderStyle = style;
   }
 
   setAngleGuide(from: Point | null, angle: number | null): void {
@@ -266,7 +271,62 @@ export class WallLayer extends BaseLayer {
     ctx.lineTo(p3.x, p3.y);
     ctx.lineTo(p4.x, p4.y);
     ctx.closePath();
-    ctx.fill();
+
+    // Render based on style
+    switch (this.renderStyle) {
+      case 'wireframe':
+        // Only outline, no fill
+        ctx.strokeStyle = this.config.wallColor;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        break;
+
+      case 'hidden-line':
+        // Fill with light color + outline
+        const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+        ctx.fillStyle = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
+        ctx.fill();
+        ctx.strokeStyle = this.config.wallColor;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        break;
+
+      case 'realistic':
+        // Gradient fill for realistic effect
+        const centerX = (p1.x + p2.x + p3.x + p4.x) / 4;
+        const centerY = (p1.y + p2.y + p3.y + p4.y) / 4;
+        const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, this.config.wallThickness / 2);
+        const baseColor = this.config.wallColor;
+        gradient.addColorStop(0, baseColor);
+        gradient.addColorStop(1, this.darkenColor(baseColor, 0.3));
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        // Subtle outline
+        ctx.strokeStyle = this.darkenColor(baseColor, 0.5);
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+        break;
+
+      case 'solid':
+      default:
+        // Standard solid fill
+        ctx.fill();
+        break;
+    }
+  }
+
+  private darkenColor(color: string, amount: number): string {
+    // Simple color darkening - works with hex colors
+    const hex = color.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+
+    const newR = Math.max(0, Math.floor(r * (1 - amount)));
+    const newG = Math.max(0, Math.floor(g * (1 - amount)));
+    const newB = Math.max(0, Math.floor(b * (1 - amount)));
+
+    return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
   }
 
   private calculateWallCorners(wall: Wall, startPoint: Point, endPoint: Point): { tl: Vector2, tr: Vector2, br: Vector2, bl: Vector2 } {
