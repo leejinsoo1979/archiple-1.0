@@ -1475,7 +1475,7 @@ const EditorPage = () => {
               <div className={styles.sunDropdown} style={{ width: '320px', maxHeight: '600px', overflowY: 'auto' }}>
                 <div className={styles.dropdownHeader}>
                   <span>Rendering Settings</span>
-                  <button onClick={() => setRenderSettingsOpen(false)} className={styles.closeBtn}>×</button>
+                  <button onClick={() => setRenderPanelOpen(false)} className={styles.closeBtn}>×</button>
                 </div>
                 <div className={styles.dropdownBody}>
                   {/* SSAO Radius */}

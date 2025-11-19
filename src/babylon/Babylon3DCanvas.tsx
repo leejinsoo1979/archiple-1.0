@@ -26,7 +26,6 @@ import {
   SceneLoader,
   PointerEventTypes,
   GizmoManager,
-  UtilityLayerRenderer,
   AbstractMesh,
   FollowCamera,
   DefaultRenderingPipeline,
@@ -45,8 +44,6 @@ import { EditorEvents } from '../core/events/EditorEvents';
 import {
   findConnectedWalls,
   calculateWallCorners,
-  calculateBasicWallCorners,
-  calculateSegmentCorners,
   type WallCorners,
 } from './utils/WallMiterUtils';
 import { createCSGWalls } from './utils/CSGWallBuilder';
