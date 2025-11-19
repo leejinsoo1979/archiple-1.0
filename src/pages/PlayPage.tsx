@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { db } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import Babylon3DCanvas from '../babylon/Babylon3DCanvas';
+import { VirtualJoystick } from '../ui/controls/VirtualJoystick';
 import styles from './PlayPage.module.css';
 
 const PlayPage = () => {
@@ -12,6 +13,18 @@ const PlayPage = () => {
   const [error, setError] = useState<string | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+  const joystickInput = useRef({ x: 0, y: 0 });
+
+  const handleJoystickMove = (x: number, y: number) => {
+    joystickInput.current = { x, y };
+
+    // Simulate keyboard input for Babylon camera
+    const event = new CustomEvent('joystickMove', {
+      detail: { x, y }
+    });
+    window.dispatchEvent(event);
+  };
 
   useEffect(() => {
     // Override App.css styles for full-screen experience
@@ -55,6 +68,20 @@ const PlayPage = () => {
       html.style.height = '';
       html.style.overflow = '';
     };
+  }, []);
+
+  useEffect(() => {
+    // Detect mobile device
+    const checkMobile = () => {
+      const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      const isTouchDevice = 'ontouchstart' in window;
+      const isSmallScreen = window.innerWidth <= 768;
+      setIsMobile(isMobileDevice || (isTouchDevice && isSmallScreen));
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   useEffect(() => {
@@ -155,7 +182,7 @@ const PlayPage = () => {
       </div>
 
       {/* Floating Controls Info - Only show in Play Mode */}
-      {isPlaying && (
+      {isPlaying && !isMobile && (
         <div className={styles.controlsOverlay}>
           <div className={styles.controlsInfo}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -166,6 +193,25 @@ const PlayPage = () => {
             <span>WASD to move • Mouse to look • Double-click floor to teleport • Click doors/windows to interact</span>
           </div>
         </div>
+      )}
+
+      {/* Mobile Controls Info */}
+      {isPlaying && isMobile && (
+        <div className={styles.controlsOverlay}>
+          <div className={styles.controlsInfo}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
+            <span>Joystick to move • Swipe to look • Tap floor to teleport • Tap doors/windows to interact</span>
+          </div>
+        </div>
+      )}
+
+      {/* Virtual Joystick - Mobile Only */}
+      {isMobile && isPlaying && (
+        <VirtualJoystick onMove={handleJoystickMove} />
       )}
     </div>
   );

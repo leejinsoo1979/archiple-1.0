@@ -1,0 +1,66 @@
+.container {
+  position: fixed;
+  bottom: 120px;
+  left: 40px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.joystick {
+  width: 120px;
+  height: 120px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  position: relative;
+  touch-action: none;
+  user-select: none;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+}
+
+.joystick.active {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(63, 174, 122, 0.6);
+  box-shadow: 0 0 20px rgba(63, 174, 122, 0.3);
+}
+
+.stick {
+  width: 50px;
+  height: 50px;
+  background: rgba(63, 174, 122, 0.8);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin-left: -25px;
+  margin-top: -25px;
+  transition: background 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.joystick.active .stick {
+  background: rgba(63, 174, 122, 1);
+  box-shadow: 0 6px 16px rgba(63, 174, 122, 0.4);
+}
+
+.label {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Hide on desktop */
+@media (min-width: 769px) {
+  .container {
+    display: none;
+  }
+}

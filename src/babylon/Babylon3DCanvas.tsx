@@ -3321,6 +3321,40 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     cameraSettings.depthOfField,
   ]);
 
+  // Handle virtual joystick input for mobile (play mode only)
+  useEffect(() => {
+    if (!playMode) return;
+
+    const handleJoystickMove = (e: CustomEvent) => {
+      const { x, y } = e.detail;
+      const fpsCamera = fpsCameraRef.current;
+      if (!fpsCamera) return;
+
+      // Convert joystick input to camera movement
+      const speed = 0.1; // Movement speed multiplier
+
+      // Get camera's direction vectors
+      const forward = fpsCamera.getDirection(new Vector3(0, 0, 1));
+      const right = fpsCamera.getDirection(new Vector3(1, 0, 0));
+
+      // Ensure Y movement stays at camera height (no flying)
+      forward.y = 0;
+      right.y = 0;
+      forward.normalize();
+      right.normalize();
+
+      // Apply movement based on joystick input
+      // y controls forward/backward, x controls left/right
+      const movement = forward.scale(-y * speed).add(right.scale(x * speed));
+      fpsCamera.position.addInPlace(movement);
+    };
+
+    window.addEventListener('joystickMove', handleJoystickMove as EventListener);
+    return () => {
+      window.removeEventListener('joystickMove', handleJoystickMove as EventListener);
+    };
+  }, [playMode]);
+
   return (
     <div className={styles.container}>
       <canvas
