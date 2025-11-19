@@ -9,10 +9,13 @@ import { PiCubeTransparentLight } from 'react-icons/pi';
 import { eventBus } from '../core/events/EventBus';
 import { EditorEvents } from '../core/events/EditorEvents';
 import type { Light, LightType } from '../core/types/Light';
+import { CameraSettingsModal } from '../ui/modals/CameraSettingsModal';
+import { useCameraSettingsStore } from '../stores/cameraSettingsStore';
 
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 
 const EditorPage = () => {
+  const setModalOpen = useCameraSettingsStore((state) => state.setModalOpen);
   const [_activeCategory, _setActiveCategory] = useState<ToolCategory>('walls');
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
@@ -1726,6 +1729,18 @@ const EditorPage = () => {
                   </>
                 )}
               </button>
+              {playMode && (
+                <button
+                  className={styles.topBtn}
+                  onClick={() => setModalOpen(true)}
+                  title="Camera Settings"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -2669,6 +2684,9 @@ const EditorPage = () => {
         </div>
       )}
       </div>
+
+      {/* Camera Settings Modal */}
+      <CameraSettingsModal />
     </div>
   );
 };

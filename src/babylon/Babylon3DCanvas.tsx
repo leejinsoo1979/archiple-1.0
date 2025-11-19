@@ -1,4 +1,6 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useCameraSettingsStore } from '../stores/cameraSettingsStore';
+import { horizontalFovToVertical } from './utils/cameraUtils';
 import {
   Engine,
   Scene,
@@ -254,6 +256,9 @@ const Babylon3DCanvas = forwardRef<
   const gizmoManagerRef = useRef<GizmoManager | null>(null); // Store gizmo manager
   const selectedLightMeshRef = useRef<Mesh | null>(null); // Store selected light indicator mesh
   const infiniteGridRef = useRef<Mesh | null>(null); // Store infinite grid mesh
+
+  // Camera settings from Zustand store
+  const cameraSettings = useCameraSettingsStore();
 
   // Expose captureRender function via ref
   useImperativeHandle(ref, () => ({
@@ -3115,6 +3120,81 @@ const Babylon3DCanvas = forwardRef<
       console.log('[Babylon3DCanvas] Grid visibility:', showGrid);
     }
   }, [showGrid]);
+
+  // Apply camera settings in real-time (only in play mode)
+  useEffect(() => {
+    if (!playMode) return;
+
+    const fpsCamera = fpsCameraRef.current;
+    const pipeline = pipelineRef.current;
+    const engine = engineRef.current;
+    const canvas = canvasRef.current;
+
+    if (!fpsCamera || !engine || !canvas) return;
+
+    console.log('[Babylon3DCanvas] Applying camera settings:', cameraSettings);
+
+    // 1. Projection Type
+    if (cameraSettings.projectionType === 'orthographic') {
+      fpsCamera.mode = 1; // Camera.ORTHOGRAPHIC_CAMERA
+      // Auto-calculate orthographic bounds based on viewport
+      const aspectRatio = canvas.width / canvas.height;
+      const orthoSize = 10; // 10 meters view size
+      fpsCamera.orthoLeft = -orthoSize * aspectRatio;
+      fpsCamera.orthoRight = orthoSize * aspectRatio;
+      fpsCamera.orthoTop = orthoSize;
+      fpsCamera.orthoBottom = -orthoSize;
+    } else {
+      fpsCamera.mode = 0; // Camera.PERSPECTIVE_CAMERA
+    }
+
+    // 2. Field of View (Horizontal → Vertical conversion)
+    const aspectRatio = canvas.width / canvas.height;
+    const verticalFov = horizontalFovToVertical(cameraSettings.horizontalFov, aspectRatio);
+    fpsCamera.fov = verticalFov;
+
+    // 3. Exposure (only if pipeline exists)
+    if (pipeline && pipeline.imageProcessing) {
+      if (cameraSettings.autoExposure) {
+        // Auto exposure
+        pipeline.imageProcessing.toneMappingEnabled = true;
+        pipeline.imageProcessing.exposure = 1.0;
+      } else {
+        // Manual exposure
+        pipeline.imageProcessing.toneMappingEnabled = true;
+        // Map 0-100% to 0.5-1.5 exposure range
+        const exposure = 0.5 + (cameraSettings.exposure / 100);
+        pipeline.imageProcessing.exposure = exposure;
+      }
+    }
+
+      // 4. Depth of Field
+      if (cameraSettings.depthOfField > 0) {
+        pipeline.depthOfFieldEnabled = true;
+        // @ts-ignore - Babylon.js typing issue
+        if (pipeline.depthOfField) {
+          // Map 0-100% to focal length (0-200mm equivalent)
+          // @ts-ignore
+          pipeline.depthOfField.focalLength = cameraSettings.depthOfField * 2;
+          // @ts-ignore
+          pipeline.depthOfField.fStop = 1.4; // Wide aperture for more blur
+          // @ts-ignore
+          pipeline.depthOfField.focusDistance = 3000; // Focus at 3m
+        }
+      } else {
+        pipeline.depthOfFieldEnabled = false;
+      }
+    }
+
+    console.log('[Babylon3DCanvas] Camera settings applied successfully');
+  }, [
+    playMode,
+    cameraSettings.projectionType,
+    cameraSettings.horizontalFov,
+    cameraSettings.autoExposure,
+    cameraSettings.exposure,
+    cameraSettings.depthOfField,
+  ]);
 
   return (
     <div className={styles.container}>

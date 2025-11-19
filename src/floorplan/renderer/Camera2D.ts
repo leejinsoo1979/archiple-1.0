@@ -38,8 +38,9 @@ export class Camera2D {
   setSize(width: number, height: number, dpr: number = 1): void {
     this.dpr = dpr;
     // Store logical pixels in viewport (Physical / DPR)
-    this.viewport.canvasWidth = width / dpr;
-    this.viewport.canvasHeight = height / dpr;
+    // Canvas2DRenderer passes logical pixels, so we store them directly
+    this.viewport.canvasWidth = width;
+    this.viewport.canvasHeight = height;
   }
 
   /**

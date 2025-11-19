@@ -3,178 +3,167 @@ import type { Wall } from '../../core/types/Wall';
 import type { Room } from '../../core/types/Room';
 import { v4 as uuidv4 } from 'uuid';
 
-interface Graph {
-  adjacencyList: Map<string, Set<string>>;
-}
-
 /**
- * RoomDetectionService - Automatic room detection from walls
+ * RoomDetectionService - Simple cycle-based room detection
  *
  * Algorithm:
- * 1. Build graph from walls (point ID → connected point IDs)
- * 2. Find all cycles using DFS
- * 3. Validate cycles (closed, clockwise, minimum area)
- * 4. Calculate area using Shoelace formula
- * 5. Create Room objects
+ * 1. Build undirected graph from walls
+ * 2. Find all simple cycles using DFS
+ * 3. Filter by minimum area
+ * 4. Remove duplicate/nested cycles
  */
 export class RoomDetectionService {
   /**
    * Detect all rooms from walls and points
    */
   detectRooms(walls: Wall[], points: Point[]): Room[] {
-    if (walls.length < 3) return [];
+    if (walls.length < 3) {
+      console.log('[RoomDetection] Not enough walls');
+      return [];
+    }
 
     // Build point lookup map
     const pointMap = new Map<string, Point>();
     points.forEach((p) => pointMap.set(p.id, p));
 
-    // Build graph
+    // Build adjacency list
     const graph = this.buildGraph(walls);
 
-    // Find all cycles
-    const cycles = this.findAllCycles(graph);
+    console.log('[RoomDetection] Graph built with', graph.size, 'vertices');
 
-    // Convert cycles to rooms
+    // Find all cycles
+    const cycles = this.findAllCycles(graph, pointMap);
+
+    console.log('[RoomDetection] Found', cycles.length, 'raw cycles');
+
+    // Convert to rooms
     const rooms: Room[] = [];
     for (const cycle of cycles) {
-      const cyclePoints = cycle
-        .map((pointId) => pointMap.get(pointId))
-        .filter((p): p is Point => p !== undefined);
+      const cyclePoints = cycle.map(id => pointMap.get(id)!);
+      const area = Math.abs(this.calculateSignedArea(cyclePoints));
 
-      if (this.isValidRoom(cyclePoints)) {
-        const room = this.createRoom(cyclePoints, walls);
+      const MIN_AREA = 0.5; // 0.5 m²
+
+      if (area >= MIN_AREA) {
+        const room = this.createRoom(cycle, walls, area);
         rooms.push(room);
       }
     }
 
+    console.log('[RoomDetection] Created', rooms.length, 'rooms');
     return rooms;
   }
 
   /**
-   * Build adjacency list graph from walls
+   * Build adjacency list
    */
-  private buildGraph(walls: Wall[]): Graph {
-    const adjacencyList = new Map<string, Set<string>>();
+  private buildGraph(walls: Wall[]): Map<string, Set<string>> {
+    const graph = new Map<string, Set<string>>();
 
-    walls.forEach((wall) => {
-      // Add edge from start to end
-      if (!adjacencyList.has(wall.startPointId)) {
-        adjacencyList.set(wall.startPointId, new Set());
+    for (const wall of walls) {
+      if (!graph.has(wall.startPointId)) {
+        graph.set(wall.startPointId, new Set());
       }
-      adjacencyList.get(wall.startPointId)!.add(wall.endPointId);
+      if (!graph.has(wall.endPointId)) {
+        graph.set(wall.endPointId, new Set());
+      }
 
-      // Add edge from end to start (undirected graph)
-      if (!adjacencyList.has(wall.endPointId)) {
-        adjacencyList.set(wall.endPointId, new Set());
-      }
-      adjacencyList.get(wall.endPointId)!.add(wall.startPointId);
+      graph.get(wall.startPointId)!.add(wall.endPointId);
+      graph.get(wall.endPointId)!.add(wall.startPointId);
+    }
+
+    return graph;
+  }
+
+  /**
+   * Find all simple cycles using DFS
+   */
+  private findAllCycles(graph: Map<string, Set<string>>, pointMap: Map<string, Point>): string[][] {
+    const allCycles: string[][] = [];
+    const visited = new Set<string>();
+
+    for (const startNode of graph.keys()) {
+      if (visited.has(startNode)) continue;
+
+      // DFS from this node
+      this.dfs(startNode, startNode, [startNode], new Set([startNode]), graph, allCycles, visited);
+      visited.add(startNode);
+    }
+
+    // Deduplicate cycles (same set of points)
+    const unique = this.deduplicateCycles(allCycles);
+
+    // Sort by area (smallest first - these are the "minimal" rooms)
+    unique.sort((a, b) => {
+      const areaA = Math.abs(this.calculateSignedArea(a.map(id => pointMap.get(id)!)));
+      const areaB = Math.abs(this.calculateSignedArea(b.map(id => pointMap.get(id)!)));
+      return areaA - areaB;
     });
 
-    return { adjacencyList };
+    return unique;
   }
 
   /**
-   * Find all cycles in graph using DFS
+   * DFS to find cycles
    */
-  private findAllCycles(graph: Graph): string[][] {
-    const cycles: string[][] = [];
-    const visited = new Set<string>();
-    const recursionStack = new Set<string>();
+  private dfs(
+    current: string,
+    start: string,
+    path: string[],
+    pathSet: Set<string>,
+    graph: Map<string, Set<string>>,
+    allCycles: string[][],
+    globalVisited: Set<string>
+  ): void {
+    const neighbors = graph.get(current) || new Set();
 
-    const dfs = (
-      node: string,
-      parent: string | null,
-      path: string[]
-    ): void => {
-      visited.add(node);
-      recursionStack.add(node);
-      path.push(node);
-
-      const neighbors = graph.adjacencyList.get(node) || new Set();
-
-      for (const neighbor of neighbors) {
-        // Skip parent to avoid trivial back-edge
-        if (neighbor === parent) continue;
-
-        if (recursionStack.has(neighbor)) {
-          // Found a cycle
-          const cycleStart = path.indexOf(neighbor);
-          if (cycleStart !== -1) {
-            const cycle = path.slice(cycleStart);
-            // Only keep cycles with at least 3 nodes
-            if (cycle.length >= 3) {
-              // Check if this cycle is new (not a duplicate)
-              if (!this.isDuplicateCycle(cycle, cycles)) {
-                cycles.push([...cycle]);
-              }
-            }
-          }
-        } else if (!visited.has(neighbor)) {
-          dfs(neighbor, node, path);
-        }
+    for (const neighbor of neighbors) {
+      // Found a cycle back to start
+      if (neighbor === start && path.length >= 3) {
+        // Only add if we haven't seen this cycle yet
+        allCycles.push([...path]);
+        continue;
       }
 
+      // Skip if already in path (avoid revisiting)
+      if (pathSet.has(neighbor)) continue;
+
+      // Skip if globally visited (optimization)
+      if (globalVisited.has(neighbor)) continue;
+
+      // Continue DFS
+      path.push(neighbor);
+      pathSet.add(neighbor);
+      this.dfs(neighbor, start, path, pathSet, graph, allCycles, globalVisited);
       path.pop();
-      recursionStack.delete(node);
-    };
+      pathSet.delete(neighbor);
+    }
+  }
 
-    // Start DFS from each unvisited node
-    for (const node of graph.adjacencyList.keys()) {
-      if (!visited.has(node)) {
-        dfs(node, null, []);
+  /**
+   * Remove duplicate cycles
+   */
+  private deduplicateCycles(cycles: string[][]): string[][] {
+    const unique: string[][] = [];
+    const seen = new Set<string>();
+
+    for (const cycle of cycles) {
+      // Create a canonical representation (sorted)
+      const sorted = [...cycle].sort().join(',');
+
+      if (!seen.has(sorted)) {
+        seen.add(sorted);
+        unique.push(cycle);
       }
     }
 
-    return cycles;
+    return unique;
   }
 
   /**
-   * Check if cycle is duplicate (same set of points, regardless of order)
+   * Calculate signed area
    */
-  private isDuplicateCycle(cycle: string[], existingCycles: string[][]): boolean {
-    const cycleSet = new Set(cycle);
-
-    for (const existing of existingCycles) {
-      if (existing.length !== cycle.length) continue;
-
-      const existingSet = new Set(existing);
-      if (this.areSetsEqual(cycleSet, existingSet)) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  /**
-   * Check if two sets are equal
-   */
-  private areSetsEqual(a: Set<string>, b: Set<string>): boolean {
-    if (a.size !== b.size) return false;
-    for (const item of a) {
-      if (!b.has(item)) return false;
-    }
-    return true;
-  }
-
-  /**
-   * Validate if cycle forms a valid room
-   */
-  private isValidRoom(points: Point[]): boolean {
-    if (points.length < 3) return false;
-
-    // Check minimum area (e.g., > 1 square meter)
-    const area = this.calculateArea(points);
-    const MIN_AREA = 1.0; // 1 m²
-
-    return area >= MIN_AREA;
-  }
-
-  /**
-   * Calculate polygon area using Shoelace formula
-   * Assumes points are in order (clockwise or counter-clockwise)
-   */
-  calculateArea(points: Point[]): number {
+  private calculateSignedArea(points: Point[]): number {
     if (points.length < 3) return 0;
 
     let area = 0;
@@ -186,9 +175,9 @@ export class RoomDetectionService {
       area -= points[j].x * points[i].y;
     }
 
-    area = Math.abs(area) / 2;
+    area = area / 2;
 
-    // Convert from pixels² to m² (1 pixel = 1mm ⇒ 1000 pixels = 1 meter)
+    // Convert from mm² to m²
     const PIXELS_PER_METER = 1000;
     area = area / (PIXELS_PER_METER * PIXELS_PER_METER);
 
@@ -196,30 +185,34 @@ export class RoomDetectionService {
   }
 
   /**
-   * Create Room object from cycle
+   * Create room from cycle
    */
-  private createRoom(points: Point[], walls: Wall[]): Room {
-    const pointIds = points.map((p) => p.id);
+  private createRoom(pointIds: string[], walls: Wall[], area: number): Room {
     const pointIdSet = new Set(pointIds);
 
-    // Find walls that connect these points
-    const roomWalls = walls
-      .filter(
-        (wall) =>
-          pointIdSet.has(wall.startPointId) && pointIdSet.has(wall.endPointId)
-      )
-      .map((wall) => wall.id);
+    // Find walls connecting consecutive points in the cycle
+    const wallIds: string[] = [];
+    for (let i = 0; i < pointIds.length; i++) {
+      const curr = pointIds[i];
+      const next = pointIds[(i + 1) % pointIds.length];
 
-    const area = this.calculateArea(points);
+      const wall = walls.find(
+        (w) =>
+          (w.startPointId === curr && w.endPointId === next) ||
+          (w.startPointId === next && w.endPointId === curr)
+      );
 
-    const room: Room = {
+      if (wall) {
+        wallIds.push(wall.id);
+      }
+    }
+
+    return {
       id: uuidv4(),
       name: `Room ${Math.floor(Math.random() * 1000)}`,
       points: pointIds,
-      walls: roomWalls,
-      area,
+      walls: wallIds,
+      area: Math.abs(area),
     };
-
-    return room;
   }
 }
