@@ -1,3 +1,15 @@
+/* PlayPage UI - Themed & Modernized */
+
+/* ===== THEME VARIABLES ===== */
+:root {
+  --theme-color: #3fae7a;
+  --bg-primary: #ffffff;
+  --bg-secondary: #e8e8e8;
+  --text-primary: #333;
+  --text-secondary: #666;
+  --danger-color: #e74c3c;
+}
+
 .container {
   width: 100vw;
   height: 100vh;
@@ -10,6 +22,7 @@
   overflow: hidden;
   margin: 0;
   padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 /* Canvas Container - Full Screen */
@@ -21,41 +34,123 @@
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: 0;
 }
 
-/* Floating Controls Overlay */
-.controlsOverlay {
+/* Play Control Dock */
+.playControl {
   position: fixed;
-  bottom: 24px;
+  bottom: 40px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.playBtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 28px;
+  background: rgba(63, 174, 122, 0.9);
+  /* Theme color with slight transparency */
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 100px;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    0 4px 8px rgba(63, 174, 122, 0.3),
+    inset 0 1px 1px rgba(255, 255, 255, 0.2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.playBtn:hover {
+  transform: translateY(-4px) scale(1.02);
+  background: rgba(63, 174, 122, 1);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.3),
+    0 6px 12px rgba(63, 174, 122, 0.4),
+    inset 0 1px 1px rgba(255, 255, 255, 0.3);
+}
+
+.playBtn:active {
+  transform: translateY(-1px) scale(0.98);
+}
+
+.playBtn svg {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+/* Stop Button Variant */
+.stopBtn {
+  background: rgba(231, 76, 60, 0.9);
+  /* Danger color */
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    0 4px 8px rgba(231, 76, 60, 0.3),
+    inset 0 1px 1px rgba(255, 255, 255, 0.2);
+}
+
+.stopBtn:hover {
+  background: rgba(231, 76, 60, 1);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.3),
+    0 6px 12px rgba(231, 76, 60, 0.4),
+    inset 0 1px 1px rgba(255, 255, 255, 0.3);
+}
+
+/* Floating Controls Info */
+.controlsOverlay {
+  position: fixed;
+  bottom: 110px;
+  /* Positioned above the play button */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
   pointer-events: none;
+  animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .controlsInfo {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  background: rgba(26, 26, 26, 0.9);
-  border: 1px solid rgba(52, 152, 219, 0.3);
-  border-radius: 8px;
-  color: #3498db;
+  gap: 10px;
+  padding: 10px 20px;
+  background: rgba(20, 20, 20, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50px;
+  color: rgba(255, 255, 255, 0.9);
   font-size: 13px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  animation: fadeIn 0.3s ease-out;
+  font-weight: 500;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+
+.controlsInfo svg {
+  color: var(--theme-color);
+  opacity: 0.9;
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translate(-50%, 20px);
   }
+
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate(-50%, 0);
   }
 }
 
@@ -67,16 +162,17 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: 24px;
+  background: #1a1a1a;
 }
 
 .spinner {
-  width: 60px;
-  height: 60px;
-  border: 6px solid rgba(255, 255, 255, 0.1);
-  border-top-color: #3498db;
+  width: 64px;
+  height: 64px;
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--theme-color);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: spin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 @keyframes spin {
@@ -87,9 +183,10 @@
 
 .loadingText {
   margin: 0;
-  color: #ffffff;
+  color: rgba(255, 255, 255, 0.8);
   font-size: 16px;
   font-weight: 500;
+  letter-spacing: 0.5px;
 }
 
 /* Error State */
@@ -100,13 +197,15 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: 24px;
   padding: 40px;
   text-align: center;
+  background: #1a1a1a;
 }
 
 .error svg {
-  color: #e74c3c;
+  color: var(--danger-color);
+  filter: drop-shadow(0 4px 12px rgba(231, 76, 60, 0.3));
 }
 
 .errorTitle {
@@ -114,75 +213,33 @@
   color: #ffffff;
   font-size: 32px;
   font-weight: 700;
+  letter-spacing: -0.5px;
 }
 
 .errorMessage {
   margin: 0;
-  color: #999;
+  color: rgba(255, 255, 255, 0.6);
   font-size: 16px;
-  max-width: 500px;
+  max-width: 400px;
   line-height: 1.6;
 }
 
 .homeBtn {
-  margin-top: 12px;
+  margin-top: 16px;
   padding: 12px 32px;
-  background: #3498db;
+  background: var(--theme-color);
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   color: #ffffff;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(63, 174, 122, 0.3);
 }
 
 .homeBtn:hover {
-  background: #2980b9;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
-}
-
-/* Play Control Button */
-.playControl {
-  position: fixed;
-  bottom: 80px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1000;
-  pointer-events: auto;
-}
-
-.playBtn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 24px;
-  background: #3498db;
-  border: none;
-  border-radius: 30px;
-  color: white;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.playBtn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
-  background: #2980b9;
-}
-
-.playBtn:active {
-  transform: translateY(0);
-}
-
-.stopBtn {
-  background: #e74c3c;
-}
-
-.stopBtn:hover {
-  background: #c0392b;
+  background: #359e6e;
+  box-shadow: 0 6px 16px rgba(63, 174, 122, 0.4);
 }

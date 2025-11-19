@@ -58,7 +58,7 @@ if (typeof window !== 'undefined') {
 (PolygonMeshBuilder as any).earcut = earcut;
 
 interface Babylon3DCanvasProps {
-  floorplanData?: { points: any[]; walls: any[]; rooms: any[]; doors?: any[]; floorplan?: any } | null;
+  floorplanData?: { points: any[]; walls: any[]; rooms: any[]; doors?: any[]; windows?: any[]; floorplan?: any } | null;
   visible?: boolean;
   sunSettings?: {
     intensity: number;
@@ -1318,7 +1318,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     wallMaterial.metallic = 0.0;
     wallMaterial.roughness = 0.6;
     wallMaterial.environmentIntensity = 0.7;
-    wallMaterial.useVertexColor = false; // 모든 벽 세그먼트 동일한 색상
 
     // Create floor material with real wood texture
     const floorMaterial = new PBRMaterial('floorMat_2d', scene);
@@ -1375,7 +1374,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       wallMaterial.roughness = 0.9;
       wallMaterial.metallic = 0.0;
 
-      csgWalls.forEach((wallMesh, index) => {
+      csgWalls.forEach((wallMesh) => {
         wallMesh.material = wallMaterial;
         wallMesh.receiveShadows = true;
 
@@ -2540,30 +2539,35 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         pipelineRef.current = pipeline;
 
         // Enable SSAO (Screen Space Ambient Occlusion) for realistic shadows
-        pipeline.ssaoEnabled = true;
-        if (pipeline.ssao2) {
-          pipeline.ssao2.radius = renderSettings?.ssaoRadius ?? 1.5;
-          pipeline.ssao2.totalStrength = renderSettings?.ssaoStrength ?? 2.0;
-          pipeline.ssao2.expensiveBlur = true;
-          pipeline.ssao2.samples = 32;
-          pipeline.ssao2.maxZ = 250;
+        const pipelineAny = pipeline as any;
+        if (pipelineAny.ssaoEnabled !== undefined) {
+          pipelineAny.ssaoEnabled = true;
+        }
+        if (pipelineAny.ssao2) {
+          pipelineAny.ssao2.radius = renderSettings?.ssaoRadius ?? 1.5;
+          pipelineAny.ssao2.totalStrength = renderSettings?.ssaoStrength ?? 2.0;
+          pipelineAny.ssao2.expensiveBlur = true;
+          pipelineAny.ssao2.samples = 32;
+          pipelineAny.ssao2.maxZ = 250;
         }
 
         // Enable Screen Space Reflections
-        pipeline.screenSpaceReflectionsEnabled = true;
-        if (pipeline.screenSpaceReflections) {
-          pipeline.screenSpaceReflections.strength = renderSettings?.ssrStrength ?? 0.8;
-          pipeline.screenSpaceReflections.reflectionSpecularFalloffExponent = 3;
-          pipeline.screenSpaceReflections.threshold = 0.5;
-          pipeline.screenSpaceReflections.roughnessFactor = 0.1;
+        if (pipelineAny.screenSpaceReflectionsEnabled !== undefined) {
+          pipelineAny.screenSpaceReflectionsEnabled = true;
+        }
+        if (pipelineAny.screenSpaceReflections) {
+          pipelineAny.screenSpaceReflections.strength = renderSettings?.ssrStrength ?? 0.8;
+          pipelineAny.screenSpaceReflections.reflectionSpecularFalloffExponent = 3;
+          pipelineAny.screenSpaceReflections.threshold = 0.5;
+          pipelineAny.screenSpaceReflections.roughnessFactor = 0.1;
         }
 
         // Enable Bloom for bright highlights
         pipeline.bloomEnabled = true;
-        if (pipeline.bloom) {
-          pipeline.bloom.threshold = renderSettings?.bloomThreshold ?? 0.6;
-          pipeline.bloom.weight = renderSettings?.bloomWeight ?? 0.5;
-          pipeline.bloom.kernel = 64;
+        if (pipelineAny.bloom) {
+          pipelineAny.bloom.threshold = renderSettings?.bloomThreshold ?? 0.6;
+          pipelineAny.bloom.weight = renderSettings?.bloomWeight ?? 0.5;
+          pipelineAny.bloom.kernel = 64;
         }
 
         // Enable Depth of Field for camera focus effect
@@ -2635,7 +2639,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
       // Upgrade shadow quality
       if (sunLight) {
-        const shadowGen = sunLight.getShadowGenerator();
+        const shadowGen = sunLight.getShadowGenerator() as ShadowGenerator | null;
         if (shadowGen) {
           shadowGen.mapSize = 4096; // Increase from 2048 to 4096
           shadowGen.filteringQuality = ShadowGenerator.QUALITY_HIGH;
