@@ -55,11 +55,32 @@
   gap: 16px;
 }
 
-/* Logo SVG with theme color */
-.headerLogo {
+/* Original logo with theme color filter */
+.logoWrapper {
+  position: relative;
   height: 36px;
+  display: flex;
+  align-items: center;
+}
+
+.headerLogo {
+  height: 100%;
   width: auto;
   display: block;
+  filter: brightness(0) saturate(100%);
+  position: relative;
+}
+
+.logoWrapper::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--theme-color);
+  mix-blend-mode: screen;
+  pointer-events: none;
 }
 
 .headerCenter {
