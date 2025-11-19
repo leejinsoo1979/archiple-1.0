@@ -251,6 +251,7 @@ const FloorplanCanvas = ({
       // Update layer data
       wallLayer.setWalls(walls);
       wallLayer.setPoints(points);
+      wallLayer.setRooms(rooms);
       wallLayer.setDoors(doors);
 
       pointLayer.setPoints(points);
@@ -305,6 +306,7 @@ const FloorplanCanvas = ({
 
       wallLayer.setWalls(walls);
       wallLayer.setPoints(points);
+      wallLayer.setRooms(rooms);
       pointLayer.setPoints(points);
       roomLayer.setRooms(rooms);
       roomLayer.setPoints(points);

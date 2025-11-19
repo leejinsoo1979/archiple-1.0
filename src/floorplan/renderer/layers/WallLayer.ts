@@ -2,6 +2,7 @@ import { BaseLayer } from './Layer';
 import type { Wall } from '../../../core/types/Wall';
 import type { Point } from '../../../core/types/Point';
 import type { Door } from '../../../core/types/Door';
+import type { Room } from '../../../core/types/Room';
 import type { Camera2D } from '../Camera2D';
 import { Vector2 } from '../../../core/math/Vector2';
 
@@ -38,6 +39,7 @@ interface DimensionHitbox {
 export class WallLayer extends BaseLayer {
   private walls: Wall[] = [];
   private points: Map<string, Point> = new Map();
+  private rooms: Room[] = [];
   private doors: Door[] = [];
   private previewWall: { start: Point; end: Point } | null = null;
   private hoveredWallId: string | null = null;
@@ -73,6 +75,10 @@ export class WallLayer extends BaseLayer {
   setPoints(points: Point[]): void {
     this.points.clear();
     points.forEach((p) => this.points.set(p.id, p));
+  }
+
+  setRooms(rooms: Room[]): void {
+    this.rooms = rooms;
   }
 
   setDoors(doors: Door[]): void {
@@ -452,6 +458,7 @@ export class WallLayer extends BaseLayer {
 
   /**
    * Render wall dimension label in CAD style with extension lines and arrows
+   * Dimensions are ALWAYS placed OUTSIDE the room space
    */
   private renderWallDimension(ctx: CanvasRenderingContext2D, wall: Wall): void {
     if (!this.camera) return;
@@ -472,9 +479,52 @@ export class WallLayer extends BaseLayer {
     const offsetDistanceMm = 600; // 600mm offset for dimension line from wall surface
     const extensionOverhang = 100; // Extension line extends 100mm beyond dimension line
 
-    // Calculate perpendicular offset direction (to the left of the wall direction)
-    const perpX = -Math.sin(angle);
-    const perpY = Math.cos(angle);
+    // Calculate perpendicular offset direction
+    // Find which room this wall belongs to and place dimension OUTSIDE the room
+    let perpX = -Math.sin(angle); // Default: left side
+    let perpY = Math.cos(angle);
+
+    // Find the room containing this wall
+    const parentRoom = this.rooms.find(room => room.walls.includes(wall.id));
+
+    if (parentRoom && parentRoom.points.length > 0) {
+      // Calculate room centroid
+      let centerX = 0;
+      let centerY = 0;
+      parentRoom.points.forEach(pointId => {
+        const point = this.points.get(pointId);
+        if (point) {
+          centerX += point.x;
+          centerY += point.y;
+        }
+      });
+      centerX /= parentRoom.points.length;
+      centerY /= parentRoom.points.length;
+
+      // Calculate wall midpoint
+      const wallMidX = (startPoint.x + endPoint.x) / 2;
+      const wallMidY = (startPoint.y + endPoint.y) / 2;
+
+      // Vector from room center to wall midpoint
+      const toWallX = wallMidX - centerX;
+      const toWallY = wallMidY - centerY;
+
+      // Two possible perpendicular directions
+      const perp1X = -Math.sin(angle);
+      const perp1Y = Math.cos(angle);
+      const perp2X = Math.sin(angle);
+      const perp2Y = -Math.cos(angle);
+
+      // Choose the direction that points AWAY from room center
+      // Dot product with toWall vector: positive means same direction (away from center)
+      const dot1 = perp1X * toWallX + perp1Y * toWallY;
+      const dot2 = perp2X * toWallX + perp2Y * toWallY;
+
+      if (dot2 > dot1) {
+        perpX = perp2X;
+        perpY = perp2Y;
+      }
+    }
 
     // Start extension lines from wall surface (center + half thickness)
     const surfaceOffset = wallHalfThickness + extensionGap;
