@@ -415,6 +415,7 @@ const Babylon3DCanvas = forwardRef<
         new Vector3(0, DEFAULT_CAMERA_HEIGHT, 0),
         scene
       );
+      fpsCamera.fov = 1.3; // 75 degrees (default 0.8 = 45 degrees is too narrow)
       fpsCamera.speed = 0.3; // Movement speed
       fpsCamera.angularSensibility = 2000; // Mouse sensitivity
 
@@ -1012,7 +1013,8 @@ const Babylon3DCanvas = forwardRef<
     doorLeaf.rotation.y = 0;
     doorLeaf.metadata = {
       isOpen: false,
-      swing: swing // 열림방향 저장
+      swing: swing, // 열림방향 저장
+      hotspot: hotspot // hotspot 메쉬 참조 저장
     };
 
     console.log('[Babylon3DCanvas] Created door:', name, 'at position', doorCenter3D);
@@ -1207,7 +1209,8 @@ const Babylon3DCanvas = forwardRef<
     slidingPane.metadata = {
       isOpen: false,
       closedPosX: (width / 4 + FRAME_WIDTH * 0.125) * MM_TO_METERS,
-      openPosX: -(width / 4 + FRAME_WIDTH * 0.125) * MM_TO_METERS // 왼쪽으로 슬라이딩
+      openPosX: -(width / 4 + FRAME_WIDTH * 0.125) * MM_TO_METERS, // 왼쪽으로 슬라이딩
+      hotspot: hotspot // hotspot 메쉬 참조 저장
     };
 
     console.log('[Babylon3DCanvas] Created sliding window:', name, 'at position', windowCenter3D);
@@ -1699,10 +1702,10 @@ const Babylon3DCanvas = forwardRef<
 
       const pickResult = scene.pick(evt.offsetX, evt.offsetY);
 
-      // Hide all hotspots first
+      // Hide all hotspots first (but keep them visible in play mode)
       scene.meshes.forEach((mesh) => {
         if (mesh.name.includes('_hotspot') && mesh.material) {
-          (mesh.material as PBRMaterial).alpha = 0;
+          (mesh.material as PBRMaterial).alpha = playMode ? 0.6 : 0;
         }
       });
 
@@ -1723,11 +1726,11 @@ const Babylon3DCanvas = forwardRef<
             current = current.parent;
           }
 
-          // Show hotspot
+          // Show hotspot (brighter on hover, always visible in play mode)
           if (doorLeaf && doorLeaf.metadata && doorLeaf.metadata.hotspot) {
             const hotspot = doorLeaf.metadata.hotspot as Mesh;
             if (hotspot.material) {
-              (hotspot.material as PBRMaterial).alpha = 0.8; // Show hotspot
+              (hotspot.material as PBRMaterial).alpha = playMode ? 1.0 : 0.8; // Brighter on hover in play mode
             }
           }
         }
@@ -1745,11 +1748,11 @@ const Babylon3DCanvas = forwardRef<
             current = current.parent;
           }
 
-          // Show hotspot
+          // Show hotspot (brighter on hover, always visible in play mode)
           if (slidingPane && slidingPane.metadata && slidingPane.metadata.hotspot) {
             const hotspot = slidingPane.metadata.hotspot as Mesh;
             if (hotspot.material) {
-              (hotspot.material as PBRMaterial).alpha = 0.8; // Show hotspot
+              (hotspot.material as PBRMaterial).alpha = playMode ? 1.0 : 0.8; // Brighter on hover in play mode
             }
           }
         }
