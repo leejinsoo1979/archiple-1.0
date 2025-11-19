@@ -27,8 +27,8 @@ export class GridLayer extends BaseLayer {
     this.config = {
       gridSize: config.gridSize,
       majorGridSize: config.majorGridSize || config.gridSize * 5,
-      minorColor: config.minorColor || '#b0b0b0',
-      majorColor: config.majorColor || '#808080',
+      minorColor: config.minorColor || '#888888',
+      majorColor: config.majorColor || '#606060',
       backgroundColor: config.backgroundColor || '#ffffff',
     };
   }
@@ -70,7 +70,7 @@ export class GridLayer extends BaseLayer {
 
     // Constant high opacity - no fade with zoom
     // Grid should always be clearly visible at any zoom level
-    const minorOpacity = 0.5; // 50% for minor grid (subtle but visible)
+    const minorOpacity = 0.8; // 80% for minor grid (clearly visible)
     const majorOpacity = 1.0; // 100% for major grid (always clear)
 
     // Draw minor grid (10cm) - lighter color with moderate opacity
