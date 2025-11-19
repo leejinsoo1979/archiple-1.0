@@ -166,12 +166,15 @@ export class WallLayer extends BaseLayer {
     // Calculate wall corners (mitered or butt)
     const corners = this.calculateWallCorners(wall, startPoint, endPoint);
 
-    // Determine color
-    let color = this.config.wallColor;
+    // Check current theme for color selection
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+
+    // Determine color - 다크모드 대응
+    let color = isDarkMode ? '#E0E0E0' : this.config.wallColor;
     if (isSelected) {
-      color = '#3498db'; // Blue for selected
+      color = isDarkMode ? '#64B5F6' : '#3498db'; // Blue for selected
     } else if (isHovered) {
-      color = '#e74c3c'; // Red for hovered
+      color = isDarkMode ? '#EF5350' : '#e74c3c'; // Red for hovered
     }
 
     ctx.fillStyle = color;
@@ -408,7 +411,9 @@ export class WallLayer extends BaseLayer {
     const p3 = e.subtract(normal.multiply(halfThickness));
     const p4 = s.subtract(normal.multiply(halfThickness));
 
-    ctx.fillStyle = this.config.wallColor;
+    // Check current theme for color selection - 다크모드 대응
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+    ctx.fillStyle = isDarkMode ? '#E0E0E0' : this.config.wallColor;
     ctx.globalAlpha = 0.5;
 
     ctx.beginPath();

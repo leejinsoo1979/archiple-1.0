@@ -69,9 +69,12 @@ export class GridLayer extends BaseLayer {
     const viewRight = (this.width - transform.e) * invZoom;
     const viewBottom = (this.height - transform.f) * invZoom;
 
-    // Fill background - FULLY OPAQUE
+    // Check current theme for color selection
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+
+    // Fill background - FULLY OPAQUE, 다크모드 대응
     const margin = Math.max(this.width, this.height) * invZoom;
-    ctx.fillStyle = this.config.backgroundColor;
+    ctx.fillStyle = isDarkMode ? '#1e1e1e' : this.config.backgroundColor;
     ctx.fillRect(viewLeft - margin, viewTop - margin, (viewRight - viewLeft) + margin * 2, (viewBottom - viewTop) + margin * 2);
 
     // Constant high opacity - no fade with zoom
@@ -79,11 +82,15 @@ export class GridLayer extends BaseLayer {
     const minorOpacity = 0.8; // 80% for minor grid (clearly visible)
     const majorOpacity = 1.0; // 100% for major grid (always clear)
 
+    // Theme-aware grid colors
+    const minorColor = isDarkMode ? '#555555' : this.config.minorColor;
+    const majorColor = isDarkMode ? '#707070' : this.config.majorColor;
+
     // Draw minor grid (10cm) - lighter color with moderate opacity
-    this.drawGrid(ctx, this.config.gridSize, this.config.minorColor, 1, viewLeft, viewTop, viewRight, viewBottom, minorOpacity);
+    this.drawGrid(ctx, this.config.gridSize, minorColor, 1, viewLeft, viewTop, viewRight, viewBottom, minorOpacity);
 
     // Draw major grid (1m) - darker color with full opacity
-    this.drawGrid(ctx, this.config.majorGridSize, this.config.majorColor, 2, viewLeft, viewTop, viewRight, viewBottom, majorOpacity);
+    this.drawGrid(ctx, this.config.majorGridSize, majorColor, 2, viewLeft, viewTop, viewRight, viewBottom, majorOpacity);
 
     this.resetOpacity(ctx);
   }

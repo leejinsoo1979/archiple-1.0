@@ -106,8 +106,8 @@ export class PointLayer extends BaseLayer {
     }
 
     ctx.save();
-    // Reset transform to screen space
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // Reset transform to screen space (with DPI scaling)
+    this.camera.applyScreenTransform(ctx);
 
     // Draw point
     ctx.fillStyle = color;
@@ -115,8 +115,9 @@ export class PointLayer extends BaseLayer {
     ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
     ctx.fill();
 
-    // Draw outline
-    ctx.strokeStyle = '#ffffff';
+    // Draw outline - 다크모드 대응
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+    ctx.strokeStyle = isDarkMode ? '#1e1e1e' : '#ffffff';
     ctx.lineWidth = 2;
     ctx.stroke();
 
@@ -130,8 +131,8 @@ export class PointLayer extends BaseLayer {
     const screenPos = this.camera.worldToScreen(point.x, point.y);
 
     ctx.save();
-    // Reset transform to screen space
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // Reset transform to screen space (with DPI scaling)
+    this.camera.applyScreenTransform(ctx);
 
     // Outer ring (pulsing effect)
     ctx.strokeStyle = this.config.snapIndicatorColor;
