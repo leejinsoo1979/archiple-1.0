@@ -47,6 +47,7 @@ import {
   calculateSegmentCorners,
   type WallCorners,
 } from './utils/WallMiterUtils';
+import { createCSGWalls } from './utils/CSGWallBuilder';
 import type { Wall } from '../core/types/Wall';
 import type { Light, LightType } from '../core/types/Light';
 import { createDefaultLight } from '../core/types/Light';
@@ -1775,7 +1776,7 @@ const Babylon3DCanvas = forwardRef<
 
         // Check if clicked on door or hotspot
         if (picked.name.includes('door_') || picked.name.includes('_hotspot') ||
-            picked.name.includes('_panel') || picked.name.includes('_handle')) {
+          picked.name.includes('_panel') || picked.name.includes('_handle')) {
 
           // Find parent door leaf
           let doorLeaf: Mesh | null = null;
@@ -1828,7 +1829,7 @@ const Babylon3DCanvas = forwardRef<
 
         // Check if clicked on window or hotspot
         if (picked.name.includes('window_') || picked.name.includes('_hotspot') ||
-            picked.name.includes('_glassPane') || picked.name.includes('_handle')) {
+          picked.name.includes('_glassPane') || picked.name.includes('_handle')) {
 
           // Find parent sliding pane
           let slidingPane: Mesh | null = null;
@@ -2334,7 +2335,7 @@ const Babylon3DCanvas = forwardRef<
 
             // Check if clicked on floor (mesh name contains 'floor' or 'room')
             if (pickedMesh.name.toLowerCase().includes('floor') ||
-                pickedMesh.name.toLowerCase().includes('room')) {
+              pickedMesh.name.toLowerCase().includes('room')) {
 
               const clickPosition = pickResult.pickedPoint;
               if (clickPosition && loadedModelRef.current) {
@@ -2924,9 +2925,8 @@ const Babylon3DCanvas = forwardRef<
       if (!mesh.material) return;
 
       const material = mesh.material;
-      const meshNameLower = mesh.name.toLowerCase();
-      const isFloor = meshNameLower.includes('floor') || meshNameLower.includes('room');
-      const isWall = meshNameLower.includes('wall');
+      const isFloor = mesh.name.startsWith('floor_');
+      const isWall = mesh.name.startsWith('wall');
 
       console.log(`[Babylon3DCanvas] Processing mesh: ${mesh.name}, isFloor: ${isFloor}, isWall: ${isWall}`);
 
