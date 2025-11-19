@@ -21,30 +21,59 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, floor
     setExportType('link');
 
     try {
+      // Use floorplan data or create empty default structure
+      const dataToExport = floorplanData || {
+        walls: [],
+        points: [],
+        rooms: [],
+        doors: [],
+        windows: [],
+      };
+
+      console.log('[Export] Exporting data:', dataToExport);
+
       // Create a unique ID for this project
       const projectId = `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
       // Store the floorplan data in localStorage with the project ID
       const exportData = {
-        floorplanData,
+        floorplanData: dataToExport,
         timestamp: new Date().toISOString(),
         mode: 'play', // Always export in play mode
       };
 
-      localStorage.setItem(`archiple_export_${projectId}`, JSON.stringify(exportData));
+      try {
+        const jsonData = JSON.stringify(exportData);
+        console.log('[Export] Saving to localStorage, size:', jsonData.length, 'bytes');
+        localStorage.setItem(`archiple_export_${projectId}`, jsonData);
+        console.log('[Export] Successfully saved to localStorage');
+      } catch (storageError) {
+        console.error('[Export] Storage error:', storageError);
+        throw new Error('Failed to save project data. Storage might be full.');
+      }
 
       // Create the shareable URL
       const baseUrl = window.location.origin;
       const shareUrl = `${baseUrl}/play/${projectId}`;
 
+      console.log('[Export] Generated share URL:', shareUrl);
+
       setExportedUrl(shareUrl);
       setExportUrl(shareUrl);
 
       // Copy to clipboard
-      await navigator.clipboard.writeText(shareUrl);
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        console.log('[Export] Copied to clipboard');
+      } catch (clipboardError) {
+        console.warn('Clipboard copy failed, but export succeeded:', clipboardError);
+        // Don't throw - export succeeded even if clipboard failed
+      }
     } catch (error) {
       console.error('Export failed:', error);
-      alert('Export failed. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Export failed. Please try again.';
+      alert(errorMessage);
+      setExportedUrl(null);
     } finally {
       setLoading(false);
       setExporting(false);
