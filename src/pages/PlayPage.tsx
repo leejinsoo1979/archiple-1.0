@@ -69,33 +69,25 @@ const PlayPage = () => {
 
   return (
     <div className={styles.container}>
-      {/* Header */}
-      <header className={styles.header}>
-        <div className={styles.logo}>
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
-          </svg>
-          <span className={styles.logoText}>Archiple</span>
-        </div>
-        <div className={styles.controls}>
-          <div className={styles.controlsInfo}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="16" x2="12" y2="12" />
-              <line x1="12" y1="8" x2="12.01" y2="8" />
-            </svg>
-            <span>WASD to move • Mouse to look • Click doors/windows to interact</span>
-          </div>
-        </div>
-      </header>
-
-      {/* 3D Canvas */}
+      {/* 3D Canvas - Full Screen */}
       <div className={styles.canvasContainer}>
         <Babylon3DCanvas
           floorplanData={floorplanData}
           visible={true}
           playMode={true}
         />
+      </div>
+
+      {/* Floating Controls Info */}
+      <div className={styles.controlsOverlay}>
+        <div className={styles.controlsInfo}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+          <span>WASD to move • Mouse to look • Click doors/windows to interact</span>
+        </div>
       </div>
     </div>
   );

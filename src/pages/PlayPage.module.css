@@ -2,60 +2,55 @@
   width: 100vw;
   height: 100vh;
   background: #1a1a1a;
-  display: flex;
-  flex-direction: column;
+  position: relative;
   overflow: hidden;
 }
 
-/* Header */
-.header {
-  height: 60px;
-  background: rgba(26, 26, 26, 0.95);
-  border-bottom: 1px solid #2a2a2a;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  z-index: 100;
-  backdrop-filter: blur(10px);
+/* Canvas Container - Full Screen */
+.canvasContainer {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: #ffffff;
-}
-
-.logoText {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-}
-
-.controls {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+/* Floating Controls Overlay */
+.controlsOverlay {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  pointer-events: none;
 }
 
 .controlsInfo {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
-  background: rgba(52, 152, 219, 0.1);
+  padding: 12px 20px;
+  background: rgba(26, 26, 26, 0.9);
   border: 1px solid rgba(52, 152, 219, 0.3);
-  border-radius: 6px;
+  border-radius: 8px;
   color: #3498db;
   font-size: 13px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  animation: fadeIn 0.3s ease-out;
 }
 
-/* Canvas Container */
-.canvasContainer {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Loading State */
