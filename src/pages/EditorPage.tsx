@@ -88,6 +88,11 @@ const EditorPage = () => {
   const [lightPlacementMode, setLightPlacementMode] = useState(false);
   const [selectedLightType, setSelectedLightType] = useState<LightType>('point');
 
+  // Theme settings state
+  const [themeSettingsOpen, setThemeSettingsOpen] = useState(false);
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
+  const [themeColor, setThemeColor] = useState<string>('#3fae7a');
+
   // Handle light placement from 3D view
   const handleLightPlaced = (light: Light) => {
     console.log('[EditorPage] ✅ Light placed successfully:', light.type, light.id, 'at position:', light.position);
@@ -141,6 +146,29 @@ const EditorPage = () => {
     }
   };
 
+  // Load theme from localStorage on mount
+  useEffect(() => {
+    const savedThemeMode = localStorage.getItem('themeMode') as 'light' | 'dark' | null;
+    const savedThemeColor = localStorage.getItem('themeColor');
+
+    if (savedThemeMode) {
+      setThemeMode(savedThemeMode);
+    }
+    if (savedThemeColor) {
+      setThemeColor(savedThemeColor);
+    }
+  }, []);
+
+  // Apply theme to document root
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', themeMode);
+    document.documentElement.style.setProperty('--theme-color', themeColor);
+
+    // Save to localStorage
+    localStorage.setItem('themeMode', themeMode);
+    localStorage.setItem('themeColor', themeColor);
+  }, [themeMode, themeColor]);
+
   // Close view options dropdown when clicking outside
   useEffect(() => {
     if (!viewOptionsOpen) return;
@@ -155,6 +183,21 @@ const EditorPage = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [viewOptionsOpen]);
+
+  // Close theme settings panel when clicking outside
+  useEffect(() => {
+    if (!themeSettingsOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(`.${styles.themeSettingsPanel}`)) {
+        setThemeSettingsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [themeSettingsOpen]);
 
   // Load test room data (2800mm x 2800mm room with 100mm walls)
   const handleLoadTestRoom = () => {
@@ -1752,7 +1795,7 @@ const EditorPage = () => {
               </svg>
             </div>
           </button>
-          <button className={styles.sidebarBtn}>
+          <button className={styles.sidebarBtn} onClick={() => setThemeSettingsOpen(!themeSettingsOpen)}>
             <div className={styles.icon}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
@@ -2426,6 +2469,88 @@ const EditorPage = () => {
               <input type="text" defaultValue="120 mm" />
             </div>
             <button className={styles.editBtn}>Edit Floor ›</button>
+          </div>
+        </div>
+      )}
+
+      {/* Theme Settings Panel */}
+      {themeSettingsOpen && (
+        <div className={styles.themeSettingsPanel}>
+          <div className={styles.panelHeader}>
+            <h3>테마 설정</h3>
+            <button onClick={() => setThemeSettingsOpen(false)} className={styles.closeBtn}>×</button>
+          </div>
+
+          <div className={styles.panelContent}>
+            {/* Theme Mode Selection */}
+            <div className={styles.settingsSection}>
+              <h4>모드</h4>
+              <div className={styles.themeModeGrid}>
+                <button
+                  className={`${styles.themeModeBtn} ${themeMode === 'light' ? styles.active : ''}`}
+                  onClick={() => setThemeMode('light')}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/>
+                  </svg>
+                  <span>라이트</span>
+                </button>
+                <button
+                  className={`${styles.themeModeBtn} ${themeMode === 'dark' ? styles.active : ''}`}
+                  onClick={() => setThemeMode('dark')}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>
+                  </svg>
+                  <span>다크</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Theme Color Selection */}
+            <div className={styles.settingsSection}>
+              <h4>테마 색상</h4>
+              <div className={styles.colorGrid}>
+                {[
+                  { name: '그린', color: '#3fae7a' },
+                  { name: '블루', color: '#4a90e2' },
+                  { name: '퍼플', color: '#9b59b6' },
+                  { name: '오렌지', color: '#e67e22' },
+                  { name: '레드', color: '#e74c3c' },
+                  { name: '핑크', color: '#ec4899' },
+                  { name: '틸', color: '#14b8a6' },
+                  { name: '인디고', color: '#6366f1' },
+                ].map(({ name, color }) => (
+                  <button
+                    key={color}
+                    className={`${styles.colorBtn} ${themeColor === color ? styles.active : ''}`}
+                    style={{ backgroundColor: color }}
+                    onClick={() => setThemeColor(color)}
+                    title={name}
+                  >
+                    {themeColor === color && (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Color Picker */}
+            <div className={styles.settingsSection}>
+              <h4>커스텀 색상</h4>
+              <div className={styles.customColorRow}>
+                <input
+                  type="color"
+                  value={themeColor}
+                  onChange={(e) => setThemeColor(e.target.value)}
+                  className={styles.colorPicker}
+                />
+                <span className={styles.colorValue}>{themeColor.toUpperCase()}</span>
+              </div>
+            </div>
           </div>
         </div>
       )}

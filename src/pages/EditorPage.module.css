@@ -1,4 +1,28 @@
 /* Archiple Studio UI - Exact Recreation */
+
+/* ===== THEME VARIABLES ===== */
+:root {
+  --theme-color: #3fae7a;
+  --bg-primary: #ffffff;
+  --bg-secondary: #e8e8e8;
+  --bg-tertiary: #f5f5f5;
+  --text-primary: #333;
+  --text-secondary: #666;
+  --border-color: #ddd;
+  --border-light: #eee;
+}
+
+/* Dark Mode Variables */
+[data-theme="dark"] {
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #2d2d2d;
+  --bg-tertiary: #3a3a3a;
+  --text-primary: #e0e0e0;
+  --text-secondary: #b0b0b0;
+  --border-color: #404040;
+  --border-light: #333333;
+}
+
 .editorContainer {
   position: fixed;
   top: 0;
@@ -7,7 +31,7 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #e8e8e8;
+  background: var(--bg-secondary);
   overflow: hidden;
 }
 
@@ -15,8 +39,8 @@
 .header {
   width: 100%;
   height: 60px;
-  background: white;
-  border-bottom: 1px solid #ddd;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -47,7 +71,7 @@
   margin: 0;
   font-size: 18px;
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .headerRight {
@@ -58,9 +82,9 @@
 
 .headerBtn {
   padding: 8px 16px;
-  border: 1px solid #ddd;
-  background: white;
-  color: #666;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
@@ -69,15 +93,15 @@
 }
 
 .headerBtn:hover {
-  background: #f5f5f5;
-  border-color: #3fae7a;
-  color: #3fae7a;
+  background: var(--bg-tertiary);
+  border-color: var(--theme-color);
+  color: var(--theme-color);
 }
 
 .headerBtnPrimary {
   padding: 8px 20px;
   border: none;
-  background: #3fae7a;
+  background: var(--theme-color);
   color: white;
   border-radius: 4px;
   cursor: pointer;
@@ -87,7 +111,7 @@
 }
 
 .headerBtnPrimary:hover {
-  background: #2d9967;
+  opacity: 0.9;
 }
 
 /* ===== MAIN CONTENT ===== */
@@ -101,7 +125,7 @@
 .leftSidebar {
   width: 72px;
   height: 100%;
-  background: linear-gradient(180deg, #3fae7a 0%, #2d9967 100%);
+  background: linear-gradient(180deg, var(--theme-color) 0%, color-mix(in srgb, var(--theme-color) 85%, black) 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1062,4 +1086,197 @@
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
+}
+
+/* ===== THEME SETTINGS PANEL ===== */
+.themeSettingsPanel {
+  position: fixed;
+  left: 72px;
+  top: 60px;
+  bottom: 0;
+  width: 320px;
+  background: var(--bg-primary);
+  border-right: 1px solid var(--border-color);
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 250;
+  display: flex;
+  flex-direction: column;
+  animation: slideInLeft 0.3s ease-out;
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.themeSettingsPanel .panelHeader {
+  padding: 20px;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-primary);
+}
+
+.themeSettingsPanel .panelHeader h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.themeSettingsPanel .closeBtn {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.themeSettingsPanel .closeBtn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.themeSettingsPanel .panelContent {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.themeSettingsPanel .settingsSection {
+  margin-bottom: 28px;
+}
+
+.themeSettingsPanel .settingsSection h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Theme Mode Grid */
+.themeModeGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.themeModeBtn {
+  padding: 16px;
+  border: 2px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.themeModeBtn:hover {
+  border-color: var(--theme-color);
+  background: var(--bg-tertiary);
+}
+
+.themeModeBtn.active {
+  border-color: var(--theme-color);
+  background: color-mix(in srgb, var(--theme-color) 10%, var(--bg-primary));
+  color: var(--theme-color);
+}
+
+.themeModeBtn svg {
+  opacity: 0.8;
+}
+
+.themeModeBtn.active svg {
+  opacity: 1;
+}
+
+/* Color Grid */
+.colorGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.colorBtn {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 3px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.colorBtn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.colorBtn.active {
+  border-color: var(--text-primary);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.colorBtn svg {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+/* Custom Color Picker */
+.customColorRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+}
+
+.colorPicker {
+  width: 60px;
+  height: 40px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: none;
+}
+
+.colorPicker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.colorPicker::-webkit-color-swatch {
+  border: 2px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.colorValue {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: 'Courier New', monospace;
 }
