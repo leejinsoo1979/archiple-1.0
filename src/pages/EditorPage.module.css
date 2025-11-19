@@ -56,14 +56,47 @@
 }
 
 .headerLogo {
-  display: flex;
-  align-items: center;
   height: 36px;
+  width: auto;
+  filter: brightness(0) saturate(100%) invert(100%);
 }
 
-.headerLogo svg {
+/* Apply theme color to logo using CSS variables */
+[data-theme="light"] .headerLogo {
+  filter: brightness(0) saturate(100%);
+}
+
+/* Use a more sophisticated approach for theme color */
+.headerLeft {
+  position: relative;
+}
+
+.headerLeft::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
   height: 100%;
+  background: var(--theme-color);
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* Alternative: Use mask-image for precise color control */
+.headerLogo {
+  height: 36px;
   width: auto;
+  -webkit-mask-image: url('/images/archiple_logo.png');
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-image: url('/images/archiple_logo.png');
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  background: var(--theme-color);
 }
 
 .headerCenter {

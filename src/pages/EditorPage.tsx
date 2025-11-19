@@ -529,17 +529,7 @@ const EditorPage = () => {
       {/* Header */}
       <header className={styles.header}>
         <div className={styles.headerLeft}>
-          <div className={styles.headerLogo}>
-            <svg width="140" height="36" viewBox="0 0 140 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-              {/* A Icon */}
-              <path d="M8 28L14 8L20 28M10.5 21H17.5" stroke="var(--theme-color)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-
-              {/* Text: RCHIPLE */}
-              <text x="28" y="24" fill="var(--text-primary)" fontSize="20" fontWeight="600" fontFamily="system-ui, -apple-system">
-                RCHIPLE
-              </text>
-            </svg>
-          </div>
+          <img src="/images/archiple_logo.png" alt="Archiple Studio" className={styles.headerLogo} />
         </div>
         <div className={styles.headerCenter}>
           {/* Top Toolbar */}
