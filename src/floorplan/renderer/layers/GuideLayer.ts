@@ -162,7 +162,10 @@ export class GuideLayer extends BaseLayer {
   ): void {
     ctx.save();
 
-    ctx.strokeStyle = '#3498db';
+    // Check current theme for color selection
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+
+    ctx.strokeStyle = isDarkMode ? '#64B5F6' : '#3498db';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([10, 5]);
 
@@ -170,8 +173,8 @@ export class GuideLayer extends BaseLayer {
       // 수평 가이드 (캔버스 전체 너비)
       const y = guide.from.y;
       ctx.beginPath();
-      ctx.moveTo(-1000, y);
-      ctx.lineTo(5000, y);
+      ctx.moveTo(-1000000, y);
+      ctx.lineTo(1000000, y);
       ctx.stroke();
 
       // 라벨
@@ -184,8 +187,8 @@ export class GuideLayer extends BaseLayer {
       // 수직 가이드 (캔버스 전체 높이)
       const x = guide.from.x;
       ctx.beginPath();
-      ctx.moveTo(x, -1000);
-      ctx.lineTo(x, 5000);
+      ctx.moveTo(x, -1000000);
+      ctx.lineTo(x, 1000000);
       ctx.stroke();
 
       // 라벨
@@ -200,8 +203,17 @@ export class GuideLayer extends BaseLayer {
   }
 
   private renderAngleGuide(ctx: CanvasRenderingContext2D, from: Point, angle: number): void {
+    if (!this.camera) return;
+
+    // Calculate visible bounds in world space
+    const transform = ctx.getTransform();
+    // We need to invert the transform to get world bounds
+    // But easier to just use a very large number relative to the view
+    // Or use camera.getWorldBounds() if available.
+    // Let's use a sufficiently large number (e.g. 1,000,000 mm = 1km) which covers most floorplans
+    const length = 1000000;
+
     const radians = (angle * Math.PI) / 180;
-    const length = 10000; // Extend guide line across entire canvas
 
     const endX = from.x + Math.cos(radians) * length;
     const endY = from.y + Math.sin(radians) * length;
@@ -220,15 +232,40 @@ export class GuideLayer extends BaseLayer {
     ctx.stroke();
 
     // Draw angle label
-    const labelX = from.x + Math.cos(radians) * 100;
-    const labelY = from.y + Math.sin(radians) * 100;
+    // Position label at a fixed screen distance from 'from' point, not world distance
+    // This ensures label is always visible regardless of zoom
+
+    // Convert 'from' to screen
+    const screenFrom = this.camera.worldToScreen(from.x, from.y);
+    const labelOffsetPx = 60; // 60px offset
+    const labelScreenX = screenFrom.x + Math.cos(radians) * labelOffsetPx;
+    const labelScreenY = screenFrom.y + Math.sin(radians) * labelOffsetPx;
+
+    // Reset transform to draw label in screen space
+    this.camera.applyScreenTransform(ctx);
 
     ctx.fillStyle = this.config.angleGuideColor;
     ctx.font = 'bold 14px system-ui';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+
+    // Add background for better readability
     const label = angle === 0 ? '수평 (0°)' : angle === 90 ? '수직 (90°)' : `${angle}°`;
-    ctx.fillText(label, labelX, labelY);
+    const metrics = ctx.measureText(label);
+    const padding = 4;
+
+    // Check current theme for background color
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+    ctx.fillStyle = isDarkMode ? 'rgba(45, 45, 45, 0.9)' : 'rgba(255, 255, 255, 0.8)';
+    ctx.fillRect(
+      labelScreenX - metrics.width / 2 - padding,
+      labelScreenY - 10,
+      metrics.width + padding * 2,
+      20
+    );
+
+    ctx.fillStyle = this.config.angleGuideColor;
+    ctx.fillText(label, labelScreenX, labelScreenY);
 
     ctx.restore();
   }
@@ -290,15 +327,18 @@ export class GuideLayer extends BaseLayer {
     // Format label in mm only
     const label = `${Math.round(millimeters)}mm`;
 
-    // Reset transform to screen space
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // Reset transform to screen space (with DPI scaling)
+    this.camera.applyScreenTransform(ctx);
 
     ctx.font = 'bold 13px system-ui';
     const metrics = ctx.measureText(label);
     const padding = 6;
 
-    // Draw label background
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    // Check current theme for color selection
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+
+    // Draw label background - 다크모드 대응
+    ctx.fillStyle = isDarkMode ? 'rgba(45, 45, 45, 0.95)' : 'rgba(255, 255, 255, 0.95)';
     ctx.fillRect(
       labelScreen.x - metrics.width / 2 - padding,
       labelScreen.y - 10,
@@ -306,8 +346,8 @@ export class GuideLayer extends BaseLayer {
       20
     );
 
-    // Draw border
-    ctx.strokeStyle = '#2c3e50';
+    // Draw border - 다크모드 대응
+    ctx.strokeStyle = isDarkMode ? '#90CAF9' : '#2c3e50';
     ctx.lineWidth = 1.5;
     ctx.strokeRect(
       labelScreen.x - metrics.width / 2 - padding,
@@ -316,8 +356,8 @@ export class GuideLayer extends BaseLayer {
       20
     );
 
-    // Draw text
-    ctx.fillStyle = '#2c3e50';
+    // Draw text - 다크모드 대응
+    ctx.fillStyle = isDarkMode ? '#E0E0E0' : '#2c3e50';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(label, labelScreen.x, labelScreen.y);
@@ -331,8 +371,11 @@ export class GuideLayer extends BaseLayer {
   ): void {
     ctx.save();
 
-    // Draw vertical guide line (수직 가이드)
-    ctx.strokeStyle = '#e74c3c'; // 빨간색으로 명확하게 표시
+    // Check current theme for color selection
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+
+    // Draw vertical guide line (수직 가이드) - 다크모드 대응
+    ctx.strokeStyle = isDarkMode ? '#EF5350' : '#e74c3c';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([10, 5]);
 
@@ -350,8 +393,11 @@ export class GuideLayer extends BaseLayer {
   ): void {
     ctx.save();
 
-    // Draw horizontal guide line (수평 가이드)
-    ctx.strokeStyle = '#e74c3c'; // 빨간색으로 명확하게 표시
+    // Check current theme for color selection
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+
+    // Draw horizontal guide line (수평 가이드) - 다크모드 대응
+    ctx.strokeStyle = isDarkMode ? '#EF5350' : '#e74c3c';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([10, 5]);
 
@@ -366,8 +412,11 @@ export class GuideLayer extends BaseLayer {
   private renderRectanglePreview(ctx: CanvasRenderingContext2D, corners: Point[]): void {
     ctx.save();
 
-    // EXACT SAME thickness as confirmed walls (100mm)
-    ctx.strokeStyle = '#2c3e50'; // Same color as confirmed walls
+    // Check current theme for color selection
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+
+    // EXACT SAME thickness as confirmed walls (100mm) - 다크모드 대응
+    ctx.strokeStyle = isDarkMode ? '#E0E0E0' : '#2c3e50';
     ctx.globalAlpha = 0.7; // 70% transparent for preview
     ctx.lineWidth = this.wallThickness; // Use actual wall thickness
     ctx.lineCap = 'square';
@@ -425,15 +474,18 @@ export class GuideLayer extends BaseLayer {
     // Convert world position to screen space
     const screenPos = this.camera.worldToScreen(worldX, worldY);
 
-    // Reset transform to screen space
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // Reset transform to screen space (with DPI scaling)
+    this.camera.applyScreenTransform(ctx);
 
     ctx.font = 'bold 12px system-ui';
     const metrics = ctx.measureText(label);
     const padding = 5;
 
-    // Background
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    // Check current theme for color selection
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+
+    // Background - 다크모드 대응
+    ctx.fillStyle = isDarkMode ? 'rgba(45, 45, 45, 0.95)' : 'rgba(255, 255, 255, 0.95)';
     ctx.fillRect(
       screenPos.x - metrics.width / 2 - padding,
       screenPos.y - 9,
@@ -441,8 +493,8 @@ export class GuideLayer extends BaseLayer {
       18
     );
 
-    // Border
-    ctx.strokeStyle = '#3498db';
+    // Border - 다크모드 대응
+    ctx.strokeStyle = isDarkMode ? '#64B5F6' : '#3498db';
     ctx.lineWidth = 1.5;
     ctx.strokeRect(
       screenPos.x - metrics.width / 2 - padding,
@@ -451,8 +503,8 @@ export class GuideLayer extends BaseLayer {
       18
     );
 
-    // Text
-    ctx.fillStyle = '#2c3e50';
+    // Text - 다크모드 대응
+    ctx.fillStyle = isDarkMode ? '#E0E0E0' : '#2c3e50';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(label, screenPos.x, screenPos.y);
