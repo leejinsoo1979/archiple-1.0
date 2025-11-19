@@ -368,6 +368,17 @@
   height: 32px;
 }
 
+.toolBtn img {
+  width: 32px;
+  height: 32px;
+  transition: filter 0.2s;
+}
+
+/* Dark mode: invert and brighten icon colors */
+[data-theme="dark"] .toolBtn img {
+  filter: invert(1) brightness(1.2);
+}
+
 .toolBtn span {
   font-size: 10px;
   text-align: center;
