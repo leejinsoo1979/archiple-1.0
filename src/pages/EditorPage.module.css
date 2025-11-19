@@ -850,21 +850,21 @@
 .leftPanel::-webkit-scrollbar,
 .rightPanel::-webkit-scrollbar,
 .themeSettingsPanel::-webkit-scrollbar,
-.displayStylePanel::-webkit-scrollbar {
+.renderStylePanel::-webkit-scrollbar {
   width: 6px;
 }
 
 .leftPanel::-webkit-scrollbar-track,
 .rightPanel::-webkit-scrollbar-track,
 .themeSettingsPanel::-webkit-scrollbar-track,
-.displayStylePanel::-webkit-scrollbar-track {
+.renderStylePanel::-webkit-scrollbar-track {
   background: var(--bg-tertiary);
 }
 
 .leftPanel::-webkit-scrollbar-thumb,
 .rightPanel::-webkit-scrollbar-thumb,
 .themeSettingsPanel::-webkit-scrollbar-thumb,
-.displayStylePanel::-webkit-scrollbar-thumb {
+.renderStylePanel::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 3px;
 }
@@ -872,7 +872,7 @@
 .leftPanel::-webkit-scrollbar-thumb:hover,
 .rightPanel::-webkit-scrollbar-thumb:hover,
 .themeSettingsPanel::-webkit-scrollbar-thumb:hover,
-.displayStylePanel::-webkit-scrollbar-thumb:hover {
+.renderStylePanel::-webkit-scrollbar-thumb:hover {
   background: var(--text-secondary);
 }
 
@@ -1141,8 +1141,8 @@
 }
 
 /* ===== THEME SETTINGS PANEL ===== */
-/* ===== DISPLAY STYLE PANEL ===== */
-.displayStylePanel {
+/* ===== RENDER STYLE PANEL ===== */
+.renderStylePanel {
   position: fixed;
   left: 72px;
   top: 60px;
@@ -1157,7 +1157,7 @@
   animation: slideInLeft 0.3s ease-out;
 }
 
-.displayStylePanel .panelHeader {
+.renderStylePanel .panelHeader {
   padding: 20px;
   border-bottom: 1px solid var(--border-light);
   display: flex;
@@ -1166,25 +1166,25 @@
   background: var(--bg-primary);
 }
 
-.displayStylePanel .panelHeader h3 {
+.renderStylePanel .panelHeader h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
-.displayStylePanel .panelContent {
+.renderStylePanel .panelContent {
   padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.displayStylePanel .styleOption {
+.renderStylePanel .styleOption {
   width: 100%;
 }
 
-.displayStylePanel .styleBtn {
+.renderStylePanel .styleBtn {
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -1198,25 +1198,25 @@
   transition: all 0.2s;
 }
 
-.displayStylePanel .styleBtn:hover {
+.renderStylePanel .styleBtn:hover {
   background: var(--bg-tertiary);
   border-color: var(--border-color);
 }
 
-.displayStylePanel .styleBtn.active {
+.renderStylePanel .styleBtn.active {
   background: color-mix(in srgb, var(--theme-color) 15%, var(--bg-primary));
   border-color: var(--theme-color);
 }
 
-.displayStylePanel .styleBtn svg {
+.renderStylePanel .styleBtn svg {
   color: var(--text-secondary);
 }
 
-.displayStylePanel .styleBtn.active svg {
+.renderStylePanel .styleBtn.active svg {
   color: var(--theme-color);
 }
 
-.displayStylePanel .styleBtn span {
+.renderStylePanel .styleBtn span {
   font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);

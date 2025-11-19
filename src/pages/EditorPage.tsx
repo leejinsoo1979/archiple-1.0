@@ -93,9 +93,9 @@ const EditorPage = () => {
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
   const [themeColor, setThemeColor] = useState<string>('#3fae7a');
 
-  // Display style state
-  const [displayStyleOpen, setDisplayStyleOpen] = useState(false);
-  const [displayStyle, setDisplayStyle] = useState<'wireframe' | 'solid' | 'textured'>('solid');
+  // Render style state (for header panel)
+  const [renderStyleOpen, setRenderStyleOpen] = useState(false);
+  const [renderStyle, setRenderStyle] = useState<'wireframe' | 'solid' | 'textured'>('solid');
 
   // Handle light placement from 3D view
   const handleLightPlaced = (light: Light) => {
@@ -203,20 +203,20 @@ const EditorPage = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [themeSettingsOpen]);
 
-  // Close display style panel when clicking outside
+  // Close render style panel when clicking outside
   useEffect(() => {
-    if (!displayStyleOpen) return;
+    if (!renderStyleOpen) return;
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest(`.${styles.displayStylePanel}`)) {
-        setDisplayStyleOpen(false);
+      if (!target.closest(`.${styles.renderStylePanel}`)) {
+        setRenderStyleOpen(false);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [displayStyleOpen]);
+  }, [renderStyleOpen]);
 
   // Load test room data (2800mm x 2800mm room with 100mm walls)
   const handleLoadTestRoom = () => {
@@ -1816,7 +1816,7 @@ const EditorPage = () => {
               </svg>
             </div>
           </button>
-          <button className={styles.sidebarBtn} onClick={() => setDisplayStyleOpen(!displayStyleOpen)}>
+          <button className={styles.sidebarBtn} onClick={() => setRenderStyleOpen(!renderStyleOpen)}>
             <div className={styles.icon}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9zM12 4.15L5 8.09v7.82l7 3.94 7-3.94V8.09l-7-3.94z"/>
@@ -2501,19 +2501,19 @@ const EditorPage = () => {
         </div>
       )}
 
-      {/* Display Style Panel */}
-      {displayStyleOpen && (
-        <div className={styles.displayStylePanel}>
+      {/* Render Style Panel */}
+      {renderStyleOpen && (
+        <div className={styles.renderStylePanel}>
           <div className={styles.panelHeader}>
-            <h3>Display Style</h3>
-            <button onClick={() => setDisplayStyleOpen(false)} className={styles.closeBtn}>×</button>
+            <h3>Render Style</h3>
+            <button onClick={() => setRenderStyleOpen(false)} className={styles.closeBtn}>×</button>
           </div>
 
           <div className={styles.panelContent}>
             <div className={styles.styleOption}>
               <button
-                className={`${styles.styleBtn} ${displayStyle === 'wireframe' ? styles.active : ''}`}
-                onClick={() => setDisplayStyle('wireframe')}
+                className={`${styles.styleBtn} ${renderStyle === 'wireframe' ? styles.active : ''}`}
+                onClick={() => setRenderStyle('wireframe')}
               >
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
@@ -2526,8 +2526,8 @@ const EditorPage = () => {
 
             <div className={styles.styleOption}>
               <button
-                className={`${styles.styleBtn} ${displayStyle === 'solid' ? styles.active : ''}`}
-                onClick={() => setDisplayStyle('solid')}
+                className={`${styles.styleBtn} ${renderStyle === 'solid' ? styles.active : ''}`}
+                onClick={() => setRenderStyle('solid')}
               >
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9z"/>
@@ -2538,8 +2538,8 @@ const EditorPage = () => {
 
             <div className={styles.styleOption}>
               <button
-                className={`${styles.styleBtn} ${displayStyle === 'textured' ? styles.active : ''}`}
-                onClick={() => setDisplayStyle('textured')}
+                className={`${styles.styleBtn} ${renderStyle === 'textured' ? styles.active : ''}`}
+                onClick={() => setRenderStyle('textured')}
               >
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9zM12 4.15L5 8.09v7.82l7 3.94 7-3.94V8.09l-7-3.94z"/>
