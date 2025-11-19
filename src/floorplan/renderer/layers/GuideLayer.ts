@@ -195,22 +195,7 @@ export class GuideLayer extends BaseLayer {
       ctx.lineTo(1000000, y);
       ctx.stroke();
 
-      // 라벨 (Screen Space)
-      if (this.camera) {
-        const screenPos = this.camera.worldToScreen(guide.from.x, y);
-
-        ctx.save();
-        this.camera.applyScreenTransform(ctx);
-
-        ctx.shadowBlur = 0; // Remove shadow for text
-        ctx.fillStyle = this.config.orthogonalGuideColor;
-        ctx.font = 'bold 12px system-ui';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText('수평', screenPos.x + 10, screenPos.y - 5);
-
-        ctx.restore();
-      }
+      // 라벨 (Screen Space) - removed text label
     } else {
       // 수직 가이드 (캔버스 전체 높이)
       const x = guide.from.x;
@@ -219,22 +204,7 @@ export class GuideLayer extends BaseLayer {
       ctx.lineTo(x, 1000000);
       ctx.stroke();
 
-      // 라벨 (Screen Space)
-      if (this.camera) {
-        const screenPos = this.camera.worldToScreen(x, guide.from.y);
-
-        ctx.save();
-        this.camera.applyScreenTransform(ctx);
-
-        ctx.shadowBlur = 0; // Remove shadow for text
-        ctx.fillStyle = this.config.orthogonalGuideColor;
-        ctx.font = 'bold 12px system-ui';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.fillText('수직', screenPos.x + 5, screenPos.y + 10);
-
-        ctx.restore();
-      }
+      // 라벨 (Screen Space) - removed text label
     }
 
     ctx.restore();
@@ -292,7 +262,7 @@ export class GuideLayer extends BaseLayer {
     ctx.textBaseline = 'middle';
 
     // Add background for better readability
-    const label = angle === 0 ? '수평 (0°)' : angle === 90 ? '수직 (90°)' : `${angle}°`;
+    const label = `${angle}°`;
     const metrics = ctx.measureText(label);
     const padding = 4;
 
