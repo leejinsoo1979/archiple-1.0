@@ -93,7 +93,6 @@ export class PointLayer extends BaseLayer {
 
     // Convert world coordinates to screen coordinates
     const screenPos = this.camera.worldToScreen(point.x, point.y);
-    console.log('[PointLayer] Rendering point:', { id: point.id.slice(0, 8), world: { x: point.x, y: point.y }, screen: { x: screenPos.x, y: screenPos.y } });
 
     let color = this.config.pointColor;
     let radius = this.config.pointRadius;

@@ -347,14 +347,12 @@ export class WallTool extends BaseTool {
    * Create a new point
    */
   private createPoint(position: Vector2): Point {
-    const point = {
+    return {
       id: uuidv4(),
       x: position.x,
       y: position.y,
       connectedWalls: [],
     };
-    console.log('[WallTool] Created point:', point);
-    return point;
   }
 
   /**
