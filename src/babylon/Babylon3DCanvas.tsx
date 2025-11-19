@@ -425,7 +425,7 @@ const Babylon3DCanvas = forwardRef<
       fpsCamera.fov = 1.3; // 75 degrees (default 0.8 = 45 degrees is too narrow)
       fpsCamera.minZ = 0.05; // Near clipping plane: 5cm (prevent objects from disappearing when close)
       fpsCamera.maxZ = 1000; // Far clipping plane: 1000m
-      fpsCamera.speed = 0.3; // Movement speed
+      fpsCamera.speed = 0.15; // Movement speed (meters/sec)
       fpsCamera.angularSensibility = 2000; // Mouse sensitivity
 
       // Set WASD keys (key codes)
@@ -715,8 +715,18 @@ const Babylon3DCanvas = forwardRef<
       // Handle resize
       const handleResize = () => {
         engine.resize();
+        console.log('[Babylon3DCanvas] Resized:', canvas.width, 'x', canvas.height);
       };
       window.addEventListener('resize', handleResize);
+
+      // Handle fullscreen changes (aspect ratio fix)
+      const handleFullscreenChange = () => {
+        setTimeout(() => {
+          engine.resize();
+          console.log('[Babylon3DCanvas] Fullscreen changed, resized:', canvas.width, 'x', canvas.height);
+        }, 100);
+      };
+      document.addEventListener('fullscreenchange', handleFullscreenChange);
 
       console.log('[Babylon3DCanvas] Initialized successfully');
 
@@ -724,6 +734,7 @@ const Babylon3DCanvas = forwardRef<
       return () => {
         console.log('[Babylon3DCanvas] Cleaning up...');
         window.removeEventListener('resize', handleResize);
+        document.removeEventListener('fullscreenchange', handleFullscreenChange);
         scene.dispose();
         engine.dispose();
       };
