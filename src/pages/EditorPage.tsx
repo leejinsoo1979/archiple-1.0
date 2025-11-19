@@ -2141,6 +2141,7 @@ const EditorPage = () => {
             onLightPlaced={handleLightPlaced}
             onLightMoved={handleLightMoved}
             displayStyle={displayStyle}
+            showGrid={showGrid}
           />
 
           {/* Light Placement Guide Overlay */}

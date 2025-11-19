@@ -71,6 +71,7 @@ interface Babylon3DCanvasProps {
   glbModelFile?: File | null;
   photoRealisticMode?: boolean;
   displayStyle?: 'material' | 'white' | 'sketch' | 'transparent';
+  showGrid?: boolean;
   renderSettings?: {
     ssaoRadius: number;
     ssaoStrength: number;
@@ -230,6 +231,7 @@ const Babylon3DCanvas = forwardRef<
   glbModelFile,
   photoRealisticMode = false,
   displayStyle = 'material',
+  showGrid = true,
   renderSettings,
   lights = [],
   lightPlacementMode = false,
@@ -251,6 +253,7 @@ const Babylon3DCanvas = forwardRef<
   const pipelineRef = useRef<DefaultRenderingPipeline | null>(null); // Store rendering pipeline
   const gizmoManagerRef = useRef<GizmoManager | null>(null); // Store gizmo manager
   const selectedLightMeshRef = useRef<Mesh | null>(null); // Store selected light indicator mesh
+  const infiniteGridRef = useRef<Mesh | null>(null); // Store infinite grid mesh
 
   // Expose captureRender function via ref
   useImperativeHandle(ref, () => ({
@@ -537,7 +540,7 @@ const Babylon3DCanvas = forwardRef<
         return gridPlane;
       };
 
-      createInfiniteGrid();
+      infiniteGridRef.current = createInfiniteGrid();
 
       // Create outdoor skybox with clouds
       const createSkybox = () => {
@@ -1328,8 +1331,8 @@ const Babylon3DCanvas = forwardRef<
     wallMeshesRef.current = [];
 
     // Toggle between CSG and Miter wall generation
-    // CSG mode is now default for automatic corner alignment
-    const USE_CSG_WALLS = localStorage.getItem('USE_CSG_WALLS') !== 'false'; // Default: true
+    // Miter mode is default (CSG has issues)
+    const USE_CSG_WALLS = localStorage.getItem('USE_CSG_WALLS') === 'true'; // Default: false (Miter)
 
     if (USE_CSG_WALLS) {
       console.log('[Babylon3DCanvas] Using CSG-based wall system');
@@ -3081,6 +3084,15 @@ const Babylon3DCanvas = forwardRef<
       }
     });
   }, [displayStyle]);
+
+  // Update grid visibility when showGrid changes
+  useEffect(() => {
+    const gridMesh = infiniteGridRef.current;
+    if (gridMesh) {
+      gridMesh.setEnabled(showGrid);
+      console.log('[Babylon3DCanvas] Grid visibility:', showGrid);
+    }
+  }, [showGrid]);
 
   return (
     <div className={styles.container}>
