@@ -436,7 +436,7 @@ const Babylon3DCanvas = forwardRef<
 
       fpsCamera.checkCollisions = true;
       fpsCamera.applyGravity = false;
-      fpsCamera.ellipsoid = new Vector3(0.5, 0.9, 0.5); // Collision ellipsoid (radius)
+      fpsCamera.ellipsoid = new Vector3(0.2, 0.85, 0.2); // Collision ellipsoid (radius in meters)
 
       console.log('[Babylon3DCanvas] FPS Camera created with keys:', {
         keysUp: fpsCamera.keysUp,
@@ -1487,11 +1487,22 @@ const Babylon3DCanvas = forwardRef<
           // Convert CSG back to mesh
           wallMesh.dispose();
           wallMesh = wallCSG.toMesh(`wall_${wallIndex}`, wallMaterial, scene);
+
+          if (!wallMesh) {
+            console.error('[Babylon3DCanvas] Failed to create wall mesh from CSG:', wall.id);
+            return;
+          }
         }
 
-        // Finalize wall mesh (with or without doors)
+        // Finalize wall mesh (with or without doors/windows)
         wallMesh.receiveShadows = true;
         wallMesh.checkCollisions = true;
+
+        // Ensure collision is properly set for CSG-generated meshes
+        if (wallMesh.checkCollisions !== true) {
+          console.warn('[Babylon3DCanvas] Collision not set for wall:', wall.id);
+          wallMesh.checkCollisions = true;
+        }
         wallMeshesRef.current.push(wallMesh);
 
         if (shadowGenerator) {
