@@ -336,43 +336,114 @@ export class WallLayer extends BaseLayer {
     const start = Vector2.from(startPoint);
     const end = Vector2.from(endPoint);
     const dir = end.subtract(start).normalize();
-    const normal = new Vector2(-dir.y, dir.x); // Left normal
+    const normal = new Vector2(-dir.y, dir.x); // CW normal (Right side)
 
-    // Default corners (butt joint)
+    // Default corners (butt join)
+    // tl/tr are on "Right" side (start + normal)
+    // bl/br are on "Left" side (start - normal)
     let tl = start.add(normal.multiply(halfThickness));
     let bl = start.subtract(normal.multiply(halfThickness));
     let tr = end.add(normal.multiply(halfThickness));
     let br = end.subtract(normal.multiply(halfThickness));
 
-    // Adjust start corners if connected
-    const startConnectedWalls = this.connectivityMap.get(wall.startPointId) || [];
-    if (startConnectedWalls.length === 2) {
-      const otherWallId = startConnectedWalls.find(id => id !== wall.id);
-      const otherWall = this.walls.find(w => w.id === otherWallId);
-      if (otherWall) {
-        const adjustment = this.calculateCornerAdjustment(wall, otherWall, startPoint, normal, halfThickness);
-        if (adjustment) {
-          tl = adjustment.left;
-          bl = adjustment.right;
-        }
-      }
-    }
+    // Helper to apply intersections
+    const applyIntersections = (isStart: boolean) => {
+      const junctionPoint = isStart ? startPoint : endPoint;
+      const connectedIds = this.connectivityMap.get(junctionPoint.id) || [];
 
-    // Adjust end corners if connected
-    const endConnectedWalls = this.connectivityMap.get(wall.endPointId) || [];
-    if (endConnectedWalls.length === 2) {
-      const otherWallId = endConnectedWalls.find(id => id !== wall.id);
-      const otherWall = this.walls.find(w => w.id === otherWallId);
-      if (otherWall) {
-        const adjustment = this.calculateCornerAdjustment(wall, otherWall, endPoint, normal, halfThickness);
+      // Filter out self
+      const otherIds = connectedIds.filter(id => id !== wall.id);
+      if (otherIds.length === 0) return;
+
+      // Candidates for Left and Right side intersections
+      const leftCandidates: Vector2[] = [];
+      const rightCandidates: Vector2[] = [];
+
+      otherIds.forEach(otherId => {
+        const otherWall = this.walls.find(w => w.id === otherId);
+        if (!otherWall) return;
+
+        const relDir = this.getRelativeDirection(wall, otherWall, junctionPoint);
+        const adjustment = this.calculateCornerAdjustment(wall, otherWall, junctionPoint, normal, halfThickness);
+
         if (adjustment) {
-          tr = adjustment.left;
-          br = adjustment.right;
+          // Note: adjustment.left corresponds to 'tl'/'tr' (Right side in our variable naming)
+          // adjustment.right corresponds to 'bl'/'br' (Left side)
+          // This naming confusion comes from calculateCornerAdjustment using add(normal) for 'left'
+
+          // If Straight (Collinear), apply to BOTH
+          if (relDir === 'straight') {
+            rightCandidates.push(adjustment.left); // Right side (tl/tr)
+            leftCandidates.push(adjustment.right); // Left side (bl/br)
+          }
+          // If Right turn (CW), apply to Right side (tl/tr)
+          else if (relDir === 'right') {
+            rightCandidates.push(adjustment.left);
+          }
+          // If Left turn (CCW), apply to Left side (bl/br)
+          else if (relDir === 'left') {
+            leftCandidates.push(adjustment.right);
+          }
         }
+      });
+
+      // Pick best candidates (shortest wall segment / most cut back)
+      // For Start corners: Pick point furthest from Start (closest to End)? No, closest to End means shortest.
+      // Wait, Start corners move *into* the wall. So we want the one that is *furthest* along the wall direction?
+      // Or simply the one closest to the *other* end of the wall.
+
+      const pickBest = (candidates: Vector2[], defaultPoint: Vector2) => {
+        if (candidates.length === 0) return defaultPoint;
+        // Sort by distance to the *other* end of the wall
+        // We want the intersection that makes the wall shortest (avoids overlap)
+        const target = isStart ? end : start;
+        candidates.sort((a, b) => a.distanceTo(target) - b.distanceTo(target));
+        return candidates[0];
+      };
+
+      if (isStart) {
+        tl = pickBest(rightCandidates, tl);
+        bl = pickBest(leftCandidates, bl);
+      } else {
+        tr = pickBest(rightCandidates, tr);
+        br = pickBest(leftCandidates, br);
       }
-    }
+    };
+
+    applyIntersections(true);
+    applyIntersections(false);
 
     return { tl, tr, br, bl };
+  }
+
+  private getRelativeDirection(currentWall: Wall, otherWall: Wall, junctionPoint: Point): 'left' | 'right' | 'straight' {
+    const getDir = (w: Wall, p: Point) => {
+      const s = Vector2.from(this.points.get(w.startPointId)!);
+      const e = Vector2.from(this.points.get(w.endPointId)!);
+      // Direction pointing AWAY from junction
+      return w.startPointId === p.id ? e.subtract(s).normalize() : s.subtract(e).normalize();
+    };
+
+    const dir1 = getDir(currentWall, junctionPoint);
+    const dir2 = getDir(otherWall, junctionPoint);
+
+    // Cross product (2D)
+    // Positive = Left turn (CCW), Negative = Right turn (CW)
+    // Note: dir1 is "backwards" relative to incoming path.
+    // If we walk towards junction, dir1 is opposite.
+    // Standard relative angle: angle between outgoing vector (dir2) and incoming vector (-dir1).
+    // But here we use two outgoing vectors.
+
+    const cross = dir1.x * dir2.y - dir1.y * dir2.x;
+    const dot = dir1.dot(dir2);
+
+    // Collinear (opposite directions)
+    if (dot < -0.99) return 'straight';
+
+    // Cross > 0 means dir2 is CCW from dir1.
+    // If we stand at junction looking along dir1, dir2 is to our Left.
+    // So this affects the Left side of the wall.
+    return cross > 0 ? 'left' : 'right';
   }
 
   private calculateCornerAdjustment(

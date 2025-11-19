@@ -10,6 +10,7 @@ import { eventBus } from '../core/events/EventBus';
 import { EditorEvents } from '../core/events/EditorEvents';
 import type { Light, LightType } from '../core/types/Light';
 import { CameraSettingsModal } from '../ui/modals/CameraSettingsModal';
+import { ExportModal } from '../ui/modals/ExportModal';
 import { useCameraSettingsStore } from '../stores/cameraSettingsStore';
 
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
@@ -31,6 +32,7 @@ const EditorPage = () => {
   const [playMode, setPlayMode] = useState(false); // FPS mode toggle
   const [showCharacter, setShowCharacter] = useState(false); // Character toggle
   const [photoRealisticMode, setPhotoRealisticMode] = useState(false); // Photo-realistic rendering
+  const [exportModalOpen, setExportModalOpen] = useState(false); // Export modal toggle
 
   // Screenshot resolution settings
   const [screenshotResolution, setScreenshotResolution] = useState<'1080p' | '4k' | '8k'>('4k');
@@ -1746,7 +1748,7 @@ const EditorPage = () => {
         </div>
         <div className={styles.headerRight}>
           <button className={styles.headerBtn}>Save</button>
-          <button className={styles.headerBtn}>Export</button>
+          <button className={styles.headerBtn} onClick={() => setExportModalOpen(true)}>Export</button>
           <button className={styles.headerBtnPrimary}>Publish</button>
         </div>
       </header>
@@ -2687,6 +2689,13 @@ const EditorPage = () => {
 
       {/* Camera Settings Modal */}
       <CameraSettingsModal />
+
+      {/* Export Modal */}
+      <ExportModal
+        isOpen={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        floorplanData={floorplanData}
+      />
     </div>
   );
 };

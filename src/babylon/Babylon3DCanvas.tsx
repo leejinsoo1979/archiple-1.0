@@ -2150,6 +2150,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         character.rotation.y = 0;
 
         // Setup isometric orbit camera
+        arcCamera.mode = 0; // Camera.PERSPECTIVE_CAMERA
         arcCamera.setTarget(new Vector3(planMetrics.centerX, 0, planMetrics.centerZ));
         arcCamera.alpha = Math.PI / 4; // 45 degrees horizontal
         arcCamera.beta = Math.PI / 3; // 60 degrees from top (isometric)
@@ -3137,8 +3138,20 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     console.log('[Babylon3DCanvas] Applying camera settings:', cameraSettings);
 
     // 1. Projection Type
+    const arcCamera = arcCameraRef.current;
     if (cameraSettings.projectionType === 'orthographic') {
       fpsCamera.mode = 1; // Camera.ORTHOGRAPHIC_CAMERA
+      if (arcCamera) {
+        arcCamera.mode = 1;
+        // Auto-calculate orthographic bounds based on viewport
+        const aspectRatio = canvas.width / canvas.height;
+        const orthoSize = 10; // 10 meters view size
+        arcCamera.orthoLeft = -orthoSize * aspectRatio;
+        arcCamera.orthoRight = orthoSize * aspectRatio;
+        arcCamera.orthoTop = orthoSize;
+        arcCamera.orthoBottom = -orthoSize;
+      }
+
       // Auto-calculate orthographic bounds based on viewport
       const aspectRatio = canvas.width / canvas.height;
       const orthoSize = 10; // 10 meters view size
@@ -3148,6 +3161,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       fpsCamera.orthoBottom = -orthoSize;
     } else {
       fpsCamera.mode = 0; // Camera.PERSPECTIVE_CAMERA
+      if (arcCamera) arcCamera.mode = 0;
     }
 
     // 2. Field of View (Horizontal → Vertical conversion)
@@ -3168,7 +3182,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         const exposure = 0.5 + (cameraSettings.exposure / 100);
         pipeline.imageProcessing.exposure = exposure;
       }
-    }
 
       // 4. Depth of Field
       if (cameraSettings.depthOfField > 0) {

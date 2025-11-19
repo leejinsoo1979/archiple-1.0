@@ -1,8 +1,17 @@
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import EditorPage from './pages/EditorPage'
+import PlayPage from './pages/PlayPage'
 import './App.css'
 
 function App() {
-  return <EditorPage />
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<EditorPage />} />
+        <Route path="/play/:projectId" element={<PlayPage />} />
+      </Routes>
+    </BrowserRouter>
+  )
 }
 
 export default App
