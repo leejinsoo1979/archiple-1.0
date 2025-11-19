@@ -2918,49 +2918,115 @@ const Babylon3DCanvas = forwardRef<
 
     console.log('[Babylon3DCanvas] Applying display style:', displayStyle);
 
-    // Get all meshes in the scene
     scene.meshes.forEach((mesh) => {
       if (!mesh.material) return;
 
       const material = mesh.material;
+      const isFloor = mesh.name.toLowerCase().includes('floor') || mesh.name.toLowerCase().includes('room');
+      const isWall = mesh.name.toLowerCase().includes('wall');
+
+      // Store original properties if not already stored
+      if (!(material as any)._originalProps) {
+        (material as any)._originalProps = {
+          albedoColor: material instanceof PBRMaterial ? material.albedoColor?.clone() : null,
+          diffuseColor: material instanceof StandardMaterial ? material.diffuseColor?.clone() : null,
+          albedoTexture: material instanceof PBRMaterial ? material.albedoTexture : null,
+          diffuseTexture: material instanceof StandardMaterial ? material.diffuseTexture : null,
+          alpha: material.alpha,
+          wireframe: material.wireframe
+        };
+      }
+
+      const originalProps = (material as any)._originalProps;
 
       switch (displayStyle) {
         case 'white':
-          // White model mode - all surfaces pure white
-          if (material instanceof StandardMaterial || material instanceof PBRMaterial) {
-            const tempColor = material.albedoColor || material.diffuseColor || Color3.White();
-            material.albedoColor = Color3.White();
-            material.diffuseColor = Color3.White();
-            (material as any)._originalColor = tempColor; // Store original
-          }
-          break;
-
-        case 'sketch':
-          // Sketch mode - wireframe with edges
-          material.wireframe = true;
-          mesh.enableEdgesRendering();
-          mesh.edgesWidth = 2.0;
-          mesh.edgesColor = new Color4(0, 0, 0, 1);
-          break;
-
-        case 'transparent':
-          // Transparent mode - semi-transparent surfaces
-          material.alpha = 0.3;
-          material.transparencyMode = 2; // ALPHABLEND
-          break;
-
-        case 'material':
-        default:
-          // Material mode - restore original materials
+          // 화이트 모델: 모든 표면 연한 회색 (음영 있음)
           material.wireframe = false;
           material.alpha = 1.0;
           mesh.disableEdgesRendering();
 
-          // Restore original color if available
-          if ((material as any)._originalColor) {
-            if (material instanceof StandardMaterial || material instanceof PBRMaterial) {
-              material.albedoColor = (material as any)._originalColor;
-              material.diffuseColor = (material as any)._originalColor;
+          if (material instanceof PBRMaterial) {
+            material.albedoTexture = null;
+            material.albedoColor = new Color3(0.85, 0.85, 0.85); // 연한 회색
+          } else if (material instanceof StandardMaterial) {
+            material.diffuseTexture = null;
+            material.diffuseColor = new Color3(0.85, 0.85, 0.85);
+          }
+          break;
+
+        case 'transparent':
+          // 투명 (Hidden Line): 벽 거의 투명, 선만 강조
+          material.wireframe = false;
+          mesh.enableEdgesRendering();
+          mesh.edgesWidth = 1.5;
+          mesh.edgesColor = new Color4(0.2, 0.2, 0.2, 1);
+
+          if (material instanceof PBRMaterial) {
+            material.albedoTexture = null;
+            material.albedoColor = new Color3(0.9, 0.9, 0.9);
+            material.alpha = isWall ? 0.05 : 0.3; // 벽은 거의 투명
+          } else if (material instanceof StandardMaterial) {
+            material.diffuseTexture = null;
+            material.diffuseColor = new Color3(0.9, 0.9, 0.9);
+            material.alpha = isWall ? 0.05 : 0.3;
+          }
+          material.transparencyMode = 2; // ALPHABLEND
+          break;
+
+        case 'sketch':
+          // 스케치: 바닥만 나무 텍스처, 벽은 연한 회색
+          material.wireframe = false;
+          material.alpha = 1.0;
+          mesh.enableEdgesRendering();
+          mesh.edgesWidth = 1.0;
+          mesh.edgesColor = new Color4(0.3, 0.3, 0.3, 1);
+
+          if (isFloor) {
+            // 바닥: 나무 텍스처 복원
+            if (material instanceof PBRMaterial) {
+              material.albedoTexture = originalProps.albedoTexture;
+              material.albedoColor = originalProps.albedoColor || Color3.White();
+            } else if (material instanceof StandardMaterial) {
+              material.diffuseTexture = originalProps.diffuseTexture;
+              material.diffuseColor = originalProps.diffuseColor || Color3.White();
+            }
+          } else {
+            // 벽: 연한 회색
+            if (material instanceof PBRMaterial) {
+              material.albedoTexture = null;
+              material.albedoColor = new Color3(0.88, 0.88, 0.88);
+            } else if (material instanceof StandardMaterial) {
+              material.diffuseTexture = null;
+              material.diffuseColor = new Color3(0.88, 0.88, 0.88);
+            }
+          }
+          break;
+
+        case 'material':
+        default:
+          // 재질: 바닥은 나무 텍스처, 벽은 하얀색
+          material.wireframe = false;
+          material.alpha = 1.0;
+          mesh.disableEdgesRendering();
+
+          if (isFloor) {
+            // 바닥: 나무 텍스처
+            if (material instanceof PBRMaterial) {
+              material.albedoTexture = originalProps.albedoTexture;
+              material.albedoColor = originalProps.albedoColor || Color3.White();
+            } else if (material instanceof StandardMaterial) {
+              material.diffuseTexture = originalProps.diffuseTexture;
+              material.diffuseColor = originalProps.diffuseColor || Color3.White();
+            }
+          } else {
+            // 벽: 하얀색
+            if (material instanceof PBRMaterial) {
+              material.albedoTexture = null;
+              material.albedoColor = Color3.White();
+            } else if (material instanceof StandardMaterial) {
+              material.diffuseTexture = null;
+              material.diffuseColor = Color3.White();
             }
           }
           break;
