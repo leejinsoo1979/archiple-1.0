@@ -10,6 +10,50 @@ const PlayPage = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Override App.css styles for full-screen experience
+    const root = document.getElementById('root');
+    const body = document.body;
+    const html = document.documentElement;
+
+    if (root) {
+      root.style.maxWidth = 'none';
+      root.style.padding = '0';
+      root.style.margin = '0';
+      root.style.width = '100%';
+      root.style.height = '100%';
+    }
+
+    body.style.margin = '0';
+    body.style.padding = '0';
+    body.style.width = '100%';
+    body.style.height = '100%';
+    body.style.overflow = 'hidden';
+
+    html.style.width = '100%';
+    html.style.height = '100%';
+    html.style.overflow = 'hidden';
+
+    // Cleanup on unmount
+    return () => {
+      if (root) {
+        root.style.maxWidth = '';
+        root.style.padding = '';
+        root.style.margin = '';
+        root.style.width = '';
+        root.style.height = '';
+      }
+      body.style.margin = '';
+      body.style.padding = '';
+      body.style.width = '';
+      body.style.height = '';
+      body.style.overflow = '';
+      html.style.width = '';
+      html.style.height = '';
+      html.style.overflow = '';
+    };
+  }, []);
+
+  useEffect(() => {
     // Load the exported project data
     if (!projectId) {
       setError('No project ID provided');
