@@ -2918,13 +2918,17 @@ const Babylon3DCanvas = forwardRef<
     if (!scene) return;
 
     console.log('[Babylon3DCanvas] Applying display style:', displayStyle);
+    console.log('[Babylon3DCanvas] Scene meshes:', scene.meshes.map(m => ({ name: m.name, hasMaterial: !!m.material })));
 
     scene.meshes.forEach((mesh) => {
       if (!mesh.material) return;
 
       const material = mesh.material;
-      const isFloor = mesh.name.toLowerCase().includes('floor') || mesh.name.toLowerCase().includes('room');
-      const isWall = mesh.name.toLowerCase().includes('wall');
+      const meshNameLower = mesh.name.toLowerCase();
+      const isFloor = meshNameLower.includes('floor') || meshNameLower.includes('room');
+      const isWall = meshNameLower.includes('wall');
+
+      console.log(`[Babylon3DCanvas] Processing mesh: ${mesh.name}, isFloor: ${isFloor}, isWall: ${isWall}`);
 
       // Store original properties if not already stored
       if (!(material as any)._originalProps) {
