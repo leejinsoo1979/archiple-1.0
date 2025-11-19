@@ -13,6 +13,7 @@ const PlayPage = () => {
 
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [controlMode, setControlMode] = useState<'touch' | 'joystick'>('touch');
 
   useEffect(() => {
     // Override App.css styles for full-screen experience
@@ -142,59 +143,90 @@ const PlayPage = () => {
           floorplanData={floorplanData}
           visible={true}
           playMode={isPlaying}
+          controlMode={controlMode}
         />
       </div>
 
-      {/* Play/Stop Control */}
-      <div className={styles.playControl}>
+      {/* Top Controls */}
+      {isMobile && (
+        <div className={styles.topControls}>
+          {/* Control Mode Toggle */}
+          <div className={styles.controlModeToggle}>
+            <button
+              className={`${styles.modeBtn} ${controlMode === 'touch' ? styles.active : ''}`}
+              onClick={() => setControlMode('touch')}
+            >
+              Touch
+            </button>
+            <button
+              className={`${styles.modeBtn} ${controlMode === 'joystick' ? styles.active : ''}`}
+              onClick={() => setControlMode('joystick')}
+            >
+              Joystick
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Top Right Controls */}
+      <div className={styles.topRightControls}>
+        {/* Fullscreen Button - Mobile Only */}
+        {isMobile && (
+          <button
+            className={styles.fullscreenBtn}
+            onClick={() => {
+              const elem = document.documentElement;
+              if (!document.fullscreenElement) {
+                elem.requestFullscreen?.() ||
+                (elem as any).webkitRequestFullscreen?.() ||
+                (elem as any).msRequestFullscreen?.();
+              } else {
+                document.exitFullscreen?.() ||
+                (document as any).webkitExitFullscreen?.() ||
+                (document as any).msExitFullscreen?.();
+              }
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+            </svg>
+          </button>
+        )}
+
+        {/* Play/Stop Button */}
         <button
           className={`${styles.playBtn} ${isPlaying ? styles.stopBtn : ''}`}
           onClick={() => setIsPlaying(!isPlaying)}
         >
           {isPlaying ? (
-            <>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="4" y="4" width="16" height="16" rx="2" />
-              </svg>
-              Stop Play Mode
-            </>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="4" y="4" width="16" height="16" rx="2" />
+            </svg>
           ) : (
-            <>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polygon points="5 3 19 12 5 21 5 3" />
-              </svg>
-              Start Play Mode
-            </>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
           )}
         </button>
       </div>
 
-      {/* Floating Controls Info - Only show in Play Mode */}
-      {isPlaying && !isMobile && (
-        <div className={styles.controlsOverlay}>
-          <div className={styles.controlsInfo}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="16" x2="12" y2="12" />
-              <line x1="12" y1="8" x2="12.01" y2="8" />
-            </svg>
-            <span>WASD to move • Mouse to look • Double-click floor to teleport • Click doors/windows to interact</span>
+      {/* Joystick Widgets - Only visible in joystick mode on mobile */}
+      {isMobile && controlMode === 'joystick' && (
+        <>
+          {/* Left Joystick - Movement */}
+          <div className={styles.joystickLeft} id="joystick-left">
+            <div className={styles.joystickBase}>
+              <div className={styles.joystickStick}></div>
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* Mobile Controls Info */}
-      {isPlaying && isMobile && (
-        <div className={styles.controlsOverlay}>
-          <div className={styles.controlsInfo}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="16" x2="12" y2="12" />
-              <line x1="12" y1="8" x2="12.01" y2="8" />
-            </svg>
-            <span>Touch and drag to move • Swipe to look • Tap floor to teleport • Tap doors/windows to interact</span>
+          {/* Right Joystick - Rotation */}
+          <div className={styles.joystickRight} id="joystick-right">
+            <div className={styles.joystickBase}>
+              <div className={styles.joystickStick}></div>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

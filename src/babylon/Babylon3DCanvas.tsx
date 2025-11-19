@@ -89,6 +89,7 @@ interface Babylon3DCanvasProps {
   selectedLightType?: LightType;
   onLightPlaced?: (light: Light) => void;
   onLightMoved?: (lightId: string, newPosition: { x: number; y: number; z: number }) => void;
+  controlMode?: 'touch' | 'joystick';
 }
 
 // 2D 좌표(mm)를 Babylon 미터 단위로 변환
@@ -236,7 +237,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     lightPlacementMode = false,
     selectedLightType = 'point',
     onLightPlaced,
-    onLightMoved
+    onLightMoved,
+    controlMode = 'touch'
   }: Babylon3DCanvasProps,
   ref: React.ForwardedRef<Babylon3DCanvasRef>
 ) {
@@ -3321,86 +3323,209 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     cameraSettings.depthOfField,
   ]);
 
-  // Handle touch drag movement for mobile (ShapeSpark style)
+  // Handle mobile controls (Touch mode or Joystick mode)
   useEffect(() => {
     if (!playMode) return;
 
     const canvas = canvasRef.current;
     const fpsCamera = fpsCameraRef.current;
-    if (!canvas || !fpsCamera) return;
+    const scene = sceneRef.current;
+    if (!canvas || !fpsCamera || !scene) return;
 
-    let touchStartX = 0;
-    let touchStartY = 0;
-    let isTouching = false;
-    let touchMoveInterval: number | null = null;
+    // ===== TOUCH MODE (ShapeSpark style) =====
+    if (controlMode === 'touch') {
+      let touchStartX = 0;
+      let lastTouchX = 0;
+      let isTouching = false;
 
-    const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return; // Only single touch for movement
+      const handleTouchStart = (e: TouchEvent) => {
+        if (e.touches.length !== 1) return;
 
-      const touch = e.touches[0];
-      touchStartX = touch.clientX;
-      touchStartY = touch.clientY;
-      isTouching = true;
+        const touch = e.touches[0];
+        touchStartX = touch.clientX;
+        lastTouchX = touch.clientX;
+        isTouching = true;
+      };
 
-      // Start continuous movement while touching
-      if (touchMoveInterval) clearInterval(touchMoveInterval);
-      touchMoveInterval = window.setInterval(() => {
-        if (!isTouching) return;
-        // Movement will be handled in touchmove
-      }, 16); // ~60fps
-    };
+      const handleTouchMove = (e: TouchEvent) => {
+        if (!isTouching || e.touches.length !== 1) return;
 
-    const handleTouchMove = (e: TouchEvent) => {
-      if (!isTouching || e.touches.length !== 1) return;
+        const touch = e.touches[0];
+        const deltaX = touch.clientX - lastTouchX;
+        lastTouchX = touch.clientX;
 
-      const touch = e.touches[0];
-      const deltaX = touch.clientX - touchStartX;
-      const deltaY = touch.clientY - touchStartY;
+        // Rotate camera based on horizontal drag
+        const rotationSensitivity = 0.005;
+        fpsCamera.rotation.y -= deltaX * rotationSensitivity;
+      };
 
-      // Convert touch drag to movement direction
-      const sensitivity = 0.003; // Lower = slower movement
-      const maxDistance = 100; // Max pixels for full speed
+      const handleTouchEnd = () => {
+        isTouching = false;
+      };
 
-      // Normalize delta to -1 to 1 range
-      const normalizedX = Math.max(-1, Math.min(1, deltaX / maxDistance));
-      const normalizedY = Math.max(-1, Math.min(1, deltaY / maxDistance));
+      canvas.addEventListener('touchstart', handleTouchStart, { passive: true });
+      canvas.addEventListener('touchmove', handleTouchMove, { passive: true });
+      canvas.addEventListener('touchend', handleTouchEnd, { passive: true });
+      canvas.addEventListener('touchcancel', handleTouchEnd, { passive: true });
 
-      // Get camera's direction vectors
-      const forward = fpsCamera.getDirection(new Vector3(0, 0, 1));
-      const right = fpsCamera.getDirection(new Vector3(1, 0, 0));
+      return () => {
+        canvas.removeEventListener('touchstart', handleTouchStart);
+        canvas.removeEventListener('touchmove', handleTouchMove);
+        canvas.removeEventListener('touchend', handleTouchEnd);
+        canvas.removeEventListener('touchcancel', handleTouchEnd);
+      };
+    }
 
-      // Keep movement horizontal
-      forward.y = 0;
-      right.y = 0;
-      forward.normalize();
-      right.normalize();
+    // ===== JOYSTICK MODE =====
+    if (controlMode === 'joystick') {
+      const leftJoystickElement = document.getElementById('joystick-left');
+      const rightJoystickElement = document.getElementById('joystick-right');
 
-      // Apply movement: drag down = forward, drag up = backward, drag left/right = strafe
-      const movement = forward.scale(-normalizedY * sensitivity).add(right.scale(normalizedX * sensitivity));
-      fpsCamera.position.addInPlace(movement);
-    };
+      if (!leftJoystickElement || !rightJoystickElement) return;
 
-    const handleTouchEnd = () => {
-      isTouching = false;
-      if (touchMoveInterval) {
-        clearInterval(touchMoveInterval);
-        touchMoveInterval = null;
-      }
-    };
+      // Joystick state
+      let leftJoystickActive = false;
+      let rightJoystickActive = false;
+      let leftJoystickDelta = { x: 0, y: 0 };
+      let rightJoystickDelta = { x: 0, y: 0 };
 
-    canvas.addEventListener('touchstart', handleTouchStart, { passive: true });
-    canvas.addEventListener('touchmove', handleTouchMove, { passive: true });
-    canvas.addEventListener('touchend', handleTouchEnd, { passive: true });
-    canvas.addEventListener('touchcancel', handleTouchEnd, { passive: true });
+      // Helper function to calculate joystick delta
+      const getJoystickDelta = (element: HTMLElement, touch: Touch) => {
+        const rect = element.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
 
-    return () => {
-      canvas.removeEventListener('touchstart', handleTouchStart);
-      canvas.removeEventListener('touchmove', handleTouchMove);
-      canvas.removeEventListener('touchend', handleTouchEnd);
-      canvas.removeEventListener('touchcancel', handleTouchEnd);
-      if (touchMoveInterval) clearInterval(touchMoveInterval);
-    };
-  }, [playMode]);
+        const deltaX = touch.clientX - centerX;
+        const deltaY = touch.clientY - centerY;
+
+        // Limit to joystick radius
+        const maxRadius = rect.width / 2;
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        const clampedDistance = Math.min(distance, maxRadius);
+
+        if (distance === 0) return { x: 0, y: 0 };
+
+        const angle = Math.atan2(deltaY, deltaX);
+        return {
+          x: (Math.cos(angle) * clampedDistance) / maxRadius,
+          y: (Math.sin(angle) * clampedDistance) / maxRadius
+        };
+      };
+
+      // Update joystick stick visual position
+      const updateJoystickStick = (element: HTMLElement, delta: { x: number; y: number }) => {
+        const stick = element.querySelector('.joystickStick') as HTMLElement;
+        if (!stick) return;
+
+        const maxOffset = 35; // pixels
+        const offsetX = delta.x * maxOffset;
+        const offsetY = delta.y * maxOffset;
+
+        stick.style.transform = `translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px))`;
+      };
+
+      // Touch event handlers
+      const handleTouchStart = (e: TouchEvent) => {
+        Array.from(e.touches).forEach((touch) => {
+          const target = document.elementFromPoint(touch.clientX, touch.clientY);
+          if (!target) return;
+
+          if (leftJoystickElement.contains(target)) {
+            leftJoystickActive = true;
+            leftJoystickDelta = getJoystickDelta(leftJoystickElement, touch);
+            updateJoystickStick(leftJoystickElement, leftJoystickDelta);
+          } else if (rightJoystickElement.contains(target)) {
+            rightJoystickActive = true;
+            rightJoystickDelta = getJoystickDelta(rightJoystickElement, touch);
+            updateJoystickStick(rightJoystickElement, rightJoystickDelta);
+          }
+        });
+      };
+
+      const handleTouchMove = (e: TouchEvent) => {
+        Array.from(e.touches).forEach((touch) => {
+          const target = document.elementFromPoint(touch.clientX, touch.clientY);
+          if (!target) return;
+
+          if (leftJoystickActive && leftJoystickElement.contains(target)) {
+            leftJoystickDelta = getJoystickDelta(leftJoystickElement, touch);
+            updateJoystickStick(leftJoystickElement, leftJoystickDelta);
+          } else if (rightJoystickActive && rightJoystickElement.contains(target)) {
+            rightJoystickDelta = getJoystickDelta(rightJoystickElement, touch);
+            updateJoystickStick(rightJoystickElement, rightJoystickDelta);
+          }
+        });
+      };
+
+      const handleTouchEnd = (e: TouchEvent) => {
+        const remainingTouches = Array.from(e.touches);
+
+        // Check if left joystick is still touched
+        const leftStillTouched = remainingTouches.some((touch) => {
+          const target = document.elementFromPoint(touch.clientX, touch.clientY);
+          return target && leftJoystickElement.contains(target);
+        });
+
+        if (!leftStillTouched && leftJoystickActive) {
+          leftJoystickActive = false;
+          leftJoystickDelta = { x: 0, y: 0 };
+          updateJoystickStick(leftJoystickElement, leftJoystickDelta);
+        }
+
+        // Check if right joystick is still touched
+        const rightStillTouched = remainingTouches.some((touch) => {
+          const target = document.elementFromPoint(touch.clientX, touch.clientY);
+          return target && rightJoystickElement.contains(target);
+        });
+
+        if (!rightStillTouched && rightJoystickActive) {
+          rightJoystickActive = false;
+          rightJoystickDelta = { x: 0, y: 0 };
+          updateJoystickStick(rightJoystickElement, rightJoystickDelta);
+        }
+      };
+
+      // Apply joystick movement and rotation in render loop
+      const renderLoopObserver = scene.onBeforeRenderObservable.add(() => {
+        // Left joystick - Movement
+        if (leftJoystickActive) {
+          const movementSpeed = 0.1;
+          const forward = fpsCamera.getDirection(new Vector3(0, 0, 1));
+          const right = fpsCamera.getDirection(new Vector3(1, 0, 0));
+
+          forward.y = 0;
+          right.y = 0;
+          forward.normalize();
+          right.normalize();
+
+          const movement = forward
+            .scale(-leftJoystickDelta.y * movementSpeed)
+            .add(right.scale(leftJoystickDelta.x * movementSpeed));
+
+          fpsCamera.position.addInPlace(movement);
+        }
+
+        // Right joystick - Rotation
+        if (rightJoystickActive) {
+          const rotationSpeed = 0.05;
+          fpsCamera.rotation.y -= rightJoystickDelta.x * rotationSpeed;
+        }
+      });
+
+      document.addEventListener('touchstart', handleTouchStart, { passive: true });
+      document.addEventListener('touchmove', handleTouchMove, { passive: true });
+      document.addEventListener('touchend', handleTouchEnd, { passive: true });
+      document.addEventListener('touchcancel', handleTouchEnd, { passive: true });
+
+      return () => {
+        scene.onBeforeRenderObservable.remove(renderLoopObserver);
+        document.removeEventListener('touchstart', handleTouchStart);
+        document.removeEventListener('touchmove', handleTouchMove);
+        document.removeEventListener('touchend', handleTouchEnd);
+        document.removeEventListener('touchcancel', handleTouchEnd);
+      };
+    }
+  }, [playMode, controlMode]);
 
   return (
     <div className={styles.container}>
