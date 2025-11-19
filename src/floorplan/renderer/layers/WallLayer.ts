@@ -163,6 +163,12 @@ export class WallLayer extends BaseLayer {
 
     if (!startPoint || !endPoint) return;
 
+    console.log('[WallLayer] Rendering wall:', {
+      id: wall.id.slice(0, 8),
+      start: { id: startPoint.id.slice(0, 8), x: startPoint.x, y: startPoint.y },
+      end: { id: endPoint.id.slice(0, 8), x: endPoint.x, y: endPoint.y }
+    });
+
     // Calculate wall corners (mitered or butt)
     const corners = this.calculateWallCorners(wall, startPoint, endPoint);
 

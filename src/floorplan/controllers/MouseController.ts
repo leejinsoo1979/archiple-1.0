@@ -61,10 +61,13 @@ export class MouseController {
 
     // Convert screen coordinates to world coordinates using camera
     if (this.camera) {
-      return this.camera.screenToWorld(screenX, screenY);
+      const worldPos = this.camera.screenToWorld(screenX, screenY);
+      console.log('[MouseController] Screen:', { screenX, screenY }, '→ World:', { x: worldPos.x, y: worldPos.y });
+      return worldPos;
     }
 
     // Fallback to screen coordinates if no camera
+    console.warn('[MouseController] No camera, using screen coordinates');
     return new Vector2(screenX, screenY);
   }
 
