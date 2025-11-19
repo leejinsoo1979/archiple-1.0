@@ -188,7 +188,7 @@ export class SelectTool extends BaseTool {
     }
   }
 
-  handleMouseUp(position: Vector2, event: MouseEvent): void {
+  handleMouseUp(_position: Vector2, event: MouseEvent): void {
     if (!this.isDragging || event.button !== 0) return;
 
     // Finalize move

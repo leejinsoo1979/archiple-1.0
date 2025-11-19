@@ -305,13 +305,13 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           renderTarget.renderList = scene.meshes;
 
           // Render once
-          renderTarget.onAfterRenderObservable.addOnce(() => {
+          renderTarget.onAfterRenderObservable.addOnce(async () => {
             // Read pixels from render target - need to use scene.getEngine()
             const textureSize = renderTarget.getSize();
             console.log(`[Babylon3DCanvas] RenderTarget actual size: ${textureSize.width}x${textureSize.height}`);
 
             // Read pixels
-            const pixels = engine.readPixels(0, 0, textureSize.width, textureSize.height, renderTarget);
+            const pixels = await engine.readPixels(0, 0, textureSize.width, textureSize.height, true);
 
             // Create canvas to convert pixels to image
             const canvas = document.createElement('canvas');
@@ -327,7 +327,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
             // Create ImageData from pixels
             const imageData = ctx.createImageData(textureSize.width, textureSize.height);
-            imageData.data.set(pixels);
+            imageData.data.set(new Uint8ClampedArray(pixels.buffer));
             ctx.putImageData(imageData, 0, 0);
 
             // Convert to blob and then data URL
@@ -2682,7 +2682,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
       // Restore standard shadow quality
       if (sunLight) {
-        const shadowGen = sunLight.getShadowGenerator();
+        const shadowGen = sunLight.getShadowGenerator() as ShadowGenerator | null;
         if (shadowGen) {
           shadowGen.mapSize = 2048; // Standard quality
           shadowGen.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
@@ -2698,26 +2698,27 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     if (!photoRealisticMode || !pipelineRef.current || !renderSettings) return;
 
     const pipeline = pipelineRef.current;
+    const pipelineAny = pipeline as any;
 
     console.log('[Babylon3DCanvas] Updating rendering settings...', renderSettings);
 
     // Update SSAO
-    if (pipeline.ssao2) {
-      pipeline.ssao2.radius = renderSettings.ssaoRadius;
-      pipeline.ssao2.totalStrength = renderSettings.ssaoStrength;
+    if (pipelineAny.ssao2) {
+      pipelineAny.ssao2.radius = renderSettings.ssaoRadius;
+      pipelineAny.ssao2.totalStrength = renderSettings.ssaoStrength;
       console.log('[Babylon3DCanvas] SSAO updated:', renderSettings.ssaoRadius, renderSettings.ssaoStrength);
     }
 
     // Update SSR
-    if (pipeline.screenSpaceReflections) {
-      pipeline.screenSpaceReflections.strength = renderSettings.ssrStrength;
+    if (pipelineAny.screenSpaceReflections) {
+      pipelineAny.screenSpaceReflections.strength = renderSettings.ssrStrength;
       console.log('[Babylon3DCanvas] SSR updated:', renderSettings.ssrStrength);
     }
 
     // Update Bloom
-    if (pipeline.bloom) {
-      pipeline.bloom.threshold = renderSettings.bloomThreshold;
-      pipeline.bloom.weight = renderSettings.bloomWeight;
+    if (pipelineAny.bloom) {
+      pipelineAny.bloom.threshold = renderSettings.bloomThreshold;
+      pipelineAny.bloom.weight = renderSettings.bloomWeight;
       console.log('[Babylon3DCanvas] Bloom updated:', renderSettings.bloomThreshold, renderSettings.bloomWeight);
     }
 

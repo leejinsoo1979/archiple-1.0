@@ -23,7 +23,7 @@ export interface DetectedDimension {
  * @returns Array of detected lines
  */
 export async function detectLines(imageData: ImageData): Promise<DetectedLine[]> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, _reject) => {
     try {
       // Load opencv.js
       const cv = (window as any).cv;
@@ -274,7 +274,9 @@ export async function detectDimensions(canvas: HTMLCanvasElement): Promise<Detec
     const dimensions: DetectedDimension[] = [];
 
     // Process OCR results
-    result.data.words.forEach((word) => {
+    const resultData = result.data as any;
+    if (resultData.words) {
+      resultData.words.forEach((word: any) => {
       // Look for numbers (dimensions)
       const text = word.text.trim();
       const numberMatch = text.match(/(\d+)/);
@@ -293,7 +295,8 @@ export async function detectDimensions(canvas: HTMLCanvasElement): Promise<Detec
           });
         }
       }
-    });
+      });
+    }
 
     console.log(`Detected ${dimensions.length} dimensions:`, dimensions);
     return dimensions;

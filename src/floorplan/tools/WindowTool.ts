@@ -23,7 +23,6 @@ export class WindowTool extends BaseTool {
   // Preview state
   private hoveredWall: Wall | null = null;
   private previewPosition: number = 0.5; // 0-1 position along wall
-  private currentMousePos: Vector2 | null = null;
 
   // Config
   private wallHoverDistance = 100; // 100mm hover detection radius
@@ -43,7 +42,7 @@ export class WindowTool extends BaseTool {
     this.resetState();
   }
 
-  handleMouseDown(position: Vector2, event: MouseEvent): void {
+  handleMouseDown(_position: Vector2, event: MouseEvent): void {
     if (event.button !== 0) return; // Only handle left-click
 
     if (this.hoveredWall) {
@@ -53,8 +52,6 @@ export class WindowTool extends BaseTool {
   }
 
   handleMouseMove(position: Vector2, _event: MouseEvent): void {
-    this.currentMousePos = position;
-
     // Find nearest wall
     const walls = this.sceneManager.objectManager.getAllWalls();
     const points = this.sceneManager.objectManager.getAllPoints();
@@ -167,7 +164,6 @@ export class WindowTool extends BaseTool {
   private resetState(): void {
     this.hoveredWall = null;
     this.previewPosition = 0.5;
-    this.currentMousePos = null;
   }
 
   getCursor(): string {

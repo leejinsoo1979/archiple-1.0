@@ -188,8 +188,6 @@ export class RoomDetectionService {
    * Create room from cycle
    */
   private createRoom(pointIds: string[], walls: Wall[], area: number): Room {
-    const pointIdSet = new Set(pointIds);
-
     // Find walls connecting consecutive points in the cycle
     const wallIds: string[] = [];
     for (let i = 0; i < pointIds.length; i++) {

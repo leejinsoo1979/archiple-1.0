@@ -214,7 +214,6 @@ export class GuideLayer extends BaseLayer {
     if (!this.camera) return;
 
     // Calculate visible bounds in world space
-    const transform = ctx.getTransform();
     // We need to invert the transform to get world bounds
     // But easier to just use a very large number relative to the view
     // Or use camera.getWorldBounds() if available.

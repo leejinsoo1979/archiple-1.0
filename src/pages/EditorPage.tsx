@@ -3,7 +3,7 @@ import FloorplanCanvas from '../floorplan/FloorplanCanvas';
 import Babylon3DCanvas from '../babylon/Babylon3DCanvas';
 import styles from './EditorPage.module.css';
 import { ToolType } from '../core/types/EditorState';
-import { createTestRoom } from '../floorplan/blueprint/BlueprintToBabylonAdapter';
+// import { createTestRoom } from '../floorplan/blueprint/BlueprintToBabylonAdapter';
 import { RxCursorArrow } from 'react-icons/rx';
 import { PiCubeTransparentLight } from 'react-icons/pi';
 import { eventBus } from '../core/events/EventBus';
@@ -227,12 +227,15 @@ const EditorPage = () => {
   }, [renderStyleOpen]);
 
   // Load test room data (2800mm x 2800mm room with 100mm walls)
+  // Commented out - currently unused but may be needed for testing
+  /*
   const handleLoadTestRoom = () => {
     const testData = createTestRoom();
     console.log('[EditorPage] Loading test room:', testData);
     setFloorplanData(testData);
     setViewMode('3D'); // Switch to 3D view to see the result
   };
+  */
 
   // Handle GLB file upload
   const handleGlbUpload = (event: React.ChangeEvent<HTMLInputElement>) => {

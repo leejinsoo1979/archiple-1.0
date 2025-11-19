@@ -115,6 +115,8 @@ export function getWallDirection(
  * @param wall2Dir 두 번째 벽의 방향 벡터
  * @param connectingAtWall1End wall1의 끝점에서 연결되는지 여부
  */
+// Commented out - currently unused but may be needed in future
+/*
 function calculateMiterAngle(
   wall1Dir: WallDirection,
   wall2Dir: WallDirection,
@@ -140,6 +142,7 @@ function calculateMiterAngle(
   // Miter 각도 = 두 벽이 이루는 각도의 절반
   return angleDiff / 2;
 }
+*/
 
 /**
  * 벽의 4개 코너 계산 (Miter 적용)

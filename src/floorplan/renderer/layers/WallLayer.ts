@@ -789,7 +789,6 @@ export class WallLayer extends BaseLayer {
     // Draw dimension text - rotated to align with dimension line
     const label = `${distanceMm.toFixed(0)}mm`;
     ctx.font = '12px system-ui';
-    const metrics = ctx.measureText(label);
 
     ctx.save();
     ctx.translate(labelX, labelY);

@@ -4,7 +4,7 @@
  * 모든 코너(ㄱ, T, 십자)를 자동으로 정렬하는 polygon 기반 벽 시스템
  */
 
-import { Vector2, Vector3, Mesh, Scene, VertexData, CSG } from '@babylonjs/core';
+import { Vector2, Mesh, Scene, VertexData, CSG } from '@babylonjs/core';
 import type { Wall } from '../../core/types/Wall';
 import type { Point } from '../../core/types/Point';
 

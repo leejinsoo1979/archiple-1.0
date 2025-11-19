@@ -37,7 +37,7 @@ export const ImageImportPanel: React.FC<ImageImportPanelProps> = ({ onFloorplanG
   const [calibrationPoints, setCalibrationPoints] = useState<CalibrationPoint[]>([]);
   const [realWorldDistance, setRealWorldDistance] = useState<string>('');
   const [detectedLines, setDetectedLines] = useState<DetectedLine[]>([]);
-  const [detectedDimensions, setDetectedDimensions] = useState<DetectedDimension[]>([]);
+  const [_detectedDimensions, _setDetectedDimensions] = useState<DetectedDimension[]>([]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -178,7 +178,7 @@ export const ImageImportPanel: React.FC<ImageImportPanelProps> = ({ onFloorplanG
       });
 
       const dimensions = await detectDimensions(canvasRef.current);
-      setDetectedDimensions(dimensions);
+      _setDetectedDimensions(dimensions);
 
       // Draw detected dimensions on canvas
       ctx.fillStyle = '#00FF00';
