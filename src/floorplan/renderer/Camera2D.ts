@@ -25,6 +25,7 @@ import {
  */
 export class Camera2D {
   private viewport: ViewportState;
+  private dpr: number = 1;
 
   constructor(canvasWidth: number, canvasHeight: number, initialScale: number = 0.1) {
     // ViewportState 생성 (scalePxPerMm = 0.1 means 1mm = 0.1px, so 4800mm = 480px)
@@ -32,9 +33,10 @@ export class Camera2D {
   }
 
   /**
-   * Set canvas size
+   * Set canvas size and Device Pixel Ratio
    */
-  setSize(width: number, height: number): void {
+  setSize(width: number, height: number, dpr: number = 1): void {
+    this.dpr = dpr;
     this.viewport.canvasWidth = width;
     this.viewport.canvasHeight = height;
   }
@@ -128,8 +130,8 @@ export class Camera2D {
   applyTransform(ctx: CanvasRenderingContext2D): void {
     const { scalePxPerMm, offsetX, offsetY, canvasWidth, canvasHeight } = this.viewport;
 
-    // Reset transform
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // Reset transform to DPI scale
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     // 1. Translate to canvas center
     ctx.translate(canvasWidth / 2, canvasHeight / 2);
@@ -139,6 +141,14 @@ export class Camera2D {
 
     // 3. Apply scale (zoom) - converts mm to px
     ctx.scale(scalePxPerMm, scalePxPerMm);
+  }
+
+  /**
+   * Apply screen transform (reset to pixel space with DPI scaling)
+   * Useful for drawing UI elements that shouldn't zoom/pan
+   */
+  applyScreenTransform(ctx: CanvasRenderingContext2D): void {
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
 
   /**

@@ -19,7 +19,6 @@ export class ToolManager {
    */
   registerTool(type: ToolType, tool: Tool): void {
     this.tools.set(type, tool);
-    console.log(`[ToolManager] Registered tool: ${type}`);
   }
 
   /**
@@ -39,7 +38,6 @@ export class ToolManager {
   setActiveTool(type: ToolType): boolean {
     const tool = this.tools.get(type);
     if (!tool) {
-      console.warn(`[ToolManager] Tool not found: ${type}`);
       return false;
     }
 
@@ -52,7 +50,6 @@ export class ToolManager {
     this.activeTool = tool;
     tool.activate();
 
-    console.log(`[ToolManager] Activated tool: ${type}`);
     return true;
   }
 
@@ -75,10 +72,7 @@ export class ToolManager {
    */
   handleMouseDown(position: Vector2, event: MouseEvent): void {
     if (this.activeTool) {
-      console.log('[ToolManager] Routing mouse down to active tool:', this.activeTool.name);
       this.activeTool.handleMouseDown(position, event);
-    } else {
-      console.warn('[ToolManager] No active tool to route mouse down to!');
     }
   }
 
@@ -96,7 +90,6 @@ export class ToolManager {
    */
   handleMouseUp(position: Vector2, event: MouseEvent): void {
     if (this.activeTool) {
-      console.log('[ToolManager] Routing mouse up to active tool:', this.activeTool.name);
       this.activeTool.handleMouseUp(position, event);
     }
   }

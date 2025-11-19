@@ -312,83 +312,76 @@ export class WallLayer extends BaseLayer {
   private calculateCornerAdjustment(
     currentWall: Wall,
     otherWall: Wall,
-    _junctionPoint: Point,
+    junctionPoint: Point,
     _currentNormal: Vector2,
     halfThickness: number
   ): { left: Vector2, right: Vector2 } | null {
 
-    // Get other wall direction (away from junction)
-    const otherStart = this.points.get(otherWall.startPointId);
-    const otherEnd = this.points.get(otherWall.endPointId);
-    if (!otherStart || !otherEnd) return null;
+    // Helper to get wall lines
+    const getWallLines = (wall: Wall) => {
+      const start = Vector2.from(this.points.get(wall.startPointId)!);
+      const end = Vector2.from(this.points.get(wall.endPointId)!);
+      const dir = end.subtract(start).normalize();
+      const normal = new Vector2(-dir.y, dir.x);
 
+      // Define lines by a point and direction
+      // Left line: passes through start + normal * halfThickness
+      // Right line: passes through start - normal * halfThickness
+      const leftOrigin = start.add(normal.multiply(halfThickness));
+      const rightOrigin = start.subtract(normal.multiply(halfThickness));
 
-    // Intersect the two left lines
-    // Line 1: P = junction + currentNormal * halfThickness + t * currentDir
-    // Line 2: P = junction + otherNormal * halfThickness + u * otherDir
-    // But we can just find intersection of infinite lines
-
-    // Current wall left line
-
-
-    // Wait, currentDir needs to be consistent with "Left" and "Right".
-    // "Left" is defined by `normal = (-dir.y, dir.x)` where `dir = end - start`.
-    // So if we are at Start, `dir` is away. If at End, `dir` is towards.
-    // Let's stick to the wall's intrinsic Start->End direction for Left/Right definition.
-
-    // Re-calculate for the specific junction
-    // We want the intersection of:
-    // L1: P = (Start + Normal*W/2) + t * Dir
-    // L2: P = (OtherStart + OtherNormal*W/2) + u * OtherDir
-
-    // Let's use a simpler approach: Miter vector
-    // Miter vector is the normalized sum of the two wall directions (both pointing AWAY or both TOWARDS junction).
-    // Let's use "Away from junction".
-
-    // Dir1: Current wall direction AWAY from junction
-    // Dir2: Other wall direction AWAY from junction
-    // Wait, in calculateWallCorners, I passed `normal` which is based on Start->End.
-    // If I am at End, `dir` (Start->End) is pointing AT the junction.
-    // So `normal` is correct for the wall.
-
-    // Let's find the intersection of the two "Left" lines and two "Right" lines.
-
-    // Current Wall Left Line: Point = (Start + Normal*W/2), Dir = (End - Start)
-    // Current Wall Right Line: Point = (Start - Normal*W/2), Dir = (End - Start)
-
-    // Other Wall Left Line: Point = (OtherStart + OtherNormal*W/2), Dir = (OtherEnd - OtherStart)
-    // Other Wall Right Line: Point = (OtherStart - OtherNormal*W/2), Dir = (OtherEnd - OtherStart)
-
-    // We need to find which lines intersect to form the corner.
-    // Helper to intersect two lines defined by Point and Dir
-    const intersect = (p1: Vector2, d1: Vector2, p2: Vector2, d2: Vector2): Vector2 | null => {
-      const det = d1.x * d2.y - d1.y * d2.x;
-      if (Math.abs(det) < 0.0001) return null; // Parallel
-      const t = ((p2.x - p1.x) * d2.y - (p2.y - p1.y) * d2.x) / det;
-      return p1.add(d1.multiply(t));
+      return {
+        left: { p: leftOrigin, d: dir },
+        right: { p: rightOrigin, d: dir }
+      };
     };
 
-    const w1Start = Vector2.from(this.points.get(currentWall.startPointId)!);
-    const w1End = Vector2.from(this.points.get(currentWall.endPointId)!);
-    const w1Dir = w1End.subtract(w1Start).normalize();
-    const w1Normal = new Vector2(-w1Dir.y, w1Dir.x);
+    // Helper to intersect two lines
+    const intersect = (l1: { p: Vector2, d: Vector2 }, l2: { p: Vector2, d: Vector2 }): Vector2 | null => {
+      const det = l1.d.x * l2.d.y - l1.d.y * l2.d.x;
+      if (Math.abs(det) < 0.0001) return null; // Parallel
+      const t = ((l2.p.x - l1.p.x) * l2.d.y - (l2.p.y - l1.p.y) * l2.d.x) / det;
+      return l1.p.add(l1.d.multiply(t));
+    };
 
-    const w2Start = Vector2.from(this.points.get(otherWall.startPointId)!);
-    const w2End = Vector2.from(this.points.get(otherWall.endPointId)!);
-    const w2Dir = w2End.subtract(w2Start).normalize();
-    const w2Normal = new Vector2(-w2Dir.y, w2Dir.x);
+    const w1Lines = getWallLines(currentWall);
+    const w2Lines = getWallLines(otherWall);
 
-    const w1Left = w1Start.add(w1Normal.multiply(halfThickness));
-    const w1Right = w1Start.subtract(w1Normal.multiply(halfThickness));
+    const isW1Start = currentWall.startPointId === junctionPoint.id;
+    const isW2Start = otherWall.startPointId === junctionPoint.id;
 
-    const w2Left = w2Start.add(w2Normal.multiply(halfThickness));
-    const w2Right = w2Start.subtract(w2Normal.multiply(halfThickness));
+    // Determine connectivity type and intersect appropriate lines
+    // Case 1: Head-Tail or Tail-Head (Sequential) -> Same sides intersect
+    // Case 2: Head-Head or Tail-Tail (Opposing) -> Opposite sides intersect
 
-    const leftInt = intersect(w1Left, w1Dir, w2Left, w2Dir);
-    const rightInt = intersect(w1Right, w1Dir, w2Right, w2Dir);
+    // If W1 End meets W2 Start (Standard): W1 Left <-> W2 Left
+    // If W1 Start meets W2 End (Reverse): W1 Left <-> W2 Left
+    // If W1 End meets W2 End (Head-Head): W1 Left <-> W2 Right
+    // If W1 Start meets W2 Start (Tail-Tail): W1 Left <-> W2 Right
 
-    if (leftInt && rightInt) {
-      return { left: leftInt, right: rightInt };
+    // Logic:
+    // If (isW1Start == isW2Start) -> Tail-Tail (true, true) or Head-Head (false, false) -> Opposite sides
+    // If (isW1Start != isW2Start) -> Head-Tail or Tail-Head -> Same sides
+
+    let newLeft: Vector2 | null = null;
+    let newRight: Vector2 | null = null;
+
+    if (isW1Start === isW2Start) {
+      // Tail-Tail or Head-Head: Connect Left to Right, Right to Left
+      newLeft = intersect(w1Lines.left, w2Lines.right);
+      newRight = intersect(w1Lines.right, w2Lines.left);
+    } else {
+      // Head-Tail or Tail-Head: Connect Left to Left, Right to Right
+      newLeft = intersect(w1Lines.left, w2Lines.left);
+      newRight = intersect(w1Lines.right, w2Lines.right);
+    }
+
+    if (newLeft && newRight) {
+      // Miter limit check
+      // If intersection is too far from junction, clamp it?
+      // For now, just return the intersection. 
+      // The user wants "correct" geometry, which mathematically IS the intersection.
+      return { left: newLeft, right: newRight };
     }
 
     return null;

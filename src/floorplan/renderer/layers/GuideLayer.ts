@@ -165,8 +165,12 @@ export class GuideLayer extends BaseLayer {
     // Check current theme for color selection
     const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
 
-    ctx.strokeStyle = isDarkMode ? '#64B5F6' : '#3498db';
-    ctx.lineWidth = 1.5;
+    // Emissive effect
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = isDarkMode ? '#64B5F6' : '#3498db';
+
+    ctx.strokeStyle = isDarkMode ? '#64B5F6' : '#2980b9'; // Slightly darker in light mode for contrast
+    ctx.lineWidth = 2; // Bolder
     ctx.setLineDash([10, 5]);
 
     if (guide.type === 'horizontal') {
@@ -178,8 +182,9 @@ export class GuideLayer extends BaseLayer {
       ctx.stroke();
 
       // 라벨
+      ctx.shadowBlur = 0; // Remove shadow for text
       ctx.fillStyle = this.config.orthogonalGuideColor;
-      ctx.font = 'bold 11px system-ui';
+      ctx.font = 'bold 12px system-ui';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'bottom';
       ctx.fillText('수평', guide.from.x + 10, y - 5);
@@ -192,8 +197,9 @@ export class GuideLayer extends BaseLayer {
       ctx.stroke();
 
       // 라벨
+      ctx.shadowBlur = 0; // Remove shadow for text
       ctx.fillStyle = this.config.orthogonalGuideColor;
-      ctx.font = 'bold 11px system-ui';
+      ctx.font = 'bold 12px system-ui';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
       ctx.fillText('수직', x + 5, guide.from.y + 10);
@@ -222,8 +228,12 @@ export class GuideLayer extends BaseLayer {
 
     ctx.save();
 
+    // Emissive effect
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = this.config.angleGuideColor;
+
     ctx.strokeStyle = this.config.angleGuideColor;
-    ctx.lineWidth = 2; // Thicker line for better visibility
+    ctx.lineWidth = 2.5; // Even thicker for angle guide
     ctx.setLineDash([15, 8]); // Longer dashes
 
     ctx.beginPath();
@@ -371,12 +381,13 @@ export class GuideLayer extends BaseLayer {
   ): void {
     ctx.save();
 
-    // Check current theme for color selection
-    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+    // Emissive effect
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#e74c3c';
 
-    // Draw vertical guide line (수직 가이드) - 다크모드 대응
-    ctx.strokeStyle = isDarkMode ? '#EF5350' : '#e74c3c';
-    ctx.lineWidth = 1.5;
+    // Draw vertical guide line (수직 가이드)
+    ctx.strokeStyle = '#e74c3c'; // 빨간색으로 명확하게 표시
+    ctx.lineWidth = 2;
     ctx.setLineDash([10, 5]);
 
     ctx.beginPath();
@@ -393,12 +404,13 @@ export class GuideLayer extends BaseLayer {
   ): void {
     ctx.save();
 
-    // Check current theme for color selection
-    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+    // Emissive effect
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#e74c3c';
 
-    // Draw horizontal guide line (수평 가이드) - 다크모드 대응
-    ctx.strokeStyle = isDarkMode ? '#EF5350' : '#e74c3c';
-    ctx.lineWidth = 1.5;
+    // Draw horizontal guide line (수평 가이드)
+    ctx.strokeStyle = '#e74c3c'; // 빨간색으로 명확하게 표시
+    ctx.lineWidth = 2;
     ctx.setLineDash([10, 5]);
 
     ctx.beginPath();

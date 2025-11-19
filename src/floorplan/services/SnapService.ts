@@ -94,11 +94,22 @@ export class SnapService {
       return { position, snappedTo: 'none' };
     }
 
+    // Clear transient guides at the start of each snap cycle
+    eventBus.emit(FloorEvents.VERTICAL_GUIDE_CLEARED, {});
+    eventBus.emit(FloorEvents.HORIZONTAL_GUIDE_CLEARED, {});
+    // Note: We don't clear ANGLE_GUIDE here because it might be used by other snaps, 
+    // but we should probably reset it if no snap occurs.
+    // For now, let's rely on the specific snap methods to emit ANGLE_GUIDE_UPDATED if needed.
+    // Actually, if we don't emit it, the layer keeps the old one. 
+    // We should probably emit a "clear" if no snap happens at the end.
+
     // 1. Point snap (highest priority - snap to existing points)
     if (this.config.pointSnapEnabled) {
       const pointSnap = this.snapToPoint(position);
       if (pointSnap) {
         console.log('[SnapService] Point snap triggered');
+        // Clear angle guide when point snapping
+        eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, { from: null, angle: null });
         return pointSnap;
       }
     }
@@ -109,6 +120,16 @@ export class SnapService {
       if (orthogonalSnap) {
         console.log('[SnapService] Orthogonal snap triggered');
         return orthogonalSnap;
+      }
+    }
+
+    // 2.5 Intersection Snap (Smart Guides) - HIGH PRIORITY
+    // Automatically finds rectangle corners
+    if (this.lastPoint) {
+      const intersectionSnap = this.snapToIntersection(position, this.lastPoint);
+      if (intersectionSnap) {
+        console.log('[SnapService] Intersection snap triggered');
+        return intersectionSnap;
       }
     }
 
@@ -376,5 +397,77 @@ export class SnapService {
    */
   getConfig(): SnapConfig {
     return { ...this.config };
+  }
+
+  /**
+   * Snap to intersection of orthogonal lines from last point and other points
+   * This allows closing rectangles perfectly (U -> Square)
+   */
+  private snapToIntersection(position: Vector2, lastPoint: Vector2): SnapResult | null {
+    if (this.points.length === 0) return null;
+
+    const threshold = 500; // 500mm threshold
+
+    for (const point of this.points) {
+      // Skip if point is the last point itself
+      if (point.x === lastPoint.x && point.y === lastPoint.y) continue;
+
+      // Case 1: Horizontal from lastPoint + Vertical from point
+      // Intersection is (point.x, lastPoint.y)
+      const intersection1 = new Vector2(point.x, lastPoint.y);
+      const dist1 = position.distanceTo(intersection1);
+      if (dist1 < threshold) {
+        console.log('[SnapService] Intersection Case 1 found:', intersection1, 'Distance:', dist1);
+        // Emit guides
+        eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, {
+          from: { id: 'intersection-h', x: lastPoint.x, y: lastPoint.y },
+          angle: 0, // Horizontal from lastPoint
+        });
+
+        eventBus.emit(FloorEvents.VERTICAL_GUIDE_UPDATED, {
+          x: point.x,
+          fromY: -1000000,
+          toY: 1000000,
+        });
+
+        // Highlight the reference point
+        eventBus.emit(FloorEvents.POINT_HOVERED, { point });
+
+        return {
+          position: intersection1,
+          snappedTo: 'perpendicular', // Treat as perpendicular/intersection
+        };
+      }
+
+      // Case 2: Vertical from lastPoint + Horizontal from point
+      // Intersection is (lastPoint.x, point.y)
+      const intersection2 = new Vector2(lastPoint.x, point.y);
+      const dist2 = position.distanceTo(intersection2);
+      if (dist2 < threshold) {
+        console.log('[SnapService] Intersection Case 2 found:', intersection2, 'Distance:', dist2);
+
+        // Emit guides
+        eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, {
+          from: { id: 'intersection-v', x: lastPoint.x, y: lastPoint.y },
+          angle: 90, // Vertical from lastPoint
+        });
+
+        eventBus.emit(FloorEvents.HORIZONTAL_GUIDE_UPDATED, {
+          y: point.y,
+          fromX: -1000000,
+          toX: 1000000,
+        });
+
+        // Highlight the reference point
+        eventBus.emit(FloorEvents.POINT_HOVERED, { point });
+
+        return {
+          position: intersection2,
+          snappedTo: 'perpendicular',
+        };
+      }
+    }
+
+    return null;
   }
 }

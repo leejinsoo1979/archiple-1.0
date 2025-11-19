@@ -103,10 +103,12 @@ export class Canvas2DRenderer {
    * Render a single frame
    */
   render(): void {
-    // Clear canvas
+    // Clear canvas (physical pixels)
     this.clear();
 
-    // Apply camera transform
+    this.ctx.save();
+
+    // Apply camera transform (now handles DPI scaling internally)
     this.camera.applyTransform(this.ctx);
 
     // Update all layers
@@ -125,7 +127,9 @@ export class Canvas2DRenderer {
       }
     });
 
-    // Reset transform for UI elements
+    this.ctx.restore();
+
+    // Reset transform for UI elements (if any were drawn outside the save/restore)
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
@@ -166,13 +170,20 @@ export class Canvas2DRenderer {
 
   /**
    * Resize the canvas
+   * @param width Logical width (CSS pixels)
+   * @param height Logical height (CSS pixels)
+   * @param dpr Device Pixel Ratio (default: window.devicePixelRatio)
    */
-  resize(width: number, height: number): void {
-    this.canvas.width = width;
-    this.canvas.height = height;
+  resize(width: number, height: number, dpr: number = window.devicePixelRatio || 1): void {
+    this.canvas.width = width * dpr;
+    this.canvas.height = height * dpr;
 
-    // Update camera size
-    this.camera.setSize(width, height);
+    // Ensure CSS size matches logical size
+    this.canvas.style.width = `${width}px`;
+    this.canvas.style.height = `${height}px`;
+
+    // Update camera size (logical) and DPR
+    this.camera.setSize(width, height, dpr);
 
     // Reset context settings after resize
     this.ctx.imageSmoothingEnabled = true;

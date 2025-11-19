@@ -72,9 +72,7 @@ export class MouseController {
    * Handle mouse down
    */
   private handleMouseDown(event: MouseEvent): void {
-    console.log('[MouseController] Mouse down - button:', event.button, 'at screen:', event.clientX, event.clientY);
     const position = this.getCanvasPosition(event);
-    console.log('[MouseController] Converted to world position:', position.x.toFixed(0), position.y.toFixed(0));
     this.toolManager.handleMouseDown(position, event);
 
     // Update cursor
@@ -96,7 +94,6 @@ export class MouseController {
    * Handle mouse up
    */
   private handleMouseUp(event: MouseEvent): void {
-    console.log('[MouseController] Mouse up - button:', event.button);
     const position = this.getCanvasPosition(event);
     this.toolManager.handleMouseUp(position, event);
 

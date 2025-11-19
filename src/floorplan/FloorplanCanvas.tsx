@@ -128,12 +128,17 @@ const FloorplanCanvas = ({
     sceneManagerRef.current = sceneManager;
 
     // 2. Resize canvas
-    canvas.width = container.clientWidth;
-    canvas.height = container.clientHeight;
+    // Handle High DPI (Retina) displays
+    const dpr = window.devicePixelRatio || 1;
+    const logicalWidth = container.clientWidth;
+    const logicalHeight = container.clientHeight;
 
     // 3. Initialize Renderer
     const renderer = new Canvas2DRenderer(canvas);
     rendererRef.current = renderer;
+
+    // Resize renderer (handles physical size and DPI scaling)
+    renderer.resize(logicalWidth, logicalHeight, dpr);
 
     // 4. Create Layers
     const ctx = canvas.getContext('2d');
@@ -149,7 +154,8 @@ const FloorplanCanvas = ({
       majorColor: '#222222', // Almost black for major lines
       backgroundColor: '#ffffff', // Pure white background (high contrast)
     });
-    gridLayer.setSize(canvas.width, canvas.height);
+    // GridLayer needs physical dimensions because ctx.getTransform() returns physical pixel matrix
+    gridLayer.setSize(logicalWidth * dpr, logicalHeight * dpr);
     gridLayerRef.current = gridLayer;
 
     const roomLayer = new RoomLayer();
@@ -545,10 +551,10 @@ const FloorplanCanvas = ({
     requestAnimationFrame(() => {
       // Double-check canvas dimensions in case container wasn't fully sized initially
       if (container.clientWidth > 0 && container.clientHeight > 0) {
-        canvas.width = container.clientWidth;
-        canvas.height = container.clientHeight;
-        gridLayer.setSize(canvas.width, canvas.height);
-        renderer.resize(canvas.width, canvas.height);
+        const dpr = window.devicePixelRatio || 1;
+        renderer.resize(container.clientWidth, container.clientHeight, dpr);
+        // GridLayer needs physical dimensions because ctx.getTransform() returns physical pixel matrix
+        gridLayer.setSize(container.clientWidth * dpr, container.clientHeight * dpr);
       }
 
       // Force initial render to ensure camera transform is applied and grid is visible
@@ -562,12 +568,11 @@ const FloorplanCanvas = ({
     const handleResize = () => {
       if (!canvas || !container) return;
 
-      canvas.width = container.clientWidth;
-      canvas.height = container.clientHeight;
-
-      gridLayer.setSize(canvas.width, canvas.height);
-      renderer.resize(canvas.width, canvas.height);
-      sceneManager.resizeCanvas(canvas.width, canvas.height);
+      const dpr = window.devicePixelRatio || 1;
+      renderer.resize(container.clientWidth, container.clientHeight, dpr);
+      // GridLayer needs physical dimensions
+      gridLayer.setSize(container.clientWidth * dpr, container.clientHeight * dpr);
+      sceneManager.resizeCanvas(container.clientWidth, container.clientHeight);
     };
 
     window.addEventListener('resize', handleResize);
@@ -610,7 +615,6 @@ const FloorplanCanvas = ({
     const sceneManager = sceneManagerRef.current;
 
     if (toolManager && sceneManager) {
-      console.log('[FloorplanCanvas] Switching to tool:', activeTool);
       toolManager.setActiveTool(activeTool);
       sceneManager.setTool(activeTool);
     }
