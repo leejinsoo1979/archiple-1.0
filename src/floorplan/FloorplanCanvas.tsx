@@ -118,7 +118,7 @@ const FloorplanCanvas = ({
       gridSize: 100, // 100mm = 10cm grid display
       snapEnabled: true,
       snapThreshold: 15, // 15px snap threshold (screen space)
-      wallThickness: 150, // 150mm = 15cm
+      wallThickness: 100, // 100mm = 10cm
       wallHeight: 2400, // 2400mm = 2.4m
       canvasWidth: container.clientWidth,
       canvasHeight: container.clientHeight,

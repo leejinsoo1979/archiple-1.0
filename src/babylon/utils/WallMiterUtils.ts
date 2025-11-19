@@ -190,75 +190,105 @@ export function calculateWallCorners(
     },
   };
 
+  // Helper: Get wall lines (Left and Right)
+  // Note: Using 2D coordinates (x, y) internally for calculation, then mapping y -> z
+  const getWallLines = (w: Wall) => {
+    const s = pointMap.get(w.startPointId)!;
+    const e = pointMap.get(w.endPointId)!;
+    const dx = e.x - s.x;
+    const dy = e.y - s.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const dir = { x: dx / len, y: dy / len };
+    const normal = { x: -dir.y, y: dir.x }; // Left normal
+    const halfT = w.thickness / 2;
+
+    // Left line origin
+    const leftOrigin = {
+      x: s.x + normal.x * halfT,
+      y: s.y + normal.y * halfT
+    };
+    // Right line origin
+    const rightOrigin = {
+      x: s.x - normal.x * halfT,
+      y: s.y - normal.y * halfT
+    };
+
+    return {
+      left: { p: leftOrigin, d: dir },
+      right: { p: rightOrigin, d: dir }
+    };
+  };
+
+  // Helper: Intersect two lines
+  const intersect = (l1: { p: { x: number, y: number }, d: { x: number, y: number } }, l2: { p: { x: number, y: number }, d: { x: number, y: number } }) => {
+    const det = l1.d.x * l2.d.y - l1.d.y * l2.d.x;
+    if (Math.abs(det) < 0.0001) return null; // Parallel
+    const t = ((l2.p.x - l1.p.x) * l2.d.y - (l2.p.y - l1.p.y) * l2.d.x) / det;
+    return {
+      x: l1.p.x + l1.d.x * t,
+      y: l1.p.y + l1.d.y * t
+    };
+  };
+
   // ===== 시작점 Miter 적용 =====
   if (connections.startConnected) {
     const connectedWall = connections.startConnected.wall;
-    const connectedDir = getWallDirection(connectedWall, pointMap);
+    const atStart = connections.startConnected.atStart;
 
-    if (connectedDir) {
-      const atStart = connections.startConnected.atStart;
+    const w1Lines = getWallLines(wall);
+    const w2Lines = getWallLines(connectedWall);
 
-      // 연결된 벽의 방향 조정
-      const adjustedConnectedDir = atStart
-        ? { x: connectedDir.x, z: connectedDir.z }
-        : { x: -connectedDir.x, z: -connectedDir.z };
+    // Logic from WallLayer.ts:
+    // isW1Start is TRUE (we are at start of current wall)
+    // isW2Start is `atStart`
 
-      // 현재 벽의 시작점에서 바깥쪽 방향 (반대 방향)
-      const currentDirOut = { x: -wallDir.x, z: -wallDir.z };
+    let newLeft = null;
+    let newRight = null;
 
-      const miterAngle = calculateMiterAngle(currentDirOut, adjustedConnectedDir, true);
+    if (true === atStart) {
+      // Tail-Tail (Start-Start): Connect Left to Right, Right to Left
+      newLeft = intersect(w1Lines.left, w2Lines.right);
+      newRight = intersect(w1Lines.right, w2Lines.left);
+    } else {
+      // Head-Tail (Start-End): Connect Left to Left, Right to Right
+      newLeft = intersect(w1Lines.left, w2Lines.left);
+      newRight = intersect(w1Lines.right, w2Lines.right);
+    }
 
-      // 각도가 너무 작으면 miter 적용 안 함 (일직선)
-      if (Math.abs(miterAngle) > 0.01) {
-        const miterOffset = t / Math.tan(Math.abs(miterAngle));
-
-        if (miterAngle > 0) {
-          // 모든 부호 반대로!
-          corners.startRight.x += wallDir.x * miterOffset;
-          corners.startRight.z += wallDir.z * miterOffset;
-          corners.startLeft.x -= wallDir.x * miterOffset;
-          corners.startLeft.z -= wallDir.z * miterOffset;
-        } else {
-          corners.startLeft.x += wallDir.x * miterOffset;
-          corners.startLeft.z += wallDir.z * miterOffset;
-          corners.startRight.x -= wallDir.x * miterOffset;
-          corners.startRight.z -= wallDir.z * miterOffset;
-        }
-      }
+    if (newLeft && newRight) {
+      corners.startLeft = { x: newLeft.x, z: newLeft.y };
+      corners.startRight = { x: newRight.x, z: newRight.y };
     }
   }
 
   // ===== 끝점 Miter 적용 =====
   if (connections.endConnected) {
     const connectedWall = connections.endConnected.wall;
-    const connectedDir = getWallDirection(connectedWall, pointMap);
+    const atStart = connections.endConnected.atStart;
 
-    if (connectedDir) {
-      const atStart = connections.endConnected.atStart;
+    const w1Lines = getWallLines(wall);
+    const w2Lines = getWallLines(connectedWall);
 
-      // 연결된 벽의 방향 조정
-      const adjustedConnectedDir = atStart
-        ? { x: connectedDir.x, z: connectedDir.z }
-        : { x: -connectedDir.x, z: -connectedDir.z };
+    // Logic from WallLayer.ts:
+    // isW1Start is FALSE (we are at end of current wall)
+    // isW2Start is `atStart`
 
-      const miterAngle = calculateMiterAngle(wallDir, adjustedConnectedDir, true);
+    let newLeft = null;
+    let newRight = null;
 
-      if (Math.abs(miterAngle) > 0.01) {
-        const miterOffset = t / Math.tan(Math.abs(miterAngle));
+    if (false === atStart) {
+      // Head-Head (End-End): Connect Left to Right, Right to Left
+      newLeft = intersect(w1Lines.left, w2Lines.right);
+      newRight = intersect(w1Lines.right, w2Lines.left);
+    } else {
+      // Tail-Head (End-Start): Connect Left to Left, Right to Right
+      newLeft = intersect(w1Lines.left, w2Lines.left);
+      newRight = intersect(w1Lines.right, w2Lines.right);
+    }
 
-        if (miterAngle > 0) {
-          // 모든 부호 반대로!
-          corners.endRight.x += wallDir.x * miterOffset;
-          corners.endRight.z += wallDir.z * miterOffset;
-          corners.endLeft.x -= wallDir.x * miterOffset;
-          corners.endLeft.z -= wallDir.z * miterOffset;
-        } else {
-          corners.endLeft.x += wallDir.x * miterOffset;
-          corners.endLeft.z += wallDir.z * miterOffset;
-          corners.endRight.x -= wallDir.x * miterOffset;
-          corners.endRight.z -= wallDir.z * miterOffset;
-        }
-      }
+    if (newLeft && newRight) {
+      corners.endLeft = { x: newLeft.x, z: newLeft.y };
+      corners.endRight = { x: newRight.x, z: newRight.y };
     }
   }
 

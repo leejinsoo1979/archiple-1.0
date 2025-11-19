@@ -107,20 +107,29 @@ export class Camera2D {
 
   /**
    * Convert screen coordinates (px) to world coordinates (mm)
+   * @param screenX - Logical screen X (CSS pixels)
+   * @param screenY - Logical screen Y (CSS pixels)
    */
   screenToWorld(screenX: number, screenY: number): Vector2 {
-    const pointPx: PointPX = { x: screenX, y: screenY };
+    // Convert logical pixels to physical pixels before transforming
+    const physicalX = screenX * this.dpr;
+    const physicalY = screenY * this.dpr;
+
+    const pointPx: PointPX = { x: physicalX, y: physicalY };
     const pointMm = screenToWorld(pointPx, this.viewport);
     return new Vector2(pointMm.x, pointMm.y);
   }
 
   /**
    * Convert world coordinates (mm) to screen coordinates (px)
+   * @returns Logical screen coordinates (CSS pixels)
    */
   worldToScreen(worldX: number, worldY: number): Vector2 {
     const pointMm: PointMM = { x: worldX, y: worldY };
     const pointPx = worldToScreen(pointMm, this.viewport);
-    return new Vector2(pointPx.x, pointPx.y);
+
+    // Convert physical pixels back to logical pixels
+    return new Vector2(pointPx.x / this.dpr, pointPx.y / this.dpr);
   }
 
   /**
