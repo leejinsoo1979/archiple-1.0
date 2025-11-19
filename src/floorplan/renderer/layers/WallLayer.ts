@@ -243,16 +243,14 @@ export class WallLayer extends BaseLayer {
 
     // Draw preview with SAME thickness but different style for visibility
     ctx.strokeStyle = this.config.wallColor; // Same color as confirmed walls
-    ctx.globalAlpha = 0.5; // 50% transparent for preview
+    ctx.globalAlpha = 0.7; // 70% transparent for preview
     ctx.lineWidth = thickness;
     ctx.lineCap = 'butt';
     ctx.lineJoin = 'miter';
     ctx.miterLimit = 10;
 
-    // Dash pattern to differentiate from confirmed walls
-    const dashLength = thickness * 2;
-    const gapLength = thickness * 1;
-    ctx.setLineDash([dashLength, gapLength]);
+    // Solid line for preview
+    ctx.setLineDash([]);
 
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
