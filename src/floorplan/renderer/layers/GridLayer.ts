@@ -28,7 +28,7 @@ export class GridLayer extends BaseLayer {
       gridSize: config.gridSize,
       majorGridSize: config.majorGridSize || config.gridSize * 5,
       minorColor: config.minorColor || '#888888',
-      majorColor: config.majorColor || '#606060',
+      majorColor: config.majorColor || '#404040',
       backgroundColor: config.backgroundColor || '#ffffff',
     };
   }
