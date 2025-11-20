@@ -15,6 +15,8 @@ import { ExportModal } from '../ui/modals/ExportModal';
 import { useCameraSettingsStore } from '../stores/cameraSettingsStore';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+import { AIRenderModal } from '../ui/landing/components/AIRenderModal';
+
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 
 const EditorPage = () => {
@@ -36,6 +38,7 @@ const EditorPage = () => {
   const [showCharacter, setShowCharacter] = useState(false); // Character toggle
   const [photoRealisticMode, setPhotoRealisticMode] = useState(false); // Photo-realistic rendering
   const [exportModalOpen, setExportModalOpen] = useState(false); // Export modal toggle
+  const [aiRenderModalOpen, setAiRenderModalOpen] = useState(false); // New AI Render Modal toggle
 
   // Screenshot resolution settings
   const [screenshotResolution, setScreenshotResolution] = useState<'1080p' | '4k' | '8k'>('4k');
@@ -216,7 +219,7 @@ const EditorPage = () => {
 
           // Show success message AFTER successful download trigger
           const successMessage = document.createElement('div');
-      successMessage.style.cssText = `
+          successMessage.style.cssText = `
         position: fixed;
         top: 50%;
         left: 50%;
@@ -232,7 +235,7 @@ const EditorPage = () => {
         box-shadow: 0 10px 40px rgba(0,0,0,0.7);
         min-width: 320px;
       `;
-      successMessage.innerHTML = `
+          successMessage.innerHTML = `
         <div style="
           width: 48px;
           height: 48px;
@@ -287,16 +290,16 @@ const EditorPage = () => {
   const getStylePrompt = (style: typeof aiRenderStyle): string => {
     switch (style) {
       case 'photorealistic':
-        return `Transform this 3D architectural rendering into a photorealistic interior photograph. Apply professional photography lighting with soft, natural light from windows creating realistic shadows and highlights. Render all materials with photorealistic detail - wood grain texture, fabric weaves, surface reflections, and subtle imperfections. Captured with a wide-angle lens (24mm equivalent) with natural depth of field. The scene should feel like a professionally shot architectural photograph with warm, inviting atmosphere and accurate color reproduction. Preserve the exact room layout, dimensions, wall positions, and all furniture placement from the original rendering.`;
+        return `Transform the provided 3D architectural rendering into a photorealistic interior photograph. Preserve the original composition - maintain the exact room layout, wall positions, window locations, door placements, and all furniture arrangements. Render all elements with photorealistic materials and textures: wood grain detail, fabric weaves, surface reflections, subtle imperfections. Apply professional architectural photography lighting with soft, natural light from windows creating realistic shadows and highlights. Captured with a wide-angle lens (24mm equivalent) with natural depth of field. The final image should look like a professionally shot architectural photograph with warm, inviting atmosphere and accurate color reproduction.`;
 
       case 'product':
-        return `Transform this 3D architectural rendering into a high-resolution, studio-lit product photography style interior. Apply professional studio lighting with a three-point softbox setup designed to create soft, diffused highlights and eliminate harsh shadows. Render with ultra-realistic materials showing sharp focus on all surfaces - polished wood, smooth fabrics, reflective glass. The camera angle should be slightly elevated to showcase clean lines and spatial relationships. Ultra-realistic detail with perfect exposure and professional e-commerce photography quality. Preserve the exact room layout and all furniture placement from the original rendering.`;
+        return `Transform the provided 3D architectural rendering into a high-resolution, studio-lit product photography style interior. Preserve the original composition - maintain the exact room layout, furniture positions, and spatial relationships. Apply professional studio lighting with a three-point softbox setup designed to create soft, diffused highlights and eliminate harsh shadows. Render all surfaces with ultra-realistic materials: polished wood, smooth fabrics, reflective glass with sharp focus throughout. Professional e-commerce photography quality with perfect exposure and clarity.`;
 
       case 'minimalist':
-        return `Transform this 3D architectural rendering into a minimalist interior design photograph. Apply soft, diffused lighting creating a calm, serene atmosphere. Render materials with natural, subtle qualities - light wood tones, matte white surfaces, simple linen textures. The color palette should be predominantly neutral whites, soft grays, and warm beiges. Emphasize clean composition with negative space and uncluttered visual flow. Soft shadows and gentle highlights. Preserve the exact room layout and furniture placement while enhancing the minimalist aesthetic.`;
+        return `Transform the provided 3D architectural rendering into a minimalist interior design photograph. Preserve the original composition - maintain the exact room layout and all furniture placements. Render materials with natural, subtle qualities: light wood tones, matte white surfaces, simple linen textures. Apply soft, diffused lighting creating a calm, serene atmosphere. The color palette should be predominantly neutral whites, soft grays, and warm beiges. Clean composition with gentle shadows and highlights.`;
 
       case 'sticker':
-        return `Transform this 3D architectural rendering into a clean, stylized illustration with bold outlines and simplified forms. Apply a kawaii-style or modern flat design aesthetic with clean vector-like appearance. Use simple cel-shading with soft shadows. The color palette should be vibrant but harmonious. Bold, clean outlines defining all major elements. Simplified but recognizable architectural details. The style should resemble professional architectural illustration or infographic design. Preserve the room layout and furniture arrangement while converting to an illustrative style.`;
+        return `Transform the provided 3D architectural rendering into a clean, stylized illustration. Preserve the original composition - maintain the room layout and furniture arrangement. Render with bold outlines and simplified forms in a modern flat design aesthetic. Use simple cel-shading with soft shadows. Vibrant but harmonious color palette. Bold, clean outlines defining all major elements. The style should resemble professional architectural illustration.`;
     }
   };
 
@@ -391,20 +394,18 @@ const EditorPage = () => {
       const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-image' });
 
       const prompt = getStylePrompt(aiRenderStyle);
-      const result = await model.generateContent({
-        contents: [
-          {
-            parts: [
-              {
-                inlineData: {
-                  mimeType: 'image/png',
-                  data: base64,
-                },
-              },
-              { text: prompt },
-            ],
+      const contentParts = [
+        {
+          inlineData: {
+            mimeType: 'image/png',
+            data: base64,
           },
-        ],
+        },
+        { text: prompt },
+      ];
+
+      const result = await model.generateContent({
+        contents: contentParts,
         generationConfig: {
           imageConfig: {
             aspectRatio: aiAspectRatio,
@@ -1005,7 +1006,7 @@ const EditorPage = () => {
                 onClick={() => setLightPanelOpen(!lightPanelOpen)}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/>
+                  <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z" />
                 </svg>
               </button>
 
@@ -1352,7 +1353,7 @@ const EditorPage = () => {
                 style={{ opacity: photoRealisticMode ? 1 : 0.4 }}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+                  <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z" />
                 </svg>
               </button>
 
@@ -1489,7 +1490,7 @@ const EditorPage = () => {
                           max="2"
                           step="0.1"
                           value={renderSettings.ssaoRadius}
-                          onChange={(e) => setRenderSettings({...renderSettings, ssaoRadius: parseFloat(e.target.value)})}
+                          onChange={(e) => setRenderSettings({ ...renderSettings, ssaoRadius: parseFloat(e.target.value) })}
                           className={styles.rangeSlider}
                         />
                         <span className={styles.valueDisplay}>{renderSettings.ssaoRadius.toFixed(1)}</span>
@@ -1505,7 +1506,7 @@ const EditorPage = () => {
                           max="2"
                           step="0.1"
                           value={renderSettings.ssaoStrength}
-                          onChange={(e) => setRenderSettings({...renderSettings, ssaoStrength: parseFloat(e.target.value)})}
+                          onChange={(e) => setRenderSettings({ ...renderSettings, ssaoStrength: parseFloat(e.target.value) })}
                           className={styles.rangeSlider}
                         />
                         <span className={styles.valueDisplay}>{renderSettings.ssaoStrength.toFixed(1)}</span>
@@ -1522,7 +1523,7 @@ const EditorPage = () => {
                           max="1"
                           step="0.05"
                           value={renderSettings.ssrStrength}
-                          onChange={(e) => setRenderSettings({...renderSettings, ssrStrength: parseFloat(e.target.value)})}
+                          onChange={(e) => setRenderSettings({ ...renderSettings, ssrStrength: parseFloat(e.target.value) })}
                           className={styles.rangeSlider}
                         />
                         <span className={styles.valueDisplay}>{renderSettings.ssrStrength.toFixed(2)}</span>
@@ -1539,7 +1540,7 @@ const EditorPage = () => {
                           max="1"
                           step="0.05"
                           value={renderSettings.bloomThreshold}
-                          onChange={(e) => setRenderSettings({...renderSettings, bloomThreshold: parseFloat(e.target.value)})}
+                          onChange={(e) => setRenderSettings({ ...renderSettings, bloomThreshold: parseFloat(e.target.value) })}
                           className={styles.rangeSlider}
                         />
                         <span className={styles.valueDisplay}>{renderSettings.bloomThreshold.toFixed(2)}</span>
@@ -1555,7 +1556,7 @@ const EditorPage = () => {
                           max="1"
                           step="0.05"
                           value={renderSettings.bloomWeight}
-                          onChange={(e) => setRenderSettings({...renderSettings, bloomWeight: parseFloat(e.target.value)})}
+                          onChange={(e) => setRenderSettings({ ...renderSettings, bloomWeight: parseFloat(e.target.value) })}
                           className={styles.rangeSlider}
                         />
                         <span className={styles.valueDisplay}>{renderSettings.bloomWeight.toFixed(2)}</span>
@@ -1572,7 +1573,7 @@ const EditorPage = () => {
                           max="10000"
                           step="100"
                           value={renderSettings.dofFocusDistance}
-                          onChange={(e) => setRenderSettings({...renderSettings, dofFocusDistance: parseFloat(e.target.value)})}
+                          onChange={(e) => setRenderSettings({ ...renderSettings, dofFocusDistance: parseFloat(e.target.value) })}
                           className={styles.rangeSlider}
                         />
                         <span className={styles.valueDisplay}>{renderSettings.dofFocusDistance}</span>
@@ -1588,7 +1589,7 @@ const EditorPage = () => {
                           max="22"
                           step="0.1"
                           value={renderSettings.dofFStop}
-                          onChange={(e) => setRenderSettings({...renderSettings, dofFStop: parseFloat(e.target.value)})}
+                          onChange={(e) => setRenderSettings({ ...renderSettings, dofFStop: parseFloat(e.target.value) })}
                           className={styles.rangeSlider}
                         />
                         <span className={styles.valueDisplay}>f/{renderSettings.dofFStop.toFixed(1)}</span>
@@ -1605,7 +1606,7 @@ const EditorPage = () => {
                           max="10"
                           step="0.5"
                           value={renderSettings.chromaticAberration}
-                          onChange={(e) => setRenderSettings({...renderSettings, chromaticAberration: parseFloat(e.target.value)})}
+                          onChange={(e) => setRenderSettings({ ...renderSettings, chromaticAberration: parseFloat(e.target.value) })}
                           className={styles.rangeSlider}
                         />
                         <span className={styles.valueDisplay}>{renderSettings.chromaticAberration.toFixed(1)}</span>
@@ -1621,7 +1622,7 @@ const EditorPage = () => {
                           max="20"
                           step="0.5"
                           value={renderSettings.grainIntensity}
-                          onChange={(e) => setRenderSettings({...renderSettings, grainIntensity: parseFloat(e.target.value)})}
+                          onChange={(e) => setRenderSettings({ ...renderSettings, grainIntensity: parseFloat(e.target.value) })}
                           className={styles.rangeSlider}
                         />
                         <span className={styles.valueDisplay}>{renderSettings.grainIntensity.toFixed(1)}</span>
@@ -1637,7 +1638,7 @@ const EditorPage = () => {
                           max="3"
                           step="0.1"
                           value={renderSettings.vignetteWeight}
-                          onChange={(e) => setRenderSettings({...renderSettings, vignetteWeight: parseFloat(e.target.value)})}
+                          onChange={(e) => setRenderSettings({ ...renderSettings, vignetteWeight: parseFloat(e.target.value) })}
                           className={styles.rangeSlider}
                         />
                         <span className={styles.valueDisplay}>{renderSettings.vignetteWeight.toFixed(1)}</span>
@@ -1653,7 +1654,7 @@ const EditorPage = () => {
                           max="1"
                           step="0.05"
                           value={renderSettings.sharpenAmount}
-                          onChange={(e) => setRenderSettings({...renderSettings, sharpenAmount: parseFloat(e.target.value)})}
+                          onChange={(e) => setRenderSettings({ ...renderSettings, sharpenAmount: parseFloat(e.target.value) })}
                           className={styles.rangeSlider}
                         />
                         <span className={styles.valueDisplay}>{renderSettings.sharpenAmount.toFixed(2)}</span>
@@ -1665,7 +1666,7 @@ const EditorPage = () => {
             </div>
             <button className={styles.topBtn} title="Material">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+                <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
               </svg>
             </button>
             <button
@@ -1674,7 +1675,7 @@ const EditorPage = () => {
               onClick={() => setShowCharacter(!showCharacter)}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
               </svg>
             </button>
             <div style={{ position: 'relative' }}>
@@ -1684,7 +1685,7 @@ const EditorPage = () => {
                 onClick={() => setSunPanelOpen(!sunPanelOpen)}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2v2.95zm-7.45-3.91l1.41 1.41 1.79-1.8-1.41-1.41-1.79 1.8z"/>
+                  <path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2v2.95zm-7.45-3.91l1.41 1.41 1.79-1.8-1.41-1.41-1.79 1.8z" />
                 </svg>
               </button>
 
@@ -1705,7 +1706,7 @@ const EditorPage = () => {
                           max="3"
                           step="0.1"
                           value={sunSettings.intensity}
-                          onChange={(e) => setSunSettings({...sunSettings, intensity: parseFloat(e.target.value)})}
+                          onChange={(e) => setSunSettings({ ...sunSettings, intensity: parseFloat(e.target.value) })}
                           className={styles.rangeSlider}
                         />
                         <span className={styles.valueDisplay}>{sunSettings.intensity.toFixed(1)}</span>
@@ -1722,7 +1723,7 @@ const EditorPage = () => {
                           max="360"
                           step="1"
                           value={sunSettings.azimuth}
-                          onChange={(e) => setSunSettings({...sunSettings, azimuth: parseFloat(e.target.value)})}
+                          onChange={(e) => setSunSettings({ ...sunSettings, azimuth: parseFloat(e.target.value) })}
                           className={styles.rangeSlider}
                         />
                         <span className={styles.valueDisplay}>{sunSettings.azimuth}°</span>
@@ -1739,7 +1740,7 @@ const EditorPage = () => {
                           max="90"
                           step="1"
                           value={sunSettings.altitude}
-                          onChange={(e) => setSunSettings({...sunSettings, altitude: parseFloat(e.target.value)})}
+                          onChange={(e) => setSunSettings({ ...sunSettings, altitude: parseFloat(e.target.value) })}
                           className={styles.rangeSlider}
                         />
                         <span className={styles.valueDisplay}>{sunSettings.altitude}°</span>
@@ -1751,22 +1752,22 @@ const EditorPage = () => {
             </div>
             <button className={styles.topBtn} title="Ambient">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/>
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z" />
               </svg>
             </button>
             <button className={styles.topBtn} title="Dimensions">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
               </svg>
             </button>
             <button className={styles.topBtn} title="Render">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+                <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
               </svg>
             </button>
             <button className={styles.topBtn} title="Draw">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
               </svg>
             </button>
             <button
@@ -1775,8 +1776,8 @@ const EditorPage = () => {
               onClick={() => setPhotoRealisticMode(!photoRealisticMode)}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="12" r="3.2"/>
-                <path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
+                <circle cx="12" cy="12" r="3.2" />
+                <path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z" />
               </svg>
             </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -1805,7 +1806,7 @@ const EditorPage = () => {
                 onClick={handleCaptureScreenshot}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/>
+                  <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z" />
                 </svg>
               </button>
               {/* AI Render Button - Premium Design */}
@@ -1839,7 +1840,7 @@ const EditorPage = () => {
                   }}
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+                    <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
                   </svg>
                   <span>AI Render</span>
                   <div style={{
@@ -1882,7 +1883,7 @@ const EditorPage = () => {
                   }}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                    <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
                   </svg>
                 </button>
 
@@ -1916,128 +1917,128 @@ const EditorPage = () => {
                       }
                     `}</style>
 
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                        <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: themeColor }}>AI Rendering Settings</h3>
-                        <button
-                          onClick={() => setAiRenderPanelOpen(false)}
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '8px',
-                            border: 'none',
-                            background: themeMode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-                            color: themeMode === 'dark' ? '#fff' : '#000',
-                            cursor: 'pointer',
-                            fontSize: '20px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}
-                        >×</button>
-                      </div>
-
-                      {/* Aspect Ratio Selection */}
-                      <div style={{ marginBottom: '24px' }}>
-                        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
-                          Aspect Ratio
-                        </label>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
-                          {(['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'] as const).map((ratio) => (
-                            <button
-                              key={ratio}
-                              onClick={() => setAiAspectRatio(ratio)}
-                              style={{
-                                padding: '10px 6px',
-                                borderRadius: '6px',
-                                border: aiAspectRatio === ratio ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
-                                background: aiAspectRatio === ratio ? `${themeColor}15` : 'transparent',
-                                color: aiAspectRatio === ratio ? themeColor : (themeMode === 'dark' ? '#fff' : '#000'),
-                                cursor: 'pointer',
-                                fontWeight: aiAspectRatio === ratio ? '600' : '500',
-                                fontSize: '12px',
-                                transition: 'all 0.2s'
-                              }}
-                            >
-                              {ratio}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Style Grid */}
-                      <div style={{ marginBottom: '16px' }}>
-                        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
-                          Rendering Style
-                        </label>
-                        <div style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-                          gap: '12px'
-                        }}>
-                          {(['photorealistic', 'product', 'minimalist', 'sticker'] as const).map((style) => (
-                            <button
-                              key={style}
-                              onClick={() => setAiRenderStyle(style)}
-                              style={{
-                                padding: '16px 12px',
-                                borderRadius: '10px',
-                                border: aiRenderStyle === style ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
-                                background: aiRenderStyle === style ? `${themeColor}15` : (themeMode === 'dark' ? '#252525' : '#f8f8f8'),
-                                color: themeMode === 'dark' ? '#fff' : '#000',
-                                cursor: 'pointer',
-                                fontSize: '13px',
-                                fontWeight: aiRenderStyle === style ? '600' : '500',
-                                transition: 'all 0.2s',
-                                textAlign: 'center',
-                                textTransform: 'capitalize'
-                              }}
-                              onMouseEnter={(e) => {
-                                if (aiRenderStyle !== style) {
-                                  e.currentTarget.style.borderColor = `${themeColor}80`;
-                                }
-                              }}
-                              onMouseLeave={(e) => {
-                                if (aiRenderStyle !== style) {
-                                  e.currentTarget.style.borderColor = themeMode === 'dark' ? '#333' : '#ddd';
-                                }
-                              }}
-                            >
-                              {style}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Render Button */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                      <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: themeColor }}>AI Rendering Settings</h3>
                       <button
-                        onClick={() => {
-                          setAiRenderPanelOpen(false);
-                          handleAIRender();
-                        }}
+                        onClick={() => setAiRenderPanelOpen(false)}
                         style={{
-                          width: '100%',
-                          padding: '14px',
-                          borderRadius: '10px',
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '8px',
                           border: 'none',
-                          background: `linear-gradient(135deg, ${themeColor} 0%, ${themeColor}cc 100%)`,
-                          color: 'white',
-                          fontSize: '15px',
-                          fontWeight: '600',
+                          background: themeMode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                          color: themeMode === 'dark' ? '#fff' : '#000',
                           cursor: 'pointer',
-                          transition: 'all 0.2s',
-                          boxShadow: `0 4px 15px ${themeColor}40`
+                          fontSize: '20px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
                         }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = 'translateY(-2px)';
-                          e.currentTarget.style.boxShadow = `0 6px 20px ${themeColor}60`;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = 'translateY(0)';
-                          e.currentTarget.style.boxShadow = `0 4px 15px ${themeColor}40`;
-                        }}
-                      >
-                        Generate AI Render
-                      </button>
+                      >×</button>
+                    </div>
+
+                    {/* Aspect Ratio Selection */}
+                    <div style={{ marginBottom: '24px' }}>
+                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
+                        Aspect Ratio
+                      </label>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
+                        {(['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'] as const).map((ratio) => (
+                          <button
+                            key={ratio}
+                            onClick={() => setAiAspectRatio(ratio)}
+                            style={{
+                              padding: '10px 6px',
+                              borderRadius: '6px',
+                              border: aiAspectRatio === ratio ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
+                              background: aiAspectRatio === ratio ? `${themeColor}15` : 'transparent',
+                              color: aiAspectRatio === ratio ? themeColor : (themeMode === 'dark' ? '#fff' : '#000'),
+                              cursor: 'pointer',
+                              fontWeight: aiAspectRatio === ratio ? '600' : '500',
+                              fontSize: '12px',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            {ratio}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Style Grid */}
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
+                        Rendering Style
+                      </label>
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                        gap: '12px'
+                      }}>
+                        {(['photorealistic', 'product', 'minimalist', 'sticker'] as const).map((style) => (
+                          <button
+                            key={style}
+                            onClick={() => setAiRenderStyle(style)}
+                            style={{
+                              padding: '16px 12px',
+                              borderRadius: '10px',
+                              border: aiRenderStyle === style ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
+                              background: aiRenderStyle === style ? `${themeColor}15` : (themeMode === 'dark' ? '#252525' : '#f8f8f8'),
+                              color: themeMode === 'dark' ? '#fff' : '#000',
+                              cursor: 'pointer',
+                              fontSize: '13px',
+                              fontWeight: aiRenderStyle === style ? '600' : '500',
+                              transition: 'all 0.2s',
+                              textAlign: 'center',
+                              textTransform: 'capitalize'
+                            }}
+                            onMouseEnter={(e) => {
+                              if (aiRenderStyle !== style) {
+                                e.currentTarget.style.borderColor = `${themeColor}80`;
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (aiRenderStyle !== style) {
+                                e.currentTarget.style.borderColor = themeMode === 'dark' ? '#333' : '#ddd';
+                              }
+                            }}
+                          >
+                            {style}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Render Button */}
+                    <button
+                      onClick={() => {
+                        setAiRenderPanelOpen(false);
+                        handleAIRender();
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '14px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        background: `linear-gradient(135deg, ${themeColor} 0%, ${themeColor}cc 100%)`,
+                        color: 'white',
+                        fontSize: '15px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        boxShadow: `0 4px 15px ${themeColor}40`
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = `0 6px 20px ${themeColor}60`;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = `0 4px 15px ${themeColor}40`;
+                      }}
+                    >
+                      Generate AI Render
+                    </button>
                   </div>
                 )}
               </div>
@@ -2060,7 +2061,7 @@ const EditorPage = () => {
                         max="2"
                         step="0.1"
                         value={renderSettings.ssaoRadius}
-                        onChange={(e) => setRenderSettings({...renderSettings, ssaoRadius: parseFloat(e.target.value)})}
+                        onChange={(e) => setRenderSettings({ ...renderSettings, ssaoRadius: parseFloat(e.target.value) })}
                         className={styles.rangeSlider}
                       />
                       <span className={styles.valueDisplay}>{renderSettings.ssaoRadius.toFixed(1)}</span>
@@ -2077,7 +2078,7 @@ const EditorPage = () => {
                         max="2"
                         step="0.1"
                         value={renderSettings.ssaoStrength}
-                        onChange={(e) => setRenderSettings({...renderSettings, ssaoStrength: parseFloat(e.target.value)})}
+                        onChange={(e) => setRenderSettings({ ...renderSettings, ssaoStrength: parseFloat(e.target.value) })}
                         className={styles.rangeSlider}
                       />
                       <span className={styles.valueDisplay}>{renderSettings.ssaoStrength.toFixed(1)}</span>
@@ -2094,7 +2095,7 @@ const EditorPage = () => {
                         max="1"
                         step="0.05"
                         value={renderSettings.ssrStrength}
-                        onChange={(e) => setRenderSettings({...renderSettings, ssrStrength: parseFloat(e.target.value)})}
+                        onChange={(e) => setRenderSettings({ ...renderSettings, ssrStrength: parseFloat(e.target.value) })}
                         className={styles.rangeSlider}
                       />
                       <span className={styles.valueDisplay}>{renderSettings.ssrStrength.toFixed(2)}</span>
@@ -2111,7 +2112,7 @@ const EditorPage = () => {
                         max="1"
                         step="0.05"
                         value={renderSettings.bloomThreshold}
-                        onChange={(e) => setRenderSettings({...renderSettings, bloomThreshold: parseFloat(e.target.value)})}
+                        onChange={(e) => setRenderSettings({ ...renderSettings, bloomThreshold: parseFloat(e.target.value) })}
                         className={styles.rangeSlider}
                       />
                       <span className={styles.valueDisplay}>{renderSettings.bloomThreshold.toFixed(2)}</span>
@@ -2128,7 +2129,7 @@ const EditorPage = () => {
                         max="1"
                         step="0.05"
                         value={renderSettings.bloomWeight}
-                        onChange={(e) => setRenderSettings({...renderSettings, bloomWeight: parseFloat(e.target.value)})}
+                        onChange={(e) => setRenderSettings({ ...renderSettings, bloomWeight: parseFloat(e.target.value) })}
                         className={styles.rangeSlider}
                       />
                       <span className={styles.valueDisplay}>{renderSettings.bloomWeight.toFixed(2)}</span>
@@ -2145,7 +2146,7 @@ const EditorPage = () => {
                         max="10000"
                         step="100"
                         value={renderSettings.dofFocusDistance}
-                        onChange={(e) => setRenderSettings({...renderSettings, dofFocusDistance: parseFloat(e.target.value)})}
+                        onChange={(e) => setRenderSettings({ ...renderSettings, dofFocusDistance: parseFloat(e.target.value) })}
                         className={styles.rangeSlider}
                       />
                       <span className={styles.valueDisplay}>{renderSettings.dofFocusDistance}</span>
@@ -2162,7 +2163,7 @@ const EditorPage = () => {
                         max="22"
                         step="0.1"
                         value={renderSettings.dofFStop}
-                        onChange={(e) => setRenderSettings({...renderSettings, dofFStop: parseFloat(e.target.value)})}
+                        onChange={(e) => setRenderSettings({ ...renderSettings, dofFStop: parseFloat(e.target.value) })}
                         className={styles.rangeSlider}
                       />
                       <span className={styles.valueDisplay}>f/{renderSettings.dofFStop.toFixed(1)}</span>
@@ -2179,7 +2180,7 @@ const EditorPage = () => {
                         max="10"
                         step="0.5"
                         value={renderSettings.chromaticAberration}
-                        onChange={(e) => setRenderSettings({...renderSettings, chromaticAberration: parseFloat(e.target.value)})}
+                        onChange={(e) => setRenderSettings({ ...renderSettings, chromaticAberration: parseFloat(e.target.value) })}
                         className={styles.rangeSlider}
                       />
                       <span className={styles.valueDisplay}>{renderSettings.chromaticAberration.toFixed(1)}</span>
@@ -2196,7 +2197,7 @@ const EditorPage = () => {
                         max="20"
                         step="0.5"
                         value={renderSettings.grainIntensity}
-                        onChange={(e) => setRenderSettings({...renderSettings, grainIntensity: parseFloat(e.target.value)})}
+                        onChange={(e) => setRenderSettings({ ...renderSettings, grainIntensity: parseFloat(e.target.value) })}
                         className={styles.rangeSlider}
                       />
                       <span className={styles.valueDisplay}>{renderSettings.grainIntensity.toFixed(1)}</span>
@@ -2213,7 +2214,7 @@ const EditorPage = () => {
                         max="3"
                         step="0.1"
                         value={renderSettings.vignetteWeight}
-                        onChange={(e) => setRenderSettings({...renderSettings, vignetteWeight: parseFloat(e.target.value)})}
+                        onChange={(e) => setRenderSettings({ ...renderSettings, vignetteWeight: parseFloat(e.target.value) })}
                         className={styles.rangeSlider}
                       />
                       <span className={styles.valueDisplay}>{renderSettings.vignetteWeight.toFixed(1)}</span>
@@ -2230,7 +2231,7 @@ const EditorPage = () => {
                         max="1"
                         step="0.05"
                         value={renderSettings.sharpenAmount}
-                        onChange={(e) => setRenderSettings({...renderSettings, sharpenAmount: parseFloat(e.target.value)})}
+                        onChange={(e) => setRenderSettings({ ...renderSettings, sharpenAmount: parseFloat(e.target.value) })}
                         className={styles.rangeSlider}
                       />
                       <span className={styles.valueDisplay}>{renderSettings.sharpenAmount.toFixed(2)}</span>
@@ -2242,13 +2243,13 @@ const EditorPage = () => {
 
             <button className={styles.topBtn} title="Target">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/>
-                <circle cx="12" cy="12" r="5"/>
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z" />
+                <circle cx="12" cy="12" r="5" />
               </svg>
             </button>
             <button className={styles.topBtn} title="Layout">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M3 5v4h2V5h4V3H5c-1.1 0-2 .9-2 2zm2 10H3v4c0 1.1.9 2 2 2h4v-2H5v-4zm14 4h-4v2h4c1.1 0 2-.9 2-2v-4h-2v4zm0-16h-4v2h4v4h2V5c0-1.1-.9-2-2-2z"/>
+                <path d="M3 5v4h2V5h4V3H5c-1.1 0-2 .9-2 2zm2 10H3v4c0 1.1.9 2 2 2h4v-2H5v-4zm14 4h-4v2h4c1.1 0 2-.9 2-2v-4h-2v4zm0-16h-4v2h4v4h2V5c0-1.1-.9-2-2-2z" />
               </svg>
             </button>
             <button
@@ -2257,24 +2258,24 @@ const EditorPage = () => {
               onClick={() => setShowGrid(!showGrid)}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM8 20H4v-4h4v4zm0-6H4v-4h4v4zm0-6H4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4z"/>
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM8 20H4v-4h4v4zm0-6H4v-4h4v4zm0-6H4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4z" />
               </svg>
             </button>
             <button className={styles.topBtn} title="View">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" />
               </svg>
             </button>
 
             <div className={styles.playButtons}>
               <button className={styles.navBtn}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+                  <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
                 </svg>
               </button>
               <button className={styles.navBtn}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                  <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
                 </svg>
               </button>
               <button
@@ -2296,14 +2297,14 @@ const EditorPage = () => {
                 {playMode ? (
                   <>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: '6px' }}>
-                      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
                     </svg>
                     Stop
                   </>
                 ) : (
                   <>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: '6px' }}>
-                      <path d="M8 5v14l11-7z"/>
+                      <path d="M8 5v14l11-7z" />
                     </svg>
                     Play
                   </>
@@ -2321,6 +2322,19 @@ const EditorPage = () => {
                   </svg>
                 </button>
               )}
+
+              {/* New AI Render Button (Nanobanana) */}
+              <button
+                className={styles.topBtn}
+                onClick={() => setAiRenderModalOpen(true)}
+                title="AI Render (Nanobanana)"
+                style={{ marginLeft: '8px', color: themeColor }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z" />
+                  <path d="M12 6v6l4 2" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -2335,655 +2349,516 @@ const EditorPage = () => {
       <div className={styles.mainContent} style={playMode ? { paddingLeft: 0 } : {}}>
         {/* Left Green Sidebar */}
         {!playMode && (
-        <div className={styles.leftSidebar}>
-        <div className={styles.sidebarButtons}>
-          <button className={styles.sidebarBtn}>
-            <div className={styles.icon}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <rect x="3" y="3" width="7" height="7"/>
-                <rect x="14" y="3" width="7" height="7"/>
-                <rect x="3" y="14" width="7" height="7"/>
-                <rect x="14" y="14" width="7" height="7"/>
-              </svg>
-            </div>
-            <span>Create<br/>Room</span>
-          </button>
+          <div className={styles.leftSidebar}>
+            <div className={styles.sidebarButtons}>
+              <button className={styles.sidebarBtn}>
+                <div className={styles.icon}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                    <rect x="14" y="14" width="7" height="7" />
+                  </svg>
+                </div>
+                <span>Create<br />Room</span>
+              </button>
 
-          <button className={styles.sidebarBtn}>
-            <div className={styles.icon}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <circle cx="12" cy="12" r="3"/>
-                <path d="M12 1v6m0 6v6M1 12h6m6 0h6"/>
-              </svg>
-            </div>
-            <span>Customize</span>
-          </button>
+              <button className={styles.sidebarBtn}>
+                <div className={styles.icon}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M12 1v6m0 6v6M1 12h6m6 0h6" />
+                  </svg>
+                </div>
+                <span>Customize</span>
+              </button>
 
-          <button className={styles.sidebarBtn}>
-            <div className={styles.icon}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <rect x="3" y="3" width="18" height="18"/>
-                <path d="M3 9h18M9 9v12"/>
-              </svg>
-            </div>
-            <span>Model<br/>Library</span>
-          </button>
+              <button className={styles.sidebarBtn}>
+                <div className={styles.icon}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <rect x="3" y="3" width="18" height="18" />
+                    <path d="M3 9h18M9 9v12" />
+                  </svg>
+                </div>
+                <span>Model<br />Library</span>
+              </button>
 
-          <button className={styles.sidebarBtn}>
-            <div className={styles.icon}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M3 12l9-9 9 9M5 10v11h4v-6h6v6h4V10"/>
-              </svg>
-            </div>
-            <span>Mode</span>
-          </button>
+              <button className={styles.sidebarBtn}>
+                <div className={styles.icon}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M3 12l9-9 9 9M5 10v11h4v-6h6v6h4V10" />
+                  </svg>
+                </div>
+                <span>Mode</span>
+              </button>
 
-          <button className={styles.sidebarBtn}>
-            <div className={styles.icon}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <circle cx="12" cy="8" r="4"/>
-                <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
-              </svg>
+              <button className={styles.sidebarBtn}>
+                <div className={styles.icon}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <circle cx="12" cy="8" r="4" />
+                    <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+                  </svg>
+                </div>
+                <span>My</span>
+              </button>
             </div>
-            <span>My</span>
-          </button>
-        </div>
 
-        <div className={styles.sidebarBottom}>
-          <button className={styles.sidebarBtn}>
-            <div className={styles.icon}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <circle cx="12" cy="12" r="1"/>
-              </svg>
+            <div className={styles.sidebarBottom}>
+              <button className={styles.sidebarBtn}>
+                <div className={styles.icon}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <circle cx="12" cy="12" r="1" />
+                  </svg>
+                </div>
+              </button>
+              <button className={styles.sidebarBtn}>
+                <div className={styles.icon}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z" />
+                  </svg>
+                </div>
+              </button>
+              <button className={styles.sidebarBtn}>
+                <div className={styles.icon}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+                  </svg>
+                </div>
+              </button>
+              <button className={styles.sidebarBtn}>
+                <div className={styles.icon}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
+                  </svg>
+                </div>
+              </button>
+              <button className={styles.sidebarBtn} onClick={() => setRenderStyleOpen(!renderStyleOpen)}>
+                <div className={styles.icon}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9zM12 4.15L5 8.09v7.82l7 3.94 7-3.94V8.09l-7-3.94z" />
+                  </svg>
+                </div>
+              </button>
+              <button className={styles.sidebarBtn} onClick={() => setThemeSettingsOpen(!themeSettingsOpen)}>
+                <div className={styles.icon}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+                  </svg>
+                </div>
+              </button>
+              <button className={styles.sidebarBtn}>
+                <div className={styles.icon}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                  </svg>
+                </div>
+              </button>
+              <button className={styles.sidebarBtn} onClick={() => navigate('/')} title="나가기">
+                <div className={styles.icon}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z" />
+                  </svg>
+                </div>
+              </button>
             </div>
-          </button>
-          <button className={styles.sidebarBtn}>
-            <div className={styles.icon}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
-              </svg>
-            </div>
-          </button>
-          <button className={styles.sidebarBtn}>
-            <div className={styles.icon}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-              </svg>
-            </div>
-          </button>
-          <button className={styles.sidebarBtn}>
-            <div className={styles.icon}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
-              </svg>
-            </div>
-          </button>
-          <button className={styles.sidebarBtn} onClick={() => setRenderStyleOpen(!renderStyleOpen)}>
-            <div className={styles.icon}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9zM12 4.15L5 8.09v7.82l7 3.94 7-3.94V8.09l-7-3.94z"/>
-              </svg>
-            </div>
-          </button>
-          <button className={styles.sidebarBtn} onClick={() => setThemeSettingsOpen(!themeSettingsOpen)}>
-            <div className={styles.icon}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-              </svg>
-            </div>
-          </button>
-          <button className={styles.sidebarBtn}>
-            <div className={styles.icon}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-              </svg>
-            </div>
-          </button>
-          <button className={styles.sidebarBtn} onClick={() => navigate('/')} title="나가기">
-            <div className={styles.icon}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
-              </svg>
-            </div>
-          </button>
-        </div>
-      </div>
+          </div>
         )}
 
-      {/* Left Tools Panel */}
-      {!playMode && leftPanelOpen && (
-        <div className={styles.leftPanel}>
-          <div className={styles.panelHeader}>
-            <h3>Create Room</h3>
-            <button onClick={() => setLeftPanelOpen(false)}>×</button>
+        {/* Left Tools Panel */}
+        {!playMode && leftPanelOpen && (
+          <div className={styles.leftPanel}>
+            <div className={styles.panelHeader}>
+              <h3>Create Room</h3>
+              <button onClick={() => setLeftPanelOpen(false)}>×</button>
+            </div>
+
+            <div className={styles.createRoomOptions}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                style={{ display: 'none' }}
+              />
+              <input
+                ref={glbFileInputRef}
+                type="file"
+                accept=".glb"
+                onChange={handleGlbUpload}
+                style={{ display: 'none' }}
+              />
+              <button className={styles.optionCard}>
+                <div className={styles.optionIcon}>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+                  </svg>
+                </div>
+                <span>Explore</span>
+              </button>
+              <button className={styles.optionCard} onClick={() => fileInputRef.current?.click()}>
+                <div className={styles.optionIcon}>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+                  </svg>
+                </div>
+                <span>Import</span>
+              </button>
+              <button className={styles.optionCard} onClick={() => glbFileInputRef.current?.click()}>
+                <div className={styles.optionIcon}>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M21.9 8.89l-1.05-4.37c-.22-.9-1-1.52-1.91-1.52H5.05c-.9 0-1.69.63-1.9 1.52L2.1 8.89c-.24 1.02-.02 2.06.62 2.88.08.11.19.19.28.29V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-6.94c.09-.09.2-.18.28-.28.64-.82.87-1.87.62-2.89zM18.91 4.99l1.05 4.37c.1.42.01.84-.25 1.17-.14.18-.44.47-1.05.47-.83 0-1.52-.64-1.63-1.5l-.5-4.5h2.38zM13 4.99h1.96l.54 4.52c.05.46.23.88.5 1.23.1.15.22.28.36.4-.07.08-.14.16-.22.25v3.61h-3.14V4.99zM5.05 4.99h2.38l-.5 4.5c-.11.86-.8 1.5-1.63 1.5-.61 0-.91-.29-1.05-.47-.25-.33-.35-.75-.25-1.17l1.05-4.36zM5 19v-6.03c.08-.01.15-.03.23-.06.24-.07.48-.23.7-.4.1.17.23.33.39.47.41.37.95.59 1.55.59.64 0 1.24-.25 1.66-.66.23-.23.39-.5.48-.78.09.28.25.54.48.78.42.41 1.02.66 1.66.66.23 0 .45-.03.66-.08v4.51H5zm14 0h-3V5.71l.54 4.79c.1.92.48 1.76 1.07 2.42.1.11.2.2.31.29v5.79z" />
+                  </svg>
+                </div>
+                <span>3D Model</span>
+              </button>
+              <button className={styles.optionCard}>
+                <div className={styles.optionIcon}>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z" />
+                  </svg>
+                </div>
+                <span>RoomScaner</span>
+              </button>
+            </div>
+
+            {/* Walls */}
+            <div className={styles.toolSection}>
+              <h4>Walls</h4>
+              <div className={styles.toolGrid}>
+                <button
+                  className={`${styles.toolBtn} ${activeTool === ToolType.SELECT ? styles.toolBtnActive : ''}`}
+                  title="Select and Move Points"
+                  onClick={() => setActiveTool(ToolType.SELECT)}
+                >
+                  <RxCursorArrow size={32} />
+                  <span>Select</span>
+                </button>
+                <button
+                  className={`${styles.toolBtn} ${activeTool === ToolType.WALL ? styles.toolBtnActive : ''}`}
+                  title="Draw Staight Walls"
+                  onClick={() => setActiveTool(ToolType.WALL)}
+                >
+                  <img src="/icons/wall.svg" alt="Wall" width="32" height="32" />
+                  <span>Draw Staight Walls</span>
+                </button>
+                <button className={styles.toolBtn} title="Draw Arc Walls">
+                  <svg width="32" height="32" viewBox="0 0 48 48">
+                    <path d="M 8 28 Q 24 8, 40 28" stroke="currentColor" strokeWidth="2" fill="none" />
+                  </svg>
+                  <span>Draw Arc Walls</span>
+                </button>
+                <button
+                  className={`${styles.toolBtn} ${activeTool === ToolType.RECTANGLE ? styles.toolBtnActive : ''}`}
+                  title="Draw Rooms"
+                  onClick={() => setActiveTool(ToolType.RECTANGLE)}
+                >
+                  <img src="/icons/room.svg" alt="Room" width="32" height="32" />
+                  <span>Draw Rooms</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Door */}
+            <div className={styles.toolSection}>
+              <h4>Door</h4>
+              <div className={styles.toolGrid}>
+                <button
+                  className={`${styles.toolBtn} ${activeTool === ToolType.DOOR ? styles.toolBtnActive : ''}`}
+                  title="Place Door (900mm x 2100mm)"
+                  onClick={() => setActiveTool(ToolType.DOOR)}
+                >
+                  <img src="/icons/singledoor.svg" alt="Single Door" width="32" height="32" />
+                  <span>Single Door</span>
+                </button>
+                <button className={styles.toolBtn}>
+                  <img src="/icons/doubledoor.svg" alt="Double Door" width="32" height="32" />
+                  <span>Double Door</span>
+                </button>
+                <button className={styles.toolBtn}>
+                  <img src="/icons/window.svg" alt="Sliding Door" width="32" height="32" />
+                  <span>Sliding Door</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Window */}
+            <div className={styles.toolSection}>
+              <h4>Window</h4>
+              <div className={styles.toolGrid}>
+                <button
+                  className={`${styles.toolBtn} ${activeTool === ToolType.WINDOW ? styles.toolBtnActive : ''}`}
+                  title="Place Window (1200mm x 1200mm)"
+                  onClick={() => setActiveTool(ToolType.WINDOW)}
+                >
+                  <img src="/icons/slidingdoor.svg" alt="Single Window" width="32" height="32" />
+                  <span>Single Window</span>
+                </button>
+                <button className={styles.toolBtn}>
+                  <img src="/icons/dualwindow.svg" alt="Dual Window" width="32" height="32" />
+                  <span>Dual Window</span>
+                </button>
+                <button className={styles.toolBtn}>
+                  <svg width="32" height="32" viewBox="0 0 48 48">
+                    <rect x="8" y="18" width="10" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
+                    <rect x="18" y="18" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
+                    <rect x="30" y="18" width="10" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
+                  </svg>
+                  <span>Unequal Double Door</span>
+                </button>
+                <button className={styles.toolBtn}>
+                  <svg width="32" height="32" viewBox="0 0 48 48">
+                    <path d="M 12 24 L 18 18 L 30 18 L 36 24 L 30 30 L 18 30 Z" stroke="currentColor" strokeWidth="2" fill="none" />
+                  </svg>
+                  <span>Corner Bay Window</span>
+                </button>
+                <button className={styles.toolBtn}>
+                  <svg width="32" height="32" viewBox="0 0 48 48">
+                    <path d="M 14 24 L 20 20 L 28 20 L 34 24" stroke="currentColor" strokeWidth="2" fill="none" />
+                  </svg>
+                  <span>Corner Window</span>
+                </button>
+                <button className={styles.toolBtn}>
+                  <svg width="32" height="32" viewBox="0 0 48 48">
+                    <rect x="12" y="20" width="24" height="8" stroke="currentColor" strokeWidth="2" fill="none" />
+                  </svg>
+                  <span>Bay Window</span>
+                </button>
+                <button className={styles.toolBtn}>
+                  <svg width="32" height="32" viewBox="0 0 48 48">
+                    <path d="M 16 24 Q 24 16, 32 24" stroke="currentColor" strokeWidth="2" fill="none" />
+                  </svg>
+                  <span>Arc Window</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Structure */}
+            <div className={styles.toolSection}>
+              <h4>Structure</h4>
+              <div className={styles.toolGrid}>
+                <button className={styles.toolBtn}>
+                  <svg width="32" height="32" viewBox="0 0 48 48">
+                    <path d="M 16 12 L 16 36 M 32 12 L 32 36" stroke="currentColor" strokeWidth="2" />
+                  </svg>
+                  <span>Door Opening</span>
+                </button>
+                <button className={styles.toolBtn}>
+                  <svg width="32" height="32" viewBox="0 0 48 48">
+                    <rect x="16" y="20" width="16" height="8" stroke="currentColor" strokeWidth="2" fill="none" />
+                  </svg>
+                  <span>Flue</span>
+                </button>
+                <button className={styles.toolBtn}>
+                  <svg width="32" height="32" viewBox="0 0 48 48">
+                    <rect x="12" y="20" width="24" height="3" fill="currentColor" />
+                  </svg>
+                  <span>Beam</span>
+                </button>
+                <button className={styles.toolBtn}>
+                  <svg width="32" height="32" viewBox="0 0 48 48">
+                    <rect x="16" y="16" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" />
+                  </svg>
+                  <span>Square</span>
+                </button>
+                <button className={styles.toolBtn}>
+                  <svg width="32" height="32" viewBox="0 0 48 48">
+                    <circle cx="24" cy="24" r="10" stroke="currentColor" strokeWidth="2" fill="none" />
+                  </svg>
+                  <span>Circle</span>
+                </button>
+                <button className={styles.toolBtn}>
+                  <svg width="32" height="32" viewBox="0 0 48 48">
+                    <rect x="14" y="14" width="20" height="20" stroke="currentColor" strokeWidth="2" fill="none" />
+                    <rect x="18" y="18" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
+                  </svg>
+                  <span>Frame</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Main Viewport */}
+        <div className={styles.viewport}>
+          {/* View Mode Toggle (Top Right) */}
+          <div className={styles.viewModeToggle}>
+            <button
+              className={`${styles.viewModeBtn} ${viewMode === '2D' ? styles.viewModeBtnActive : ''}`}
+              onClick={() => {
+                setViewMode('2D');
+                setPlayMode(false);
+              }}
+            >
+              2D
+            </button>
+            <button
+              className={`${styles.viewModeBtn} ${viewMode === '3D' ? styles.viewModeBtnActive : ''}`}
+              onClick={() => {
+                setViewMode('3D');
+                setPlayMode(false);
+              }}
+            >
+              3D
+            </button>
           </div>
 
-          <div className={styles.createRoomOptions}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              style={{ display: 'none' }}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            visibility: playMode ? 'hidden' : (viewMode === '2D' ? 'visible' : 'hidden'),
+            pointerEvents: playMode ? 'none' : (viewMode === '2D' ? 'auto' : 'none')
+          }}>
+            <FloorplanCanvas
+              activeTool={activeTool}
+              onDataChange={setFloorplanData}
+              backgroundImage={showBackgroundImage ? backgroundImage : null}
+              renderStyle={renderStyle}
+              showGrid={showGrid}
+              imageScale={imageScale}
+              imageOpacity={imageOpacity}
+              onDimensionClick={handleDimensionClick}
+              rulerVisible={rulerVisible}
+              rulerStart={rulerStart}
+              rulerEnd={rulerEnd}
+              onRulerDragStart={handleRulerDragStart}
+              onRulerDrag={handleRulerDrag}
+              onRulerDragEnd={handleRulerDragEnd}
+              onRulerLabelClick={handleRulerLabelClick}
+              draggingRulerPoint={draggingRulerPoint}
+              scannedWalls={scannedWalls}
             />
-            <input
-              ref={glbFileInputRef}
-              type="file"
-              accept=".glb"
-              onChange={handleGlbUpload}
-              style={{ display: 'none' }}
+          </div>
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            visibility: playMode || viewMode === '3D' ? 'visible' : 'hidden',
+            pointerEvents: playMode || viewMode === '3D' ? 'auto' : 'none',
+            cursor: lightPlacementMode ? 'crosshair' : 'default'
+          }}>
+            <Babylon3DCanvas
+              ref={babylon3DCanvasRef}
+              floorplanData={floorplanData}
+              visible={playMode || viewMode === '3D'}
+              sunSettings={sunSettings}
+              playMode={playMode}
+              showCharacter={showCharacter}
+              glbModelFile={glbModelFile}
+              photoRealisticMode={photoRealisticMode}
+              renderSettings={renderSettings}
+              lights={lights}
+              lightPlacementMode={lightPlacementMode}
+              selectedLightType={selectedLightType}
+              onLightPlaced={handleLightPlaced}
+              onLightMoved={handleLightMoved}
+              displayStyle={displayStyle}
+              showGrid={showGrid}
             />
-            <button className={styles.optionCard}>
-              <div className={styles.optionIcon}>
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-                </svg>
+
+            {/* Light Placement Guide Overlay */}
+            {lightPlacementMode && viewMode === '3D' && (
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                background: 'rgba(0, 0, 0, 0.85)',
+                color: 'white',
+                padding: '32px 48px',
+                borderRadius: '12px',
+                fontSize: '24px',
+                fontWeight: '600',
+                textAlign: 'center',
+                pointerEvents: 'none',
+                zIndex: 1000,
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+              }}>
+                <div style={{ marginBottom: '12px' }}>
+                  {selectedLightType === 'point' ? '포인트 라이트' :
+                    selectedLightType === 'spot' ? '스포트 라이트' :
+                      '방향성 라이트'} 배치 모드
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: '400', color: '#ffc107' }}>
+                  3D 뷰를 클릭해서 조명을 배치하세요
+                </div>
+                <div style={{ fontSize: '14px', fontWeight: '400', color: '#aaa', marginTop: '8px' }}>
+                  여러 개 배치 가능 | 종료: 빨간 버튼 클릭
+                </div>
               </div>
-              <span>Explore</span>
-            </button>
-            <button className={styles.optionCard} onClick={() => fileInputRef.current?.click()}>
-              <div className={styles.optionIcon}>
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-                </svg>
-              </div>
-              <span>Import</span>
-            </button>
-            <button className={styles.optionCard} onClick={() => glbFileInputRef.current?.click()}>
-              <div className={styles.optionIcon}>
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M21.9 8.89l-1.05-4.37c-.22-.9-1-1.52-1.91-1.52H5.05c-.9 0-1.69.63-1.9 1.52L2.1 8.89c-.24 1.02-.02 2.06.62 2.88.08.11.19.19.28.29V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-6.94c.09-.09.2-.18.28-.28.64-.82.87-1.87.62-2.89zM18.91 4.99l1.05 4.37c.1.42.01.84-.25 1.17-.14.18-.44.47-1.05.47-.83 0-1.52-.64-1.63-1.5l-.5-4.5h2.38zM13 4.99h1.96l.54 4.52c.05.46.23.88.5 1.23.1.15.22.28.36.4-.07.08-.14.16-.22.25v3.61h-3.14V4.99zM5.05 4.99h2.38l-.5 4.5c-.11.86-.8 1.5-1.63 1.5-.61 0-.91-.29-1.05-.47-.25-.33-.35-.75-.25-1.17l1.05-4.36zM5 19v-6.03c.08-.01.15-.03.23-.06.24-.07.48-.23.7-.4.1.17.23.33.39.47.41.37.95.59 1.55.59.64 0 1.24-.25 1.66-.66.23-.23.39-.5.48-.78.09.28.25.54.48.78.42.41 1.02.66 1.66.66.23 0 .45-.03.66-.08v4.51H5zm14 0h-3V5.71l.54 4.79c.1.92.48 1.76 1.07 2.42.1.11.2.2.31.29v5.79z"/>
-                </svg>
-              </div>
-              <span>3D Model</span>
-            </button>
-            <button className={styles.optionCard}>
-              <div className={styles.optionIcon}>
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/>
-                </svg>
-              </div>
-              <span>RoomScaner</span>
-            </button>
+            )}
           </div>
 
-          {/* Walls */}
-          <div className={styles.toolSection}>
-            <h4>Walls</h4>
-            <div className={styles.toolGrid}>
-              <button
-                className={`${styles.toolBtn} ${activeTool === ToolType.SELECT ? styles.toolBtnActive : ''}`}
-                title="Select and Move Points"
-                onClick={() => setActiveTool(ToolType.SELECT)}
-              >
-                <RxCursorArrow size={32} />
-                <span>Select</span>
-              </button>
-              <button
-                className={`${styles.toolBtn} ${activeTool === ToolType.WALL ? styles.toolBtnActive : ''}`}
-                title="Draw Staight Walls"
-                onClick={() => setActiveTool(ToolType.WALL)}
-              >
-                <img src="/icons/wall.svg" alt="Wall" width="32" height="32" />
-                <span>Draw Staight Walls</span>
-              </button>
-              <button className={styles.toolBtn} title="Draw Arc Walls">
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <path d="M 8 28 Q 24 8, 40 28" stroke="currentColor" strokeWidth="2" fill="none"/>
-                </svg>
-                <span>Draw Arc Walls</span>
-              </button>
-              <button
-                className={`${styles.toolBtn} ${activeTool === ToolType.RECTANGLE ? styles.toolBtnActive : ''}`}
-                title="Draw Rooms"
-                onClick={() => setActiveTool(ToolType.RECTANGLE)}
-              >
-                <img src="/icons/room.svg" alt="Room" width="32" height="32" />
-                <span>Draw Rooms</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Door */}
-          <div className={styles.toolSection}>
-            <h4>Door</h4>
-            <div className={styles.toolGrid}>
-              <button
-                className={`${styles.toolBtn} ${activeTool === ToolType.DOOR ? styles.toolBtnActive : ''}`}
-                title="Place Door (900mm x 2100mm)"
-                onClick={() => setActiveTool(ToolType.DOOR)}
-              >
-                <img src="/icons/singledoor.svg" alt="Single Door" width="32" height="32" />
-                <span>Single Door</span>
-              </button>
-              <button className={styles.toolBtn}>
-                <img src="/icons/doubledoor.svg" alt="Double Door" width="32" height="32" />
-                <span>Double Door</span>
-              </button>
-              <button className={styles.toolBtn}>
-                <img src="/icons/window.svg" alt="Sliding Door" width="32" height="32" />
-                <span>Sliding Door</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Window */}
-          <div className={styles.toolSection}>
-            <h4>Window</h4>
-            <div className={styles.toolGrid}>
-              <button
-                className={`${styles.toolBtn} ${activeTool === ToolType.WINDOW ? styles.toolBtnActive : ''}`}
-                title="Place Window (1200mm x 1200mm)"
-                onClick={() => setActiveTool(ToolType.WINDOW)}
-              >
-                <img src="/icons/slidingdoor.svg" alt="Single Window" width="32" height="32" />
-                <span>Single Window</span>
-              </button>
-              <button className={styles.toolBtn}>
-                <img src="/icons/dualwindow.svg" alt="Dual Window" width="32" height="32" />
-                <span>Dual Window</span>
-              </button>
-              <button className={styles.toolBtn}>
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <rect x="8" y="18" width="10" height="12" stroke="currentColor" strokeWidth="2" fill="none"/>
-                  <rect x="18" y="18" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none"/>
-                  <rect x="30" y="18" width="10" height="12" stroke="currentColor" strokeWidth="2" fill="none"/>
-                </svg>
-                <span>Unequal Double Door</span>
-              </button>
-              <button className={styles.toolBtn}>
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <path d="M 12 24 L 18 18 L 30 18 L 36 24 L 30 30 L 18 30 Z" stroke="currentColor" strokeWidth="2" fill="none"/>
-                </svg>
-                <span>Corner Bay Window</span>
-              </button>
-              <button className={styles.toolBtn}>
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <path d="M 14 24 L 20 20 L 28 20 L 34 24" stroke="currentColor" strokeWidth="2" fill="none"/>
-                </svg>
-                <span>Corner Window</span>
-              </button>
-              <button className={styles.toolBtn}>
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <rect x="12" y="20" width="24" height="8" stroke="currentColor" strokeWidth="2" fill="none"/>
-                </svg>
-                <span>Bay Window</span>
-              </button>
-              <button className={styles.toolBtn}>
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <path d="M 16 24 Q 24 16, 32 24" stroke="currentColor" strokeWidth="2" fill="none"/>
-                </svg>
-                <span>Arc Window</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Structure */}
-          <div className={styles.toolSection}>
-            <h4>Structure</h4>
-            <div className={styles.toolGrid}>
-              <button className={styles.toolBtn}>
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <path d="M 16 12 L 16 36 M 32 12 L 32 36" stroke="currentColor" strokeWidth="2"/>
-                </svg>
-                <span>Door Opening</span>
-              </button>
-              <button className={styles.toolBtn}>
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <rect x="16" y="20" width="16" height="8" stroke="currentColor" strokeWidth="2" fill="none"/>
-                </svg>
-                <span>Flue</span>
-              </button>
-              <button className={styles.toolBtn}>
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <rect x="12" y="20" width="24" height="3" fill="currentColor"/>
-                </svg>
-                <span>Beam</span>
-              </button>
-              <button className={styles.toolBtn}>
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <rect x="16" y="16" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none"/>
-                </svg>
-                <span>Square</span>
-              </button>
-              <button className={styles.toolBtn}>
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <circle cx="24" cy="24" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
-                </svg>
-                <span>Circle</span>
-              </button>
-              <button className={styles.toolBtn}>
-                <svg width="32" height="32" viewBox="0 0 48 48">
-                  <rect x="14" y="14" width="20" height="20" stroke="currentColor" strokeWidth="2" fill="none"/>
-                  <rect x="18" y="18" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none"/>
-                </svg>
-                <span>Frame</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Viewport */}
-      <div className={styles.viewport}>
-        {/* View Mode Toggle (Top Right) */}
-        <div className={styles.viewModeToggle}>
-          <button
-            className={`${styles.viewModeBtn} ${viewMode === '2D' ? styles.viewModeBtnActive : ''}`}
-            onClick={() => {
-              setViewMode('2D');
-              setPlayMode(false);
-            }}
-          >
-            2D
-          </button>
-          <button
-            className={`${styles.viewModeBtn} ${viewMode === '3D' ? styles.viewModeBtnActive : ''}`}
-            onClick={() => {
-              setViewMode('3D');
-              setPlayMode(false);
-            }}
-          >
-            3D
-          </button>
-        </div>
-
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          visibility: playMode ? 'hidden' : (viewMode === '2D' ? 'visible' : 'hidden'),
-          pointerEvents: playMode ? 'none' : (viewMode === '2D' ? 'auto' : 'none')
-        }}>
-          <FloorplanCanvas
-            activeTool={activeTool}
-            onDataChange={setFloorplanData}
-            backgroundImage={showBackgroundImage ? backgroundImage : null}
-            renderStyle={renderStyle}
-            showGrid={showGrid}
-            imageScale={imageScale}
-            imageOpacity={imageOpacity}
-            onDimensionClick={handleDimensionClick}
-            rulerVisible={rulerVisible}
-            rulerStart={rulerStart}
-            rulerEnd={rulerEnd}
-            onRulerDragStart={handleRulerDragStart}
-            onRulerDrag={handleRulerDrag}
-            onRulerDragEnd={handleRulerDragEnd}
-            onRulerLabelClick={handleRulerLabelClick}
-            draggingRulerPoint={draggingRulerPoint}
-            scannedWalls={scannedWalls}
-          />
-        </div>
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          visibility: playMode || viewMode === '3D' ? 'visible' : 'hidden',
-          pointerEvents: playMode || viewMode === '3D' ? 'auto' : 'none',
-          cursor: lightPlacementMode ? 'crosshair' : 'default'
-        }}>
-          <Babylon3DCanvas
-            ref={babylon3DCanvasRef}
-            floorplanData={floorplanData}
-            visible={playMode || viewMode === '3D'}
-            sunSettings={sunSettings}
-            playMode={playMode}
-            showCharacter={showCharacter}
-            glbModelFile={glbModelFile}
-            photoRealisticMode={photoRealisticMode}
-            renderSettings={renderSettings}
-            lights={lights}
-            lightPlacementMode={lightPlacementMode}
-            selectedLightType={selectedLightType}
-            onLightPlaced={handleLightPlaced}
-            onLightMoved={handleLightMoved}
-            displayStyle={displayStyle}
-            showGrid={showGrid}
-          />
-
-          {/* Light Placement Guide Overlay */}
-          {lightPlacementMode && viewMode === '3D' && (
+          {/* Dimension Edit Modal */}
+          {editingWallId && viewMode === '2D' && !playMode && (
             <div style={{
               position: 'absolute',
               top: '50%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
-              background: 'rgba(0, 0, 0, 0.85)',
-              color: 'white',
-              padding: '32px 48px',
-              borderRadius: '12px',
-              fontSize: '24px',
-              fontWeight: '600',
-              textAlign: 'center',
-              pointerEvents: 'none',
-              zIndex: 1000,
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+              background: 'white',
+              padding: '24px',
+              borderRadius: '8px',
+              border: '2px solid #3fae7a',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
+              zIndex: 2000,
+              minWidth: '320px',
             }}>
-              <div style={{ marginBottom: '12px' }}>
-                {selectedLightType === 'point' ? '포인트 라이트' :
-                 selectedLightType === 'spot' ? '스포트 라이트' :
-                 '방향성 라이트'} 배치 모드
-              </div>
-              <div style={{ fontSize: '18px', fontWeight: '400', color: '#ffc107' }}>
-                3D 뷰를 클릭해서 조명을 배치하세요
-              </div>
-              <div style={{ fontSize: '14px', fontWeight: '400', color: '#aaa', marginTop: '8px' }}>
-                여러 개 배치 가능 | 종료: 빨간 버튼 클릭
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Dimension Edit Modal */}
-        {editingWallId && viewMode === '2D' && !playMode && (
-          <div style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            background: 'white',
-            padding: '24px',
-            borderRadius: '8px',
-            border: '2px solid #3fae7a',
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
-            zIndex: 2000,
-            minWidth: '320px',
-          }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)' }}>
-              벽 치수 수정
-            </h3>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500' }}>
-                치수 (mm):
-              </label>
-              <input
-                type="number"
-                value={dimensionInput}
-                onChange={(e) => setDimensionInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleDimensionSubmit();
-                  if (e.key === 'Escape') {
-                    setEditingWallId(null);
-                    setDimensionInput('');
-                  }
-                }}
-                autoFocus
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '4px',
-                  fontSize: '14px',
-                  background: 'var(--bg-primary)',
-                  color: 'var(--text-primary)',
-                }}
-              />
-            </div>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => {
-                  setEditingWallId(null);
-                  setDimensionInput('');
-                }}
-                style={{
-                  padding: '8px 16px',
-                  background: 'var(--bg-tertiary)',
-                  color: 'var(--text-secondary)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '4px',
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                }}
-              >
-                취소
-              </button>
-              <button
-                onClick={handleDimensionSubmit}
-                style={{
-                  padding: '8px 20px',
-                  background: 'var(--theme-color)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                }}
-              >
-                확인
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Ruler Label Edit Overlay */}
-        {editingRulerLabel && viewMode === '2D' && !playMode && (
-          <div style={{
-            position: 'absolute',
-            left: `${editingRulerLabel.x}px`,
-            top: `${editingRulerLabel.y + 40}px`,
-            background: 'white',
-            padding: '12px',
-            borderRadius: '6px',
-            border: '2px solid #FF0000',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
-            zIndex: 2000,
-            minWidth: '200px',
-          }}>
-            <div style={{ marginBottom: '8px', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '500' }}>
-              실제 거리 입력:
-            </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <input
-                type="number"
-                value={rulerDistance}
-                onChange={(e) => setRulerDistance(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleRulerLabelSubmit();
-                  if (e.key === 'Escape') setEditingRulerLabel(null);
-                }}
-                autoFocus
-                style={{
-                  flex: 1,
-                  padding: '6px 8px',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '4px',
-                  fontSize: '13px',
-                  background: 'var(--bg-primary)',
-                  color: 'var(--text-primary)',
-                }}
-              />
-              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>mm</span>
-            </div>
-            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-              <button
-                onClick={() => setEditingRulerLabel(null)}
-                style={{
-                  flex: 1,
-                  padding: '6px 12px',
-                  background: 'var(--bg-tertiary)',
-                  color: 'var(--text-secondary)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                }}
-              >
-                취소
-              </button>
-              <button
-                onClick={handleRulerLabelSubmit}
-                style={{
-                  flex: 1,
-                  padding: '6px 12px',
-                  background: '#FF0000',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                }}
-              >
-                확인
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Image Controls Overlay */}
-        {backgroundImage && viewMode === '2D' && !playMode && (
-          <div style={{
-            position: 'absolute',
-            bottom: '20px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'white',
-            padding: '16px 24px',
-            borderRadius: '4px',
-            border: '1px solid var(--border-color)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px',
-            zIndex: 1000,
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-            minWidth: '400px',
-          }}>
-            {/* Ruler Guide Instructions */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500' }}>
-                🎯 줄자 가이드를 드래그해서 이미지의 알려진 치수에 맞추세요
-              </span>
-            </div>
-
-            {/* Distance Input (always visible when ruler is present) */}
-            {rulerVisible && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <label style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', minWidth: '80px' }}>
-                  실제 거리:
+              <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)' }}>
+                벽 치수 수정
+              </h3>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500' }}>
+                  치수 (mm):
                 </label>
                 <input
                   type="number"
-                  value={rulerDistance}
-                  onChange={(e) => setRulerDistance(e.target.value)}
-                  placeholder="예: 3550"
+                  value={dimensionInput}
+                  onChange={(e) => setDimensionInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleDimensionSubmit();
+                    if (e.key === 'Escape') {
+                      setEditingWallId(null);
+                      setDimensionInput('');
+                    }
+                  }}
+                  autoFocus
                   style={{
-                    flex: 1,
-                    padding: '8px 12px',
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                    background: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => {
+                    setEditingWallId(null);
+                    setDimensionInput('');
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'var(--bg-tertiary)',
+                    color: 'var(--text-secondary)',
                     border: '1px solid var(--border-color)',
                     borderRadius: '4px',
                     fontSize: '13px',
+                    fontWeight: '500',
+                    cursor: 'pointer',
                   }}
-                />
-                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>mm</span>
+                >
+                  취소
+                </button>
                 <button
-                  onClick={handleRulerSubmit}
+                  onClick={handleDimensionSubmit}
                   style={{
                     padding: '8px 20px',
                     background: 'var(--theme-color)',
@@ -2995,285 +2870,424 @@ const EditorPage = () => {
                     cursor: 'pointer',
                   }}
                 >
-                  스케일 적용
+                  확인
                 </button>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Image Visibility Toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <label style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', minWidth: '80px' }}>
-                이미지 표시:
-              </label>
+          {/* Ruler Label Edit Overlay */}
+          {editingRulerLabel && viewMode === '2D' && !playMode && (
+            <div style={{
+              position: 'absolute',
+              left: `${editingRulerLabel.x}px`,
+              top: `${editingRulerLabel.y + 40}px`,
+              background: 'white',
+              padding: '12px',
+              borderRadius: '6px',
+              border: '2px solid #FF0000',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
+              zIndex: 2000,
+              minWidth: '200px',
+            }}>
+              <div style={{ marginBottom: '8px', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '500' }}>
+                실제 거리 입력:
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input
+                  type="number"
+                  value={rulerDistance}
+                  onChange={(e) => setRulerDistance(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleRulerLabelSubmit();
+                    if (e.key === 'Escape') setEditingRulerLabel(null);
+                  }}
+                  autoFocus
+                  style={{
+                    flex: 1,
+                    padding: '6px 8px',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '4px',
+                    fontSize: '13px',
+                    background: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                  }}
+                />
+                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>mm</span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                <button
+                  onClick={() => setEditingRulerLabel(null)}
+                  style={{
+                    flex: 1,
+                    padding: '6px 12px',
+                    background: 'var(--bg-tertiary)',
+                    color: 'var(--text-secondary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleRulerLabelSubmit}
+                  style={{
+                    flex: 1,
+                    padding: '6px 12px',
+                    background: '#FF0000',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                  }}
+                >
+                  확인
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Image Controls Overlay */}
+          {backgroundImage && viewMode === '2D' && !playMode && (
+            <div style={{
+              position: 'absolute',
+              bottom: '20px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'white',
+              padding: '16px 24px',
+              borderRadius: '4px',
+              border: '1px solid var(--border-color)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+              zIndex: 1000,
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+              minWidth: '400px',
+            }}>
+              {/* Ruler Guide Instructions */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500' }}>
+                  🎯 줄자 가이드를 드래그해서 이미지의 알려진 치수에 맞추세요
+                </span>
+              </div>
+
+              {/* Distance Input (always visible when ruler is present) */}
+              {rulerVisible && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <label style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', minWidth: '80px' }}>
+                    실제 거리:
+                  </label>
+                  <input
+                    type="number"
+                    value={rulerDistance}
+                    onChange={(e) => setRulerDistance(e.target.value)}
+                    placeholder="예: 3550"
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '4px',
+                      fontSize: '13px',
+                    }}
+                  />
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>mm</span>
+                  <button
+                    onClick={handleRulerSubmit}
+                    style={{
+                      padding: '8px 20px',
+                      background: 'var(--theme-color)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    스케일 적용
+                  </button>
+                </div>
+              )}
+
+              {/* Image Visibility Toggle */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <label style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', minWidth: '80px' }}>
+                  이미지 표시:
+                </label>
+                <button
+                  onClick={() => setShowBackgroundImage(!showBackgroundImage)}
+                  style={{
+                    padding: '8px 16px',
+                    background: showBackgroundImage ? '#3fae7a' : '#f5f5f5',
+                    color: showBackgroundImage ? 'white' : '#666',
+                    border: showBackgroundImage ? 'none' : '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '13px',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {showBackgroundImage ? '표시됨' : '숨김'}
+                </button>
+              </div>
+
+              {/* Opacity Control */}
+              {showBackgroundImage && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', minWidth: '50px' }}>
+                    투명도:
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={imageOpacity}
+                    onChange={(e) => setImageOpacity(parseFloat(e.target.value))}
+                    style={{ flex: 1 }}
+                  />
+                  <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: '500', minWidth: '40px' }}>
+                    {Math.round(imageOpacity * 100)}%
+                  </span>
+                </div>
+              )}
+
+              {/* Scan Button */}
               <button
-                onClick={() => setShowBackgroundImage(!showBackgroundImage)}
+                onClick={handleScan}
                 style={{
-                  padding: '8px 16px',
-                  background: showBackgroundImage ? '#3fae7a' : '#f5f5f5',
-                  color: showBackgroundImage ? 'white' : '#666',
-                  border: showBackgroundImage ? 'none' : '1px solid #ddd',
+                  padding: '10px 20px',
+                  background: 'var(--theme-color)',
+                  color: 'white',
+                  border: 'none',
                   borderRadius: '4px',
-                  fontSize: '13px',
+                  fontSize: '14px',
                   fontWeight: '500',
                   cursor: 'pointer',
                   transition: 'all 0.2s',
                 }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#2d9967';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#3fae7a';
+                }}
               >
-                {showBackgroundImage ? '표시됨' : '숨김'}
+                스캐닝
               </button>
             </div>
+          )}
+        </div>
 
-            {/* Opacity Control */}
-            {showBackgroundImage && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <label style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', minWidth: '50px' }}>
-                  투명도:
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={imageOpacity}
-                  onChange={(e) => setImageOpacity(parseFloat(e.target.value))}
-                  style={{ flex: 1 }}
-                />
-                <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: '500', minWidth: '40px' }}>
-                  {Math.round(imageOpacity * 100)}%
-                </span>
+        {/* Right Settings Panel */}
+        {!playMode && rightPanelOpen && (
+          <div className={styles.rightPanel}>
+            <div className={styles.panelHeader}>
+              <h3>Layer Settings</h3>
+              <button onClick={() => setRightPanelOpen(false)}>×</button>
+            </div>
+
+            {/* Basic Parameters */}
+            <div className={styles.settingsSection}>
+              <h4>Basic Parameters</h4>
+              <div className={styles.settingRow}>
+                <label>Total Building</label>
+                <input type="text" defaultValue="0.00 ㎡" readOnly />
               </div>
-            )}
+            </div>
 
-            {/* Scan Button */}
-            <button
-              onClick={handleScan}
-              style={{
-                padding: '10px 20px',
-                background: 'var(--theme-color)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                fontSize: '14px',
-                fontWeight: '500',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#2d9967';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = '#3fae7a';
-              }}
-            >
-              스캐닝
-            </button>
+            {/* Wall Settings */}
+            <div className={styles.settingsSection}>
+              <h4>Wall Settings</h4>
+              <div className={styles.settingRow}>
+                <label>Lock Walls</label>
+                <input type="checkbox" />
+              </div>
+              <div className={styles.settingRow}>
+                <label>Wall Height</label>
+                <input type="text" defaultValue="2400 mm" />
+              </div>
+              <div className={styles.settingRow}>
+                <label>Wall Thickness</label>
+                <input type="text" defaultValue="100 mm" />
+              </div>
+              <button className={styles.deleteBtn}>Delete All Walls</button>
+            </div>
+
+            {/* Floor Setting */}
+            <div className={styles.settingsSection}>
+              <h4>Floor Setting</h4>
+              <div className={styles.settingRow}>
+                <label>Floor Thickness</label>
+                <input type="text" defaultValue="120 mm" />
+              </div>
+              <button className={styles.editBtn}>Edit Floor ›</button>
+            </div>
           </div>
         )}
-      </div>
 
-      {/* Right Settings Panel */}
-      {!playMode && rightPanelOpen && (
-        <div className={styles.rightPanel}>
-          <div className={styles.panelHeader}>
-            <h3>Layer Settings</h3>
-            <button onClick={() => setRightPanelOpen(false)}>×</button>
-          </div>
-
-          {/* Basic Parameters */}
-          <div className={styles.settingsSection}>
-            <h4>Basic Parameters</h4>
-            <div className={styles.settingRow}>
-              <label>Total Building</label>
-              <input type="text" defaultValue="0.00 ㎡" readOnly />
-            </div>
-          </div>
-
-          {/* Wall Settings */}
-          <div className={styles.settingsSection}>
-            <h4>Wall Settings</h4>
-            <div className={styles.settingRow}>
-              <label>Lock Walls</label>
-              <input type="checkbox" />
-            </div>
-            <div className={styles.settingRow}>
-              <label>Wall Height</label>
-              <input type="text" defaultValue="2400 mm" />
-            </div>
-            <div className={styles.settingRow}>
-              <label>Wall Thickness</label>
-              <input type="text" defaultValue="100 mm" />
-            </div>
-            <button className={styles.deleteBtn}>Delete All Walls</button>
-          </div>
-
-          {/* Floor Setting */}
-          <div className={styles.settingsSection}>
-            <h4>Floor Setting</h4>
-            <div className={styles.settingRow}>
-              <label>Floor Thickness</label>
-              <input type="text" defaultValue="120 mm" />
-            </div>
-            <button className={styles.editBtn}>Edit Floor ›</button>
-          </div>
-        </div>
-      )}
-
-      {/* Render Style Panel */}
-      {renderStyleOpen && (
-        <div className={styles.renderStylePanel}>
-          <div className={styles.panelHeader}>
-            <h3>Render Style</h3>
-            <button onClick={() => setRenderStyleOpen(false)} className={styles.closeBtn}>×</button>
-          </div>
-
-          <div className={styles.panelContent}>
-            <div className={styles.styleOption}>
-              <button
-                className={`${styles.styleBtn} ${renderStyle === 'wireframe' ? styles.active : ''}`}
-                onClick={() => setRenderStyle('wireframe')}
-              >
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-                  <line x1="12" y1="22.08" x2="12" y2="12"/>
-                </svg>
-                <span>Wireframe</span>
-              </button>
+        {/* Render Style Panel */}
+        {renderStyleOpen && (
+          <div className={styles.renderStylePanel}>
+            <div className={styles.panelHeader}>
+              <h3>Render Style</h3>
+              <button onClick={() => setRenderStyleOpen(false)} className={styles.closeBtn}>×</button>
             </div>
 
-            <div className={styles.styleOption}>
-              <button
-                className={`${styles.styleBtn} ${renderStyle === 'hidden-line' ? styles.active : ''}`}
-                onClick={() => setRenderStyle('hidden-line')}
-              >
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                  <polyline points="7.5 4.21 12 6.81 16.5 4.21"/>
-                  <polyline points="7.5 19.79 12 17.19 16.5 19.79"/>
-                  <line x1="3.27" y1="6.96" x2="12" y2="12.01"/>
-                  <line x1="12" y1="12.01" x2="20.73" y2="6.96"/>
-                </svg>
-                <span>Hidden Line</span>
-              </button>
-            </div>
-
-            <div className={styles.styleOption}>
-              <button
-                className={`${styles.styleBtn} ${renderStyle === 'solid' ? styles.active : ''}`}
-                onClick={() => setRenderStyle('solid')}
-              >
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9z"/>
-                </svg>
-                <span>Solid</span>
-              </button>
-            </div>
-
-            <div className={styles.styleOption}>
-              <button
-                className={`${styles.styleBtn} ${renderStyle === 'realistic' ? styles.active : ''}`}
-                onClick={() => setRenderStyle('realistic')}
-              >
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                  <defs>
-                    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" style={{stopColor: 'currentColor', stopOpacity: 1}} />
-                      <stop offset="100%" style={{stopColor: 'currentColor', stopOpacity: 0.3}} />
-                    </linearGradient>
-                  </defs>
-                  <path fill="url(#grad1)" d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9z"/>
-                  <circle cx="8" cy="10" r="1" fill="currentColor" opacity="0.6"/>
-                  <circle cx="16" cy="10" r="1" fill="currentColor" opacity="0.6"/>
-                  <circle cx="12" cy="14" r="1" fill="currentColor" opacity="0.6"/>
-                </svg>
-                <span>Realistic</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Theme Settings Panel */}
-      {themeSettingsOpen && (
-        <div className={styles.themeSettingsPanel}>
-          <div className={styles.panelHeader}>
-            <h3>테마 설정</h3>
-            <button onClick={() => setThemeSettingsOpen(false)} className={styles.closeBtn}>×</button>
-          </div>
-
-          <div className={styles.panelContent}>
-            {/* Theme Mode Selection */}
-            <div className={styles.settingsSection}>
-              <h4>모드</h4>
-              <div className={styles.themeModeGrid}>
+            <div className={styles.panelContent}>
+              <div className={styles.styleOption}>
                 <button
-                  className={`${styles.themeModeBtn} ${themeMode === 'light' ? styles.active : ''}`}
-                  onClick={() => setThemeMode('light')}
+                  className={`${styles.styleBtn} ${renderStyle === 'wireframe' ? styles.active : ''}`}
+                  onClick={() => setRenderStyle('wireframe')}
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                    <line x1="12" y1="22.08" x2="12" y2="12" />
                   </svg>
-                  <span>라이트</span>
+                  <span>Wireframe</span>
                 </button>
+              </div>
+
+              <div className={styles.styleOption}>
                 <button
-                  className={`${styles.themeModeBtn} ${themeMode === 'dark' ? styles.active : ''}`}
-                  onClick={() => setThemeMode('dark')}
+                  className={`${styles.styleBtn} ${renderStyle === 'hidden-line' ? styles.active : ''}`}
+                  onClick={() => setRenderStyle('hidden-line')}
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                    <polyline points="7.5 4.21 12 6.81 16.5 4.21" />
+                    <polyline points="7.5 19.79 12 17.19 16.5 19.79" />
+                    <line x1="3.27" y1="6.96" x2="12" y2="12.01" />
+                    <line x1="12" y1="12.01" x2="20.73" y2="6.96" />
                   </svg>
-                  <span>다크</span>
+                  <span>Hidden Line</span>
+                </button>
+              </div>
+
+              <div className={styles.styleOption}>
+                <button
+                  className={`${styles.styleBtn} ${renderStyle === 'solid' ? styles.active : ''}`}
+                  onClick={() => setRenderStyle('solid')}
+                >
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9z" />
+                  </svg>
+                  <span>Solid</span>
+                </button>
+              </div>
+
+              <div className={styles.styleOption}>
+                <button
+                  className={`${styles.styleBtn} ${renderStyle === 'realistic' ? styles.active : ''}`}
+                  onClick={() => setRenderStyle('realistic')}
+                >
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                    <defs>
+                      <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style={{ stopColor: 'currentColor', stopOpacity: 1 }} />
+                        <stop offset="100%" style={{ stopColor: 'currentColor', stopOpacity: 0.3 }} />
+                      </linearGradient>
+                    </defs>
+                    <path fill="url(#grad1)" d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9z" />
+                    <circle cx="8" cy="10" r="1" fill="currentColor" opacity="0.6" />
+                    <circle cx="16" cy="10" r="1" fill="currentColor" opacity="0.6" />
+                    <circle cx="12" cy="14" r="1" fill="currentColor" opacity="0.6" />
+                  </svg>
+                  <span>Realistic</span>
                 </button>
               </div>
             </div>
+          </div>
+        )}
 
-            {/* Theme Color Selection */}
-            <div className={styles.settingsSection}>
-              <h4>테마 색상</h4>
-              <div className={styles.colorGrid}>
-                {[
-                  { name: '그린', color: '#3fae7a' },
-                  { name: '블루', color: '#4a90e2' },
-                  { name: '퍼플', color: '#9b59b6' },
-                  { name: '오렌지', color: '#e67e22' },
-                  { name: '레드', color: '#e74c3c' },
-                  { name: '핑크', color: '#ec4899' },
-                  { name: '틸', color: '#14b8a6' },
-                  { name: '인디고', color: '#6366f1' },
-                ].map(({ name, color }) => (
+        {/* Theme Settings Panel */}
+        {themeSettingsOpen && (
+          <div className={styles.themeSettingsPanel}>
+            <div className={styles.panelHeader}>
+              <h3>테마 설정</h3>
+              <button onClick={() => setThemeSettingsOpen(false)} className={styles.closeBtn}>×</button>
+            </div>
+
+            <div className={styles.panelContent}>
+              {/* Theme Mode Selection */}
+              <div className={styles.settingsSection}>
+                <h4>모드</h4>
+                <div className={styles.themeModeGrid}>
                   <button
-                    key={color}
-                    className={`${styles.colorBtn} ${themeColor === color ? styles.active : ''}`}
-                    style={{ backgroundColor: color }}
-                    onClick={() => setThemeColor(color)}
-                    title={name}
+                    className={`${styles.themeModeBtn} ${themeMode === 'light' ? styles.active : ''}`}
+                    onClick={() => setThemeMode('light')}
                   >
-                    {themeColor === color && (
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                      </svg>
-                    )}
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z" />
+                    </svg>
+                    <span>라이트</span>
                   </button>
-                ))}
+                  <button
+                    className={`${styles.themeModeBtn} ${themeMode === 'dark' ? styles.active : ''}`}
+                    onClick={() => setThemeMode('dark')}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z" />
+                    </svg>
+                    <span>다크</span>
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {/* Custom Color Picker */}
-            <div className={styles.settingsSection}>
-              <h4>커스텀 색상</h4>
-              <div className={styles.customColorRow}>
-                <input
-                  type="color"
-                  value={themeColor}
-                  onChange={(e) => setThemeColor(e.target.value)}
-                  className={styles.colorPicker}
-                />
-                <span className={styles.colorValue}>{themeColor.toUpperCase()}</span>
+              {/* Theme Color Selection */}
+              <div className={styles.settingsSection}>
+                <h4>테마 색상</h4>
+                <div className={styles.colorGrid}>
+                  {[
+                    { name: '그린', color: '#3fae7a' },
+                    { name: '블루', color: '#4a90e2' },
+                    { name: '퍼플', color: '#9b59b6' },
+                    { name: '오렌지', color: '#e67e22' },
+                    { name: '레드', color: '#e74c3c' },
+                    { name: '핑크', color: '#ec4899' },
+                    { name: '틸', color: '#14b8a6' },
+                    { name: '인디고', color: '#6366f1' },
+                  ].map(({ name, color }) => (
+                    <button
+                      key={color}
+                      className={`${styles.colorBtn} ${themeColor === color ? styles.active : ''}`}
+                      style={{ backgroundColor: color }}
+                      onClick={() => setThemeColor(color)}
+                      title={name}
+                    >
+                      {themeColor === color && (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom Color Picker */}
+              <div className={styles.settingsSection}>
+                <h4>커스텀 색상</h4>
+                <div className={styles.customColorRow}>
+                  <input
+                    type="color"
+                    value={themeColor}
+                    onChange={(e) => setThemeColor(e.target.value)}
+                    className={styles.colorPicker}
+                  />
+                  <span className={styles.colorValue}>{themeColor.toUpperCase()}</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
       </div>
 
       {/* Camera Settings Modal */}
@@ -3284,6 +3298,13 @@ const EditorPage = () => {
         isOpen={exportModalOpen}
         onClose={() => setExportModalOpen(false)}
         floorplanData={floorplanData}
+      />
+      {/* New AI Render Modal */}
+      <AIRenderModal
+        isOpen={aiRenderModalOpen}
+        onClose={() => setAiRenderModalOpen(false)}
+        themeMode={themeMode}
+        themeColor={themeColor}
       />
     </div>
   );
