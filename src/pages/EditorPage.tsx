@@ -394,24 +394,20 @@ const EditorPage = () => {
       const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-image' });
 
       const prompt = getStylePrompt(aiRenderStyle);
-      const contentParts = [
+
+      console.log('[EditorPage] Prompt:', prompt);
+      console.log('[EditorPage] Aspect ratio:', aiAspectRatio);
+      console.log('[EditorPage] Base64 length:', base64.length);
+
+      const result = await model.generateContent([
         {
           inlineData: {
             mimeType: 'image/png',
             data: base64,
           },
         },
-        { text: prompt },
-      ];
-
-      const result = await model.generateContent({
-        contents: contentParts,
-        config: {
-          imageConfig: {
-            aspectRatio: aiAspectRatio,
-          },
-        },
-      });
+        prompt,
+      ]);
 
       const aiResponse = await result.response;
       console.log('[EditorPage] Gemini API response received');
