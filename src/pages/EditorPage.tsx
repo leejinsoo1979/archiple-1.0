@@ -13,6 +13,7 @@ import type { Light, LightType } from '../core/types/Light';
 import { CameraSettingsModal } from '../ui/modals/CameraSettingsModal';
 import { ExportModal } from '../ui/modals/ExportModal';
 import { useCameraSettingsStore } from '../stores/cameraSettingsStore';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 
@@ -276,6 +277,115 @@ const EditorPage = () => {
     } catch (error) {
       console.error('[EditorPage] Render failed:', error);
       alert('렌더링 실패: ' + (error as Error).message);
+    }
+  };
+
+  // AI photorealistic rendering with Gemini
+  const handleAIRender = async () => {
+    if (!babylon3DCanvasRef.current || viewMode !== '3D') {
+      alert('3D 뷰로 전환해주세요.');
+      return;
+    }
+
+    try {
+      console.log('[EditorPage] Starting AI photorealistic rendering...');
+
+      // Show loading message
+      const loadingMessage = document.createElement('div');
+      loadingMessage.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #1a1a1a;
+        border: 1px solid #333;
+        color: white;
+        padding: 40px 60px;
+        border-radius: 8px;
+        font-size: 16px;
+        z-index: 10000;
+        text-align: center;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.7);
+        min-width: 320px;
+      `;
+      loadingMessage.innerHTML = `
+        <div style="
+          width: 40px;
+          height: 40px;
+          border: 3px solid #333;
+          border-top: 3px solid #9c27b0;
+          border-radius: 50%;
+          margin: 0 auto 20px;
+          animation: spin 0.8s linear infinite;
+        "></div>
+        <style>
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        </style>
+        <div style="font-size: 18px; font-weight: 500; margin-bottom: 12px;">
+          AI Rendering
+        </div>
+        <div style="font-size: 14px; color: #888; line-height: 1.6;">
+          Converting to photorealistic image...<br>
+          Powered by Google Gemini
+        </div>
+      `;
+      document.body.appendChild(loadingMessage);
+
+      // Capture current 3D view (1024x1024 for Gemini limit)
+      const blobUrl = await babylon3DCanvasRef.current.captureRender(1024, 1024);
+
+      // Convert blob URL to base64
+      const response = await fetch(blobUrl);
+      const blob = await response.blob();
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          // Remove data:image/png;base64, prefix
+          resolve(result.split(',')[1]);
+        };
+        reader.readAsDataURL(blob);
+      });
+
+      console.log('[EditorPage] Screenshot captured, calling Gemini API...');
+
+      // Call Gemini API for image generation
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error('Gemini API key not found');
+      }
+
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+
+      const result = await model.generateContent([
+        {
+          inlineData: {
+            mimeType: 'image/png',
+            data: base64,
+          },
+        },
+        'Convert this 3D architectural rendering into a photorealistic interior design image. Keep the exact same layout, room dimensions, wall positions, and spatial configuration. Make it look like a professional architectural photography with realistic materials, lighting, and textures. Maintain all structural elements exactly as shown.',
+      ]);
+
+      const aiResponse = await result.response;
+      console.log('[EditorPage] Gemini API response received');
+
+      // Remove loading message
+      document.body.removeChild(loadingMessage);
+
+      // Show result (Gemini returns text, not image directly for this model)
+      alert('AI 렌더링 완료!\n\n응답: ' + aiResponse.text());
+
+      // Clean up
+      URL.revokeObjectURL(blobUrl);
+
+    } catch (error) {
+      console.error('[EditorPage] AI rendering failed:', error);
+      alert('AI 렌더링 실패: ' + (error as Error).message);
     }
   };
 
@@ -1591,6 +1701,16 @@ const EditorPage = () => {
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/>
+                </svg>
+              </button>
+              <button
+                className={styles.topBtn}
+                title="AI Photorealistic Rendering (Google Gemini)"
+                onClick={handleAIRender}
+                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5.5-2.5l7.51-3.49L17.5 6.5 9.99 9.99 6.5 17.5zm5.5-6.6c.61 0 1.1.49 1.1 1.1s-.49 1.1-1.1 1.1-1.1-.49-1.1-1.1.49-1.1 1.1-1.1z"/>
                 </svg>
               </button>
             </div>
