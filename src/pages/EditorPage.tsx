@@ -471,9 +471,13 @@ const EditorPage = () => {
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      // Check if click is outside the style menu container
-      const styleMenuContainer = target.closest('div[style*="position: relative"]');
-      if (!styleMenuContainer || !styleMenuContainer.querySelector('[title*="Select Rendering Style"]')) {
+
+      // Check if click is inside the AI render panel or the AI render button
+      const aiRenderPanel = target.closest('[data-ai-render-panel]');
+      const aiRenderButton = target.closest('[data-ai-render-button]');
+
+      // Only close if click is outside both the panel and the button
+      if (!aiRenderPanel && !aiRenderButton) {
         setAiRenderPanelOpen(false);
       }
     };
@@ -1761,6 +1765,7 @@ const EditorPage = () => {
               {/* AI Render Button - Premium Design */}
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <button
+                  data-ai-render-button
                   onClick={openAIRenderPanel}
                   style={{
                     display: 'flex',
@@ -1808,6 +1813,7 @@ const EditorPage = () => {
 
                 {/* Style Selector Button */}
                 <button
+                  data-ai-render-button
                   onClick={() => setAiRenderPanelOpen(!aiRenderPanelOpen)}
                   style={{
                     display: 'flex',
@@ -1838,21 +1844,24 @@ const EditorPage = () => {
 
                 {/* AI Render Settings Panel */}
                 {aiRenderPanelOpen && (
-                  <div style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 10px)',
-                    right: 0,
-                    background: themeMode === 'dark' ? '#1e1e1e' : '#ffffff',
-                    border: `2px solid ${themeColor}40`,
-                    borderRadius: '12px',
-                    padding: '20px',
-                    width: '420px',
-                    maxHeight: '80vh',
-                    overflowY: 'auto',
-                    zIndex: 10000,
-                    boxShadow: `0 10px 40px ${themeColor}40`,
-                    animation: 'slideDown 0.2s ease-out'
-                  }}>
+                  <div
+                    data-ai-render-panel
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 10px)',
+                      right: 0,
+                      background: themeMode === 'dark' ? '#1e1e1e' : '#ffffff',
+                      border: `2px solid ${themeColor}40`,
+                      borderRadius: '12px',
+                      padding: '20px',
+                      width: '420px',
+                      maxHeight: '80vh',
+                      overflowY: 'auto',
+                      zIndex: 10000,
+                      boxShadow: `0 10px 40px ${themeColor}40`,
+                      animation: 'slideDown 0.2s ease-out'
+                    }}
+                  >
                     <style>{`
                       @keyframes slideDown {
                         from {
@@ -2368,7 +2377,7 @@ const EditorPage = () => {
                   // Capture current view using Babylon's built-in tool
                   if (babylon3DCanvasRef.current) {
                     try {
-                      // @ts-ignore - takeScreenshot is added via useImperativeHandle
+                      // Capture screenshot via ref
                       const screenshot = await babylon3DCanvasRef.current.takeScreenshot();
                       if (screenshot) {
                         setCapturedImage(screenshot);
