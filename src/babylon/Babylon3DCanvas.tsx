@@ -305,19 +305,86 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           }
 
           // Boost environment reflections
-          scene.environmentIntensity = 2.0;
+          scene.environmentIntensity = 2.5;
 
           // Boost all material quality and save original values
           const originalMaterialIntensities = new Map<PBRMaterial, number>();
+          const originalMaterialRoughness = new Map<PBRMaterial, number>();
+          const originalMaterialMetallic = new Map<PBRMaterial, number>();
+
           scene.meshes.forEach(mesh => {
             if (mesh.material && mesh.material instanceof PBRMaterial) {
               const mat = mesh.material as PBRMaterial;
               originalMaterialIntensities.set(mat, mat.environmentIntensity);
-              mat.environmentIntensity = Math.max(mat.environmentIntensity, 1.0);
+              originalMaterialRoughness.set(mat, mat.roughness);
+              originalMaterialMetallic.set(mat, mat.metallic);
+
+              // Boost reflections
+              mat.environmentIntensity = Math.max(mat.environmentIntensity, 1.5);
+
+              // Slightly reduce roughness for more reflective surfaces
+              if (mat.roughness > 0.3) {
+                mat.roughness = mat.roughness * 0.8;
+              }
+
+              // Enable more accurate PBR calculations
+              mat.usePhysicalLightFalloff = true;
+              mat.useRadianceOverAlpha = true;
             }
           });
 
-          console.log('[Babylon3DCanvas] Material quality boosted');
+          // Create ultra-quality rendering pipeline for the render target
+          const renderPipeline = new DefaultRenderingPipeline(
+            'ultraQualityPipeline',
+            true, // HDR
+            scene,
+            [camera]
+          );
+
+          // Ultra-quality SSAO (Ambient Occlusion) - adds depth and realism
+          renderPipeline.samples = 8; // 8x MSAA
+          renderPipeline.fxaaEnabled = true;
+
+          if (renderPipeline.imageProcessing) {
+            renderPipeline.imageProcessing.toneMappingEnabled = true;
+            renderPipeline.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
+            renderPipeline.imageProcessing.exposure = 1.0;
+            renderPipeline.imageProcessing.contrast = 1.1;
+            renderPipeline.imageProcessing.vignetteEnabled = false; // Keep clean
+          }
+
+          // High-quality SSAO
+          const ssao = renderPipeline.ssaoRenderEffect?.ssao;
+          if (ssao) {
+            ssao.totalStrength = 1.5;
+            ssao.radius = 1.0;
+            ssao.area = 0.75;
+            ssao.fallOff = 0.002;
+            ssao.base = 0.1;
+            ssao.samples = 64; // Maximum quality
+          }
+
+          // Subtle bloom for realism
+          renderPipeline.bloomEnabled = true;
+          if (renderPipeline.bloom) {
+            renderPipeline.bloom.bloomScale = 0.3;
+            renderPipeline.bloom.bloomWeight = 0.15;
+            renderPipeline.bloom.bloomKernel = 64;
+            renderPipeline.bloom.bloomThreshold = 0.9;
+          }
+
+          // Screen Space Reflections for realistic reflections
+          const ssr = renderPipeline.screenSpaceReflections;
+          if (ssr) {
+            ssr.enabled = true;
+            ssr.strength = 0.5;
+            ssr.reflectionSpecularFalloffExponent = 3;
+            ssr.maxDistance = 1000;
+            ssr.step = 1.0;
+            ssr.thickness = 0.5;
+          }
+
+          console.log('[Babylon3DCanvas] Ultra-quality rendering pipeline created with SSAO, Bloom, SSR, ACES tonemapping');
 
           // Hide grid for clean render
           const gridMesh = infiniteGridRef.current;
@@ -465,6 +532,15 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
               originalMaterialIntensities.forEach((intensity, mat) => {
                 mat.environmentIntensity = intensity;
               });
+              originalMaterialRoughness.forEach((roughness, mat) => {
+                mat.roughness = roughness;
+              });
+              originalMaterialMetallic.forEach((metallic, mat) => {
+                mat.metallic = metallic;
+              });
+
+              // Dispose rendering pipeline
+              renderPipeline.dispose();
 
               console.log('[Babylon3DCanvas] All settings restored');
 
