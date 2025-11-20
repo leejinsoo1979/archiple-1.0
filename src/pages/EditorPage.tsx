@@ -1715,17 +1715,16 @@ const EditorPage = () => {
                 onClick={() => {
                   if (!playMode) {
                     setViewMode('3D'); // Switch to 3D view
-                    setPhotoRealisticMode(true); // Enable photo-realistic rendering
                     setDisplayStyle('material'); // Ensure textures are visible
                     setShowGrid(false); // Hide grid for immersive experience
+                    // Photo-realistic mode disabled - clean PBR rendering is better quality
                   } else {
-                    setPhotoRealisticMode(false); // Disable photo-realistic rendering when exiting
                     setDisplayStyle('material'); // Keep material style
                     setShowGrid(true); // Restore grid
                   }
                   setPlayMode(!playMode);
                 }}
-                title={playMode ? 'Exit Play Mode' : 'Enter Play Mode (WASD + Photo-Realistic Rendering)'}
+                title={playMode ? 'Exit Play Mode' : 'Enter Play Mode (WASD)'}
               >
                 {playMode ? (
                   <>
