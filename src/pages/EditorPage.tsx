@@ -284,41 +284,19 @@ const EditorPage = () => {
   };
 
   // Generate style-specific prompts for AI rendering
-  const getStylePrompt = (style: typeof aiRenderStyle, aspectRatio: typeof aiAspectRatio): string => {
-    const baseInstruction = 'Using the provided 3D architectural rendering, create a new image that maintains the EXACT same layout, room dimensions, wall positions, furniture placement, and spatial configuration. ';
-
-    const aspectRatioText = aspectRatio === 'square' ? 'Square format (1:1).' : aspectRatio === 'landscape' ? 'Landscape format (16:9).' : 'Portrait format (9:16).';
-
+  const getStylePrompt = (style: typeof aiRenderStyle): string => {
     switch (style) {
       case 'photorealistic':
-        return baseInstruction + `A photorealistic architectural interior photograph with professional lighting. The scene is illuminated by soft, natural light from windows creating realistic shadows and highlights. Captured with a wide-angle lens, emphasizing realistic materials like wood grain, fabric textures, and surface reflections. The overall mood is warm and inviting with accurate color reproduction and depth. ${aspectRatioText}`;
+        return `Transform this 3D architectural rendering into a photorealistic interior photograph. Apply professional photography lighting with soft, natural light from windows creating realistic shadows and highlights. Render all materials with photorealistic detail - wood grain texture, fabric weaves, surface reflections, and subtle imperfections. Captured with a wide-angle lens (24mm equivalent) with natural depth of field. The scene should feel like a professionally shot architectural photograph with warm, inviting atmosphere and accurate color reproduction. Preserve the exact room layout, dimensions, wall positions, and all furniture placement from the original rendering.`;
 
       case 'product':
-        return baseInstruction + `A high-resolution, studio-lit product photograph style interior. The lighting is a three-point softbox setup to eliminate harsh shadows and highlight textures. Ultra-realistic, with sharp focus on all surfaces and materials. Professional e-commerce photography quality with perfect exposure. ${aspectRatioText}`;
+        return `Transform this 3D architectural rendering into a high-resolution, studio-lit product photography style interior. Apply professional studio lighting with a three-point softbox setup designed to create soft, diffused highlights and eliminate harsh shadows. Render with ultra-realistic materials showing sharp focus on all surfaces - polished wood, smooth fabrics, reflective glass. The camera angle should be slightly elevated to showcase clean lines and spatial relationships. Ultra-realistic detail with perfect exposure and professional e-commerce photography quality. Preserve the exact room layout and all furniture placement from the original rendering.`;
 
       case 'minimalist':
-        return baseInstruction + `A minimalist interior design photograph featuring simple forms and uncluttered spaces. The lighting is soft and diffused, creating a calm atmosphere. Materials are natural and subtle - light wood, white walls, simple textiles. The color scheme is predominantly neutral whites, grays, and beiges. Clean, serene composition with emphasis on negative space. ${aspectRatioText}`;
+        return `Transform this 3D architectural rendering into a minimalist interior design photograph. Apply soft, diffused lighting creating a calm, serene atmosphere. Render materials with natural, subtle qualities - light wood tones, matte white surfaces, simple linen textures. The color palette should be predominantly neutral whites, soft grays, and warm beiges. Emphasize clean composition with negative space and uncluttered visual flow. Soft shadows and gentle highlights. Preserve the exact room layout and furniture placement while enhancing the minimalist aesthetic.`;
 
-      case 'modern':
-        return baseInstruction + `A modern, contemporary interior design photograph with clean lines and sleek finishes. The lighting is bright and even, emphasizing the minimalist aesthetic. Materials appear polished and refined - smooth surfaces, glass, metal accents. The color palette is neutral with bold accent colors. Professional architectural photography style with sharp focus throughout. ${aspectRatioText}`;
-
-      case 'luxury':
-        return baseInstruction + `A luxurious, high-end interior design photograph with premium materials and elegant lighting. The scene features rich textures - marble, velvet, polished wood, metallic accents. Lighting is sophisticated with warm ambient glow and dramatic highlights. The color palette includes deep, rich tones with gold or brass details. Professional luxury real estate photography style. ${aspectRatioText}`;
-
-      case 'artistic':
-        return baseInstruction + `Transform into an artistic, painterly interior scene with expressive brushstrokes and rich color palette. The style should evoke fine art photography with creative color grading, subtle vignetting, and artistic interpretation while maintaining spatial accuracy. Mood is contemplative and sophisticated. ${aspectRatioText}`;
-
-      case 'cinematic':
-        return baseInstruction + `A cinematic interior shot with dramatic lighting and film-like color grading. The scene has moody, atmospheric lighting with strong contrast and carefully placed highlights. Color grading resembles high-end cinema with rich shadows and controlled highlights. Anamorphic lens characteristics with subtle lens flares. ${aspectRatioText}`;
-
-      case 'bright':
-        return baseInstruction + `A bright, airy interior photograph with abundant natural light. The scene is flooded with soft daylight creating an uplifting, fresh atmosphere. Colors are vibrant but natural. Everything is crisp, clean, and well-lit with no harsh shadows. Perfect for real estate marketing with an optimistic, welcoming feel. ${aspectRatioText}`;
-
-      case 'cozy':
-        return baseInstruction + `A warm, cozy interior photograph with intimate lighting. The scene features soft, warm lighting from lamps and natural sources creating a comfortable, lived-in atmosphere. Materials look soft and inviting - plush textiles, warm wood tones. Color temperature is warm with golden hour lighting quality. ${aspectRatioText}`;
-
-      case 'industrial':
-        return baseInstruction + `An industrial-style interior photograph with raw, urban aesthetic. The scene features exposed materials like concrete, brick, metal, and unfinished surfaces. Lighting is a mix of natural light and Edison bulbs or metal fixtures. Color palette includes grays, browns, blacks with metallic accents. Modern loft aesthetic. ${aspectRatioText}`;
+      case 'sticker':
+        return `Transform this 3D architectural rendering into a clean, stylized illustration with bold outlines and simplified forms. Apply a kawaii-style or modern flat design aesthetic with clean vector-like appearance. Use simple cel-shading with soft shadows. The color palette should be vibrant but harmonious. Bold, clean outlines defining all major elements. Simplified but recognizable architectural details. The style should resemble professional architectural illustration or infographic design. Preserve the room layout and furniture arrangement while converting to an illustrative style.`;
     }
   };
 
@@ -412,16 +390,27 @@ const EditorPage = () => {
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-image' });
 
-      const prompt = getStylePrompt(aiRenderStyle, aiAspectRatio);
-      const result = await model.generateContent([
-        {
-          inlineData: {
-            mimeType: 'image/png',
-            data: base64,
+      const prompt = getStylePrompt(aiRenderStyle);
+      const result = await model.generateContent({
+        contents: [
+          {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: 'image/png',
+                  data: base64,
+                },
+              },
+              { text: prompt },
+            ],
+          },
+        ],
+        generationConfig: {
+          imageConfig: {
+            aspectRatio: aiAspectRatio,
           },
         },
-        prompt,
-      ]);
+      });
 
       const aiResponse = await result.response;
       console.log('[EditorPage] Gemini API response received');
@@ -1952,27 +1941,24 @@ const EditorPage = () => {
                         <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
                           Aspect Ratio
                         </label>
-                        <div style={{ display: 'flex', gap: '12px' }}>
-                          {(['square', 'landscape', 'portrait'] as const).map((ratio) => (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
+                          {(['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'] as const).map((ratio) => (
                             <button
                               key={ratio}
                               onClick={() => setAiAspectRatio(ratio)}
                               style={{
-                                flex: 1,
-                                padding: '12px',
-                                borderRadius: '8px',
+                                padding: '10px 6px',
+                                borderRadius: '6px',
                                 border: aiAspectRatio === ratio ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
                                 background: aiAspectRatio === ratio ? `${themeColor}15` : 'transparent',
                                 color: aiAspectRatio === ratio ? themeColor : (themeMode === 'dark' ? '#fff' : '#000'),
                                 cursor: 'pointer',
                                 fontWeight: aiAspectRatio === ratio ? '600' : '500',
-                                fontSize: '13px',
+                                fontSize: '12px',
                                 transition: 'all 0.2s'
                               }}
                             >
-                              {ratio === 'square' && '1:1'}
-                              {ratio === 'landscape' && '16:9'}
-                              {ratio === 'portrait' && '9:16'}
+                              {ratio}
                             </button>
                           ))}
                         </div>
@@ -1988,7 +1974,7 @@ const EditorPage = () => {
                           gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
                           gap: '12px'
                         }}>
-                          {(['photorealistic', 'product', 'minimalist', 'modern', 'luxury', 'artistic', 'cinematic', 'bright', 'cozy', 'industrial'] as const).map((style) => (
+                          {(['photorealistic', 'product', 'minimalist', 'sticker'] as const).map((style) => (
                             <button
                               key={style}
                               onClick={() => setAiRenderStyle(style)}
