@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BiJoystick } from "react-icons/bi";
+import { BiSolidJoystick } from "react-icons/bi";
 import styles from '../../../pages/LandingPage.module.css';
 
 const GallerySection: React.FC = () => {
@@ -75,8 +75,7 @@ const GallerySection: React.FC = () => {
                             />
                             <div className={styles.masonryOverlay}>
                                 <div className={styles.masonryBadge}>
-                                    <BiJoystick size={20} />
-                                    <span>Play</span>
+                                    <BiSolidJoystick size={48} />
                                 </div>
                             </div>
                         </div>

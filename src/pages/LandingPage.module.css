@@ -665,22 +665,29 @@
 
 .masonryOverlay {
     position: absolute;
-    bottom: 16px;
-    left: 16px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     z-index: 2;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.masonryItem:hover .masonryOverlay {
+    opacity: 1;
 }
 
 .masonryBadge {
     display: flex;
     align-items: center;
-    gap: 8px;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(4px);
-    padding: 8px 14px;
-    border-radius: 20px;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    padding: 16px;
+    border-radius: 50%;
     color: #ffffff;
-    font-size: 15px;
-    font-weight: 600;
+    width: 80px;
+    height: 80px;
 }
 
 /* Design Tools Section */
