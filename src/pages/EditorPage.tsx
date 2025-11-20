@@ -1715,10 +1715,13 @@ const EditorPage = () => {
                 onClick={() => {
                   if (!playMode) {
                     setViewMode('3D'); // Switch to 3D view
+                    setPhotoRealisticMode(true); // Enable photo-realistic rendering
+                  } else {
+                    setPhotoRealisticMode(false); // Disable photo-realistic rendering when exiting
                   }
                   setPlayMode(!playMode);
                 }}
-                title={playMode ? 'Exit Play Mode' : 'Enter Play Mode (WASD)'}
+                title={playMode ? 'Exit Play Mode' : 'Enter Play Mode (WASD + Photo-Realistic Rendering)'}
               >
                 {playMode ? (
                   <>
