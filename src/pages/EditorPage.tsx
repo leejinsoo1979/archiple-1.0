@@ -46,6 +46,9 @@ const EditorPage = () => {
   const [aiRenderStyle, setAiRenderStyle] = useState<'photorealistic' | 'product' | 'minimalist' | 'sticker'>('photorealistic');
   const [aiAspectRatio, setAiAspectRatio] = useState<'1:1' | '2:3' | '3:2' | '3:4' | '4:3' | '4:5' | '5:4' | '9:16' | '16:9' | '21:9'>('1:1');
   const [aiRenderPanelOpen, setAiRenderPanelOpen] = useState(false);
+  const [aiInputImage, setAiInputImage] = useState<string | null>(null);
+  const [aiOutputImage, setAiOutputImage] = useState<string | null>(null);
+  const [aiGenerating, setAiGenerating] = useState(false);
 
   // Rendering settings panel (right sidebar)
   const [renderPanelOpen, setRenderPanelOpen] = useState(false);
@@ -304,75 +307,36 @@ const EditorPage = () => {
     }
   };
 
-  // AI photorealistic rendering with Gemini
-  const handleAIRender = async () => {
+  // Open AI render panel and capture input image
+  const openAIRenderPanel = async () => {
     if (!babylon3DCanvasRef.current || viewMode !== '3D') {
       alert('3D 뷰로 전환해주세요.');
       return;
     }
 
-    setAiRenderPanelOpen(false); // Close style menu
-    let loadingMessage: HTMLDivElement | null = null;
+    try {
+      // Capture current 3D view
+      const blobUrl = await babylon3DCanvasRef.current.captureRender(1024, 1024);
+      setAiInputImage(blobUrl);
+      setAiOutputImage(null);
+      setAiRenderPanelOpen(true);
+    } catch (error) {
+      console.error('[EditorPage] Failed to capture input image:', error);
+      alert('이미지 캡처 실패');
+    }
+  };
+
+  // Generate AI render from input image
+  const generateAIImage = async () => {
+    if (!aiInputImage || !babylon3DCanvasRef.current) return;
+
+    setAiGenerating(true);
 
     try {
       console.log(`[EditorPage] Starting AI ${aiRenderStyle} rendering...`);
 
-      // Show loading message with themed gradient background
-      loadingMessage = document.createElement('div');
-      const bgGradient = themeMode === 'dark'
-        ? `linear-gradient(135deg, #1a1a1a 0%, ${themeColor}22 100%)`
-        : `linear-gradient(135deg, #ffffff 0%, ${themeColor}11 100%)`;
-      const textColor = themeMode === 'dark' ? 'white' : '#000';
-      const borderColor = `${themeColor}4d`;
-      const shadowColor = `${themeColor}33`;
-
-      loadingMessage.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: ${bgGradient};
-        border: 1px solid ${borderColor};
-        color: ${textColor};
-        padding: 40px 60px;
-        border-radius: 12px;
-        font-size: 16px;
-        z-index: 10000;
-        text-align: center;
-        box-shadow: 0 20px 60px ${shadowColor};
-        min-width: 320px;
-      `;
-      loadingMessage.innerHTML = `
-        <div style="
-          width: 50px;
-          height: 50px;
-          border: 4px solid ${themeColor}33;
-          border-top: 4px solid ${themeColor};
-          border-radius: 50%;
-          margin: 0 auto 20px;
-          animation: spin 0.8s linear infinite;
-        "></div>
-        <style>
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        </style>
-        <div style="font-size: 20px; font-weight: 600; margin-bottom: 12px; color: ${themeColor};">
-          AI ${aiRenderStyle.charAt(0).toUpperCase() + aiRenderStyle.slice(1)} Rendering
-        </div>
-        <div style="font-size: 14px; color: ${themeMode === 'dark' ? '#aaa' : '#666'}; line-height: 1.6;">
-          Converting to ${aiRenderStyle} style...<br>
-          <span style="color: ${themeColor};">Powered by Google Gemini Imagen 3</span>
-        </div>
-      `;
-      document.body.appendChild(loadingMessage);
-
-      // Capture current 3D view (1024x1024 for Gemini limit)
-      const blobUrl = await babylon3DCanvasRef.current.captureRender(1024, 1024);
-
-      // Convert blob URL to base64
-      const response = await fetch(blobUrl);
+      // Convert input image blob URL to base64
+      const response = await fetch(aiInputImage);
       const blob = await response.blob();
       const base64 = await new Promise<string>((resolve) => {
         const reader = new FileReader();
@@ -383,7 +347,7 @@ const EditorPage = () => {
         reader.readAsDataURL(blob);
       });
 
-      console.log('[EditorPage] Screenshot captured, calling Gemini API...');
+      console.log('[EditorPage] Calling Gemini API...');
 
       // Call Gemini API for image generation
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
@@ -428,25 +392,9 @@ const EditorPage = () => {
           const imageBlob = new Blob([buffer], { type: 'image/png' });
           const imageBlobUrl = URL.createObjectURL(imageBlob);
 
-          // Remove loading message
-          if (loadingMessage) {
-            document.body.removeChild(loadingMessage);
-            loadingMessage = null;
-          }
-
-          // Download the image
-          const downloadLink = document.createElement('a');
-          downloadLink.href = imageBlobUrl;
-          downloadLink.download = `archiple-ai-${aiRenderStyle}-${Date.now()}.png`;
-          document.body.appendChild(downloadLink);
-          downloadLink.click();
-          document.body.removeChild(downloadLink);
-
-          console.log('[EditorPage] AI rendered image downloaded successfully');
-          alert(`AI ${aiRenderStyle} 렌더링 완료!\n이미지가 다운로드되었습니다.`);
-
-          // Clean up
-          setTimeout(() => URL.revokeObjectURL(imageBlobUrl), 100);
+          // Set output image
+          setAiOutputImage(imageBlobUrl);
+          console.log('[EditorPage] AI rendered image ready');
           imageFound = true;
           break;
         }
@@ -456,15 +404,9 @@ const EditorPage = () => {
         throw new Error('No image data in API response');
       }
 
-      // Clean up
-      URL.revokeObjectURL(blobUrl);
-
     } catch (error) {
       console.error('[EditorPage] AI rendering failed:', error);
       console.error('[EditorPage] Error details:', JSON.stringify(error, null, 2));
-      if (loadingMessage) {
-        document.body.removeChild(loadingMessage);
-      }
 
       // Handle specific error types
       const errorMessage = (error as Error).message || String(error);
@@ -480,6 +422,8 @@ const EditorPage = () => {
       } else {
         alert('AI 렌더링 실패:\n\n' + errorMessage + '\n\n상세 정보는 콘솔을 확인하세요.');
       }
+    } finally {
+      setAiGenerating(false);
     }
   };
 
@@ -1817,7 +1761,7 @@ const EditorPage = () => {
               {/* AI Render Button - Premium Design */}
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <button
-                  onClick={handleAIRender}
+                  onClick={openAIRenderPanel}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -2014,36 +1958,125 @@ const EditorPage = () => {
                       </div>
                     </div>
 
-                    {/* Render Button */}
+                    {/* Input/Output Image Display */}
+                    {aiInputImage && (
+                      <div style={{ marginBottom: '20px' }}>
+                        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
+                          Input Image (3D View)
+                        </label>
+                        <div style={{
+                          width: '100%',
+                          borderRadius: '10px',
+                          overflow: 'hidden',
+                          border: `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
+                          background: themeMode === 'dark' ? '#252525' : '#f8f8f8'
+                        }}>
+                          <img
+                            src={aiInputImage}
+                            alt="Input 3D View"
+                            style={{
+                              width: '100%',
+                              height: 'auto',
+                              display: 'block'
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {aiOutputImage && (
+                      <div style={{ marginBottom: '20px' }}>
+                        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
+                          AI Rendered Result
+                        </label>
+                        <div style={{
+                          width: '100%',
+                          borderRadius: '10px',
+                          overflow: 'hidden',
+                          border: `2px solid ${themeColor}`,
+                          background: themeMode === 'dark' ? '#252525' : '#f8f8f8'
+                        }}>
+                          <img
+                            src={aiOutputImage}
+                            alt="AI Rendered Output"
+                            style={{
+                              width: '100%',
+                              height: 'auto',
+                              display: 'block'
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Generate Button */}
                     <button
-                      onClick={() => {
-                        setAiRenderPanelOpen(false);
-                        handleAIRender();
-                      }}
+                      onClick={generateAIImage}
+                      disabled={aiGenerating || !aiInputImage}
                       style={{
                         width: '100%',
                         padding: '14px',
                         borderRadius: '10px',
                         border: 'none',
-                        background: `linear-gradient(135deg, ${themeColor} 0%, ${themeColor}cc 100%)`,
+                        background: aiGenerating || !aiInputImage
+                          ? (themeMode === 'dark' ? '#444' : '#ccc')
+                          : `linear-gradient(135deg, ${themeColor} 0%, ${themeColor}cc 100%)`,
                         color: 'white',
                         fontSize: '15px',
                         fontWeight: '600',
-                        cursor: 'pointer',
+                        cursor: aiGenerating || !aiInputImage ? 'not-allowed' : 'pointer',
                         transition: 'all 0.2s',
-                        boxShadow: `0 4px 15px ${themeColor}40`
+                        boxShadow: aiGenerating || !aiInputImage ? 'none' : `0 4px 15px ${themeColor}40`,
+                        opacity: aiGenerating || !aiInputImage ? 0.6 : 1
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translateY(-2px)';
-                        e.currentTarget.style.boxShadow = `0 6px 20px ${themeColor}60`;
+                        if (!aiGenerating && aiInputImage) {
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.boxShadow = `0 6px 20px ${themeColor}60`;
+                        }
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = `0 4px 15px ${themeColor}40`;
+                        if (!aiGenerating && aiInputImage) {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = `0 4px 15px ${themeColor}40`;
+                        }
                       }}
                     >
-                      Generate AI Render
+                      {aiGenerating ? 'Generating...' : 'Generate AI Render'}
                     </button>
+
+                    {/* Download Button (only when output exists) */}
+                    {aiOutputImage && !aiGenerating && (
+                      <button
+                        onClick={() => {
+                          const link = document.createElement('a');
+                          link.href = aiOutputImage;
+                          link.download = `archiple-ai-render-${aiRenderStyle}-${Date.now()}.png`;
+                          link.click();
+                        }}
+                        style={{
+                          width: '100%',
+                          marginTop: '12px',
+                          padding: '12px',
+                          borderRadius: '10px',
+                          border: `2px solid ${themeColor}`,
+                          background: 'transparent',
+                          color: themeColor,
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = `${themeColor}15`;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                        }}
+                      >
+                        Download Rendered Image
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -2331,16 +2364,17 @@ const EditorPage = () => {
               {/* New AI Render Button (Nanobanana) */}
               <button
                 className={styles.topBtn}
-                onClick={() => {
-                  // Capture current view
+                onClick={async () => {
+                  // Capture current view using Babylon's built-in tool
                   if (babylon3DCanvasRef.current) {
                     try {
-                      // Get the canvas element
-                      const canvas = document.querySelector('canvas');
-                      if (canvas) {
-                        const dataUrl = canvas.toDataURL('image/png');
-                        setCapturedImage(dataUrl);
+                      // @ts-ignore - takeScreenshot is added via useImperativeHandle
+                      const screenshot = await babylon3DCanvasRef.current.takeScreenshot();
+                      if (screenshot) {
+                        setCapturedImage(screenshot);
                         console.log('[EditorPage] Captured 3D view for AI render');
+                      } else {
+                        console.warn('[EditorPage] Screenshot returned null');
                       }
                     } catch (e) {
                       console.error('[EditorPage] Failed to capture screenshot:', e);
