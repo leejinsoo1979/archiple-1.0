@@ -272,7 +272,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         throw new Error('Scene or Engine not initialized');
       }
 
-      console.log(`[Babylon3DCanvas] 🎨 Starting ULTRA-QUALITY rendering at ${width}x${height}...`);
+      console.log(`[Babylon3DCanvas] Starting ULTRA-QUALITY rendering at ${width}x${height}...`);
 
       return new Promise((resolve, reject) => {
         try {
@@ -288,14 +288,14 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           const originalShadowBlurKernel = shadowGen?.blurKernel || 64;
           const originalEnvIntensity = scene.environmentIntensity;
 
-          console.log('[Babylon3DCanvas] 📋 Saved original settings');
+          console.log('[Babylon3DCanvas] Saved original settings');
 
           // ===== STEP 2: Apply ULTRA-QUALITY settings =====
           if (shadowGen) {
             shadowGen.mapSize = 16384; // Ultra 16K shadow maps
             shadowGen.blurKernel = 256; // Maximum blur for ultra-soft shadows
             shadowGen.filteringQuality = ShadowGenerator.QUALITY_HIGH;
-            console.log('[Babylon3DCanvas] ✅ Shadow quality: 16K ultra-quality');
+            console.log('[Babylon3DCanvas] Shadow quality: 16K ultra-quality');
           }
 
           // Boost environment reflections
@@ -309,7 +309,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
             }
           });
 
-          console.log('[Babylon3DCanvas] ✅ Material quality boosted');
+          console.log('[Babylon3DCanvas] Material quality boosted');
 
           // Create high-resolution RenderTargetTexture with multi-sampling
           const renderTarget = new RenderTargetTexture(
@@ -331,7 +331,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           // Enable 8x MSAA for ultra-smooth edges
           renderTarget.samples = 8;
 
-          console.log(`[Babylon3DCanvas] 📐 RenderTargetTexture created: ${width}x${height} with 8x MSAA`);
+          console.log(`[Babylon3DCanvas] RenderTargetTexture created: ${width}x${height} with 8x MSAA`);
 
           // Set active camera
           renderTarget.activeCamera = camera;
@@ -345,7 +345,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
           renderTarget.renderList = scene.meshes.filter(m => m !== gridMesh);
 
-          console.log('[Babylon3DCanvas] 🎬 Starting render...');
+          console.log('[Babylon3DCanvas] Starting render...');
 
           // Render once
           renderTarget.onAfterRenderObservable.addOnce(async () => {
@@ -368,12 +368,21 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
               return;
             }
 
-            // Create ImageData from pixels
+            // Create ImageData from pixels - flip Y axis for correct orientation
             const imageData = ctx.createImageData(textureSize.width, textureSize.height);
-            imageData.data.set(new Uint8ClampedArray(pixels.buffer));
+            const pixelArray = new Uint8ClampedArray(pixels.buffer);
+
+            // Flip Y axis by reversing row order
+            const rowSize = textureSize.width * 4;
+            for (let y = 0; y < textureSize.height; y++) {
+              const srcRow = (textureSize.height - 1 - y) * rowSize;
+              const dstRow = y * rowSize;
+              imageData.data.set(pixelArray.subarray(srcRow, srcRow + rowSize), dstRow);
+            }
+
             ctx.putImageData(imageData, 0, 0);
 
-            // Convert to blob and then data URL
+            // Convert to blob and return directly (faster, more reliable)
             canvas.toBlob((blob) => {
               if (!blob) {
                 renderTarget.dispose();
@@ -381,60 +390,44 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
                 return;
               }
 
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                const dataUrl = reader.result as string;
-                console.log(`[Babylon3DCanvas] ✅ ULTRA-QUALITY render completed (${width}x${height})`);
+              console.log(`[Babylon3DCanvas] ULTRA-QUALITY render completed (${width}x${height})`);
 
-                // ===== STEP 3: Restore original settings =====
-                if (shadowGen) {
-                  shadowGen.mapSize = originalShadowMapSize;
-                  shadowGen.blurKernel = originalShadowBlurKernel;
-                  console.log('[Babylon3DCanvas] 🔄 Shadow settings restored');
-                }
+              // ===== STEP 3: Restore original settings =====
+              if (shadowGen) {
+                shadowGen.mapSize = originalShadowMapSize;
+                shadowGen.blurKernel = originalShadowBlurKernel;
+                console.log('[Babylon3DCanvas] Shadow settings restored');
+              }
 
-                scene.environmentIntensity = originalEnvIntensity;
+              scene.environmentIntensity = originalEnvIntensity;
 
-                // Restore grid visibility
-                if (gridMesh && originalGridVisibility !== undefined) {
-                  gridMesh.isVisible = originalGridVisibility;
-                }
+              // Restore grid visibility
+              if (gridMesh && originalGridVisibility !== undefined) {
+                gridMesh.isVisible = originalGridVisibility;
+              }
 
-                // Restore material settings
-                scene.meshes.forEach(mesh => {
-                  if (mesh.material && mesh.material instanceof PBRMaterial) {
-                    const mat = mesh.material as PBRMaterial;
-                    if (mat.name.includes('wallMat')) {
-                      mat.environmentIntensity = 0.7;
-                    } else if (mat.name.includes('floorMat')) {
-                      mat.environmentIntensity = 0.6;
-                    } else if (mat.name.includes('ceilingMat')) {
-                      mat.environmentIntensity = 0.7;
-                    }
+              // Restore material settings
+              scene.meshes.forEach(mesh => {
+                if (mesh.material && mesh.material instanceof PBRMaterial) {
+                  const mat = mesh.material as PBRMaterial;
+                  if (mat.name.includes('wallMat')) {
+                    mat.environmentIntensity = 0.7;
+                  } else if (mat.name.includes('floorMat')) {
+                    mat.environmentIntensity = 0.6;
+                  } else if (mat.name.includes('ceilingMat')) {
+                    mat.environmentIntensity = 0.7;
                   }
-                });
-
-                console.log('[Babylon3DCanvas] 🔄 All settings restored');
-
-                // Clean up
-                renderTarget.dispose();
-                resolve(dataUrl);
-              };
-              reader.onerror = () => {
-                // Restore settings even on error
-                if (shadowGen) {
-                  shadowGen.mapSize = originalShadowMapSize;
-                  shadowGen.blurKernel = originalShadowBlurKernel;
                 }
-                scene.environmentIntensity = originalEnvIntensity;
-                if (gridMesh && originalGridVisibility !== undefined) {
-                  gridMesh.isVisible = originalGridVisibility;
-                }
+              });
 
-                renderTarget.dispose();
-                reject(new Error('Failed to read blob as data URL'));
-              };
-              reader.readAsDataURL(blob);
+              console.log('[Babylon3DCanvas] All settings restored');
+
+              // Clean up
+              renderTarget.dispose();
+
+              // Create Blob URL and resolve
+              const blobUrl = URL.createObjectURL(blob);
+              resolve(blobUrl);
             }, 'image/png', 1.0); // Quality 1.0 for maximum PNG quality
           });
 
@@ -1447,7 +1440,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
     // Toggle between CSG and Miter wall generation
     // Miter mode is default (CSG has issues)
-    const USE_CSG_WALLS = localStorage.getItem('USE_CSG_WALLS') === 'true'; // Default: false (Miter)
+    const USE_CSG_WALLS = false; // Default: false (Miter)
 
     if (USE_CSG_WALLS) {
       console.log('[Babylon3DCanvas] Using CSG-based wall system');
