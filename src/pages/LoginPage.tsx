@@ -1,65 +1,90 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { signInWithPopup, signInWithEmailAndPassword } from 'firebase/auth';
+import { auth, googleProvider } from '../lib/firebase';
 import styles from './LoginPage.module.css';
 
-const LoginPage: React.FC = () => {
+interface LoginPageProps {
+  onClose?: () => void;
+}
+
+const LoginPage: React.FC<LoginPageProps> = ({ onClose }) => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleClose = () => {
+    if (onClose) {
+      onClose();
+    } else {
+      navigate('/');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement actual authentication
-    navigate('/editor');
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      console.log('Email login successful');
+      navigate('/editor');
+    } catch (error: any) {
+      console.error('Login error:', error);
+      alert(error.message || 'Login failed');
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      console.log('Google login successful:', result.user);
+      navigate('/editor');
+    } catch (error: any) {
+      console.error('Google login error:', error);
+      alert(error.message || 'Google login failed');
+    }
   };
 
   const handleSocialLogin = (provider: string) => {
-    // TODO: Implement social login
-    console.log(`Login with ${provider}`);
-    navigate('/editor');
+    if (provider === 'google') {
+      handleGoogleLogin();
+    } else {
+      // TODO: Implement other social login providers
+      console.log(`Login with ${provider}`);
+      alert(`${provider} login not yet implemented`);
+    }
   };
 
   return (
-    <div className={styles.container}>
-      {/* Left Side - Branding */}
-      <div className={styles.leftPanel}>
-        <div className={styles.brandingContent}>
-          <div className={styles.logo} onClick={() => navigate('/')}>
-            <div className={styles.logoImage} />
-          </div>
-          <h1 className={styles.brandTitle}>Welcome to Archiple</h1>
-          <p className={styles.brandSubtitle}>
-            Create stunning 3D floor plans and interior designs with our powerful platform
-          </p>
-          <div className={styles.features}>
-            <div className={styles.feature}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                <polyline points="22 4 12 14.01 9 11.01" />
-              </svg>
-              <span>Easy-to-use 3D editor</span>
-            </div>
-            <div className={styles.feature}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                <polyline points="22 4 12 14.01 9 11.01" />
-              </svg>
-              <span>Professional rendering</span>
-            </div>
-            <div className={styles.feature}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                <polyline points="22 4 12 14.01 9 11.01" />
-              </svg>
-              <span>Real-time collaboration</span>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className={styles.overlay} onClick={handleClose}>
+      <div className={styles.modalContainer} onClick={(e) => e.stopPropagation()}>
+        {/* Close Button */}
+        <button className={styles.closeBtn} onClick={handleClose}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
 
-      {/* Right Side - Login Form */}
-      <div className={styles.rightPanel}>
+        <div className={styles.modalContent}>
+          {/* Left Side - Branding */}
+          <div className={styles.leftPanel}>
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              className={styles.videoPlayer}
+            >
+              <source src="/movie/intro.mp4" type="video/mp4" />
+            </video>
+            <div className={styles.logoOverlay}>
+              <div className={styles.logoShadow}></div>
+              <div className={styles.logo}></div>
+            </div>
+          </div>
+
+          {/* Right Side - Login Form */}
+          <div className={styles.rightPanel}>
         <div className={styles.formContainer}>
           <div className={styles.formHeader}>
             <h2 className={styles.formTitle}>Sign in to your account</h2>
@@ -146,6 +171,8 @@ const LoginPage: React.FC = () => {
               {' '}and{' '}
               <a href="#" className={styles.link}>Privacy Policy</a>
             </p>
+          </div>
+        </div>
           </div>
         </div>
       </div>
