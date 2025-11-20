@@ -2564,6 +2564,12 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     console.log('[Babylon3DCanvas] Photo-realistic mode:', photoRealisticMode);
 
     if (photoRealisticMode) {
+      // Set hardware scaling to 1.0 for maximum quality (no downscaling)
+      const engine = engineRef.current;
+      if (engine) {
+        engine.setHardwareScalingLevel(1.0);
+      }
+
       // Create high-quality rendering pipeline
       if (!pipelineRef.current) {
         console.log('[Babylon3DCanvas] Creating photo-realistic rendering pipeline...');
@@ -2577,6 +2583,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
         pipelineRef.current = pipeline;
 
+        // Set high sample count for anti-aliasing
+        pipeline.samples = 4;
+
         // Enable SSAO (Screen Space Ambient Occlusion) for realistic shadows
         const pipelineAny = pipeline as any;
         if (pipelineAny.ssaoEnabled !== undefined) {
@@ -2586,7 +2595,11 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           pipelineAny.ssao2.radius = renderSettings?.ssaoRadius ?? 1.5;
           pipelineAny.ssao2.totalStrength = renderSettings?.ssaoStrength ?? 2.0;
           pipelineAny.ssao2.expensiveBlur = true;
-          pipelineAny.ssao2.samples = 32;
+          pipelineAny.ssao2.samples = 64; // Increased from 32 to 64 for smoother SSAO
+          pipelineAny.ssao2.textureSamples = 4; // Multi-sampling for smoother result
+          pipelineAny.ssao2.bilateralBlur = true; // Enable bilateral blur to reduce noise
+          pipelineAny.ssao2.bilateralSoften = 0.05;
+          pipelineAny.ssao2.bilateralTolerance = 0.0001;
           pipelineAny.ssao2.maxZ = 250;
         }
 
@@ -2609,13 +2622,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           pipelineAny.bloom.kernel = 64;
         }
 
-        // Enable Depth of Field for camera focus effect
-        pipeline.depthOfFieldEnabled = true;
-        if (pipeline.depthOfField) {
-          pipeline.depthOfField.focusDistance = renderSettings?.dofFocusDistance ?? 5000; // 5m focus distance
-          pipeline.depthOfField.focalLength = 50; // 50mm lens
-          pipeline.depthOfField.fStop = renderSettings?.dofFStop ?? 2.0; // f/2.0 aperture
-        }
+        // Disable Depth of Field (can cause blur and visual artifacts)
+        pipeline.depthOfFieldEnabled = false;
 
         // Enable Image Processing with advanced tone mapping
         pipeline.imageProcessingEnabled = true;
@@ -2625,29 +2633,28 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           pipeline.imageProcessing.exposure = 1.0;
           pipeline.imageProcessing.contrast = 1.1;
           pipeline.imageProcessing.vignetteEnabled = true;
-          pipeline.imageProcessing.vignetteWeight = renderSettings?.vignetteWeight ?? 2.0;
+          pipeline.imageProcessing.vignetteWeight = renderSettings?.vignetteWeight ?? 0.5; // Reduced from 2.0 to 0.5
           pipeline.imageProcessing.vignetteStretch = 0.5;
           pipeline.imageProcessing.vignetteColor = new Color4(0, 0, 0, 0);
           pipeline.imageProcessing.vignetteCameraFov = 0.8;
         }
 
-        // Enable Chromatic Aberration for lens effect
-        pipeline.chromaticAberrationEnabled = true;
-        if (pipeline.chromaticAberration) {
-          pipeline.chromaticAberration.aberrationAmount = renderSettings?.chromaticAberration ?? 5;
+        // Disable Chromatic Aberration (can cause visual artifacts and "jagginess")
+        pipeline.chromaticAberrationEnabled = false;
+
+        // Disable Grain (causes visual noise and "jagginess")
+        pipeline.grainEnabled = false;
+
+        // Enable FXAA (Fast Approximate Anti-Aliasing) for smoother edges
+        pipeline.fxaaEnabled = true;
+        if (pipeline.fxaa) {
+          pipeline.fxaa.samples = 4; // Multi-sampling for smoother result
         }
 
-        // Enable Grain for film-like quality
-        pipeline.grainEnabled = true;
-        if (pipeline.grain) {
-          pipeline.grain.intensity = renderSettings?.grainIntensity ?? 8;
-          pipeline.grain.animated = true;
-        }
-
-        // Sharpen for enhanced detail
+        // Sharpen for enhanced detail (reduced amount to avoid artifacts)
         pipeline.sharpenEnabled = true;
         if (pipeline.sharpen) {
-          const sharpenAmount = renderSettings?.sharpenAmount ?? 0.5;
+          const sharpenAmount = renderSettings?.sharpenAmount ?? 0.2; // Reduced from 0.5 to 0.2
           pipeline.sharpen.edgeAmount = sharpenAmount;
           pipeline.sharpen.colorAmount = sharpenAmount;
         }
