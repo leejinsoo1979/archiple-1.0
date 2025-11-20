@@ -1897,43 +1897,35 @@ const EditorPage = () => {
                   </svg>
                 </button>
 
-                {/* AI Render Settings Modal */}
+                {/* AI Render Settings Panel */}
                 {showStyleMenu && (
-                  <>
-                    <div
-                      style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'rgba(0,0,0,0.5)',
-                        zIndex: 9999,
-                        animation: 'fadeIn 0.2s ease-out'
-                      }}
-                      onClick={() => setShowStyleMenu(false)}
-                    />
-                    <div style={{
-                      position: 'fixed',
-                      top: '50%',
-                      left: '50%',
-                      transform: 'translate(-50%, -50%)',
-                      background: themeMode === 'dark' ? '#1e1e1e' : '#ffffff',
-                      border: `2px solid ${themeColor}40`,
-                      borderRadius: '16px',
-                      padding: '24px',
-                      width: '90%',
-                      maxWidth: '700px',
-                      maxHeight: '85vh',
-                      overflowY: 'auto',
-                      zIndex: 10000,
-                      boxShadow: `0 20px 60px ${themeColor}40`,
-                      animation: 'scaleIn 0.2s ease-out'
-                    }}>
-                      <style>{`
-                        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-                        @keyframes scaleIn { from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
-                      `}</style>
+                  <div style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 10px)',
+                    right: 0,
+                    background: themeMode === 'dark' ? '#1e1e1e' : '#ffffff',
+                    border: `2px solid ${themeColor}40`,
+                    borderRadius: '12px',
+                    padding: '20px',
+                    width: '420px',
+                    maxHeight: '80vh',
+                    overflowY: 'auto',
+                    zIndex: 10000,
+                    boxShadow: `0 10px 40px ${themeColor}40`,
+                    animation: 'slideDown 0.2s ease-out'
+                  }}>
+                    <style>{`
+                      @keyframes slideDown {
+                        from {
+                          opacity: 0;
+                          transform: translateY(-10px);
+                        }
+                        to {
+                          opacity: 1;
+                          transform: translateY(0);
+                        }
+                      }
+                    `}</style>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                         <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: themeColor }}>AI Rendering Settings</h3>
@@ -2060,8 +2052,7 @@ const EditorPage = () => {
                       >
                         Generate AI Render
                       </button>
-                    </div>
-                  </>
+                  </div>
                 )}
               </div>
             </div>
