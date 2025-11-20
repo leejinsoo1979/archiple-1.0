@@ -1,0 +1,96 @@
+/* Masonry Grid - Coohom Style */
+.my-masonry-grid {
+  display: flex;
+  margin-left: -24px;
+  width: auto;
+}
+
+.my-masonry-grid_column {
+  padding-left: 24px;
+  background-clip: padding-box;
+}
+
+/* Masonry Item */
+.masonry-item {
+  position: relative;
+  margin-bottom: 24px;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  transition: all 0.25s ease;
+  cursor: pointer;
+  break-inside: avoid;
+}
+
+.masonry-item:hover {
+  transform: scale(1.02);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.masonry-item img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+/* Overlay */
+.masonry-overlay {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.masonry-item:hover .masonry-overlay {
+  opacity: 1;
+}
+
+.masonry-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 30px;
+  padding: 6px 12px;
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.masonry-badge svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .my-masonry-grid {
+    margin-left: -16px;
+  }
+
+  .my-masonry-grid_column {
+    padding-left: 16px;
+  }
+
+  .masonry-item {
+    margin-bottom: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .my-masonry-grid {
+    margin-left: -12px;
+  }
+
+  .my-masonry-grid_column {
+    padding-left: 12px;
+  }
+
+  .masonry-item {
+    margin-bottom: 12px;
+  }
+}
