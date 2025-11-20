@@ -73,9 +73,13 @@ const GallerySection: React.FC = () => {
                                 muted
                                 playsInline
                             />
+                            <div className={styles.masonryHoverOverlay}>
+                                <BiSolidJoystick size={48} />
+                            </div>
                             <div className={styles.masonryOverlay}>
                                 <div className={styles.masonryBadge}>
-                                    <BiSolidJoystick size={48} />
+                                    <BiSolidJoystick size={20} />
+                                    <span>Play</span>
                                 </div>
                             </div>
                         </div>

@@ -663,31 +663,45 @@
     object-fit: cover;
 }
 
-.masonryOverlay {
+.masonryHoverOverlay {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 2;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 16px;
     opacity: 0;
     transition: opacity 0.3s ease;
+    z-index: 2;
+    color: #ffffff;
 }
 
-.masonryItem:hover .masonryOverlay {
+.masonryItem:hover .masonryHoverOverlay {
     opacity: 1;
+}
+
+.masonryOverlay {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    z-index: 3;
 }
 
 .masonryBadge {
     display: flex;
     align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(8px);
-    padding: 16px;
-    border-radius: 50%;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    padding: 8px 14px;
+    border-radius: 20px;
     color: #ffffff;
-    width: 80px;
-    height: 80px;
+    font-size: 15px;
+    font-weight: 600;
 }
 
 /* Design Tools Section */
