@@ -2057,6 +2057,11 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       const targetEnvironmentIntensity = hasLighting ? 0.3 : 0.05; // Very low if no lighting
 
       scene.meshes.forEach(mesh => {
+        // Hide light indicator meshes in play mode
+        if (mesh.metadata?.isLightIndicator) {
+          mesh.isVisible = false;
+        }
+
         if (mesh.material && mesh.material instanceof PBRMaterial) {
           const material = mesh.material as PBRMaterial;
           // Only adjust wall, floor, ceiling materials
@@ -2075,6 +2080,11 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
       // Restore normal environment intensity for editing mode
       scene.meshes.forEach(mesh => {
+        // Show light indicator meshes in edit mode
+        if (mesh.metadata?.isLightIndicator) {
+          mesh.isVisible = true;
+        }
+
         if (mesh.material && mesh.material instanceof PBRMaterial) {
           const material = mesh.material as PBRMaterial;
           if (material.name.includes('wallMat')) {
@@ -2266,8 +2276,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         character.isVisible = true;
       };
     } else {
-      // ====== 3D VIEW MODE: Isometric orbit control ======
-      console.log('[Babylon3DCanvas] 3D View Mode: Isometric orbit');
+      // ====== 3D VIEW MODE: Orbit control ======
+      console.log('[Babylon3DCanvas] 3D View Mode: Orbit control');
 
       const planMetrics = computePlanMetrics(floorplanData?.points);
       if (planMetrics) {
@@ -2278,11 +2288,11 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         );
         character.rotation.y = 0;
 
-        // Setup isometric orbit camera
+        // Setup orbit camera (Standard Perspective)
         arcCamera.mode = 0; // Camera.PERSPECTIVE_CAMERA
         arcCamera.setTarget(new Vector3(planMetrics.centerX, 0, planMetrics.centerZ));
-        arcCamera.alpha = Math.PI / 4; // 45 degrees horizontal
-        arcCamera.beta = Math.PI / 3; // 60 degrees from top (isometric)
+        arcCamera.alpha = -Math.PI / 4; // 45 degrees horizontal
+        arcCamera.beta = Math.PI / 3.5; // ~51 degrees (more natural perspective)
         arcCamera.radius = 10;
       }
 
