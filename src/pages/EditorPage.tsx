@@ -39,9 +39,9 @@ const EditorPage = () => {
 
   // Screenshot resolution settings
   const [screenshotResolution, setScreenshotResolution] = useState<'1080p' | '4k' | '8k'>('4k');
-  const [aiRenderStyle, setAiRenderStyle] = useState<'photorealistic' | 'product' | 'minimalist' | 'modern' | 'luxury' | 'artistic' | 'cinematic' | 'bright' | 'cozy' | 'industrial'>('photorealistic');
-  const [aiAspectRatio, setAiAspectRatio] = useState<'square' | 'landscape' | 'portrait'>('square');
-  const [showStyleMenu, setShowStyleMenu] = useState(false);
+  const [aiRenderStyle, setAiRenderStyle] = useState<'photorealistic' | 'product' | 'minimalist' | 'sticker'>('photorealistic');
+  const [aiAspectRatio, setAiAspectRatio] = useState<'1:1' | '2:3' | '3:2' | '3:4' | '4:3' | '4:5' | '5:4' | '9:16' | '16:9' | '21:9'>('1:1');
+  const [aiRenderPanelOpen, setAiRenderPanelOpen] = useState(false);
 
   // Rendering settings panel (right sidebar)
   const [renderPanelOpen, setRenderPanelOpen] = useState(false);
@@ -329,7 +329,7 @@ const EditorPage = () => {
       return;
     }
 
-    setShowStyleMenu(false); // Close style menu
+    setAiRenderPanelOpen(false); // Close style menu
     let loadingMessage: HTMLDivElement | null = null;
 
     try {
@@ -528,20 +528,20 @@ const EditorPage = () => {
 
   // Close AI style menu when clicking outside
   useEffect(() => {
-    if (!showStyleMenu) return;
+    if (!aiRenderPanelOpen) return;
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       // Check if click is outside the style menu container
       const styleMenuContainer = target.closest('div[style*="position: relative"]');
       if (!styleMenuContainer || !styleMenuContainer.querySelector('[title*="Select Rendering Style"]')) {
-        setShowStyleMenu(false);
+        setAiRenderPanelOpen(false);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showStyleMenu]);
+  }, [aiRenderPanelOpen]);
 
   // Close theme settings panel when clicking outside
   useEffect(() => {
@@ -1869,7 +1869,7 @@ const EditorPage = () => {
 
                 {/* Style Selector Button */}
                 <button
-                  onClick={() => setShowStyleMenu(!showStyleMenu)}
+                  onClick={() => setAiRenderPanelOpen(!aiRenderPanelOpen)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -1898,7 +1898,7 @@ const EditorPage = () => {
                 </button>
 
                 {/* AI Render Settings Panel */}
-                {showStyleMenu && (
+                {aiRenderPanelOpen && (
                   <div style={{
                     position: 'absolute',
                     top: 'calc(100% + 10px)',
@@ -1930,7 +1930,7 @@ const EditorPage = () => {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                         <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: themeColor }}>AI Rendering Settings</h3>
                         <button
-                          onClick={() => setShowStyleMenu(false)}
+                          onClick={() => setAiRenderPanelOpen(false)}
                           style={{
                             width: '32px',
                             height: '32px',
@@ -2025,7 +2025,7 @@ const EditorPage = () => {
                       {/* Render Button */}
                       <button
                         onClick={() => {
-                          setShowStyleMenu(false);
+                          setAiRenderPanelOpen(false);
                           handleAIRender();
                         }}
                         style={{
