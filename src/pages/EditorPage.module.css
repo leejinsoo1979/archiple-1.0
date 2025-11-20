@@ -1,27 +1,5 @@
 /* Archiple Studio UI - Exact Recreation */
-
-/* ===== THEME VARIABLES ===== */
-:global(:root) {
-  --theme-color: #3fae7a;
-  --bg-primary: #ffffff;
-  --bg-secondary: #e8e8e8;
-  --bg-tertiary: #f5f5f5;
-  --text-primary: #333;
-  --text-secondary: #666;
-  --border-color: #ddd;
-  --border-light: #eee;
-}
-
-/* Dark Mode Variables */
-:global([data-theme="dark"]) {
-  --bg-primary: #1e1e1e;
-  --bg-secondary: #2d2d2d;
-  --bg-tertiary: #3a3a3a;
-  --text-primary: #e0e0e0;
-  --text-secondary: #b0b0b0;
-  --border-color: #404040;
-  --border-light: #333333;
-}
+/* Theme variables are defined in App.css */
 
 .editorContainer {
   position: fixed;
