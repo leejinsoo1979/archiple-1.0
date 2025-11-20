@@ -2404,7 +2404,7 @@ const EditorPage = () => {
                   onClick={handleRulerSubmit}
                   style={{
                     padding: '8px 20px',
-                    background: '#3fae7a',
+                    background: 'var(--theme-color)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '4px',
@@ -2467,7 +2467,7 @@ const EditorPage = () => {
               onClick={handleScan}
               style={{
                 padding: '10px 20px',
-                background: '#3fae7a',
+                background: 'var(--theme-color)',
                 color: 'white',
                 border: 'none',
                 borderRadius: '4px',
