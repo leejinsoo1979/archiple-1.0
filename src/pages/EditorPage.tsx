@@ -1837,13 +1837,15 @@ const EditorPage = () => {
                     opacity: 0.9,
                     fontWeight: '500',
                     background: 'rgba(255,255,255,0.2)',
-                    padding: '2px 8px',
-                    borderRadius: '4px'
+                    padding: '3px 10px',
+                    borderRadius: '4px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
                   }}>
-                    {aiRenderStyle === 'photorealistic' && '📸'}
-                    {aiRenderStyle === 'modern' && '🏢'}
-                    {aiRenderStyle === 'minimalist' && '⚪'}
-                    {aiRenderStyle === 'luxury' && '💎'}
+                    {aiRenderStyle === 'photorealistic' && 'PHOTO'}
+                    {aiRenderStyle === 'modern' && 'MODERN'}
+                    {aiRenderStyle === 'minimalist' && 'MINIMAL'}
+                    {aiRenderStyle === 'luxury' && 'LUXURY'}
                   </div>
                 </button>
 
@@ -1912,15 +1914,15 @@ const EditorPage = () => {
                       marginBottom: '8px',
                       borderBottom: `2px solid ${themeColor}20`
                     }}>
-                      ✨ Select Rendering Style
+                      Select Rendering Style
                     </div>
                     {(['photorealistic', 'modern', 'minimalist', 'luxury'] as const).map((style) => {
                       const isSelected = aiRenderStyle === style;
-                      const styleEmojis = {
-                        photorealistic: '📸',
-                        modern: '🏢',
-                        minimalist: '⚪',
-                        luxury: '💎'
+                      const styleIcons = {
+                        photorealistic: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>,
+                        modern: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg>,
+                        minimalist: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" fill="none"/></svg>,
+                        luxury: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.5 7.5H22l-6 5 2.5 7.5L12 17l-6.5 5L8 14.5 2 9.5h7.5z"/></svg>
                       };
                       const styleLabels = {
                         photorealistic: 'Photorealistic',
@@ -1967,7 +1969,9 @@ const EditorPage = () => {
                             }
                           }}
                         >
-                          <span style={{ fontSize: '20px' }}>{styleEmojis[style]}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', opacity: 0.8 }}>
+                            {styleIcons[style]}
+                          </div>
                           <span style={{ flex: 1, textAlign: 'left' }}>{styleLabels[style]}</span>
                           {isSelected && (
                             <svg width="18" height="18" viewBox="0 0 24 24" fill={themeColor}>
