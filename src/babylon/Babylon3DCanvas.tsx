@@ -2627,80 +2627,45 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         // Set high sample count for anti-aliasing
         pipeline.samples = 4;
 
-        // Enable SSAO (Screen Space Ambient Occlusion) for realistic shadows
+        // Disable all post-processing effects that degrade quality
         const pipelineAny = pipeline as any;
+
+        // Disable SSAO (causes noise and artifacts)
         if (pipelineAny.ssaoEnabled !== undefined) {
-          pipelineAny.ssaoEnabled = true;
-        }
-        if (pipelineAny.ssao2) {
-          pipelineAny.ssao2.radius = renderSettings?.ssaoRadius ?? 1.5;
-          pipelineAny.ssao2.totalStrength = renderSettings?.ssaoStrength ?? 2.0;
-          pipelineAny.ssao2.expensiveBlur = true;
-          pipelineAny.ssao2.samples = 64; // Increased from 32 to 64 for smoother SSAO
-          pipelineAny.ssao2.textureSamples = 4; // Multi-sampling for smoother result
-          pipelineAny.ssao2.bilateralBlur = true; // Enable bilateral blur to reduce noise
-          pipelineAny.ssao2.bilateralSoften = 0.05;
-          pipelineAny.ssao2.bilateralTolerance = 0.0001;
-          pipelineAny.ssao2.maxZ = 250;
+          pipelineAny.ssaoEnabled = false;
         }
 
-        // Enable Screen Space Reflections
+        // Disable SSR (causes artifacts and reflections issues)
         if (pipelineAny.screenSpaceReflectionsEnabled !== undefined) {
-          pipelineAny.screenSpaceReflectionsEnabled = true;
-        }
-        if (pipelineAny.screenSpaceReflections) {
-          pipelineAny.screenSpaceReflections.strength = renderSettings?.ssrStrength ?? 0.8;
-          pipelineAny.screenSpaceReflections.reflectionSpecularFalloffExponent = 3;
-          pipelineAny.screenSpaceReflections.threshold = 0.5;
-          pipelineAny.screenSpaceReflections.roughnessFactor = 0.1;
+          pipelineAny.screenSpaceReflectionsEnabled = false;
         }
 
-        // Enable Bloom for bright highlights
-        pipeline.bloomEnabled = true;
-        if (pipelineAny.bloom) {
-          pipelineAny.bloom.threshold = renderSettings?.bloomThreshold ?? 0.6;
-          pipelineAny.bloom.weight = renderSettings?.bloomWeight ?? 0.5;
-          pipelineAny.bloom.kernel = 64;
-        }
+        // Disable Bloom (causes over-brightness and glow artifacts)
+        pipeline.bloomEnabled = false;
 
-        // Disable Depth of Field (can cause blur and visual artifacts)
+        // Disable Depth of Field (causes blur)
         pipeline.depthOfFieldEnabled = false;
 
-        // Enable Image Processing with advanced tone mapping
+        // Enable basic Image Processing (minimal, clean rendering)
         pipeline.imageProcessingEnabled = true;
         if (pipeline.imageProcessing) {
+          // Use standard tone mapping (not ACES which can alter colors)
           pipeline.imageProcessing.toneMappingEnabled = true;
-          pipeline.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES; // ACES tone mapping
+          pipeline.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_STANDARD;
           pipeline.imageProcessing.exposure = 1.0;
-          pipeline.imageProcessing.contrast = 1.1;
-          pipeline.imageProcessing.vignetteEnabled = true;
-          pipeline.imageProcessing.vignetteWeight = renderSettings?.vignetteWeight ?? 0.5; // Reduced from 2.0 to 0.5
-          pipeline.imageProcessing.vignetteStretch = 0.5;
-          pipeline.imageProcessing.vignetteColor = new Color4(0, 0, 0, 0);
-          pipeline.imageProcessing.vignetteCameraFov = 0.8;
+          pipeline.imageProcessing.contrast = 1.0; // No contrast adjustment
+          pipeline.imageProcessing.vignetteEnabled = false; // Disable vignette
         }
 
-        // Disable Chromatic Aberration (can cause visual artifacts and "jagginess")
+        // Disable all visual effects that degrade quality
         pipeline.chromaticAberrationEnabled = false;
-
-        // Disable Grain (causes visual noise and "jagginess")
         pipeline.grainEnabled = false;
+        pipeline.sharpenEnabled = false;
 
-        // Enable FXAA (Fast Approximate Anti-Aliasing) for smoother edges
+        // Enable FXAA for smooth edges only
         pipeline.fxaaEnabled = true;
-        if (pipeline.fxaa) {
-          pipeline.fxaa.samples = 4; // Multi-sampling for smoother result
-        }
 
-        // Sharpen for enhanced detail (reduced amount to avoid artifacts)
-        pipeline.sharpenEnabled = true;
-        if (pipeline.sharpen) {
-          const sharpenAmount = renderSettings?.sharpenAmount ?? 0.2; // Reduced from 0.5 to 0.2
-          pipeline.sharpen.edgeAmount = sharpenAmount;
-          pipeline.sharpen.colorAmount = sharpenAmount;
-        }
-
-        console.log('[Babylon3DCanvas] ✅ Photo-realistic pipeline created with SSAO, SSR, Bloom, DOF, ACES tone mapping');
+        console.log('[Babylon3DCanvas] ✅ Clean rendering pipeline created (PBR + FXAA only)');
       }
 
       // Create environment texture for PBR materials
