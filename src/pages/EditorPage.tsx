@@ -209,24 +209,9 @@ const EditorPage = () => {
         try {
           link.click();
           console.log('[EditorPage] Download triggered successfully');
-        } catch (error) {
-          console.error('[EditorPage] Click failed:', error);
-          // Fallback: try direct navigation
-          window.location.href = blobUrl;
-        }
 
-        // Clean up after download
-        setTimeout(() => {
-          if (link.parentNode) {
-            document.body.removeChild(link);
-          }
-          URL.revokeObjectURL(blobUrl);
-          console.log('[EditorPage] Download cleanup complete');
-        }, 2000);
-      });
-
-      // Show success message
-      const successMessage = document.createElement('div');
+          // Show success message AFTER successful download trigger
+          const successMessage = document.createElement('div');
       successMessage.style.cssText = `
         position: fixed;
         top: 50%;
@@ -270,8 +255,23 @@ const EditorPage = () => {
           ${screenshotResolution.toUpperCase()} image downloaded
         </div>
       `;
-      document.body.appendChild(successMessage);
-      setTimeout(() => document.body.removeChild(successMessage), 2000);
+          document.body.appendChild(successMessage);
+          setTimeout(() => document.body.removeChild(successMessage), 2000);
+
+        } catch (error) {
+          console.error('[EditorPage] Click failed:', error);
+          alert('다운로드 실패: ' + (error as Error).message);
+        }
+
+        // Clean up after download
+        setTimeout(() => {
+          if (link.parentNode) {
+            document.body.removeChild(link);
+          }
+          URL.revokeObjectURL(blobUrl);
+          console.log('[EditorPage] Download cleanup complete');
+        }, 2000);
+      });
 
     } catch (error) {
       console.error('[EditorPage] Render failed:', error);
