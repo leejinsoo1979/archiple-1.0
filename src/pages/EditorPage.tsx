@@ -175,11 +175,19 @@ const EditorPage = () => {
       // Remove loading message
       document.body.removeChild(loadingMessage);
 
-      // Download immediately
+      // Download immediately - must append to DOM for reliable download
       const link = document.createElement('a');
       link.href = imageData;
       link.download = `archiple_render_${screenshotResolution}_${Date.now()}.png`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
       link.click();
+
+      // Remove link after a short delay
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+      }, 100);
 
       console.log('[EditorPage] ✅ ULTRA-QUALITY render downloaded successfully');
 
