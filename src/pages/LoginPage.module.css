@@ -1,0 +1,360 @@
+.container {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Left Panel - Branding */
+.leftPanel {
+  flex: 1;
+  background: linear-gradient(135deg, var(--theme-color, #3fae7a) 0%, #2d8a5f 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
+  position: relative;
+  overflow: hidden;
+}
+
+.leftPanel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1" fill="white" opacity="0.1"/></svg>');
+  background-size: 50px 50px;
+  opacity: 0.3;
+}
+
+.brandingContent {
+  position: relative;
+  z-index: 1;
+  max-width: 500px;
+  color: white;
+}
+
+.logo {
+  margin-bottom: 40px;
+  cursor: pointer;
+}
+
+.logoImage {
+  width: 180px;
+  height: 40px;
+  background: white;
+  -webkit-mask-image: url('/images/archiple_logo.png');
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: left center;
+  mask-image: url('/images/archiple_logo.png');
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: left center;
+}
+
+.brandTitle {
+  font-size: 42px;
+  font-weight: 700;
+  margin: 0 0 16px 0;
+  line-height: 1.2;
+}
+
+.brandSubtitle {
+  font-size: 18px;
+  line-height: 1.6;
+  opacity: 0.95;
+  margin: 0 0 40px 0;
+}
+
+.features {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.feature {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.feature svg {
+  flex-shrink: 0;
+}
+
+/* Right Panel - Login Form */
+.rightPanel {
+  flex: 1;
+  background: var(--bg-primary, #ffffff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
+  overflow-y: auto;
+}
+
+.formContainer {
+  width: 100%;
+  max-width: 440px;
+}
+
+.formHeader {
+  margin-bottom: 32px;
+  text-align: center;
+}
+
+.formTitle {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  color: var(--text-primary, #333);
+}
+
+.formSubtitle {
+  font-size: 14px;
+  color: var(--text-secondary, #666);
+  margin: 0;
+}
+
+.link {
+  color: var(--theme-color, #3fae7a);
+  text-decoration: none;
+  font-weight: 600;
+  transition: opacity 0.2s;
+}
+
+.link:hover {
+  opacity: 0.8;
+}
+
+/* Social Login */
+.socialLogin {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.socialBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border: 1px solid var(--border-color, #ddd);
+  background: var(--bg-primary, #ffffff);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.socialBtn:hover {
+  background: var(--bg-tertiary, #f5f5f5);
+  border-color: var(--theme-color, #3fae7a);
+}
+
+.socialBtn svg {
+  flex-shrink: 0;
+}
+
+/* Divider */
+.divider {
+  display: flex;
+  align-items: center;
+  margin: 24px 0;
+  color: var(--text-secondary, #666);
+  font-size: 13px;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-color, #ddd);
+}
+
+.divider span {
+  padding: 0 16px;
+}
+
+/* Form */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+}
+
+.input {
+  padding: 12px 16px;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--bg-primary, #ffffff);
+  color: var(--text-primary, #333);
+  transition: all 0.2s;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--theme-color, #3fae7a);
+  box-shadow: 0 0 0 3px rgba(63, 174, 122, 0.1);
+}
+
+.input::placeholder {
+  color: var(--text-secondary, #999);
+}
+
+.formOptions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: -8px;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-primary, #333);
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--theme-color, #3fae7a);
+}
+
+.forgotPassword {
+  font-size: 14px;
+  color: var(--theme-color, #3fae7a);
+  text-decoration: none;
+  font-weight: 600;
+  transition: opacity 0.2s;
+}
+
+.forgotPassword:hover {
+  opacity: 0.8;
+}
+
+.submitBtn {
+  padding: 14px 24px;
+  background: var(--theme-color, #3fae7a);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 8px;
+}
+
+.submitBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(63, 174, 122, 0.3);
+}
+
+.submitBtn:active {
+  transform: translateY(0);
+}
+
+.footer {
+  margin-top: 24px;
+  text-align: center;
+}
+
+.footer p {
+  font-size: 12px;
+  color: var(--text-secondary, #666);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 968px) {
+  .container {
+    flex-direction: column;
+  }
+
+  .leftPanel {
+    min-height: 300px;
+    padding: 40px 24px;
+  }
+
+  .brandTitle {
+    font-size: 32px;
+  }
+
+  .brandSubtitle {
+    font-size: 16px;
+  }
+
+  .rightPanel {
+    padding: 40px 24px;
+  }
+
+  .formTitle {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .leftPanel {
+    min-height: 250px;
+    padding: 32px 20px;
+  }
+
+  .brandTitle {
+    font-size: 28px;
+  }
+
+  .features {
+    gap: 16px;
+  }
+
+  .feature {
+    font-size: 14px;
+  }
+
+  .rightPanel {
+    padding: 32px 20px;
+  }
+
+  .formContainer {
+    max-width: 100%;
+  }
+
+  .socialLogin {
+    gap: 10px;
+  }
+
+  .socialBtn {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+}

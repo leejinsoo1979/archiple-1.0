@@ -227,7 +227,7 @@ const LandingHeader: React.FC<LandingHeaderProps> = ({ onLoginClick, onStartClic
                             )}
                         </div>
 
-                        <button className={styles.btnLogin} onClick={onLoginClick}>Login</button>
+                        <button className={styles.btnLogin} onClick={() => navigate('/login')}>Login</button>
                         <button className={styles.btnStart} onClick={onStartClick}>Start for Free</button>
                         <button className={styles.btnDemo}>Book a Demo</button>
 
@@ -258,7 +258,7 @@ const LandingHeader: React.FC<LandingHeaderProps> = ({ onLoginClick, onStartClic
                         <a href="#" className={styles.mobileNavLink}>Enterprise</a>
                         <a href="#" className={styles.mobileNavLink}>Education</a>
                         <div className={styles.mobileMenuDivider} />
-                        <button className={styles.mobileBtn} onClick={onLoginClick}>Login</button>
+                        <button className={styles.mobileBtn} onClick={() => navigate('/login')}>Login</button>
                         <button className={styles.mobileBtnPrimary} onClick={onStartClick}>Start for Free</button>
                     </div>
                 )}
