@@ -382,12 +382,21 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     console.log('[Babylon3DCanvas] Initializing Babylon.js...');
 
     const initScene = () => {
-      // Create engine
+      // Create engine with high-performance GPU preference
       const engine = new Engine(canvas, true, {
         preserveDrawingBuffer: true,
         stencil: true,
+        powerPreference: 'high-performance', // Request dedicated GPU if available
       });
       engineRef.current = engine;
+
+      console.log('[Babylon3DCanvas] WebGL Info:', {
+        renderer: engine.isWebGPU ? 'WebGPU' : 'WebGL',
+        version: engine.webGLVersion,
+        // GPU info (if available)
+        vendor: (canvas.getContext('webgl2') as any)?.getParameter((canvas.getContext('webgl2') as any)?.VENDOR),
+        renderer_name: (canvas.getContext('webgl2') as any)?.getParameter((canvas.getContext('webgl2') as any)?.RENDERER),
+      });
 
       // Create scene with advanced settings
       const scene = new Scene(engine);
