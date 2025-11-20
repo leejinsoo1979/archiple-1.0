@@ -221,7 +221,7 @@ const findNearestWallSnap = (
   return { x, z };
 };
 
-interface Babylon3DCanvasRef {
+export interface Babylon3DCanvasRef {
   captureRender: (width: number, height: number) => Promise<string>;
   takeScreenshot: () => Promise<string | null>;
 }

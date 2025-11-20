@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FloorplanCanvas from '../floorplan/FloorplanCanvas';
-import Babylon3DCanvas from '../babylon/Babylon3DCanvas';
+import Babylon3DCanvas, { Babylon3DCanvasRef } from '../babylon/Babylon3DCanvas';
 import styles from './EditorPage.module.css';
 import { ToolType } from '../core/types/EditorState';
 // import { createTestRoom } from '../floorplan/blueprint/BlueprintToBabylonAdapter';
@@ -578,6 +578,7 @@ ARTISTIC APPROACH:
       const result = await model.generateContent({
         contents: [
           {
+            role: 'user',
             parts: [
               {
                 inlineData: {
