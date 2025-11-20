@@ -39,6 +39,8 @@ const EditorPage = () => {
 
   // Screenshot resolution settings
   const [screenshotResolution, setScreenshotResolution] = useState<'1080p' | '4k' | '8k'>('4k');
+  const [aiRenderStyle, setAiRenderStyle] = useState<'photorealistic' | 'modern' | 'minimalist' | 'luxury'>('photorealistic');
+  const [showStyleMenu, setShowStyleMenu] = useState(false);
 
   // Rendering settings panel (right sidebar)
   const [renderPanelOpen, setRenderPanelOpen] = useState(false);
@@ -280,6 +282,25 @@ const EditorPage = () => {
     }
   };
 
+  // Generate style-specific prompts for AI rendering
+  const getStylePrompt = (style: typeof aiRenderStyle): string => {
+    const baseInstruction = 'Using the provided 3D architectural rendering, create a new image that maintains the EXACT same layout, room dimensions, wall positions, furniture placement, and spatial configuration. ';
+
+    switch (style) {
+      case 'photorealistic':
+        return baseInstruction + 'A photorealistic architectural interior photograph with professional lighting. The scene is illuminated by soft, natural light from windows creating realistic shadows and highlights. Captured with a wide-angle lens, emphasizing realistic materials like wood grain, fabric textures, and surface reflections. The overall mood is warm and inviting with accurate color reproduction and depth. Square image format.';
+
+      case 'modern':
+        return baseInstruction + 'A modern, contemporary interior design photograph with clean lines and sleek finishes. The lighting is bright and even, emphasizing the minimalist aesthetic. Materials appear polished and refined - smooth surfaces, glass, metal accents. The color palette is neutral with bold accent colors. Professional architectural photography style with sharp focus throughout. Square image format.';
+
+      case 'minimalist':
+        return baseInstruction + 'A minimalist interior design photograph featuring simple forms and uncluttered spaces. The lighting is soft and diffused, creating a calm atmosphere. Materials are natural and subtle - light wood, white walls, simple textiles. The color scheme is predominantly neutral whites, grays, and beiges. Clean, serene composition with emphasis on negative space. Square image format.';
+
+      case 'luxury':
+        return baseInstruction + 'A luxurious, high-end interior design photograph with premium materials and elegant lighting. The scene features rich textures - marble, velvet, polished wood, metallic accents. Lighting is sophisticated with warm ambient glow and dramatic highlights. The color palette includes deep, rich tones with gold or brass details. Professional luxury real estate photography style. Square image format.';
+    }
+  };
+
   // AI photorealistic rendering with Gemini
   const handleAIRender = async () => {
     if (!babylon3DCanvasRef.current || viewMode !== '3D') {
@@ -287,33 +308,36 @@ const EditorPage = () => {
       return;
     }
 
-    try {
-      console.log('[EditorPage] Starting AI photorealistic rendering...');
+    setShowStyleMenu(false); // Close style menu
+    let loadingMessage: HTMLDivElement | null = null;
 
-      // Show loading message
-      const loadingMessage = document.createElement('div');
+    try {
+      console.log(`[EditorPage] Starting AI ${aiRenderStyle} rendering...`);
+
+      // Show loading message with gradient background
+      loadingMessage = document.createElement('div');
       loadingMessage.style.cssText = `
         position: fixed;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        background: #1a1a1a;
-        border: 1px solid #333;
+        background: linear-gradient(135deg, #1a1a1a 0%, #2d1b3d 100%);
+        border: 1px solid rgba(156, 39, 176, 0.3);
         color: white;
         padding: 40px 60px;
-        border-radius: 8px;
+        border-radius: 12px;
         font-size: 16px;
         z-index: 10000;
         text-align: center;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.7);
+        box-shadow: 0 20px 60px rgba(156, 39, 176, 0.3);
         min-width: 320px;
       `;
       loadingMessage.innerHTML = `
         <div style="
-          width: 40px;
-          height: 40px;
-          border: 3px solid #333;
-          border-top: 3px solid #9c27b0;
+          width: 50px;
+          height: 50px;
+          border: 4px solid rgba(156, 39, 176, 0.2);
+          border-top: 4px solid #9c27b0;
           border-radius: 50%;
           margin: 0 auto 20px;
           animation: spin 0.8s linear infinite;
@@ -324,12 +348,12 @@ const EditorPage = () => {
             100% { transform: rotate(360deg); }
           }
         </style>
-        <div style="font-size: 18px; font-weight: 500; margin-bottom: 12px;">
-          AI Rendering
+        <div style="font-size: 20px; font-weight: 600; margin-bottom: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+          AI ${aiRenderStyle.charAt(0).toUpperCase() + aiRenderStyle.slice(1)} Rendering
         </div>
-        <div style="font-size: 14px; color: #888; line-height: 1.6;">
-          Converting to photorealistic image...<br>
-          Powered by Google Gemini
+        <div style="font-size: 14px; color: #aaa; line-height: 1.6;">
+          Converting to ${aiRenderStyle} style...<br>
+          <span style="color: #9c27b0;">Powered by Google Gemini Imagen 3</span>
         </div>
       `;
       document.body.appendChild(loadingMessage);
@@ -344,7 +368,6 @@ const EditorPage = () => {
         const reader = new FileReader();
         reader.onloadend = () => {
           const result = reader.result as string;
-          // Remove data:image/png;base64, prefix
           resolve(result.split(',')[1]);
         };
         reader.readAsDataURL(blob);
@@ -355,12 +378,13 @@ const EditorPage = () => {
       // Call Gemini API for image generation
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
       if (!apiKey) {
-        throw new Error('Gemini API key not found');
+        throw new Error('Gemini API key not found in environment');
       }
 
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-image' });
 
+      const prompt = getStylePrompt(aiRenderStyle);
       const result = await model.generateContent([
         {
           inlineData: {
@@ -368,23 +392,57 @@ const EditorPage = () => {
             data: base64,
           },
         },
-        'Convert this 3D architectural rendering into a photorealistic interior design image. Keep the exact same layout, room dimensions, wall positions, and spatial configuration. Make it look like a professional architectural photography with realistic materials, lighting, and textures. Maintain all structural elements exactly as shown.',
+        prompt,
       ]);
 
       const aiResponse = await result.response;
       console.log('[EditorPage] Gemini API response received');
 
-      // Remove loading message
-      document.body.removeChild(loadingMessage);
+      // Extract image from response parts
+      let imageFound = false;
+      for (const part of aiResponse.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData) {
+          const imageData = part.inlineData.data;
+          const buffer = Uint8Array.from(atob(imageData), c => c.charCodeAt(0));
+          const imageBlob = new Blob([buffer], { type: 'image/png' });
+          const imageBlobUrl = URL.createObjectURL(imageBlob);
 
-      // Show result (Gemini returns text, not image directly for this model)
-      alert('AI 렌더링 완료!\n\n응답: ' + aiResponse.text());
+          // Remove loading message
+          if (loadingMessage) {
+            document.body.removeChild(loadingMessage);
+            loadingMessage = null;
+          }
+
+          // Download the image
+          const downloadLink = document.createElement('a');
+          downloadLink.href = imageBlobUrl;
+          downloadLink.download = `archiple-ai-${aiRenderStyle}-${Date.now()}.png`;
+          document.body.appendChild(downloadLink);
+          downloadLink.click();
+          document.body.removeChild(downloadLink);
+
+          console.log('[EditorPage] AI rendered image downloaded successfully');
+          alert(`AI ${aiRenderStyle} 렌더링 완료!\n이미지가 다운로드되었습니다.`);
+
+          // Clean up
+          setTimeout(() => URL.revokeObjectURL(imageBlobUrl), 100);
+          imageFound = true;
+          break;
+        }
+      }
+
+      if (!imageFound) {
+        throw new Error('No image data in API response');
+      }
 
       // Clean up
       URL.revokeObjectURL(blobUrl);
 
     } catch (error) {
       console.error('[EditorPage] AI rendering failed:', error);
+      if (loadingMessage) {
+        document.body.removeChild(loadingMessage);
+      }
       alert('AI 렌더링 실패: ' + (error as Error).message);
     }
   };
@@ -426,6 +484,23 @@ const EditorPage = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [viewOptionsOpen]);
+
+  // Close AI style menu when clicking outside
+  useEffect(() => {
+    if (!showStyleMenu) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Check if click is outside the style menu container
+      const styleMenuContainer = target.closest('div[style*="position: relative"]');
+      if (!styleMenuContainer || !styleMenuContainer.querySelector('[title*="Select Rendering Style"]')) {
+        setShowStyleMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showStyleMenu]);
 
   // Close theme settings panel when clicking outside
   useEffect(() => {
@@ -1703,16 +1778,100 @@ const EditorPage = () => {
                   <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/>
                 </svg>
               </button>
-              <button
-                className={styles.topBtn}
-                title="AI Photorealistic Rendering (Google Gemini)"
-                onClick={handleAIRender}
-                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5.5-2.5l7.51-3.49L17.5 6.5 9.99 9.99 6.5 17.5zm5.5-6.6c.61 0 1.1.49 1.1 1.1s-.49 1.1-1.1 1.1-1.1-.49-1.1-1.1.49-1.1 1.1-1.1z"/>
-                </svg>
-              </button>
+              {/* AI Render Button with Style Dropdown */}
+              <div style={{ position: 'relative' }}>
+                <div style={{ display: 'flex', gap: '0' }}>
+                  <button
+                    className={styles.topBtn}
+                    title={`AI ${aiRenderStyle.charAt(0).toUpperCase() + aiRenderStyle.slice(1)} Rendering (Google Gemini)`}
+                    onClick={handleAIRender}
+                    style={{
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      borderTopRightRadius: 0,
+                      borderBottomRightRadius: 0,
+                      borderRight: '1px solid rgba(255,255,255,0.2)'
+                    }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5.5-2.5l7.51-3.49L17.5 6.5 9.99 9.99 6.5 17.5zm5.5-6.6c.61 0 1.1.49 1.1 1.1s-.49 1.1-1.1 1.1-1.1-.49-1.1-1.1.49-1.1 1.1-1.1z"/>
+                    </svg>
+                  </button>
+                  <button
+                    className={styles.topBtn}
+                    title="Select Rendering Style"
+                    onClick={() => setShowStyleMenu(!showStyleMenu)}
+                    style={{
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      borderTopLeftRadius: 0,
+                      borderBottomLeftRadius: 0,
+                      padding: '8px 6px',
+                      minWidth: 'auto'
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M7 10l5 5 5-5z"/>
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Style Selection Menu */}
+                {showStyleMenu && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    right: 0,
+                    marginTop: '8px',
+                    background: '#1a1a1a',
+                    border: '1px solid rgba(156, 39, 176, 0.3)',
+                    borderRadius: '8px',
+                    padding: '8px',
+                    minWidth: '180px',
+                    zIndex: 1000,
+                    boxShadow: '0 10px 40px rgba(156, 39, 176, 0.3)'
+                  }}>
+                    <div style={{ fontSize: '12px', color: '#888', padding: '8px 12px', borderBottom: '1px solid #333' }}>
+                      Rendering Style
+                    </div>
+                    {(['photorealistic', 'modern', 'minimalist', 'luxury'] as const).map((style) => (
+                      <button
+                        key={style}
+                        onClick={() => {
+                          setAiRenderStyle(style);
+                          setShowStyleMenu(false);
+                        }}
+                        style={{
+                          display: 'block',
+                          width: '100%',
+                          textAlign: 'left',
+                          padding: '10px 12px',
+                          background: aiRenderStyle === style ? 'rgba(156, 39, 176, 0.2)' : 'transparent',
+                          border: 'none',
+                          color: aiRenderStyle === style ? '#9c27b0' : '#fff',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          borderRadius: '4px',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (aiRenderStyle !== style) {
+                            e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (aiRenderStyle !== style) {
+                            e.currentTarget.style.background = 'transparent';
+                          }
+                        }}
+                      >
+                        {style === 'photorealistic' && '📸 Photorealistic'}
+                        {style === 'modern' && '🏢 Modern'}
+                        {style === 'minimalist' && '⚪ Minimalist'}
+                        {style === 'luxury' && '💎 Luxury'}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {false && (
