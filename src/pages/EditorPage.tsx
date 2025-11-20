@@ -1798,102 +1798,185 @@ const EditorPage = () => {
                   <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/>
                 </svg>
               </button>
-              {/* AI Render Button with Style Dropdown */}
-              <div style={{ position: 'relative' }}>
-                <div style={{ display: 'flex', gap: '0' }}>
-                  <button
-                    className={styles.topBtn}
-                    title={`AI ${aiRenderStyle.charAt(0).toUpperCase() + aiRenderStyle.slice(1)} Rendering (Google Gemini)`}
-                    onClick={handleAIRender}
-                    style={{
-                      background: `linear-gradient(135deg, ${themeColor} 0%, ${themeColor}dd 100%)`,
-                      borderTopRightRadius: 0,
-                      borderBottomRightRadius: 0,
-                      borderRight: '1px solid rgba(255,255,255,0.2)'
-                    }}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5.5-2.5l7.51-3.49L17.5 6.5 9.99 9.99 6.5 17.5zm5.5-6.6c.61 0 1.1.49 1.1 1.1s-.49 1.1-1.1 1.1-1.1-.49-1.1-1.1.49-1.1 1.1-1.1z"/>
-                    </svg>
-                  </button>
-                  <button
-                    className={styles.topBtn}
-                    title="Select Rendering Style"
-                    onClick={() => setShowStyleMenu(!showStyleMenu)}
-                    style={{
-                      background: `linear-gradient(135deg, ${themeColor} 0%, ${themeColor}dd 100%)`,
-                      borderTopLeftRadius: 0,
-                      borderBottomLeftRadius: 0,
-                      padding: '8px 6px',
-                      minWidth: 'auto'
-                    }}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M7 10l5 5 5-5z"/>
-                    </svg>
-                  </button>
-                </div>
+              {/* AI Render Button - Premium Design */}
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={handleAIRender}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '10px 20px',
+                    background: `linear-gradient(135deg, ${themeColor} 0%, ${themeColor}cc 100%)`,
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: 'white',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    boxShadow: `0 4px 15px ${themeColor}40`,
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = `0 6px 20px ${themeColor}60`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = `0 4px 15px ${themeColor}40`;
+                  }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+                  </svg>
+                  <span>AI Render</span>
+                  <div style={{
+                    fontSize: '11px',
+                    opacity: 0.9,
+                    fontWeight: '500',
+                    background: 'rgba(255,255,255,0.2)',
+                    padding: '2px 8px',
+                    borderRadius: '4px'
+                  }}>
+                    {aiRenderStyle === 'photorealistic' && '📸'}
+                    {aiRenderStyle === 'modern' && '🏢'}
+                    {aiRenderStyle === 'minimalist' && '⚪'}
+                    {aiRenderStyle === 'luxury' && '💎'}
+                  </div>
+                </button>
 
-                {/* Style Selection Menu */}
+                {/* Style Selector Button */}
+                <button
+                  onClick={() => setShowStyleMenu(!showStyleMenu)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '36px',
+                    height: '36px',
+                    background: themeMode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                    border: `1px solid ${themeColor}40`,
+                    borderRadius: '8px',
+                    color: themeColor,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = `${themeColor}20`;
+                    e.currentTarget.style.transform = 'scale(1.05)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = themeMode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+                    e.currentTarget.style.transform = 'scale(1)';
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                  </svg>
+                </button>
+
+                {/* Enhanced Style Selection Menu */}
                 {showStyleMenu && (
                   <div style={{
                     position: 'absolute',
-                    top: '100%',
+                    top: 'calc(100% + 10px)',
                     right: 0,
-                    marginTop: '8px',
-                    background: themeMode === 'dark' ? '#1a1a1a' : '#ffffff',
-                    border: `1px solid ${themeColor}4d`,
-                    borderRadius: '8px',
-                    padding: '8px',
-                    minWidth: '180px',
-                    zIndex: 1000,
-                    boxShadow: `0 10px 40px ${themeColor}33`
+                    background: themeMode === 'dark' ? '#1e1e1e' : '#ffffff',
+                    border: `2px solid ${themeColor}40`,
+                    borderRadius: '12px',
+                    padding: '12px',
+                    minWidth: '240px',
+                    zIndex: 10000,
+                    boxShadow: `0 10px 40px ${themeColor}40, 0 0 0 1px ${themeColor}10`,
+                    animation: 'slideDown 0.2s ease-out'
                   }}>
+                    <style>{`
+                      @keyframes slideDown {
+                        from {
+                          opacity: 0;
+                          transform: translateY(-10px);
+                        }
+                        to {
+                          opacity: 1;
+                          transform: translateY(0);
+                        }
+                      }
+                    `}</style>
                     <div style={{
-                      fontSize: '12px',
-                      color: themeMode === 'dark' ? '#888' : '#666',
+                      fontSize: '13px',
+                      fontWeight: '600',
+                      color: themeColor,
                       padding: '8px 12px',
-                      borderBottom: themeMode === 'dark' ? '1px solid #333' : '1px solid #e0e0e0'
+                      marginBottom: '8px',
+                      borderBottom: `2px solid ${themeColor}20`
                     }}>
-                      Rendering Style
+                      ✨ Select Rendering Style
                     </div>
-                    {(['photorealistic', 'modern', 'minimalist', 'luxury'] as const).map((style) => (
-                      <button
-                        key={style}
-                        onClick={() => {
-                          setAiRenderStyle(style);
-                          setShowStyleMenu(false);
-                        }}
-                        style={{
-                          display: 'block',
-                          width: '100%',
-                          textAlign: 'left',
-                          padding: '10px 12px',
-                          background: aiRenderStyle === style ? `${themeColor}33` : 'transparent',
-                          border: 'none',
-                          color: aiRenderStyle === style ? themeColor : (themeMode === 'dark' ? '#fff' : '#000'),
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          borderRadius: '4px',
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                          if (aiRenderStyle !== style) {
-                            e.currentTarget.style.background = themeMode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (aiRenderStyle !== style) {
-                            e.currentTarget.style.background = 'transparent';
-                          }
-                        }}
-                      >
-                        {style === 'photorealistic' && '📸 Photorealistic'}
-                        {style === 'modern' && '🏢 Modern'}
-                        {style === 'minimalist' && '⚪ Minimalist'}
-                        {style === 'luxury' && '💎 Luxury'}
-                      </button>
-                    ))}
+                    {(['photorealistic', 'modern', 'minimalist', 'luxury'] as const).map((style) => {
+                      const isSelected = aiRenderStyle === style;
+                      const styleEmojis = {
+                        photorealistic: '📸',
+                        modern: '🏢',
+                        minimalist: '⚪',
+                        luxury: '💎'
+                      };
+                      const styleLabels = {
+                        photorealistic: 'Photorealistic',
+                        modern: 'Modern',
+                        minimalist: 'Minimalist',
+                        luxury: 'Luxury'
+                      };
+                      return (
+                        <button
+                          key={style}
+                          onClick={() => {
+                            setAiRenderStyle(style);
+                            setShowStyleMenu(false);
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            width: '100%',
+                            padding: '12px 14px',
+                            marginBottom: '6px',
+                            background: isSelected
+                              ? `linear-gradient(135deg, ${themeColor}25 0%, ${themeColor}15 100%)`
+                              : 'transparent',
+                            border: isSelected ? `2px solid ${themeColor}60` : '2px solid transparent',
+                            borderRadius: '8px',
+                            color: isSelected ? themeColor : (themeMode === 'dark' ? '#fff' : '#000'),
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            fontWeight: isSelected ? '600' : '500',
+                            transition: 'all 0.2s ease',
+                            position: 'relative'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isSelected) {
+                              e.currentTarget.style.background = themeMode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)';
+                              e.currentTarget.style.borderColor = `${themeColor}30`;
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isSelected) {
+                              e.currentTarget.style.background = 'transparent';
+                              e.currentTarget.style.borderColor = 'transparent';
+                            }
+                          }}
+                        >
+                          <span style={{ fontSize: '20px' }}>{styleEmojis[style]}</span>
+                          <span style={{ flex: 1, textAlign: 'left' }}>{styleLabels[style]}</span>
+                          {isSelected && (
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill={themeColor}>
+                              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                            </svg>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
