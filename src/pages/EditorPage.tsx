@@ -314,30 +314,37 @@ const EditorPage = () => {
     try {
       console.log(`[EditorPage] Starting AI ${aiRenderStyle} rendering...`);
 
-      // Show loading message with gradient background
+      // Show loading message with themed gradient background
       loadingMessage = document.createElement('div');
+      const bgGradient = themeMode === 'dark'
+        ? `linear-gradient(135deg, #1a1a1a 0%, ${themeColor}22 100%)`
+        : `linear-gradient(135deg, #ffffff 0%, ${themeColor}11 100%)`;
+      const textColor = themeMode === 'dark' ? 'white' : '#000';
+      const borderColor = `${themeColor}4d`;
+      const shadowColor = `${themeColor}33`;
+
       loadingMessage.style.cssText = `
         position: fixed;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        background: linear-gradient(135deg, #1a1a1a 0%, #2d1b3d 100%);
-        border: 1px solid rgba(156, 39, 176, 0.3);
-        color: white;
+        background: ${bgGradient};
+        border: 1px solid ${borderColor};
+        color: ${textColor};
         padding: 40px 60px;
         border-radius: 12px;
         font-size: 16px;
         z-index: 10000;
         text-align: center;
-        box-shadow: 0 20px 60px rgba(156, 39, 176, 0.3);
+        box-shadow: 0 20px 60px ${shadowColor};
         min-width: 320px;
       `;
       loadingMessage.innerHTML = `
         <div style="
           width: 50px;
           height: 50px;
-          border: 4px solid rgba(156, 39, 176, 0.2);
-          border-top: 4px solid #9c27b0;
+          border: 4px solid ${themeColor}33;
+          border-top: 4px solid ${themeColor};
           border-radius: 50%;
           margin: 0 auto 20px;
           animation: spin 0.8s linear infinite;
@@ -348,12 +355,12 @@ const EditorPage = () => {
             100% { transform: rotate(360deg); }
           }
         </style>
-        <div style="font-size: 20px; font-weight: 600; margin-bottom: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+        <div style="font-size: 20px; font-weight: 600; margin-bottom: 12px; color: ${themeColor};">
           AI ${aiRenderStyle.charAt(0).toUpperCase() + aiRenderStyle.slice(1)} Rendering
         </div>
-        <div style="font-size: 14px; color: #aaa; line-height: 1.6;">
+        <div style="font-size: 14px; color: ${themeMode === 'dark' ? '#aaa' : '#666'}; line-height: 1.6;">
           Converting to ${aiRenderStyle} style...<br>
-          <span style="color: #9c27b0;">Powered by Google Gemini Imagen 3</span>
+          <span style="color: ${themeColor};">Powered by Google Gemini Imagen 3</span>
         </div>
       `;
       document.body.appendChild(loadingMessage);
@@ -1799,7 +1806,7 @@ const EditorPage = () => {
                     title={`AI ${aiRenderStyle.charAt(0).toUpperCase() + aiRenderStyle.slice(1)} Rendering (Google Gemini)`}
                     onClick={handleAIRender}
                     style={{
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      background: `linear-gradient(135deg, ${themeColor} 0%, ${themeColor}dd 100%)`,
                       borderTopRightRadius: 0,
                       borderBottomRightRadius: 0,
                       borderRight: '1px solid rgba(255,255,255,0.2)'
@@ -1814,7 +1821,7 @@ const EditorPage = () => {
                     title="Select Rendering Style"
                     onClick={() => setShowStyleMenu(!showStyleMenu)}
                     style={{
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      background: `linear-gradient(135deg, ${themeColor} 0%, ${themeColor}dd 100%)`,
                       borderTopLeftRadius: 0,
                       borderBottomLeftRadius: 0,
                       padding: '8px 6px',
@@ -1834,15 +1841,20 @@ const EditorPage = () => {
                     top: '100%',
                     right: 0,
                     marginTop: '8px',
-                    background: '#1a1a1a',
-                    border: '1px solid rgba(156, 39, 176, 0.3)',
+                    background: themeMode === 'dark' ? '#1a1a1a' : '#ffffff',
+                    border: `1px solid ${themeColor}4d`,
                     borderRadius: '8px',
                     padding: '8px',
                     minWidth: '180px',
                     zIndex: 1000,
-                    boxShadow: '0 10px 40px rgba(156, 39, 176, 0.3)'
+                    boxShadow: `0 10px 40px ${themeColor}33`
                   }}>
-                    <div style={{ fontSize: '12px', color: '#888', padding: '8px 12px', borderBottom: '1px solid #333' }}>
+                    <div style={{
+                      fontSize: '12px',
+                      color: themeMode === 'dark' ? '#888' : '#666',
+                      padding: '8px 12px',
+                      borderBottom: themeMode === 'dark' ? '1px solid #333' : '1px solid #e0e0e0'
+                    }}>
                       Rendering Style
                     </div>
                     {(['photorealistic', 'modern', 'minimalist', 'luxury'] as const).map((style) => (
@@ -1857,9 +1869,9 @@ const EditorPage = () => {
                           width: '100%',
                           textAlign: 'left',
                           padding: '10px 12px',
-                          background: aiRenderStyle === style ? 'rgba(156, 39, 176, 0.2)' : 'transparent',
+                          background: aiRenderStyle === style ? `${themeColor}33` : 'transparent',
                           border: 'none',
-                          color: aiRenderStyle === style ? '#9c27b0' : '#fff',
+                          color: aiRenderStyle === style ? themeColor : (themeMode === 'dark' ? '#fff' : '#000'),
                           cursor: 'pointer',
                           fontSize: '14px',
                           borderRadius: '4px',
@@ -1867,7 +1879,7 @@ const EditorPage = () => {
                         }}
                         onMouseEnter={(e) => {
                           if (aiRenderStyle !== style) {
-                            e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                            e.currentTarget.style.background = themeMode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
                           }
                         }}
                         onMouseLeave={(e) => {
