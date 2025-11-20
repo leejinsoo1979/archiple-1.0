@@ -315,8 +315,22 @@ const EditorPage = () => {
     }
 
     try {
-      // Capture current 3D view
-      const blobUrl = await babylon3DCanvasRef.current.captureRender(1024, 1024);
+      // Get actual canvas size to preserve aspect ratio
+      const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+      let width = 1920;
+      let height = 1080;
+
+      if (canvas) {
+        // Use canvas size but scale to reasonable resolution
+        const aspectRatio = canvas.width / canvas.height;
+        const targetHeight = 1080;
+        height = targetHeight;
+        width = Math.round(targetHeight * aspectRatio);
+        console.log(`[EditorPage] Capturing at ${width}x${height} (aspect: ${aspectRatio.toFixed(2)})`);
+      }
+
+      // Capture current 3D view with actual aspect ratio
+      const blobUrl = await babylon3DCanvasRef.current.captureRender(width, height);
       setAiInputImage(blobUrl);
       setAiOutputImage(null);
       setAiRenderPanelOpen(true);
