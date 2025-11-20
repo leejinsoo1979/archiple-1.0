@@ -1890,7 +1890,7 @@ const EditorPage = () => {
                     `}</style>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                      <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: themeColor }}>AI Rendering Settings</h3>
+                      <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: themeColor }}>AI Rendering</h3>
                       <button
                         onClick={() => setAiRenderPanelOpen(false)}
                         style={{
@@ -1909,79 +1909,7 @@ const EditorPage = () => {
                       >×</button>
                     </div>
 
-                    {/* Aspect Ratio Selection */}
-                    <div style={{ marginBottom: '24px' }}>
-                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
-                        Aspect Ratio
-                      </label>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
-                        {(['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'] as const).map((ratio) => (
-                          <button
-                            key={ratio}
-                            onClick={() => setAiAspectRatio(ratio)}
-                            style={{
-                              padding: '10px 6px',
-                              borderRadius: '6px',
-                              border: aiAspectRatio === ratio ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
-                              background: aiAspectRatio === ratio ? `${themeColor}15` : 'transparent',
-                              color: aiAspectRatio === ratio ? themeColor : (themeMode === 'dark' ? '#fff' : '#000'),
-                              cursor: 'pointer',
-                              fontWeight: aiAspectRatio === ratio ? '600' : '500',
-                              fontSize: '12px',
-                              transition: 'all 0.2s'
-                            }}
-                          >
-                            {ratio}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Style Grid */}
-                    <div style={{ marginBottom: '16px' }}>
-                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
-                        Rendering Style
-                      </label>
-                      <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-                        gap: '12px'
-                      }}>
-                        {(['photorealistic', 'product', 'minimalist', 'sticker'] as const).map((style) => (
-                          <button
-                            key={style}
-                            onClick={() => setAiRenderStyle(style)}
-                            style={{
-                              padding: '16px 12px',
-                              borderRadius: '10px',
-                              border: aiRenderStyle === style ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
-                              background: aiRenderStyle === style ? `${themeColor}15` : (themeMode === 'dark' ? '#252525' : '#f8f8f8'),
-                              color: themeMode === 'dark' ? '#fff' : '#000',
-                              cursor: 'pointer',
-                              fontSize: '13px',
-                              fontWeight: aiRenderStyle === style ? '600' : '500',
-                              transition: 'all 0.2s',
-                              textAlign: 'center',
-                              textTransform: 'capitalize'
-                            }}
-                            onMouseEnter={(e) => {
-                              if (aiRenderStyle !== style) {
-                                e.currentTarget.style.borderColor = `${themeColor}80`;
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (aiRenderStyle !== style) {
-                                e.currentTarget.style.borderColor = themeMode === 'dark' ? '#333' : '#ddd';
-                              }
-                            }}
-                          >
-                            {style}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Input/Output Image Display */}
+                    {/* Input Image - Show First */}
                     {aiInputImage && (
                       <div style={{ marginBottom: '20px' }}>
                         <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
@@ -2007,30 +1935,67 @@ const EditorPage = () => {
                       </div>
                     )}
 
-                    {aiOutputImage && (
-                      <div style={{ marginBottom: '20px' }}>
-                        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
-                          AI Rendered Result
-                        </label>
-                        <div style={{
-                          width: '100%',
-                          borderRadius: '10px',
-                          overflow: 'hidden',
-                          border: `2px solid ${themeColor}`,
-                          background: themeMode === 'dark' ? '#252525' : '#f8f8f8'
-                        }}>
-                          <img
-                            src={aiOutputImage}
-                            alt="AI Rendered Output"
+                    {/* Style Selection */}
+                    <div style={{ marginBottom: '20px' }}>
+                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
+                        Rendering Style
+                      </label>
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(2, 1fr)',
+                        gap: '10px'
+                      }}>
+                        {(['photorealistic', 'product', 'minimalist', 'sticker'] as const).map((style) => (
+                          <button
+                            key={style}
+                            onClick={() => setAiRenderStyle(style)}
                             style={{
-                              width: '100%',
-                              height: 'auto',
-                              display: 'block'
+                              padding: '14px 10px',
+                              borderRadius: '8px',
+                              border: aiRenderStyle === style ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
+                              background: aiRenderStyle === style ? `${themeColor}15` : (themeMode === 'dark' ? '#252525' : '#f8f8f8'),
+                              color: themeMode === 'dark' ? '#fff' : '#000',
+                              cursor: 'pointer',
+                              fontSize: '13px',
+                              fontWeight: aiRenderStyle === style ? '600' : '500',
+                              transition: 'all 0.2s',
+                              textAlign: 'center',
+                              textTransform: 'capitalize'
                             }}
-                          />
-                        </div>
+                          >
+                            {style}
+                          </button>
+                        ))}
                       </div>
-                    )}
+                    </div>
+
+                    {/* Aspect Ratio Selection */}
+                    <div style={{ marginBottom: '20px' }}>
+                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
+                        Aspect Ratio
+                      </label>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
+                        {(['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'] as const).map((ratio) => (
+                          <button
+                            key={ratio}
+                            onClick={() => setAiAspectRatio(ratio)}
+                            style={{
+                              padding: '8px 4px',
+                              borderRadius: '6px',
+                              border: aiAspectRatio === ratio ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
+                              background: aiAspectRatio === ratio ? `${themeColor}15` : 'transparent',
+                              color: aiAspectRatio === ratio ? themeColor : (themeMode === 'dark' ? '#fff' : '#000'),
+                              cursor: 'pointer',
+                              fontWeight: aiAspectRatio === ratio ? '600' : '500',
+                              fontSize: '11px',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            {ratio}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
 
                     {/* Generate Button */}
                     <button
@@ -2068,6 +2033,32 @@ const EditorPage = () => {
                       {aiGenerating ? 'Generating...' : 'Generate AI Render'}
                     </button>
 
+                    {/* Output Image - Show After Generation */}
+                    {aiOutputImage && (
+                      <div style={{ marginTop: '20px', marginBottom: '20px' }}>
+                        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
+                          AI Rendered Result
+                        </label>
+                        <div style={{
+                          width: '100%',
+                          borderRadius: '10px',
+                          overflow: 'hidden',
+                          border: `2px solid ${themeColor}`,
+                          background: themeMode === 'dark' ? '#252525' : '#f8f8f8'
+                        }}>
+                          <img
+                            src={aiOutputImage}
+                            alt="AI Rendered Output"
+                            style={{
+                              width: '100%',
+                              height: 'auto',
+                              display: 'block'
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
                     {/* Download Button (only when output exists) */}
                     {aiOutputImage && !aiGenerating && (
                       <button
@@ -2079,7 +2070,6 @@ const EditorPage = () => {
                         }}
                         style={{
                           width: '100%',
-                          marginTop: '12px',
                           padding: '12px',
                           borderRadius: '10px',
                           border: `2px solid ${themeColor}`,
