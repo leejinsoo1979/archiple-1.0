@@ -294,16 +294,149 @@ const EditorPage = () => {
   const getStylePrompt = (style: typeof aiRenderStyle): string => {
     switch (style) {
       case 'photorealistic':
-        return `Transform the provided 3D architectural rendering into a photorealistic interior photograph. Preserve the original composition - maintain the exact room layout, wall positions, window locations, door placements, and all furniture arrangements. Render all elements with photorealistic materials and textures: wood grain detail, fabric weaves, surface reflections, subtle imperfections. Apply professional architectural photography lighting with soft, natural light from windows creating realistic shadows and highlights. Captured with a wide-angle lens (24mm equivalent) with natural depth of field. The final image should look like a professionally shot architectural photograph with warm, inviting atmosphere and accurate color reproduction.`;
+        return `Transform this 3D architectural rendering into an ULTRA-REALISTIC, PHOTO-QUALITY interior photograph that is INDISTINGUISHABLE from a real photograph.
+
+CRITICAL REQUIREMENTS - PRESERVE EXACT LAYOUT:
+- Keep the EXACT same room layout, wall positions, window locations, door placements
+- Maintain ALL furniture positions and arrangements EXACTLY as shown
+- Preserve the camera angle, perspective, and composition PRECISELY
+
+MATERIALS & TEXTURES (Maximum Realism):
+- Wood surfaces: Show REAL wood grain patterns, subtle color variations, natural knots, slight wear marks, authentic surface reflections
+- Fabric materials: Display actual fabric weaves, textile texture depth, natural wrinkles and folds, realistic light absorption and scattering
+- Glass/Windows: Crystal-clear transparency with authentic reflections, subtle dirt/fingerprints, accurate refraction, environmental reflections
+- Walls/Paint: Slight texture variation, subtle imperfections, natural light bounce, realistic matte finish
+- Floors: Authentic material appearance (wood planks with gaps, tile grout lines, carpet fibers), natural wear patterns, realistic reflections
+- Metal surfaces: True metallic reflections, brushed/polished finishes, environmental map reflections
+
+LIGHTING (Professional Architectural Photography):
+- Natural sunlight streaming through windows with REALISTIC sun rays, dust particles visible in light beams
+- Soft, natural shadows with proper penumbra (soft edges), no harsh black shadows
+- Global illumination: Light bouncing realistically off all surfaces, color bleeding from colored surfaces
+- Ambient occlusion in corners and crevices for depth
+- Realistic HDR lighting with natural exposure, highlights that don't blow out, shadows that retain detail
+- Window light creating natural gradient across room, warm sunlight color temperature (5000-6500K)
+- Soft fill light simulating skylight and ambient bounce light
+
+CAMERA & OPTICS (Professional DSLR):
+- Shot with professional full-frame camera (Canon EOS 5D, Sony A7R)
+- Wide-angle architectural lens (16-35mm) with minimal distortion correction
+- Natural depth of field: Slight background softness, foreground sharp, realistic focus fall-off
+- Realistic lens characteristics: subtle vignetting, natural chromatic behavior, micro-contrast
+- Professional architectural photography composition and framing
+
+ATMOSPHERE & ENVIRONMENT:
+- Subtle atmospheric haze/air perspective for depth
+- Dust particles floating in sunlight beams
+- Natural color grading: Warm, inviting tones, accurate white balance
+- Realistic dynamic range: Natural contrast, film-like color response
+- Environmental details: Slight imperfections, lived-in feeling, realistic cleanliness level
+
+FINAL OUTPUT QUALITY:
+- 8K resolution quality, razor-sharp details where in focus
+- Professional color grading like Architectural Digest or interior design magazines
+- Absolutely NO cartoon/3D/render appearance - must look like REAL PHOTOGRAPH
+- Every material, texture, and lighting must be 100% physically accurate and believable
+- The result should fool a professional photographer into thinking it's a real photo`;
 
       case 'product':
-        return `Transform the provided 3D architectural rendering into a high-resolution, studio-lit product photography style interior. Preserve the original composition - maintain the exact room layout, furniture positions, and spatial relationships. Apply professional studio lighting with a three-point softbox setup designed to create soft, diffused highlights and eliminate harsh shadows. Render all surfaces with ultra-realistic materials: polished wood, smooth fabrics, reflective glass with sharp focus throughout. Professional e-commerce photography quality with perfect exposure and clarity.`;
+        return `Transform this 3D rendering into ULTRA HIGH-END product photography interior. PRESERVE exact layout and furniture positions.
+
+STUDIO LIGHTING SETUP:
+- Professional 3-point lighting: Key light (main), fill light (shadows), rim light (separation)
+- Large softbox diffusers creating perfectly soft, even illumination
+- Zero harsh shadows, completely controlled lighting environment
+- Color-accurate daylight balanced lights (5500K)
+- Perfect exposure across entire scene, no hot spots or dark areas
+
+MATERIALS (Commercial Photography Quality):
+- Ultra-sharp focus throughout entire scene (f/8-f/11 depth of field)
+- Polished wood with mirror-like reflections
+- Pristine fabrics without wrinkles, perfect draping
+- Crystal-clear glass with no smudges
+- Everything looking brand new, showroom perfect
+- Maximum material clarity and definition
+
+CAMERA SETTINGS:
+- Professional medium format camera (Hasselblad, Phase One)
+- Tilt-shift lens for perfect perspective control
+- f/8-f/11 aperture for extended depth of field
+- ISO 100 for zero noise, maximum clarity
+- Perfect white balance, accurate color reproduction
+
+OUTPUT QUALITY:
+- E-commerce/catalog photography standard
+- Absolutely perfect exposure and color accuracy
+- Maximum sharpness and detail, no soft areas
+- Professional retouching quality: flawless, pristine, showroom condition
+- Suitable for luxury furniture catalogs or high-end interior design portfolios`;
 
       case 'minimalist':
-        return `Transform the provided 3D architectural rendering into a minimalist interior design photograph. Preserve the original composition - maintain the exact room layout and all furniture placements. Render materials with natural, subtle qualities: light wood tones, matte white surfaces, simple linen textures. Apply soft, diffused lighting creating a calm, serene atmosphere. The color palette should be predominantly neutral whites, soft grays, and warm beiges. Clean composition with gentle shadows and highlights.`;
+        return `Transform this 3D rendering into a serene, minimalist Scandinavian-style interior photograph. PRESERVE exact layout and furniture positions.
+
+MINIMALIST AESTHETIC:
+- Clean, uncluttered composition with emphasis on negative space
+- Predominantly white and neutral color palette (white, soft gray, warm beige, light wood tones)
+- Natural materials: Light oak/ash wood, linen textiles, matte white paint, concrete
+- Simple, functional furniture with clean lines and organic shapes
+
+LIGHTING (Soft Nordic Light):
+- Soft, diffused natural daylight from large windows
+- Gentle, even illumination without harsh contrasts
+- Subtle shadows with very soft edges
+- Cool-to-neutral color temperature (5500-6500K) like overcast Scandinavian sky
+- Gentle light gradient creating calm, peaceful atmosphere
+
+MATERIALS & TEXTURES:
+- Light wood with natural grain (not glossy, subtle matte finish)
+- Soft linen and cotton textiles with natural texture
+- Matte white walls with slight texture variation
+- Natural stone or light concrete for accent surfaces
+- Everything with subtle, tactile quality - no high gloss
+
+ATMOSPHERE:
+- Calm, peaceful, meditative feeling
+- Hygge ambiance: warm, cozy, but minimal
+- Natural, organic, breathable space
+- Clean air feeling, sense of simplicity and order
+- Emphasis on quality over quantity, each element purposeful
+
+PHOTOGRAPHY STYLE:
+- Natural, unprocessed look with gentle color grading
+- Slight desaturation for calm mood
+- Soft contrast, no blown highlights or blocked shadows
+- Architectural photography approach: straight lines, balanced composition
+- Film-like quality with natural grain and organic feel`;
 
       case 'sticker':
-        return `Transform the provided 3D architectural rendering into a clean, stylized illustration. Preserve the original composition - maintain the room layout and furniture arrangement. Render with bold outlines and simplified forms in a modern flat design aesthetic. Use simple cel-shading with soft shadows. Vibrant but harmonious color palette. Bold, clean outlines defining all major elements. The style should resemble professional architectural illustration.`;
+        return `Transform this 3D rendering into a clean, modern architectural illustration with BOLD ARTISTIC STYLE. PRESERVE exact layout and furniture positions.
+
+ILLUSTRATION STYLE:
+- Bold, confident outlines defining all major elements (2-3px black/dark lines)
+- Simplified geometric forms with clean edges
+- Modern flat design aesthetic with subtle depth
+- Cel-shading technique: 2-3 tone values per color (highlight, midtone, shadow)
+
+COLOR PALETTE:
+- Vibrant but harmonious colors: saturated but not garish
+- Warm wood tones (amber, honey, caramel)
+- Fresh accent colors (teal, coral, sage green, mustard yellow)
+- Clean whites and soft neutrals for balance
+- Consistent color temperature throughout
+
+RENDERING TECHNIQUE:
+- Soft, diffused shadows (no harsh black shadows)
+- Simple lighting from above and front (like editorial illustration)
+- Minimal texture: solid colors with occasional subtle patterns
+- Slight gradient shading on curved surfaces for dimension
+- No photorealistic textures - simplified, stylized representation
+
+ARTISTIC APPROACH:
+- Professional architectural visualization illustration style
+- Similar to: Architectural Digest illustrations, Dwell magazine graphics, modern editorial illustration
+- Clean, contemporary, designer-friendly aesthetic
+- Suitable for presentations, magazines, design portfolios
+- Balance between abstraction and recognizability - clearly an illustration but beautifully designed`;
     }
   };
 
