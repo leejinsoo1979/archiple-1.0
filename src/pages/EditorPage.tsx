@@ -403,12 +403,16 @@ const EditorPage = () => {
       const result = await model.generateContent({
         contents: [
           {
-            inlineData: {
-              mimeType: 'image/png',
-              data: base64,
-            },
+            parts: [
+              {
+                inlineData: {
+                  mimeType: 'image/png',
+                  data: base64,
+                },
+              },
+              { text: prompt },
+            ],
           },
-          { text: prompt },
         ],
       });
 
