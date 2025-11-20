@@ -221,7 +221,10 @@ const findNearestWallSnap = (
   return { x, z };
 };
 
-type Babylon3DCanvasRef = { captureRender: (width: number, height: number) => Promise<string> };
+interface Babylon3DCanvasRef {
+  captureRender: (width: number, height: number) => Promise<string>;
+  takeScreenshot: () => Promise<string | null>;
+}
 
 const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
   {
@@ -265,6 +268,73 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
   // Expose captureRender function via ref
   useImperativeHandle(ref, () => ({
+    takeScreenshot: async () => {
+      if (!engineRef.current || !sceneRef.current || !sceneRef.current.activeCamera) return null;
+
+      // Store original states
+      const gridMesh = infiniteGridRef.current;
+      const wasGridVisible = gridMesh ? gridMesh.isVisible : false;
+      const gizmoManager = gizmoManagerRef.current;
+      const previouslyAttachedMesh = gizmoManager?.attachedMesh;
+      const selectedLightMesh = selectedLightMeshRef.current;
+      const wasSelectedLightVisible = selectedLightMesh ? selectedLightMesh.isVisible : false;
+
+      // Find all hotspot meshes
+      const hotspotMeshes = sceneRef.current.meshes.filter(m => m.name.includes('_hotspot'));
+      const hotspotVisibilities = new Map<AbstractMesh, boolean>();
+      hotspotMeshes.forEach(m => hotspotVisibilities.set(m, m.isVisible));
+
+      try {
+        // Hide grid
+        if (gridMesh) {
+          gridMesh.isVisible = false;
+        }
+
+        // Hide gizmos (detach from mesh)
+        if (gizmoManager) {
+          gizmoManager.attachToMesh(null);
+        }
+
+        // Hide selected light indicator
+        if (selectedLightMesh) {
+          selectedLightMesh.isVisible = false;
+        }
+
+        // Hide all hotspots
+        hotspotMeshes.forEach(m => {
+          m.isVisible = false;
+        });
+
+        // Force a render to ensure changes are applied before screenshot
+        sceneRef.current.render();
+
+        return await Tools.CreateScreenshotAsync(
+          engineRef.current,
+          sceneRef.current.activeCamera,
+          { precision: 1 }
+        );
+      } catch (error) {
+        console.error('Screenshot capture failed:', error);
+        return null;
+      } finally {
+        // Restore states
+        if (gridMesh) {
+          gridMesh.isVisible = wasGridVisible;
+        }
+        if (gizmoManager && previouslyAttachedMesh) {
+          gizmoManager.attachToMesh(previouslyAttachedMesh);
+        }
+        if (selectedLightMesh) {
+          selectedLightMesh.isVisible = wasSelectedLightVisible;
+        }
+        hotspotMeshes.forEach(m => {
+          const wasVisible = hotspotVisibilities.get(m);
+          if (wasVisible !== undefined) {
+            m.isVisible = wasVisible;
+          }
+        });
+      }
+    },
     captureRender: async (width: number, height: number): Promise<string> => {
       const scene = sceneRef.current;
       const engine = engineRef.current;
@@ -309,8 +379,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
           // Boost all material quality and save original values
           const originalMaterialIntensities = new Map<PBRMaterial, number>();
-          const originalMaterialRoughness = new Map<PBRMaterial, number>();
-          const originalMaterialMetallic = new Map<PBRMaterial, number>();
+          const originalMaterialRoughness = new Map<PBRMaterial, number | null>();
+          const originalMaterialMetallic = new Map<PBRMaterial, number | null>();
 
           scene.meshes.forEach(mesh => {
             if (mesh.material && mesh.material instanceof PBRMaterial) {
@@ -323,10 +393,11 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
               mat.environmentIntensity = Math.max(mat.environmentIntensity, 1.5);
 
               // Slightly reduce roughness for more reflective surfaces
-              if (mat.roughness > 0.3) {
-                mat.roughness = mat.roughness * 0.8;
+              if (mat.roughness !== null && mat.roughness !== undefined) {
+                if (mat.roughness > 0.3) {
+                  mat.roughness = mat.roughness * 0.8;
+                }
               }
-
               // Enable more accurate PBR calculations
               mat.usePhysicalLightFalloff = true;
               mat.useRadianceOverAlpha = true;
@@ -1617,6 +1688,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           scene
         );
 
+        // Assign material immediately (crucial for display styles)
+        wallMesh.material = wallMaterial;
+
         // If wall has doors or windows, subtract openings using CSG
         if (wallDoors.length > 0 || wallWindows.length > 0) {
           const DOOR_HEIGHT = 2050; // 도어 높이 (mm)
@@ -2359,21 +2433,68 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       // ====== PLAY MODE: 1st Person FPS (game mode) ======
       console.log('[Babylon3DCanvas] Play Mode: 1st Person FPS');
 
-      const planMetrics = computePlanMetrics(floorplanData?.points);
-      if (planMetrics) {
-        fpsCamera.position = new Vector3(
-          planMetrics.centerX,
-          DEFAULT_CAMERA_HEIGHT,
-          planMetrics.centerZ
-        );
-        fpsCamera.rotation = new Vector3(0, 0, 0);
+      // Calculate best starting position (inside largest room)
+      let startX = 0;
+      let startZ = 0;
+      let foundValidStart = false;
 
-        character.position = new Vector3(
-          planMetrics.centerX,
-          0,
-          planMetrics.centerZ
-        );
+      if (floorplanData?.rooms && floorplanData.rooms.length > 0 && floorplanData.points) {
+        const pointMap = new Map();
+        floorplanData.points.forEach((p) => pointMap.set(p.id, p));
+
+        let maxRoomArea = -1;
+
+        floorplanData.rooms.forEach((room) => {
+          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+          let validPoints = 0;
+
+          room.points.forEach((pid: string) => {
+            const p = pointMap.get(pid);
+            if (p) {
+              minX = Math.min(minX, p.x);
+              maxX = Math.max(maxX, p.x);
+              minY = Math.min(minY, p.y);
+              maxY = Math.max(maxY, p.y);
+              validPoints++;
+            }
+          });
+
+          if (validPoints >= 3) {
+            const width = maxX - minX;
+            const height = maxY - minY;
+            const area = width * height;
+
+            if (area > maxRoomArea) {
+              maxRoomArea = area;
+              startX = (minX + maxX) / 2 * MM_TO_METERS;
+              startZ = -((minY + maxY) / 2 * MM_TO_METERS); // Flip Z
+              foundValidStart = true;
+            }
+          }
+        });
       }
+
+      if (!foundValidStart) {
+        // Fallback to geometric center
+        const planMetrics = computePlanMetrics(floorplanData?.points);
+        if (planMetrics) {
+          startX = planMetrics.centerX;
+          startZ = planMetrics.centerZ;
+        }
+      }
+
+      fpsCamera.position = new Vector3(
+        startX,
+        DEFAULT_CAMERA_HEIGHT,
+        startZ
+      );
+      fpsCamera.rotation = new Vector3(0, 0, 0);
+
+      character.position = new Vector3(
+        startX,
+        0,
+        startZ
+      );
 
       // Hide character in FPS mode
       character.isVisible = false;
@@ -2484,6 +2605,12 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
         // Setup orbit camera (Standard Perspective)
         arcCamera.mode = 0; // Camera.PERSPECTIVE_CAMERA
+
+        // Reset any orthographic settings
+        arcCamera.orthoLeft = null;
+        arcCamera.orthoRight = null;
+        arcCamera.orthoTop = null;
+        arcCamera.orthoBottom = null;
 
         // Don't force reset camera position - let it stay where user left it
         // arcCamera.setTarget(new Vector3(planMetrics.centerX, 0, planMetrics.centerZ));
@@ -2636,6 +2763,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     console.log('[Babylon3DCanvas] Character visibility:', showCharacter);
   }, [showCharacter]);
 
+  // Camera reset event
   // Camera reset event
   useEffect(() => {
     const handleCameraReset = () => {
@@ -3493,7 +3621,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           break;
       }
     });
-  }, [displayStyle]);
+  }, [displayStyle, floorplanData]);
 
   // Update grid visibility when showGrid changes
   useEffect(() => {
