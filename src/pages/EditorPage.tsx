@@ -1716,8 +1716,12 @@ const EditorPage = () => {
                   if (!playMode) {
                     setViewMode('3D'); // Switch to 3D view
                     setPhotoRealisticMode(true); // Enable photo-realistic rendering
+                    setDisplayStyle('material'); // Ensure textures are visible
+                    setShowGrid(false); // Hide grid for immersive experience
                   } else {
                     setPhotoRealisticMode(false); // Disable photo-realistic rendering when exiting
+                    setDisplayStyle('material'); // Keep material style
+                    setShowGrid(true); // Restore grid
                   }
                   setPlayMode(!playMode);
                 }}

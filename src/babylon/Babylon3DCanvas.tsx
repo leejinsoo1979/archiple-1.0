@@ -2023,6 +2023,25 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     }
   }, [floorplanData, playMode]);
 
+  // Adjust ambient lighting based on play mode
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    const hemisphericLight = scene.getLightByName('hemiLight') as HemisphericLight;
+    if (!hemisphericLight) return;
+
+    if (playMode) {
+      // Reduce ambient light in play mode to simulate indoor lighting with ceiling
+      hemisphericLight.intensity = 0.2;
+      console.log('[Babylon3DCanvas] Reduced hemispheric light for play mode (intensity: 0.2)');
+    } else {
+      // Restore normal ambient light for editing mode
+      hemisphericLight.intensity = 0.7;
+      console.log('[Babylon3DCanvas] Restored hemispheric light for edit mode (intensity: 0.7)');
+    }
+  }, [playMode]);
+
   // Update sun light and skybox when settings change
   useEffect(() => {
     const sunLight = sunLightRef.current;
