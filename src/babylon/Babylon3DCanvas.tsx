@@ -2032,8 +2032,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     const sunLight = sunLightRef.current;
     if (!hemisphericLight || !sunLight) return;
 
-    // Count windows to determine if natural light should enter
+    // Count windows and lights to determine lighting conditions
     const windowCount = floorplanData?.windows?.length || 0;
+    const lightCount = lights.length;
 
     if (playMode) {
       // Reduce ambient light in play mode to simulate indoor lighting with ceiling
@@ -2050,15 +2051,45 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         console.log(`[Babylon3DCanvas] Enabled sunlight for play mode (${windowCount} windows, intensity: ${intensity})`);
       }
 
-      console.log('[Babylon3DCanvas] Reduced hemispheric light for play mode (intensity: 0.2)');
+      // Adjust material environment intensity based on lighting conditions
+      // If no lights and no windows, materials should be very dark
+      const hasLighting = windowCount > 0 || lightCount > 0;
+      const targetEnvironmentIntensity = hasLighting ? 0.3 : 0.05; // Very low if no lighting
+
+      scene.meshes.forEach(mesh => {
+        if (mesh.material && mesh.material instanceof PBRMaterial) {
+          const material = mesh.material as PBRMaterial;
+          // Only adjust wall, floor, ceiling materials
+          if (material.name.includes('wallMat') || material.name.includes('floorMat') || material.name.includes('ceilingMat')) {
+            material.environmentIntensity = targetEnvironmentIntensity;
+          }
+        }
+      });
+
+      console.log(`[Babylon3DCanvas] Set environment intensity to ${targetEnvironmentIntensity} for play mode (${windowCount} windows, ${lightCount} lights)`);
     } else {
       // Restore normal ambient light and sunlight for editing mode
       hemisphericLight.intensity = 0.7;
       const intensity = sunSettings?.intensity ?? 1.5;
       sunLight.intensity = intensity;
+
+      // Restore normal environment intensity for editing mode
+      scene.meshes.forEach(mesh => {
+        if (mesh.material && mesh.material instanceof PBRMaterial) {
+          const material = mesh.material as PBRMaterial;
+          if (material.name.includes('wallMat')) {
+            material.environmentIntensity = 0.7;
+          } else if (material.name.includes('floorMat')) {
+            material.environmentIntensity = 0.6;
+          } else if (material.name.includes('ceilingMat')) {
+            material.environmentIntensity = 0.7;
+          }
+        }
+      });
+
       console.log('[Babylon3DCanvas] Restored hemispheric light and sunlight for edit mode');
     }
-  }, [playMode, floorplanData?.windows, sunSettings?.intensity]);
+  }, [playMode, floorplanData?.windows, sunSettings?.intensity, lights.length]);
 
   // Update sun light and skybox when settings change
   useEffect(() => {

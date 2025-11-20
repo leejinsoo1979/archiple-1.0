@@ -15,6 +15,8 @@ const PlayPage = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [controlMode, setControlMode] = useState<'touch' | 'joystick'>('touch');
 
+  const [isHighQuality, setIsHighQuality] = useState(false);
+
   useEffect(() => {
     // Override App.css styles for full-screen experience
     const root = document.getElementById('root');
@@ -144,6 +146,7 @@ const PlayPage = () => {
           visible={true}
           playMode={isPlaying}
           controlMode={controlMode}
+          photoRealisticMode={isHighQuality}
         />
       </div>
 
@@ -178,12 +181,12 @@ const PlayPage = () => {
               const elem = document.documentElement;
               if (!document.fullscreenElement) {
                 elem.requestFullscreen?.() ||
-                (elem as any).webkitRequestFullscreen?.() ||
-                (elem as any).msRequestFullscreen?.();
+                  (elem as any).webkitRequestFullscreen?.() ||
+                  (elem as any).msRequestFullscreen?.();
               } else {
                 document.exitFullscreen?.() ||
-                (document as any).webkitExitFullscreen?.() ||
-                (document as any).msExitFullscreen?.();
+                  (document as any).webkitExitFullscreen?.() ||
+                  (document as any).msExitFullscreen?.();
               }
             }}
           >
@@ -192,6 +195,16 @@ const PlayPage = () => {
             </svg>
           </button>
         )}
+
+        {/* High Quality Toggle */}
+        <button
+          className={`${styles.playBtn} ${isHighQuality ? styles.active : ''}`}
+          onClick={() => setIsHighQuality(!isHighQuality)}
+          style={{ marginRight: '8px', backgroundColor: isHighQuality ? '#3dbc58' : 'rgba(0,0,0,0.5)' }}
+          title="Toggle High Quality Rendering"
+        >
+          <span style={{ fontSize: '12px', fontWeight: 700 }}>HQ</span>
+        </button>
 
         {/* Play/Stop Button */}
         <button
