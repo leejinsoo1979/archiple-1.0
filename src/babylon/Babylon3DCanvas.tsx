@@ -287,10 +287,14 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           const originalShadowMapSize = shadowGen?.mapSize || 4096;
           const originalShadowBlurKernel = shadowGen?.blurKernel || 64;
           const originalEnvIntensity = scene.environmentIntensity;
+          const originalHardwareScaling = engine.getHardwareScalingLevel();
 
           console.log('[Babylon3DCanvas] Saved original settings');
 
           // ===== STEP 2: Apply ULTRA-QUALITY settings =====
+          // Force hardware scaling to 1.0 for maximum quality
+          engine.setHardwareScalingLevel(1.0);
+
           if (shadowGen) {
             shadowGen.mapSize = 16384; // Ultra 16K shadow maps
             shadowGen.blurKernel = 256; // Maximum blur for ultra-soft shadows
@@ -301,142 +305,79 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           // Boost environment reflections
           scene.environmentIntensity = 2.0;
 
-          // Boost all material quality
+          // Boost all material quality and save original values
+          const originalMaterialIntensities = new Map<PBRMaterial, number>();
           scene.meshes.forEach(mesh => {
             if (mesh.material && mesh.material instanceof PBRMaterial) {
               const mat = mesh.material as PBRMaterial;
+              originalMaterialIntensities.set(mat, mat.environmentIntensity);
               mat.environmentIntensity = Math.max(mat.environmentIntensity, 1.0);
             }
           });
 
           console.log('[Babylon3DCanvas] Material quality boosted');
 
-          // Create high-resolution RenderTargetTexture with multi-sampling
-          const renderTarget = new RenderTargetTexture(
-            'highResRender',
-            { width, height },
-            scene,
-            false, // generateMipMaps
-            true, // doNotChangeAspectRatio
-            Constants.TEXTURETYPE_UNSIGNED_INT,
-            false, // isCube
-            Constants.TEXTURE_BILINEAR_SAMPLINGMODE, // Changed to bilinear for better quality
-            true, // generateDepthBuffer
-            false, // generateStencilBuffer
-            false, // isMulti
-            Constants.TEXTUREFORMAT_RGBA,
-            false // delayAllocation
-          );
-
-          // Enable 8x MSAA for ultra-smooth edges
-          renderTarget.samples = 8;
-
-          console.log(`[Babylon3DCanvas] RenderTargetTexture created: ${width}x${height} with 8x MSAA`);
-
-          // Set active camera
-          renderTarget.activeCamera = camera;
-
-          // Render all meshes except grid (hide grid for clean render)
+          // Hide grid for clean render
           const gridMesh = infiniteGridRef.current;
           const originalGridVisibility = gridMesh?.isVisible;
           if (gridMesh) {
             gridMesh.isVisible = false;
           }
 
-          renderTarget.renderList = scene.meshes.filter(m => m !== gridMesh);
+          console.log('[Babylon3DCanvas] Starting high-quality capture with Tools.CreateScreenshotUsingRenderTarget...');
 
-          console.log('[Babylon3DCanvas] Starting render...');
+          // Use Tools.CreateScreenshotUsingRenderTarget for proper high-quality capture
+          Tools.CreateScreenshotUsingRenderTarget(
+            engine,
+            camera,
+            { width, height, precision: 1 },
+            (data) => {
+              console.log(`[Babylon3DCanvas] Screenshot data received, converting to blob...`);
 
-          // Render once
-          renderTarget.onAfterRenderObservable.addOnce(async () => {
-            // Read pixels from render target - need to use scene.getEngine()
-            const textureSize = renderTarget.getSize();
-            console.log(`[Babylon3DCanvas] RenderTarget actual size: ${textureSize.width}x${textureSize.height}`);
+              // Convert data URL to Blob
+              fetch(data)
+                .then(res => res.blob())
+                .then(blob => {
+                  console.log(`[Babylon3DCanvas] ULTRA-QUALITY render completed (${width}x${height}, ${(blob.size / 1024 / 1024).toFixed(2)} MB)`);
 
-            // Read pixels
-            const pixels = await engine.readPixels(0, 0, textureSize.width, textureSize.height, true);
+                  // ===== STEP 3: Restore original settings =====
+                  engine.setHardwareScalingLevel(originalHardwareScaling);
 
-            // Create canvas to convert pixels to image
-            const canvas = document.createElement('canvas');
-            canvas.width = textureSize.width;
-            canvas.height = textureSize.height;
-            const ctx = canvas.getContext('2d');
-
-            if (!ctx) {
-              renderTarget.dispose();
-              reject(new Error('Failed to create canvas context'));
-              return;
-            }
-
-            // Create ImageData from pixels - flip Y axis for correct orientation
-            const imageData = ctx.createImageData(textureSize.width, textureSize.height);
-            const pixelArray = new Uint8ClampedArray(pixels.buffer);
-
-            // Flip Y axis by reversing row order
-            const rowSize = textureSize.width * 4;
-            for (let y = 0; y < textureSize.height; y++) {
-              const srcRow = (textureSize.height - 1 - y) * rowSize;
-              const dstRow = y * rowSize;
-              imageData.data.set(pixelArray.subarray(srcRow, srcRow + rowSize), dstRow);
-            }
-
-            ctx.putImageData(imageData, 0, 0);
-
-            // Convert to blob and return directly (faster, more reliable)
-            canvas.toBlob((blob) => {
-              if (!blob) {
-                renderTarget.dispose();
-                reject(new Error('Failed to create blob from canvas'));
-                return;
-              }
-
-              console.log(`[Babylon3DCanvas] ULTRA-QUALITY render completed (${width}x${height})`);
-
-              // ===== STEP 3: Restore original settings =====
-              if (shadowGen) {
-                shadowGen.mapSize = originalShadowMapSize;
-                shadowGen.blurKernel = originalShadowBlurKernel;
-                console.log('[Babylon3DCanvas] Shadow settings restored');
-              }
-
-              scene.environmentIntensity = originalEnvIntensity;
-
-              // Restore grid visibility
-              if (gridMesh && originalGridVisibility !== undefined) {
-                gridMesh.isVisible = originalGridVisibility;
-              }
-
-              // Restore material settings
-              scene.meshes.forEach(mesh => {
-                if (mesh.material && mesh.material instanceof PBRMaterial) {
-                  const mat = mesh.material as PBRMaterial;
-                  if (mat.name.includes('wallMat')) {
-                    mat.environmentIntensity = 0.7;
-                  } else if (mat.name.includes('floorMat')) {
-                    mat.environmentIntensity = 0.6;
-                  } else if (mat.name.includes('ceilingMat')) {
-                    mat.environmentIntensity = 0.7;
+                  if (shadowGen) {
+                    shadowGen.mapSize = originalShadowMapSize;
+                    shadowGen.blurKernel = originalShadowBlurKernel;
+                    console.log('[Babylon3DCanvas] Shadow settings restored');
                   }
-                }
-              });
 
-              console.log('[Babylon3DCanvas] All settings restored');
+                  scene.environmentIntensity = originalEnvIntensity;
 
-              // Clean up
-              renderTarget.dispose();
+                  // Restore grid visibility
+                  if (gridMesh && originalGridVisibility !== undefined) {
+                    gridMesh.isVisible = originalGridVisibility;
+                  }
 
-              // Create Blob URL and resolve
-              const blobUrl = URL.createObjectURL(blob);
-              resolve(blobUrl);
-            }, 'image/png', 1.0); // Quality 1.0 for maximum PNG quality
-          });
+                  // Restore material settings
+                  originalMaterialIntensities.forEach((intensity, mat) => {
+                    mat.environmentIntensity = intensity;
+                  });
 
-          // Trigger render
-          scene.incrementRenderId();
-          scene.resetCachedMaterial();
-          renderTarget.render(false, false);
+                  console.log('[Babylon3DCanvas] All settings restored');
+
+                  // Create Blob URL and resolve
+                  const blobUrl = URL.createObjectURL(blob);
+                  resolve(blobUrl);
+                })
+                .catch(error => {
+                  console.error('[Babylon3DCanvas] Failed to convert screenshot to blob:', error);
+                  reject(error);
+                });
+            },
+            'image/png',
+            8, // samples for anti-aliasing
+            false // don't use device pixel ratio
+          );
         } catch (error) {
-          console.error('[Babylon3DCanvas] ❌ Render capture failed:', error);
+          console.error('[Babylon3DCanvas] Render capture failed:', error);
           reject(error);
         }
       });
