@@ -497,11 +497,12 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       sunLight.specular = new Color3(1, 1, 1);
       sunLightRef.current = sunLight;
 
-      // Shadow generator
-      const shadowGenerator = new ShadowGenerator(2048, sunLight);
+      // Shadow generator with maximum quality
+      const shadowGenerator = new ShadowGenerator(4096, sunLight); // Increased from 2048 to 4096
       shadowGenerator.useBlurExponentialShadowMap = true;
-      shadowGenerator.blurKernel = 32;
+      shadowGenerator.blurKernel = 64; // Increased from 32 to 64 for smoother shadows
       shadowGenerator.darkness = 0.3;
+      shadowGenerator.filteringQuality = ShadowGenerator.QUALITY_HIGH;
 
       // Create infinite grid floor
       const createInfiniteGrid = () => {
@@ -2276,8 +2277,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         character.isVisible = true;
       };
     } else {
-      // ====== 3D VIEW MODE: Orbit control ======
-      console.log('[Babylon3DCanvas] 3D View Mode: Orbit control');
+      // ====== 3D VIEW MODE: Isometric orbit control ======
+      console.log('[Babylon3DCanvas] 3D View Mode: Isometric orbit');
 
       const planMetrics = computePlanMetrics(floorplanData?.points);
       if (planMetrics) {
@@ -2288,11 +2289,11 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         );
         character.rotation.y = 0;
 
-        // Setup orbit camera (Standard Perspective)
+        // Setup isometric orbit camera
         arcCamera.mode = 0; // Camera.PERSPECTIVE_CAMERA
         arcCamera.setTarget(new Vector3(planMetrics.centerX, 0, planMetrics.centerZ));
-        arcCamera.alpha = -Math.PI / 4; // 45 degrees horizontal
-        arcCamera.beta = Math.PI / 3.5; // ~51 degrees (more natural perspective)
+        arcCamera.alpha = Math.PI / 4; // 45 degrees horizontal
+        arcCamera.beta = Math.PI / 3; // 60 degrees from top (isometric)
         arcCamera.radius = 10;
       }
 
@@ -2624,48 +2625,68 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
         pipelineRef.current = pipeline;
 
-        // Set high sample count for anti-aliasing
-        pipeline.samples = 4;
+        // Maximum quality anti-aliasing
+        pipeline.samples = 8; // Increased from 4 to 8 for maximum smoothness
 
-        // Disable all post-processing effects that degrade quality
         const pipelineAny = pipeline as any;
 
-        // Disable SSAO (causes noise and artifacts)
+        // Enable high-quality SSAO with maximum samples and noise reduction
         if (pipelineAny.ssaoEnabled !== undefined) {
-          pipelineAny.ssaoEnabled = false;
+          pipelineAny.ssaoEnabled = true;
+        }
+        if (pipelineAny.ssao2) {
+          pipelineAny.ssao2.radius = 1.0; // Subtle ambient occlusion
+          pipelineAny.ssao2.totalStrength = 1.5; // Moderate strength
+          pipelineAny.ssao2.base = 0.2; // Minimum ambient occlusion
+          pipelineAny.ssao2.samples = 64; // Maximum samples for smoothness
+          pipelineAny.ssao2.textureSamples = 8; // High multi-sampling
+          pipelineAny.ssao2.expensiveBlur = true;
+          pipelineAny.ssao2.bilateralBlur = true;
+          pipelineAny.ssao2.bilateralSoften = 0.02; // Very subtle softening
+          pipelineAny.ssao2.bilateralTolerance = 0.00001; // Minimal tolerance for sharp edges
         }
 
-        // Disable SSR (causes artifacts and reflections issues)
+        // Disable SSR (still causes artifacts)
         if (pipelineAny.screenSpaceReflectionsEnabled !== undefined) {
           pipelineAny.screenSpaceReflectionsEnabled = false;
         }
 
-        // Disable Bloom (causes over-brightness and glow artifacts)
-        pipeline.bloomEnabled = false;
-
-        // Disable Depth of Field (causes blur)
-        pipeline.depthOfFieldEnabled = false;
-
-        // Enable basic Image Processing (minimal, clean rendering)
-        pipeline.imageProcessingEnabled = true;
-        if (pipeline.imageProcessing) {
-          // Use standard tone mapping (not ACES which can alter colors)
-          pipeline.imageProcessing.toneMappingEnabled = true;
-          pipeline.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_STANDARD;
-          pipeline.imageProcessing.exposure = 1.0;
-          pipeline.imageProcessing.contrast = 1.0; // No contrast adjustment
-          pipeline.imageProcessing.vignetteEnabled = false; // Disable vignette
+        // Enable subtle Bloom for realistic bright areas
+        pipeline.bloomEnabled = true;
+        if (pipelineAny.bloom) {
+          pipelineAny.bloom.threshold = 0.9; // Only very bright areas glow
+          pipelineAny.bloom.weight = 0.3; // Subtle glow
+          pipelineAny.bloom.kernel = 128; // Large kernel for smooth glow
         }
 
-        // Disable all visual effects that degrade quality
+        // Disable DOF (causes blur)
+        pipeline.depthOfFieldEnabled = false;
+
+        // High-quality image processing
+        pipeline.imageProcessingEnabled = true;
+        if (pipeline.imageProcessing) {
+          pipeline.imageProcessing.toneMappingEnabled = true;
+          pipeline.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES; // Cinematic tone mapping
+          pipeline.imageProcessing.exposure = 1.0;
+          pipeline.imageProcessing.contrast = 1.05; // Very subtle contrast boost
+          pipeline.imageProcessing.vignetteEnabled = false; // No vignette
+        }
+
+        // Disable visual noise effects
         pipeline.chromaticAberrationEnabled = false;
         pipeline.grainEnabled = false;
-        pipeline.sharpenEnabled = false;
 
-        // Enable FXAA for smooth edges only
+        // Enable subtle sharpening
+        pipeline.sharpenEnabled = true;
+        if (pipeline.sharpen) {
+          pipeline.sharpen.edgeAmount = 0.1; // Very subtle sharpening
+          pipeline.sharpen.colorAmount = 0.1;
+        }
+
+        // Enable FXAA
         pipeline.fxaaEnabled = true;
 
-        console.log('[Babylon3DCanvas] ✅ Clean rendering pipeline created (PBR + FXAA only)');
+        console.log('[Babylon3DCanvas] ✅ Ultra-quality rendering pipeline created (8x MSAA, 64 SSAO samples, subtle bloom)');
       }
 
       // Create environment texture for PBR materials
@@ -2689,15 +2710,16 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         console.log('[Babylon3DCanvas] ✅ Environment intensity boosted for PBR reflections');
       }
 
-      // Upgrade shadow quality
+      // Ultra shadow quality for photo-realistic mode
       if (sunLight) {
         const shadowGen = sunLight.getShadowGenerator() as ShadowGenerator | null;
         if (shadowGen) {
-          shadowGen.mapSize = 4096; // Increase from 2048 to 4096
+          shadowGen.mapSize = 8192; // Ultra quality 8K shadows (from 4096)
           shadowGen.filteringQuality = ShadowGenerator.QUALITY_HIGH;
-          shadowGen.contactHardeningLightSizeUVRatio = 0.05;
-          shadowGen.darkness = 0.4;
-          console.log('[Babylon3DCanvas] ✅ Shadow quality upgraded to 4096x4096');
+          shadowGen.contactHardeningLightSizeUVRatio = 0.025; // Softer contact shadows
+          shadowGen.darkness = 0.35; // Subtle shadow darkness
+          shadowGen.blurKernel = 128; // Maximum blur for ultra-soft shadows
+          console.log('[Babylon3DCanvas] ✅ Shadow quality upgraded to 8192x8192 ultra quality');
         }
       }
 
@@ -2736,10 +2758,11 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       if (sunLight) {
         const shadowGen = sunLight.getShadowGenerator() as ShadowGenerator | null;
         if (shadowGen) {
-          shadowGen.mapSize = 2048; // Standard quality
-          shadowGen.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
+          shadowGen.mapSize = 4096; // Keep high quality even in standard mode
+          shadowGen.filteringQuality = ShadowGenerator.QUALITY_HIGH;
           shadowGen.darkness = 0.3;
-          console.log('[Babylon3DCanvas] ✅ Shadow quality restored to standard');
+          shadowGen.blurKernel = 64; // Keep smooth shadows
+          console.log('[Babylon3DCanvas] ✅ Shadow quality restored to 4096x4096');
         }
       }
     }
