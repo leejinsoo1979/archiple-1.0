@@ -39,7 +39,8 @@ const EditorPage = () => {
 
   // Screenshot resolution settings
   const [screenshotResolution, setScreenshotResolution] = useState<'1080p' | '4k' | '8k'>('4k');
-  const [aiRenderStyle, setAiRenderStyle] = useState<'photorealistic' | 'modern' | 'minimalist' | 'luxury'>('photorealistic');
+  const [aiRenderStyle, setAiRenderStyle] = useState<'photorealistic' | 'product' | 'minimalist' | 'modern' | 'luxury' | 'artistic' | 'cinematic' | 'bright' | 'cozy' | 'industrial'>('photorealistic');
+  const [aiAspectRatio, setAiAspectRatio] = useState<'square' | 'landscape' | 'portrait'>('square');
   const [showStyleMenu, setShowStyleMenu] = useState(false);
 
   // Rendering settings panel (right sidebar)
@@ -283,21 +284,41 @@ const EditorPage = () => {
   };
 
   // Generate style-specific prompts for AI rendering
-  const getStylePrompt = (style: typeof aiRenderStyle): string => {
+  const getStylePrompt = (style: typeof aiRenderStyle, aspectRatio: typeof aiAspectRatio): string => {
     const baseInstruction = 'Using the provided 3D architectural rendering, create a new image that maintains the EXACT same layout, room dimensions, wall positions, furniture placement, and spatial configuration. ';
+
+    const aspectRatioText = aspectRatio === 'square' ? 'Square format (1:1).' : aspectRatio === 'landscape' ? 'Landscape format (16:9).' : 'Portrait format (9:16).';
 
     switch (style) {
       case 'photorealistic':
-        return baseInstruction + 'A photorealistic architectural interior photograph with professional lighting. The scene is illuminated by soft, natural light from windows creating realistic shadows and highlights. Captured with a wide-angle lens, emphasizing realistic materials like wood grain, fabric textures, and surface reflections. The overall mood is warm and inviting with accurate color reproduction and depth. Square image format.';
+        return baseInstruction + `A photorealistic architectural interior photograph with professional lighting. The scene is illuminated by soft, natural light from windows creating realistic shadows and highlights. Captured with a wide-angle lens, emphasizing realistic materials like wood grain, fabric textures, and surface reflections. The overall mood is warm and inviting with accurate color reproduction and depth. ${aspectRatioText}`;
 
-      case 'modern':
-        return baseInstruction + 'A modern, contemporary interior design photograph with clean lines and sleek finishes. The lighting is bright and even, emphasizing the minimalist aesthetic. Materials appear polished and refined - smooth surfaces, glass, metal accents. The color palette is neutral with bold accent colors. Professional architectural photography style with sharp focus throughout. Square image format.';
+      case 'product':
+        return baseInstruction + `A high-resolution, studio-lit product photograph style interior. The lighting is a three-point softbox setup to eliminate harsh shadows and highlight textures. Ultra-realistic, with sharp focus on all surfaces and materials. Professional e-commerce photography quality with perfect exposure. ${aspectRatioText}`;
 
       case 'minimalist':
-        return baseInstruction + 'A minimalist interior design photograph featuring simple forms and uncluttered spaces. The lighting is soft and diffused, creating a calm atmosphere. Materials are natural and subtle - light wood, white walls, simple textiles. The color scheme is predominantly neutral whites, grays, and beiges. Clean, serene composition with emphasis on negative space. Square image format.';
+        return baseInstruction + `A minimalist interior design photograph featuring simple forms and uncluttered spaces. The lighting is soft and diffused, creating a calm atmosphere. Materials are natural and subtle - light wood, white walls, simple textiles. The color scheme is predominantly neutral whites, grays, and beiges. Clean, serene composition with emphasis on negative space. ${aspectRatioText}`;
+
+      case 'modern':
+        return baseInstruction + `A modern, contemporary interior design photograph with clean lines and sleek finishes. The lighting is bright and even, emphasizing the minimalist aesthetic. Materials appear polished and refined - smooth surfaces, glass, metal accents. The color palette is neutral with bold accent colors. Professional architectural photography style with sharp focus throughout. ${aspectRatioText}`;
 
       case 'luxury':
-        return baseInstruction + 'A luxurious, high-end interior design photograph with premium materials and elegant lighting. The scene features rich textures - marble, velvet, polished wood, metallic accents. Lighting is sophisticated with warm ambient glow and dramatic highlights. The color palette includes deep, rich tones with gold or brass details. Professional luxury real estate photography style. Square image format.';
+        return baseInstruction + `A luxurious, high-end interior design photograph with premium materials and elegant lighting. The scene features rich textures - marble, velvet, polished wood, metallic accents. Lighting is sophisticated with warm ambient glow and dramatic highlights. The color palette includes deep, rich tones with gold or brass details. Professional luxury real estate photography style. ${aspectRatioText}`;
+
+      case 'artistic':
+        return baseInstruction + `Transform into an artistic, painterly interior scene with expressive brushstrokes and rich color palette. The style should evoke fine art photography with creative color grading, subtle vignetting, and artistic interpretation while maintaining spatial accuracy. Mood is contemplative and sophisticated. ${aspectRatioText}`;
+
+      case 'cinematic':
+        return baseInstruction + `A cinematic interior shot with dramatic lighting and film-like color grading. The scene has moody, atmospheric lighting with strong contrast and carefully placed highlights. Color grading resembles high-end cinema with rich shadows and controlled highlights. Anamorphic lens characteristics with subtle lens flares. ${aspectRatioText}`;
+
+      case 'bright':
+        return baseInstruction + `A bright, airy interior photograph with abundant natural light. The scene is flooded with soft daylight creating an uplifting, fresh atmosphere. Colors are vibrant but natural. Everything is crisp, clean, and well-lit with no harsh shadows. Perfect for real estate marketing with an optimistic, welcoming feel. ${aspectRatioText}`;
+
+      case 'cozy':
+        return baseInstruction + `A warm, cozy interior photograph with intimate lighting. The scene features soft, warm lighting from lamps and natural sources creating a comfortable, lived-in atmosphere. Materials look soft and inviting - plush textiles, warm wood tones. Color temperature is warm with golden hour lighting quality. ${aspectRatioText}`;
+
+      case 'industrial':
+        return baseInstruction + `An industrial-style interior photograph with raw, urban aesthetic. The scene features exposed materials like concrete, brick, metal, and unfinished surfaces. Lighting is a mix of natural light and Edison bulbs or metal fixtures. Color palette includes grays, browns, blacks with metallic accents. Modern loft aesthetic. ${aspectRatioText}`;
     }
   };
 
@@ -391,7 +412,7 @@ const EditorPage = () => {
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-image' });
 
-      const prompt = getStylePrompt(aiRenderStyle);
+      const prompt = getStylePrompt(aiRenderStyle, aiAspectRatio);
       const result = await model.generateContent([
         {
           inlineData: {
@@ -1833,19 +1854,16 @@ const EditorPage = () => {
                   </svg>
                   <span>AI Render</span>
                   <div style={{
-                    fontSize: '11px',
+                    fontSize: '10px',
                     opacity: 0.9,
-                    fontWeight: '500',
+                    fontWeight: '600',
                     background: 'rgba(255,255,255,0.2)',
-                    padding: '3px 10px',
+                    padding: '4px 8px',
                     borderRadius: '4px',
                     textTransform: 'uppercase',
                     letterSpacing: '0.5px'
                   }}>
-                    {aiRenderStyle === 'photorealistic' && 'PHOTO'}
-                    {aiRenderStyle === 'modern' && 'MODERN'}
-                    {aiRenderStyle === 'minimalist' && 'MINIMAL'}
-                    {aiRenderStyle === 'luxury' && 'LUXURY'}
+                    {aiRenderStyle.substring(0, 6).toUpperCase()}
                   </div>
                 </button>
 
@@ -1879,109 +1897,171 @@ const EditorPage = () => {
                   </svg>
                 </button>
 
-                {/* Enhanced Style Selection Menu */}
+                {/* AI Render Settings Modal */}
                 {showStyleMenu && (
-                  <div style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 10px)',
-                    right: 0,
-                    background: themeMode === 'dark' ? '#1e1e1e' : '#ffffff',
-                    border: `2px solid ${themeColor}40`,
-                    borderRadius: '12px',
-                    padding: '12px',
-                    minWidth: '240px',
-                    zIndex: 10000,
-                    boxShadow: `0 10px 40px ${themeColor}40, 0 0 0 1px ${themeColor}10`,
-                    animation: 'slideDown 0.2s ease-out'
-                  }}>
-                    <style>{`
-                      @keyframes slideDown {
-                        from {
-                          opacity: 0;
-                          transform: translateY(-10px);
-                        }
-                        to {
-                          opacity: 1;
-                          transform: translateY(0);
-                        }
-                      }
-                    `}</style>
+                  <>
+                    <div
+                      style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: 'rgba(0,0,0,0.5)',
+                        zIndex: 9999,
+                        animation: 'fadeIn 0.2s ease-out'
+                      }}
+                      onClick={() => setShowStyleMenu(false)}
+                    />
                     <div style={{
-                      fontSize: '13px',
-                      fontWeight: '600',
-                      color: themeColor,
-                      padding: '8px 12px',
-                      marginBottom: '8px',
-                      borderBottom: `2px solid ${themeColor}20`
+                      position: 'fixed',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      background: themeMode === 'dark' ? '#1e1e1e' : '#ffffff',
+                      border: `2px solid ${themeColor}40`,
+                      borderRadius: '16px',
+                      padding: '24px',
+                      width: '90%',
+                      maxWidth: '700px',
+                      maxHeight: '85vh',
+                      overflowY: 'auto',
+                      zIndex: 10000,
+                      boxShadow: `0 20px 60px ${themeColor}40`,
+                      animation: 'scaleIn 0.2s ease-out'
                     }}>
-                      Select Rendering Style
-                    </div>
-                    {(['photorealistic', 'modern', 'minimalist', 'luxury'] as const).map((style) => {
-                      const isSelected = aiRenderStyle === style;
-                      const styleIcons = {
-                        photorealistic: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>,
-                        modern: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg>,
-                        minimalist: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" fill="none"/></svg>,
-                        luxury: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.5 7.5H22l-6 5 2.5 7.5L12 17l-6.5 5L8 14.5 2 9.5h7.5z"/></svg>
-                      };
-                      const styleLabels = {
-                        photorealistic: 'Photorealistic',
-                        modern: 'Modern',
-                        minimalist: 'Minimalist',
-                        luxury: 'Luxury'
-                      };
-                      return (
+                      <style>{`
+                        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+                        @keyframes scaleIn { from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+                      `}</style>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                        <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: themeColor }}>AI Rendering Settings</h3>
                         <button
-                          key={style}
-                          onClick={() => {
-                            setAiRenderStyle(style);
-                            setShowStyleMenu(false);
-                          }}
+                          onClick={() => setShowStyleMenu(false)}
                           style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '8px',
+                            border: 'none',
+                            background: themeMode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                            color: themeMode === 'dark' ? '#fff' : '#000',
+                            cursor: 'pointer',
+                            fontSize: '20px',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '12px',
-                            width: '100%',
-                            padding: '12px 14px',
-                            marginBottom: '6px',
-                            background: isSelected
-                              ? `linear-gradient(135deg, ${themeColor}25 0%, ${themeColor}15 100%)`
-                              : 'transparent',
-                            border: isSelected ? `2px solid ${themeColor}60` : '2px solid transparent',
-                            borderRadius: '8px',
-                            color: isSelected ? themeColor : (themeMode === 'dark' ? '#fff' : '#000'),
-                            cursor: 'pointer',
-                            fontSize: '14px',
-                            fontWeight: isSelected ? '600' : '500',
-                            transition: 'all 0.2s ease',
-                            position: 'relative'
+                            justifyContent: 'center'
                           }}
-                          onMouseEnter={(e) => {
-                            if (!isSelected) {
-                              e.currentTarget.style.background = themeMode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)';
-                              e.currentTarget.style.borderColor = `${themeColor}30`;
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!isSelected) {
-                              e.currentTarget.style.background = 'transparent';
-                              e.currentTarget.style.borderColor = 'transparent';
-                            }
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', opacity: 0.8 }}>
-                            {styleIcons[style]}
-                          </div>
-                          <span style={{ flex: 1, textAlign: 'left' }}>{styleLabels[style]}</span>
-                          {isSelected && (
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill={themeColor}>
-                              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                            </svg>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
+                        >×</button>
+                      </div>
+
+                      {/* Aspect Ratio Selection */}
+                      <div style={{ marginBottom: '24px' }}>
+                        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
+                          Aspect Ratio
+                        </label>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                          {(['square', 'landscape', 'portrait'] as const).map((ratio) => (
+                            <button
+                              key={ratio}
+                              onClick={() => setAiAspectRatio(ratio)}
+                              style={{
+                                flex: 1,
+                                padding: '12px',
+                                borderRadius: '8px',
+                                border: aiAspectRatio === ratio ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
+                                background: aiAspectRatio === ratio ? `${themeColor}15` : 'transparent',
+                                color: aiAspectRatio === ratio ? themeColor : (themeMode === 'dark' ? '#fff' : '#000'),
+                                cursor: 'pointer',
+                                fontWeight: aiAspectRatio === ratio ? '600' : '500',
+                                fontSize: '13px',
+                                transition: 'all 0.2s'
+                              }}
+                            >
+                              {ratio === 'square' && '1:1'}
+                              {ratio === 'landscape' && '16:9'}
+                              {ratio === 'portrait' && '9:16'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Style Grid */}
+                      <div style={{ marginBottom: '16px' }}>
+                        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
+                          Rendering Style
+                        </label>
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                          gap: '12px'
+                        }}>
+                          {(['photorealistic', 'product', 'minimalist', 'modern', 'luxury', 'artistic', 'cinematic', 'bright', 'cozy', 'industrial'] as const).map((style) => (
+                            <button
+                              key={style}
+                              onClick={() => setAiRenderStyle(style)}
+                              style={{
+                                padding: '16px 12px',
+                                borderRadius: '10px',
+                                border: aiRenderStyle === style ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
+                                background: aiRenderStyle === style ? `${themeColor}15` : (themeMode === 'dark' ? '#252525' : '#f8f8f8'),
+                                color: themeMode === 'dark' ? '#fff' : '#000',
+                                cursor: 'pointer',
+                                fontSize: '13px',
+                                fontWeight: aiRenderStyle === style ? '600' : '500',
+                                transition: 'all 0.2s',
+                                textAlign: 'center',
+                                textTransform: 'capitalize'
+                              }}
+                              onMouseEnter={(e) => {
+                                if (aiRenderStyle !== style) {
+                                  e.currentTarget.style.borderColor = `${themeColor}80`;
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (aiRenderStyle !== style) {
+                                  e.currentTarget.style.borderColor = themeMode === 'dark' ? '#333' : '#ddd';
+                                }
+                              }}
+                            >
+                              {style}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Render Button */}
+                      <button
+                        onClick={() => {
+                          setShowStyleMenu(false);
+                          handleAIRender();
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '14px',
+                          borderRadius: '10px',
+                          border: 'none',
+                          background: `linear-gradient(135deg, ${themeColor} 0%, ${themeColor}cc 100%)`,
+                          color: 'white',
+                          fontSize: '15px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          boxShadow: `0 4px 15px ${themeColor}40`
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.boxShadow = `0 6px 20px ${themeColor}60`;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = `0 4px 15px ${themeColor}40`;
+                        }}
+                      >
+                        Generate AI Render
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
