@@ -22,20 +22,20 @@ const GallerySection: React.FC = () => {
     // Col 4: Tall (3/4) + Short (4/3)
     const galleryItems = [
         // Column 1
-        { video: '/movie/home design idea/grok-video-d212ece1-07fb-4d66-a4b5-f3561146a473.mp4', category: 'Kitchen', count: 3, aspectRatio: '4/3' },
-        { video: '/movie/home design idea/grok-video-75d17e72-2b87-4017-be4f-b584b1999f20.mp4', category: 'Kitchen', count: 4, aspectRatio: '3/4' },
+        { video: '/movie/home design idea/grok-video-d212ece1-07fb-4d66-a4b5-f3561146a473.mp4', category: 'Kitchen', aspectRatio: '4/3' },
+        { video: '/movie/home design idea/grok-video-75d17e72-2b87-4017-be4f-b584b1999f20.mp4', category: 'Kitchen', aspectRatio: '3/4' },
 
         // Column 2
-        { video: '/movie/home design idea/grok-video-7daf9bfd-c0fa-4f65-8e42-c389c8dcd374.mp4', category: 'Living Room', count: 4, aspectRatio: '3/4' },
-        { video: '/movie/home design idea/grok-video-fc359090-b8ab-4b5e-9b4e-1e2928c54bfe.mp4', category: 'Dining Room', count: 5, aspectRatio: '4/3' },
+        { video: '/movie/home design idea/grok-video-7daf9bfd-c0fa-4f65-8e42-c389c8dcd374.mp4', category: 'Living Room', aspectRatio: '3/4' },
+        { video: '/movie/home design idea/grok-video-fc359090-b8ab-4b5e-9b4e-1e2928c54bfe.mp4', category: 'Dining Room', aspectRatio: '4/3' },
 
         // Column 3
-        { video: '/movie/home design idea/grok-video-199aabee-e828-46b6-aada-ef076d6ea6ef.mp4', category: 'Kitchen', count: 4, aspectRatio: '4/3' },
-        { video: '/movie/home design idea/grok-video-514eee92-3ffd-4dd0-9c12-bafa06514d21.mp4', category: 'Living Room', count: 4, aspectRatio: '3/4' },
+        { video: '/movie/home design idea/grok-video-199aabee-e828-46b6-aada-ef076d6ea6ef.mp4', category: 'Kitchen', aspectRatio: '4/3' },
+        { video: '/movie/home design idea/grok-video-514eee92-3ffd-4dd0-9c12-bafa06514d21.mp4', category: 'Living Room', aspectRatio: '3/4' },
 
         // Column 4
-        { video: '/movie/home design idea/grok-video-bc77a3b4-ebcd-410f-bc9c-849e3a9d18b8.mp4', category: 'Bedroom', count: 4, aspectRatio: '3/4' },
-        { video: '/movie/home design idea/grok-video-1a9ba27c-8fd6-4a36-8525-d4bbe8dd23cd.mp4', category: 'Bedroom', count: 4, aspectRatio: '4/3' }
+        { video: '/movie/home design idea/grok-video-bc77a3b4-ebcd-410f-bc9c-849e3a9d18b8.mp4', category: 'Bedroom', aspectRatio: '3/4' },
+        { video: '/movie/home design idea/grok-video-1a9ba27c-8fd6-4a36-8525-d4bbe8dd23cd.mp4', category: 'Bedroom', aspectRatio: '4/3' }
     ];
 
     return (
@@ -76,7 +76,7 @@ const GallerySection: React.FC = () => {
                             <div className={styles.masonryOverlay}>
                                 <div className={styles.masonryBadge}>
                                     <BiJoystick size={16} />
-                                    <span>Play ({item.count})</span>
+                                    <span>Play</span>
                                 </div>
                             </div>
                         </div>
