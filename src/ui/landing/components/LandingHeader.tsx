@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { auth } from '../../../lib/firebase';
 import styles from '../../../pages/LandingPage.module.css';
 
 interface LandingHeaderProps {
@@ -9,6 +11,8 @@ interface LandingHeaderProps {
 
 const LandingHeader: React.FC<LandingHeaderProps> = ({ onLoginClick, onStartClick }) => {
     const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+    const [user, setUser] = useState<User | null>(null);
+    const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
     const handleMouseEnter = (menu: string) => setActiveDropdown(menu);
     const handleMouseLeave = () => setActiveDropdown(null);
@@ -19,6 +23,15 @@ const LandingHeader: React.FC<LandingHeaderProps> = ({ onLoginClick, onStartClic
     const [themeSettingsOpen, setThemeSettingsOpen] = useState(false);
     const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
     const [themeColor, setThemeColor] = useState<string>('#3dbc58'); // Default Archiple Green
+
+    // Monitor authentication state
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+            setUser(currentUser);
+        });
+
+        return () => unsubscribe();
+    }, []);
 
     // Load theme from localStorage on mount
     React.useEffect(() => {
@@ -59,11 +72,36 @@ const LandingHeader: React.FC<LandingHeaderProps> = ({ onLoginClick, onStartClic
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [themeSettingsOpen]);
 
+    // Close profile menu when clicking outside
+    React.useEffect(() => {
+        if (!profileMenuOpen) return;
+
+        const handleClickOutside = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            if (!target.closest(`.${styles.profileWrapper}`)) {
+                setProfileMenuOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [profileMenuOpen]);
+
     const navigate = useNavigate();
 
     const handleNavClick = (page: string) => {
         navigate(`/page/${page}`);
         setIsMobileMenuOpen(false);
+    };
+
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+            setProfileMenuOpen(false);
+            console.log('Logged out successfully');
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
     };
 
     return (
@@ -199,7 +237,10 @@ const LandingHeader: React.FC<LandingHeaderProps> = ({ onLoginClick, onStartClic
                                     <div className={styles.themeSection}>
                                         <h4 className={styles.themeTitle}>Accent Color</h4>
                                         <div className={styles.colorGrid}>
-                                            {['#3dbc58', '#3fae7a', '#3498db', '#9b59b6', '#e74c3c', '#f1c40f'].map((color) => (
+                                            {[
+                                                '#3dbc58', '#3fae7a', '#3498db',
+                                                '#9b59b6', '#e74c3c', '#f1c40f'
+                                            ].map((color) => (
                                                 <button
                                                     key={color}
                                                     className={`${styles.colorOption} ${themeColor === color ? styles.active : ''}`}
@@ -209,11 +250,8 @@ const LandingHeader: React.FC<LandingHeaderProps> = ({ onLoginClick, onStartClic
                                                 />
                                             ))}
                                         </div>
-                                    </div>
-
-                                    <div className={styles.themeSection}>
-                                        <h4 className={styles.themeTitle}>Custom Color</h4>
-                                        <div className={styles.customColorPicker}>
+                                        <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <label style={{ fontSize: '12px', color: 'var(--gray-600)', fontWeight: 500 }}>Custom:</label>
                                             <input
                                                 type="color"
                                                 value={themeColor}
@@ -227,9 +265,68 @@ const LandingHeader: React.FC<LandingHeaderProps> = ({ onLoginClick, onStartClic
                             )}
                         </div>
 
-                        <button className={styles.btnLogin} onClick={() => navigate('/login')}>Login</button>
-                        <button className={styles.btnStart} onClick={onStartClick}>Start for Free</button>
-                        <button className={styles.btnDemo}>Book a Demo</button>
+                        {user ? (
+                            /* Logged in: Show profile */
+                            <div className={styles.profileWrapper} style={{ position: 'relative' }}>
+                                <button
+                                    className={styles.profileBtn}
+                                    onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+                                >
+                                    <img
+                                        src={user.photoURL || 'https://via.placeholder.com/40'}
+                                        alt={user.displayName || 'User'}
+                                        className={styles.profileImage}
+                                    />
+                                </button>
+
+                                {profileMenuOpen && (
+                                    <div className={styles.profileMenu}>
+                                        <div className={styles.profileMenuHeader}>
+                                            <img
+                                                src={user.photoURL || 'https://via.placeholder.com/40'}
+                                                alt={user.displayName || 'User'}
+                                                className={styles.profileMenuImage}
+                                            />
+                                            <div className={styles.profileMenuInfo}>
+                                                <div className={styles.profileMenuName}>{user.displayName || 'User'}</div>
+                                                <div className={styles.profileMenuEmail}>{user.email}</div>
+                                            </div>
+                                        </div>
+                                        <div className={styles.profileMenuDivider} />
+                                        <button className={styles.profileMenuItem} onClick={() => navigate('/profile')}>
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                                <circle cx="12" cy="7" r="4" />
+                                            </svg>
+                                            Profile
+                                        </button>
+                                        <button className={styles.profileMenuItem} onClick={() => navigate('/settings')}>
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+                                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+                                            </svg>
+                                            Settings
+                                        </button>
+                                        <div className={styles.profileMenuDivider} />
+                                        <button className={styles.profileMenuItem} onClick={handleLogout}>
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                                                <polyline points="16 17 21 12 16 7" />
+                                                <line x1="21" y1="12" x2="9" y2="12" />
+                                            </svg>
+                                            Logout
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            /* Not logged in: Show login buttons */
+                            <>
+                                <button className={styles.btnLogin} onClick={onLoginClick}>Login</button>
+                                <button className={styles.btnStart} onClick={onStartClick}>Start for Free</button>
+                                <button className={styles.btnDemo}>Book a Demo</button>
+                            </>
+                        )}
 
                         {/* Mobile Menu Toggle */}
                         <button
@@ -258,7 +355,7 @@ const LandingHeader: React.FC<LandingHeaderProps> = ({ onLoginClick, onStartClic
                         <a href="#" className={styles.mobileNavLink}>Enterprise</a>
                         <a href="#" className={styles.mobileNavLink}>Education</a>
                         <div className={styles.mobileMenuDivider} />
-                        <button className={styles.mobileBtn} onClick={() => navigate('/login')}>Login</button>
+                        <button className={styles.mobileBtn} onClick={onLoginClick}>Login</button>
                         <button className={styles.mobileBtnPrimary} onClick={onStartClick}>Start for Free</button>
                     </div>
                 )}

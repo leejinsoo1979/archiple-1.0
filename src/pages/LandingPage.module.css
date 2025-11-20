@@ -219,6 +219,111 @@
     background: var(--gray-400);
 }
 
+/* Profile Styles */
+.profileWrapper {
+    position: relative;
+}
+
+.profileBtn {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    border-radius: 50%;
+    overflow: hidden;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.profileImage {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.profileMenu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    background: var(--bg-main);
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    min-width: 240px;
+    z-index: 1000;
+    padding: 8px 0;
+}
+
+.profileMenuHeader {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+}
+
+.profileMenuImage {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.profileMenuInfo {
+    flex: 1;
+    min-width: 0;
+}
+
+.profileMenuName {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--dark);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.profileMenuEmail {
+    font-size: 12px;
+    color: var(--gray-600);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.profileMenuDivider {
+    height: 1px;
+    background: var(--gray-200);
+    margin: 8px 0;
+}
+
+.profileMenuItem {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background: none;
+    border: none;
+    color: var(--dark);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    text-align: left;
+}
+
+.profileMenuItem:hover {
+    background: var(--bg-surface-hover);
+}
+
+.profileMenuItem svg {
+    color: var(--gray-600);
+}
+
 /* Theme Settings */
 .themeSettingsBtn {
     width: 36px;
