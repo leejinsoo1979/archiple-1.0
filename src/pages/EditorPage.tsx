@@ -47,6 +47,7 @@ const EditorPage = () => {
   const [aiAspectRatio, setAiAspectRatio] = useState<'1:1' | '2:3' | '3:2' | '3:4' | '4:3' | '4:5' | '5:4' | '9:16' | '16:9' | '21:9'>('1:1');
   const [aiTimeOfDay, setAiTimeOfDay] = useState<'day' | 'golden_hour' | 'blue_hour' | 'night' | 'overcast'>('day');
   const [aiLightingMood, setAiLightingMood] = useState<'bright' | 'soft' | 'moody' | 'dramatic'>('soft');
+  const [aiFurnitureStyle, setAiFurnitureStyle] = useState<'modern' | 'classic' | 'scandinavian' | 'industrial' | 'luxury' | 'minimalist'>('modern');
   const [aiRenderPanelOpen, setAiRenderPanelOpen] = useState(false);
   const [aiInputImage, setAiInputImage] = useState<string | null>(null);
   const [aiOutputImage, setAiOutputImage] = useState<string | null>(null);
@@ -330,9 +331,24 @@ const EditorPage = () => {
     return timeDescriptions[timeOfDay][mood];
   };
 
+  // Generate furniture style description
+  const getFurniturePrompt = (furnitureStyle: typeof aiFurnitureStyle): string => {
+    const furnitureDescriptions = {
+      modern: 'Contemporary modern furniture with clean lines, smooth surfaces, neutral colors (white, gray, black, beige), glass and metal accents, minimal ornamentation, functional design, sleek silhouettes, geometric shapes',
+      classic: 'Traditional classic furniture with ornate details, carved wood, rich fabrics (velvet, silk, leather), warm wood tones (mahogany, cherry, walnut), elegant curves, decorative elements, timeless sophistication, luxury materials',
+      scandinavian: 'Scandinavian Nordic furniture with light wood (oak, ash, birch), simple functional forms, natural materials, white and neutral palette, cozy textiles (wool, linen), organic shapes, hygge aesthetic, minimalist elegance',
+      industrial: 'Industrial loft furniture with exposed materials, raw metal (steel, iron), reclaimed wood, concrete surfaces, Edison bulbs, utilitarian design, weathered finishes, factory-inspired pieces, urban edge',
+      luxury: 'High-end luxury furniture with premium materials (marble, brass, gold accents), designer pieces, plush upholstery, rich textures, statement pieces, sophisticated color palette, artisan craftsmanship, opulent details',
+      minimalist: 'Ultra-minimalist furniture with essential pieces only, pure geometric forms, monochromatic palette, hidden storage, clean flat surfaces, no decoration, Japanese-inspired simplicity, zen aesthetic'
+    };
+
+    return furnitureDescriptions[furnitureStyle];
+  };
+
   // Generate style-specific prompts for AI rendering
-  const getStylePrompt = (style: typeof aiRenderStyle, timeOfDay: typeof aiTimeOfDay, mood: typeof aiLightingMood): string => {
+  const getStylePrompt = (style: typeof aiRenderStyle, timeOfDay: typeof aiTimeOfDay, mood: typeof aiLightingMood, furnitureStyle: typeof aiFurnitureStyle): string => {
     const lightingDescription = getLightingPrompt(timeOfDay, mood);
+    const furnitureDescription = getFurniturePrompt(furnitureStyle);
 
     switch (style) {
       case 'photorealistic':
@@ -342,6 +358,10 @@ CRITICAL REQUIREMENTS - PRESERVE EXACT LAYOUT:
 - Keep the EXACT same room layout, wall positions, window locations, door placements
 - Maintain ALL furniture positions and arrangements EXACTLY as shown
 - Preserve the camera angle, perspective, and composition PRECISELY
+
+FURNITURE STYLE REQUIREMENT:
+Transform all furniture and decor to match this aesthetic: ${furnitureDescription}
+Apply this style consistently to ALL furniture pieces, decor items, and accessories while maintaining their exact positions and proportions.
 
 MATERIALS & TEXTURES (Maximum Realism):
 - Wood surfaces: Show REAL wood grain patterns, subtle color variations, natural knots, slight wear marks, authentic surface reflections
@@ -546,11 +566,12 @@ ARTISTIC APPROACH:
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-image' });
 
-      const prompt = getStylePrompt(aiRenderStyle, aiTimeOfDay, aiLightingMood);
+      const prompt = getStylePrompt(aiRenderStyle, aiTimeOfDay, aiLightingMood, aiFurnitureStyle);
 
       console.log('[EditorPage] Prompt:', prompt);
       console.log('[EditorPage] Time of day:', aiTimeOfDay);
       console.log('[EditorPage] Lighting mood:', aiLightingMood);
+      console.log('[EditorPage] Furniture style:', aiFurnitureStyle);
       console.log('[EditorPage] Aspect ratio:', aiAspectRatio);
       console.log('[EditorPage] Base64 length:', base64.length);
 
@@ -2145,6 +2166,46 @@ ARTISTIC APPROACH:
                       </div>
                     </div>
 
+                    {/* Furniture Style */}
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '10px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
+                        Furniture Style
+                      </label>
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(3, 1fr)',
+                        gap: '8px'
+                      }}>
+                        {([
+                          { value: 'modern', label: 'Modern' },
+                          { value: 'classic', label: 'Classic' },
+                          { value: 'scandinavian', label: 'Scandinavian' },
+                          { value: 'industrial', label: 'Industrial' },
+                          { value: 'luxury', label: 'Luxury' },
+                          { value: 'minimalist', label: 'Minimalist' }
+                        ] as const).map((furniture) => (
+                          <button
+                            key={furniture.value}
+                            onClick={() => setAiFurnitureStyle(furniture.value)}
+                            style={{
+                              padding: '10px 6px',
+                              borderRadius: '6px',
+                              border: aiFurnitureStyle === furniture.value ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
+                              background: aiFurnitureStyle === furniture.value ? `${themeColor}15` : 'transparent',
+                              color: aiFurnitureStyle === furniture.value ? themeColor : (themeMode === 'dark' ? '#fff' : '#000'),
+                              cursor: 'pointer',
+                              fontWeight: aiFurnitureStyle === furniture.value ? '600' : '500',
+                              fontSize: '11px',
+                              transition: 'all 0.2s',
+                              textAlign: 'center'
+                            }}
+                          >
+                            {furniture.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     {/* Time of Day */}
                     <div style={{ marginBottom: '16px' }}>
                       <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '10px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
@@ -2156,11 +2217,11 @@ ARTISTIC APPROACH:
                         gap: '8px'
                       }}>
                         {([
-                          { value: 'day', label: '☀️ Day' },
-                          { value: 'golden_hour', label: '🌅 Golden' },
-                          { value: 'blue_hour', label: '🌆 Blue Hour' },
-                          { value: 'night', label: '🌙 Night' },
-                          { value: 'overcast', label: '☁️ Overcast' }
+                          { value: 'day', label: 'Day' },
+                          { value: 'golden_hour', label: 'Golden Hour' },
+                          { value: 'blue_hour', label: 'Blue Hour' },
+                          { value: 'night', label: 'Night' },
+                          { value: 'overcast', label: 'Overcast' }
                         ] as const).map((time) => (
                           <button
                             key={time.value}
@@ -2195,10 +2256,10 @@ ARTISTIC APPROACH:
                         gap: '8px'
                       }}>
                         {([
-                          { value: 'bright', label: '☀️ Bright' },
-                          { value: 'soft', label: '🌤️ Soft' },
-                          { value: 'moody', label: '🌥️ Moody' },
-                          { value: 'dramatic', label: '⚡ Dramatic' }
+                          { value: 'bright', label: 'Bright' },
+                          { value: 'soft', label: 'Soft' },
+                          { value: 'moody', label: 'Moody' },
+                          { value: 'dramatic', label: 'Dramatic' }
                         ] as const).map((mood) => (
                           <button
                             key={mood.value}
