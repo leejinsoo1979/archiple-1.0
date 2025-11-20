@@ -443,7 +443,20 @@ const EditorPage = () => {
       if (loadingMessage) {
         document.body.removeChild(loadingMessage);
       }
-      alert('AI 렌더링 실패: ' + (error as Error).message);
+
+      // Handle specific error types
+      const errorMessage = (error as Error).message;
+      if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('Quota')) {
+        alert('AI 렌더링 실패: API 무료 할당량 초과\n\n' +
+          '• Google Gemini API 무료 요청 한도에 도달했습니다.\n' +
+          '• 잠시 후 다시 시도하거나 내일 다시 시도해주세요.\n' +
+          '• 또는 Google Cloud Console에서 유료 플랜으로 업그레이드하세요.\n\n' +
+          '자세한 정보: https://ai.google.dev/gemini-api/docs/rate-limits');
+      } else if (errorMessage.includes('API key')) {
+        alert('AI 렌더링 실패: API 키 오류\n\nGemini API 키를 확인해주세요.');
+      } else {
+        alert('AI 렌더링 실패:\n\n' + errorMessage);
+      }
     }
   };
 
