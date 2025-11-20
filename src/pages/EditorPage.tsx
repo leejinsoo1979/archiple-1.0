@@ -143,7 +143,7 @@ const EditorPage = () => {
       };
 
       const { width, height } = resolutions[screenshotResolution];
-      console.log(`[EditorPage] 🎨 Starting ULTRA-QUALITY render at ${screenshotResolution} (${width}x${height})`);
+      console.log(`[EditorPage] Starting ULTRA-QUALITY render at ${screenshotResolution} (${width}x${height})`);
 
       // Show loading message
       const loadingMessage = document.createElement('div');
@@ -152,53 +152,122 @@ const EditorPage = () => {
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        background: rgba(0, 0, 0, 0.9);
+        background: #1a1a1a;
+        border: 1px solid #333;
         color: white;
-        padding: 30px 50px;
-        border-radius: 12px;
-        font-size: 18px;
+        padding: 40px 60px;
+        border-radius: 8px;
+        font-size: 16px;
         z-index: 10000;
         text-align: center;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        box-shadow: 0 10px 40px rgba(0,0,0,0.7);
+        min-width: 320px;
       `;
       loadingMessage.innerHTML = `
-        <div style="margin-bottom: 15px;">🎨 고품질 렌더링 중...</div>
-        <div style="font-size: 14px; color: #888;">
-          ${screenshotResolution.toUpperCase()} (${width}x${height})<br>
-          16K 그림자 + 8x MSAA
+        <div style="
+          width: 40px;
+          height: 40px;
+          border: 3px solid #333;
+          border-top: 3px solid #3dbc58;
+          border-radius: 50%;
+          margin: 0 auto 20px;
+          animation: spin 0.8s linear infinite;
+        "></div>
+        <style>
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        </style>
+        <div style="font-size: 18px; font-weight: 500; margin-bottom: 12px;">
+          Rendering
+        </div>
+        <div style="font-size: 14px; color: #888; line-height: 1.6;">
+          Resolution: ${screenshotResolution.toUpperCase()} (${width}x${height})<br>
+          Quality: Ultra (16K Shadows, 8x MSAA)
         </div>
       `;
       document.body.appendChild(loadingMessage);
 
-      const imageData = await babylon3DCanvasRef.current.captureRender(width, height);
+      const blobUrl = await babylon3DCanvasRef.current.captureRender(width, height);
+
+      console.log('[EditorPage] Blob URL created:', blobUrl);
 
       // Remove loading message
       document.body.removeChild(loadingMessage);
 
-      // Download immediately - must append to DOM for reliable download
+      // Download using Blob URL - with proper timing
       const link = document.createElement('a');
-      link.href = imageData;
+      link.href = blobUrl;
       link.download = `archiple_render_${screenshotResolution}_${Date.now()}.png`;
-      link.style.display = 'none';
       document.body.appendChild(link);
-      link.click();
 
-      // Remove link after a short delay
-      setTimeout(() => {
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
-      }, 100);
+      console.log('[EditorPage] Download link appended, preparing to click...');
 
-      console.log('[EditorPage] ✅ ULTRA-QUALITY render downloaded successfully');
+      // Use requestAnimationFrame to ensure DOM is ready
+      requestAnimationFrame(() => {
+        try {
+          link.click();
+          console.log('[EditorPage] Download triggered successfully');
+        } catch (error) {
+          console.error('[EditorPage] Click failed:', error);
+          // Fallback: try direct navigation
+          window.location.href = blobUrl;
+        }
+
+        // Clean up after download
+        setTimeout(() => {
+          if (link.parentNode) {
+            document.body.removeChild(link);
+          }
+          URL.revokeObjectURL(blobUrl);
+          console.log('[EditorPage] Download cleanup complete');
+        }, 2000);
+      });
 
       // Show success message
       const successMessage = document.createElement('div');
-      successMessage.style.cssText = loadingMessage.style.cssText;
+      successMessage.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #1a1a1a;
+        border: 1px solid #3dbc58;
+        color: white;
+        padding: 40px 60px;
+        border-radius: 8px;
+        font-size: 16px;
+        z-index: 10000;
+        text-align: center;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.7);
+        min-width: 320px;
+      `;
       successMessage.innerHTML = `
-        <div style="margin-bottom: 10px; font-size: 24px;">✅</div>
-        <div>렌더링 완료!</div>
-        <div style="font-size: 14px; color: #888; margin-top: 10px;">
-          ${screenshotResolution.toUpperCase()} 이미지가 다운로드되었습니다
+        <div style="
+          width: 48px;
+          height: 48px;
+          border: 3px solid #3dbc58;
+          border-radius: 50%;
+          margin: 0 auto 20px;
+          position: relative;
+        ">
+          <div style="
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -60%) rotate(45deg);
+            width: 12px;
+            height: 20px;
+            border: solid #3dbc58;
+            border-width: 0 3px 3px 0;
+          "></div>
+        </div>
+        <div style="font-size: 18px; font-weight: 500; margin-bottom: 12px;">
+          Render Complete
+        </div>
+        <div style="font-size: 14px; color: #888; line-height: 1.6;">
+          ${screenshotResolution.toUpperCase()} image downloaded
         </div>
       `;
       document.body.appendChild(successMessage);
