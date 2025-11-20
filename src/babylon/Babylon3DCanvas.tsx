@@ -333,58 +333,37 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
             }
           });
 
-          // Create ultra-quality rendering pipeline for the render target
-          const renderPipeline = new DefaultRenderingPipeline(
-            'ultraQualityPipeline',
-            true, // HDR
-            scene,
-            [camera]
-          );
+          // Add additional fill lights for Global Illumination effect
+          const additionalLights: PointLight[] = [];
 
-          // Ultra-quality SSAO (Ambient Occlusion) - adds depth and realism
-          renderPipeline.samples = 8; // 8x MSAA
-          renderPipeline.fxaaEnabled = true;
+          // Soft ambient fill light
+          const fillLight1 = new PointLight('renderFillLight1', new Vector3(0, 2, 0), scene);
+          fillLight1.intensity = 0.3;
+          fillLight1.diffuse = new Color3(1, 0.95, 0.9); // Warm white
+          fillLight1.range = 50;
+          additionalLights.push(fillLight1);
 
-          if (renderPipeline.imageProcessing) {
-            renderPipeline.imageProcessing.toneMappingEnabled = true;
-            renderPipeline.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
-            renderPipeline.imageProcessing.exposure = 1.0;
-            renderPipeline.imageProcessing.contrast = 1.1;
-            renderPipeline.imageProcessing.vignetteEnabled = false; // Keep clean
+          // Ceiling bounce light simulation
+          const fillLight2 = new PointLight('renderFillLight2', new Vector3(0, 2.3, 0), scene);
+          fillLight2.intensity = 0.2;
+          fillLight2.diffuse = new Color3(0.9, 0.92, 1); // Cool white (sky bounce)
+          fillLight2.range = 40;
+          additionalLights.push(fillLight2);
+
+          // Increase hemispheric light for better ambient
+          const hemisphericLight = scene.getLightByName('hemiLight') as HemisphericLight;
+          const originalHemiIntensity = hemisphericLight?.intensity || 0.7;
+          if (hemisphericLight) {
+            hemisphericLight.intensity = 0.4;
           }
 
-          // High-quality SSAO
-          const ssao = renderPipeline.ssaoRenderEffect?.ssao;
-          if (ssao) {
-            ssao.totalStrength = 1.5;
-            ssao.radius = 1.0;
-            ssao.area = 0.75;
-            ssao.fallOff = 0.002;
-            ssao.base = 0.1;
-            ssao.samples = 64; // Maximum quality
-          }
+          // Enable scene image processing for better colors
+          scene.imageProcessingConfiguration.toneMappingEnabled = true;
+          scene.imageProcessingConfiguration.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
+          scene.imageProcessingConfiguration.exposure = 1.0;
+          scene.imageProcessingConfiguration.contrast = 1.05;
 
-          // Subtle bloom for realism
-          renderPipeline.bloomEnabled = true;
-          if (renderPipeline.bloom) {
-            renderPipeline.bloom.bloomScale = 0.3;
-            renderPipeline.bloom.bloomWeight = 0.15;
-            renderPipeline.bloom.bloomKernel = 64;
-            renderPipeline.bloom.bloomThreshold = 0.9;
-          }
-
-          // Screen Space Reflections for realistic reflections
-          const ssr = renderPipeline.screenSpaceReflections;
-          if (ssr) {
-            ssr.enabled = true;
-            ssr.strength = 0.5;
-            ssr.reflectionSpecularFalloffExponent = 3;
-            ssr.maxDistance = 1000;
-            ssr.step = 1.0;
-            ssr.thickness = 0.5;
-          }
-
-          console.log('[Babylon3DCanvas] Ultra-quality rendering pipeline created with SSAO, Bloom, SSR, ACES tonemapping');
+          console.log('[Babylon3DCanvas] Ultra-quality rendering: Enhanced lighting + ACES tonemapping + 16K shadows');
 
           // Hide grid for clean render
           const gridMesh = infiniteGridRef.current;
@@ -523,6 +502,18 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
               scene.environmentIntensity = originalEnvIntensity;
 
+              // Restore hemispheric light
+              if (hemisphericLight) {
+                hemisphericLight.intensity = originalHemiIntensity;
+              }
+
+              // Remove additional fill lights
+              additionalLights.forEach(light => light.dispose());
+
+              // Restore scene image processing
+              scene.imageProcessingConfiguration.toneMappingEnabled = false;
+              scene.imageProcessingConfiguration.contrast = 1.0;
+
               // Restore grid visibility
               if (gridMesh && originalGridVisibility !== undefined) {
                 gridMesh.isVisible = originalGridVisibility;
@@ -538,9 +529,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
               originalMaterialMetallic.forEach((metallic, mat) => {
                 mat.metallic = metallic;
               });
-
-              // Dispose rendering pipeline
-              renderPipeline.dispose();
 
               console.log('[Babylon3DCanvas] All settings restored');
 
