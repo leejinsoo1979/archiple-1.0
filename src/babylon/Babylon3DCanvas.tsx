@@ -32,7 +32,8 @@ import {
   ImageProcessingConfiguration,
   RenderTargetTexture,
   Constants,
-  CSG
+  CSG,
+  Tools
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials/grid';
 import { SkyMaterial } from '@babylonjs/materials/sky';
