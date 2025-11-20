@@ -39,6 +39,7 @@ const EditorPage = () => {
   const [photoRealisticMode, setPhotoRealisticMode] = useState(false); // Photo-realistic rendering
   const [exportModalOpen, setExportModalOpen] = useState(false); // Export modal toggle
   const [aiRenderModalOpen, setAiRenderModalOpen] = useState(false); // New AI Render Modal toggle
+  const [capturedImage, setCapturedImage] = useState<string | null>(null); // Captured 3D view for AI
 
   // Screenshot resolution settings
   const [screenshotResolution, setScreenshotResolution] = useState<'1080p' | '4k' | '8k'>('4k');
@@ -399,15 +400,17 @@ const EditorPage = () => {
       console.log('[EditorPage] Aspect ratio:', aiAspectRatio);
       console.log('[EditorPage] Base64 length:', base64.length);
 
-      const result = await model.generateContent([
-        {
-          inlineData: {
-            mimeType: 'image/png',
-            data: base64,
+      const result = await model.generateContent({
+        contents: [
+          {
+            inlineData: {
+              mimeType: 'image/png',
+              data: base64,
+            },
           },
-        },
-        prompt,
-      ]);
+          { text: prompt },
+        ],
+      });
 
       const aiResponse = await result.response;
       console.log('[EditorPage] Gemini API response received');
@@ -2324,7 +2327,23 @@ const EditorPage = () => {
               {/* New AI Render Button (Nanobanana) */}
               <button
                 className={styles.topBtn}
-                onClick={() => setAiRenderModalOpen(true)}
+                onClick={() => {
+                  // Capture current view
+                  if (babylon3DCanvasRef.current) {
+                    try {
+                      // Get the canvas element
+                      const canvas = document.querySelector('canvas');
+                      if (canvas) {
+                        const dataUrl = canvas.toDataURL('image/png');
+                        setCapturedImage(dataUrl);
+                        console.log('[EditorPage] Captured 3D view for AI render');
+                      }
+                    } catch (e) {
+                      console.error('[EditorPage] Failed to capture screenshot:', e);
+                    }
+                  }
+                  setAiRenderModalOpen(true);
+                }}
                 title="AI Render (Nanobanana)"
                 style={{ marginLeft: '8px', color: themeColor }}
               >
@@ -3303,6 +3322,7 @@ const EditorPage = () => {
         onClose={() => setAiRenderModalOpen(false)}
         themeMode={themeMode}
         themeColor={themeColor}
+        initialImage={capturedImage}
       />
     </div>
   );
