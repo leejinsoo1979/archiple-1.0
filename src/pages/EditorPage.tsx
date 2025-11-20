@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import FloorplanCanvas from '../floorplan/FloorplanCanvas';
 import Babylon3DCanvas from '../babylon/Babylon3DCanvas';
 import styles from './EditorPage.module.css';
@@ -16,6 +17,7 @@ import { useCameraSettingsStore } from '../stores/cameraSettingsStore';
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 
 const EditorPage = () => {
+  const navigate = useNavigate();
   const setModalOpen = useCameraSettingsStore((state) => state.setModalOpen);
   const [_activeCategory, _setActiveCategory] = useState<ToolCategory>('walls');
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
@@ -1861,6 +1863,13 @@ const EditorPage = () => {
             <div className={styles.icon}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+              </svg>
+            </div>
+          </button>
+          <button className={styles.sidebarBtn} onClick={() => navigate('/')} title="나가기">
+            <div className={styles.icon}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
               </svg>
             </div>
           </button>
