@@ -33,7 +33,8 @@ import {
   RenderTargetTexture,
   Constants,
   CSG,
-  Tools
+  Tools,
+  Matrix
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials/grid';
 import { SkyMaterial } from '@babylonjs/materials/sky';
@@ -353,7 +354,24 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           // Render all meshes except grid
           renderTarget.renderList = scene.meshes.filter(m => m !== gridMesh);
 
-          console.log(`[Babylon3DCanvas] RenderTargetTexture created: ${width}x${height} with 8x MSAA`);
+          // Fix aspect ratio for render target by overriding getProjectionMatrix temporarily
+          const renderAspectRatio = width / height;
+          const originalGetProjectionMatrix = camera.getProjectionMatrix.bind(camera);
+
+          // Override getProjectionMatrix to use render target's aspect ratio
+          camera.getProjectionMatrix = (force?: boolean) => {
+            if (camera instanceof ArcRotateCamera) {
+              const fov = camera.fov;
+              const near = camera.minZ;
+              const far = camera.maxZ;
+
+              // Create new projection matrix with render target's aspect ratio
+              return Matrix.PerspectiveFovLH(fov, renderAspectRatio, near, far);
+            }
+            return originalGetProjectionMatrix(force);
+          };
+
+          console.log(`[Babylon3DCanvas] RenderTargetTexture created: ${width}x${height} with 8x MSAA (aspect: ${renderAspectRatio.toFixed(3)})`);
 
           // Render and capture
           renderTarget.onAfterRenderObservable.addOnce(() => {
@@ -426,6 +444,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
               // ===== STEP 3: Restore original settings =====
               engine.setHardwareScalingLevel(originalHardwareScaling);
+
+              // Restore camera projection matrix
+              camera.getProjectionMatrix = originalGetProjectionMatrix;
 
               if (shadowGen) {
                 shadowGen.mapSize = originalShadowMapSize;
