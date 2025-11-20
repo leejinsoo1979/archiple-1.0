@@ -127,7 +127,7 @@ const EditorPage = () => {
   // Babylon3DCanvas ref for screenshot capture
   const babylon3DCanvasRef = useRef<{ captureRender: (width: number, height: number) => Promise<string> } | null>(null);
 
-  // Capture and download screenshot
+  // Capture and download high-quality render
   const handleCaptureScreenshot = async () => {
     if (!babylon3DCanvasRef.current) {
       alert('3D 뷰를 먼저 로드해주세요.');
@@ -143,20 +143,62 @@ const EditorPage = () => {
       };
 
       const { width, height } = resolutions[screenshotResolution];
-      console.log(`[EditorPage] Capturing screenshot at ${screenshotResolution} (${width}x${height})`);
+      console.log(`[EditorPage] 🎨 Starting ULTRA-QUALITY render at ${screenshotResolution} (${width}x${height})`);
+
+      // Show loading message
+      const loadingMessage = document.createElement('div');
+      loadingMessage.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
+        padding: 30px 50px;
+        border-radius: 12px;
+        font-size: 18px;
+        z-index: 10000;
+        text-align: center;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      `;
+      loadingMessage.innerHTML = `
+        <div style="margin-bottom: 15px;">🎨 고품질 렌더링 중...</div>
+        <div style="font-size: 14px; color: #888;">
+          ${screenshotResolution.toUpperCase()} (${width}x${height})<br>
+          16K 그림자 + 8x MSAA
+        </div>
+      `;
+      document.body.appendChild(loadingMessage);
 
       const imageData = await babylon3DCanvasRef.current.captureRender(width, height);
+
+      // Remove loading message
+      document.body.removeChild(loadingMessage);
 
       // Download immediately
       const link = document.createElement('a');
       link.href = imageData;
-      link.download = `render_${screenshotResolution}_${Date.now()}.png`;
+      link.download = `archiple_render_${screenshotResolution}_${Date.now()}.png`;
       link.click();
 
-      console.log('[EditorPage] ✅ Screenshot downloaded successfully');
+      console.log('[EditorPage] ✅ ULTRA-QUALITY render downloaded successfully');
+
+      // Show success message
+      const successMessage = document.createElement('div');
+      successMessage.style.cssText = loadingMessage.style.cssText;
+      successMessage.innerHTML = `
+        <div style="margin-bottom: 10px; font-size: 24px;">✅</div>
+        <div>렌더링 완료!</div>
+        <div style="font-size: 14px; color: #888; margin-top: 10px;">
+          ${screenshotResolution.toUpperCase()} 이미지가 다운로드되었습니다
+        </div>
+      `;
+      document.body.appendChild(successMessage);
+      setTimeout(() => document.body.removeChild(successMessage), 2000);
+
     } catch (error) {
-      console.error('[EditorPage] Screenshot failed:', error);
-      alert('스크린샷 실패: ' + (error as Error).message);
+      console.error('[EditorPage] Render failed:', error);
+      alert('렌더링 실패: ' + (error as Error).message);
     }
   };
 
