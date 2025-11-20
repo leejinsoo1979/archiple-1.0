@@ -406,7 +406,7 @@ const EditorPage = () => {
 
       const result = await model.generateContent({
         contents: contentParts,
-        generationConfig: {
+        config: {
           imageConfig: {
             aspectRatio: aiAspectRatio,
           },
@@ -458,12 +458,14 @@ const EditorPage = () => {
 
     } catch (error) {
       console.error('[EditorPage] AI rendering failed:', error);
+      console.error('[EditorPage] Error details:', JSON.stringify(error, null, 2));
       if (loadingMessage) {
         document.body.removeChild(loadingMessage);
       }
 
       // Handle specific error types
-      const errorMessage = (error as Error).message;
+      const errorMessage = (error as Error).message || String(error);
+
       if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('Quota')) {
         alert('AI 렌더링 실패: API 무료 할당량 초과\n\n' +
           '• Google Gemini API 무료 요청 한도에 도달했습니다.\n' +
@@ -473,7 +475,7 @@ const EditorPage = () => {
       } else if (errorMessage.includes('API key')) {
         alert('AI 렌더링 실패: API 키 오류\n\nGemini API 키를 확인해주세요.');
       } else {
-        alert('AI 렌더링 실패:\n\n' + errorMessage);
+        alert('AI 렌더링 실패:\n\n' + errorMessage + '\n\n상세 정보는 콘솔을 확인하세요.');
       }
     }
   };
