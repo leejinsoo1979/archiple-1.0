@@ -2029,18 +2029,36 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     if (!scene) return;
 
     const hemisphericLight = scene.getLightByName('hemiLight') as HemisphericLight;
-    if (!hemisphericLight) return;
+    const sunLight = sunLightRef.current;
+    if (!hemisphericLight || !sunLight) return;
+
+    // Count windows to determine if natural light should enter
+    const windowCount = floorplanData?.windows?.length || 0;
 
     if (playMode) {
       // Reduce ambient light in play mode to simulate indoor lighting with ceiling
       hemisphericLight.intensity = 0.2;
+
+      // Disable sunlight if there are no windows (no natural light can enter)
+      if (windowCount === 0) {
+        sunLight.intensity = 0;
+        console.log('[Babylon3DCanvas] Disabled sunlight for play mode (no windows)');
+      } else {
+        // Restore sunlight if windows exist
+        const intensity = sunSettings?.intensity ?? 1.5;
+        sunLight.intensity = intensity;
+        console.log(`[Babylon3DCanvas] Enabled sunlight for play mode (${windowCount} windows, intensity: ${intensity})`);
+      }
+
       console.log('[Babylon3DCanvas] Reduced hemispheric light for play mode (intensity: 0.2)');
     } else {
-      // Restore normal ambient light for editing mode
+      // Restore normal ambient light and sunlight for editing mode
       hemisphericLight.intensity = 0.7;
-      console.log('[Babylon3DCanvas] Restored hemispheric light for edit mode (intensity: 0.7)');
+      const intensity = sunSettings?.intensity ?? 1.5;
+      sunLight.intensity = intensity;
+      console.log('[Babylon3DCanvas] Restored hemispheric light and sunlight for edit mode');
     }
-  }, [playMode]);
+  }, [playMode, floorplanData?.windows, sunSettings?.intensity]);
 
   // Update sun light and skybox when settings change
   useEffect(() => {
