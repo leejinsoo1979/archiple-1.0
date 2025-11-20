@@ -780,7 +780,7 @@ const EditorPage = () => {
                             textAlign: 'center',
                             color: '#999',
                             fontSize: '12px',
-                            background: '#f9f9f9',
+                            background: 'var(--bg-tertiary)',
                             borderRadius: '4px'
                           }}>
                             배치된 조명이 없습니다
@@ -802,7 +802,7 @@ const EditorPage = () => {
                             >
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div style={{ flex: 1 }}>
-                                  <div style={{ fontSize: '13px', fontWeight: '500', color: '#333', marginBottom: '4px' }}>
+                                  <div style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '4px' }}>
                                     [{light.type === 'point' ? '포인트' : light.type === 'spot' ? '스포트' : '방향성'}] {light.name}
                                   </div>
                                   <div style={{ fontSize: '11px', color: '#999' }}>
@@ -841,7 +841,7 @@ const EditorPage = () => {
                       const selectedLight = lights.find(l => l.id === selectedLightId)!;
                       return (
                         <div style={{ borderTop: '1px solid #eee', paddingTop: '16px', marginTop: '8px' }}>
-                          <div style={{ fontSize: '13px', fontWeight: '600', color: '#333', marginBottom: '12px' }}>
+                          <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '12px' }}>
                             상세 설정
                           </div>
 
@@ -859,7 +859,7 @@ const EditorPage = () => {
                               style={{
                                 width: '100%',
                                 padding: '8px',
-                                border: '1px solid #ddd',
+                                border: '1px solid var(--border-color)',
                                 borderRadius: '4px',
                                 fontSize: '13px',
                               }}
@@ -906,12 +906,12 @@ const EditorPage = () => {
                                 style={{
                                   width: '50px',
                                   height: '32px',
-                                  border: '1px solid #ddd',
+                                  border: '1px solid var(--border-color)',
                                   borderRadius: '4px',
                                   cursor: 'pointer',
                                 }}
                               />
-                              <span style={{ fontSize: '12px', color: '#666' }}>
+                              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                                 RGB({selectedLight.color.r}, {selectedLight.color.g}, {selectedLight.color.b})
                               </span>
                             </div>
@@ -2212,11 +2212,11 @@ const EditorPage = () => {
             zIndex: 2000,
             minWidth: '320px',
           }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600', color: '#333' }}>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)' }}>
               벽 치수 수정
             </h3>
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#666', fontWeight: '500' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500' }}>
                 치수 (mm):
               </label>
               <input
@@ -2234,9 +2234,11 @@ const EditorPage = () => {
                 style={{
                   width: '100%',
                   padding: '10px 12px',
-                  border: '1px solid #ddd',
+                  border: '1px solid var(--border-color)',
                   borderRadius: '4px',
                   fontSize: '14px',
+                  background: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
                 }}
               />
             </div>
@@ -2248,9 +2250,9 @@ const EditorPage = () => {
                 }}
                 style={{
                   padding: '8px 16px',
-                  background: '#f5f5f5',
-                  color: '#666',
-                  border: '1px solid #ddd',
+                  background: 'var(--bg-tertiary)',
+                  color: 'var(--text-secondary)',
+                  border: '1px solid var(--border-color)',
                   borderRadius: '4px',
                   fontSize: '13px',
                   fontWeight: '500',
@@ -2263,7 +2265,7 @@ const EditorPage = () => {
                 onClick={handleDimensionSubmit}
                 style={{
                   padding: '8px 20px',
-                  background: '#3fae7a',
+                  background: 'var(--theme-color)',
                   color: 'white',
                   border: 'none',
                   borderRadius: '4px',
@@ -2292,7 +2294,7 @@ const EditorPage = () => {
             zIndex: 2000,
             minWidth: '200px',
           }}>
-            <div style={{ marginBottom: '8px', fontSize: '12px', color: '#666', fontWeight: '500' }}>
+            <div style={{ marginBottom: '8px', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '500' }}>
               실제 거리 입력:
             </div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -2308,12 +2310,14 @@ const EditorPage = () => {
                 style={{
                   flex: 1,
                   padding: '6px 8px',
-                  border: '1px solid #ddd',
+                  border: '1px solid var(--border-color)',
                   borderRadius: '4px',
                   fontSize: '13px',
+                  background: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
                 }}
               />
-              <span style={{ fontSize: '13px', color: '#666' }}>mm</span>
+              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>mm</span>
             </div>
             <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
               <button
@@ -2321,9 +2325,9 @@ const EditorPage = () => {
                 style={{
                   flex: 1,
                   padding: '6px 12px',
-                  background: '#f5f5f5',
-                  color: '#666',
-                  border: '1px solid #ddd',
+                  background: 'var(--bg-tertiary)',
+                  color: 'var(--text-secondary)',
+                  border: '1px solid var(--border-color)',
                   borderRadius: '4px',
                   fontSize: '12px',
                   cursor: 'pointer',
@@ -2361,7 +2365,7 @@ const EditorPage = () => {
             background: 'white',
             padding: '16px 24px',
             borderRadius: '4px',
-            border: '1px solid #ddd',
+            border: '1px solid var(--border-color)',
             display: 'flex',
             flexDirection: 'column',
             gap: '16px',
@@ -2371,7 +2375,7 @@ const EditorPage = () => {
           }}>
             {/* Ruler Guide Instructions */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '13px', color: '#666', fontWeight: '500' }}>
+              <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500' }}>
                 🎯 줄자 가이드를 드래그해서 이미지의 알려진 치수에 맞추세요
               </span>
             </div>
@@ -2379,7 +2383,7 @@ const EditorPage = () => {
             {/* Distance Input (always visible when ruler is present) */}
             {rulerVisible && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <label style={{ fontSize: '13px', color: '#666', fontWeight: '500', minWidth: '80px' }}>
+                <label style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', minWidth: '80px' }}>
                   실제 거리:
                 </label>
                 <input
@@ -2390,12 +2394,12 @@ const EditorPage = () => {
                   style={{
                     flex: 1,
                     padding: '8px 12px',
-                    border: '1px solid #ddd',
+                    border: '1px solid var(--border-color)',
                     borderRadius: '4px',
                     fontSize: '13px',
                   }}
                 />
-                <span style={{ fontSize: '13px', color: '#666' }}>mm</span>
+                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>mm</span>
                 <button
                   onClick={handleRulerSubmit}
                   style={{
@@ -2416,7 +2420,7 @@ const EditorPage = () => {
 
             {/* Image Visibility Toggle */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <label style={{ fontSize: '13px', color: '#666', fontWeight: '500', minWidth: '80px' }}>
+              <label style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', minWidth: '80px' }}>
                 이미지 표시:
               </label>
               <button
@@ -2440,7 +2444,7 @@ const EditorPage = () => {
             {/* Opacity Control */}
             {showBackgroundImage && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <label style={{ fontSize: '13px', color: '#666', fontWeight: '500', minWidth: '50px' }}>
+                <label style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', minWidth: '50px' }}>
                   투명도:
                 </label>
                 <input
@@ -2452,7 +2456,7 @@ const EditorPage = () => {
                   onChange={(e) => setImageOpacity(parseFloat(e.target.value))}
                   style={{ flex: 1 }}
                 />
-                <span style={{ fontSize: '13px', color: '#333', fontWeight: '500', minWidth: '40px' }}>
+                <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: '500', minWidth: '40px' }}>
                   {Math.round(imageOpacity * 100)}%
                 </span>
               </div>
