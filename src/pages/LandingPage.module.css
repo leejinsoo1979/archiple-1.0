@@ -72,12 +72,13 @@
 .logoArea {
     display: flex;
     align-items: center;
-    margin-right: 40px;
+    margin-right: 80px;
+    flex-shrink: 0;
 }
 
 .logo {
-    width: 140px;
-    height: 34px;
+    width: 180px;
+    height: 42px;
     background-color: var(--primary);
     -webkit-mask-image: url('/images/archiple_logo.png');
     -webkit-mask-size: contain;
@@ -105,18 +106,20 @@
 }
 
 .navContent {
-    max-width: 1400px;
+    max-width: 1600px;
     margin: 0 auto;
-    padding: 0 24px;
+    padding: 0 40px;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 60px;
 }
 
 .navLinks {
     display: flex;
-    gap: 32px;
+    gap: 40px;
     align-items: center;
+    flex: 1;
 }
 
 .navItem {
@@ -172,8 +175,9 @@
 
 .navActions {
     display: flex;
-    gap: 12px;
+    gap: 16px;
     align-items: center;
+    flex-shrink: 0;
 }
 
 .btnLogin {
@@ -305,8 +309,8 @@
 
 .colorGrid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 8px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
 }
 
 .colorOption {
@@ -449,9 +453,9 @@
 }
 
 .heroContainer {
-    max-width: 1200px;
+    max-width: 1600px;
     margin: 0 auto;
-    padding: 0 24px;
+    padding: 0 40px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -608,6 +612,197 @@
     height: 100%;
 }
 
+/* Masonry Grid */
+.masonryGrid {
+    column-count: 4;
+    column-gap: 24px;
+    width: 100%;
+}
+
+@media (max-width: 1400px) {
+    .masonryGrid {
+        column-count: 3;
+    }
+}
+
+@media (max-width: 1024px) {
+    .masonryGrid {
+        column-count: 2;
+    }
+}
+
+@media (max-width: 640px) {
+    .masonryGrid {
+        column-count: 1;
+    }
+}
+
+.masonryItem {
+    break-inside: avoid;
+    margin-bottom: 24px;
+    border-radius: 16px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.3s;
+    position: relative;
+    /* Fix for some browsers to prevent breaking */
+    -webkit-column-break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+.masonryItem:hover {
+    transform: translateY(-4px);
+}
+
+.masonryImage {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 16px;
+    /* aspect-ratio removed to allow dynamic sizing */
+    object-fit: cover;
+}
+
+.masonryOverlay {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    z-index: 2;
+}
+
+.masonryBadge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    padding: 8px 14px;
+    border-radius: 20px;
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+/* Design Tools Section */
+.designToolsSection {
+    padding: 80px 0;
+    background: var(--bg-main);
+}
+
+/* New Hero Section */
+.heroContainerNew {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 0 40px;
+    text-align: center;
+}
+
+.heroTitleNew {
+    font-size: 48px;
+    font-weight: 700;
+    color: var(--dark);
+    margin: 0 0 16px 0;
+    letter-spacing: -0.5px;
+}
+
+.heroSubtitleNew {
+    font-size: 18px;
+    color: var(--gray-600);
+    margin: 0 0 40px 0;
+    line-height: 1.6;
+}
+
+.btnDesignFree {
+    background: #000000;
+    color: white;
+    border: none;
+    padding: 16px 48px;
+    border-radius: 50px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin: 0 auto 60px;
+    display: inline-block;
+}
+
+.btnDesignFree:hover {
+    background: #333333;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.toolsGrid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 24px;
+    margin-top: 40px;
+}
+
+.toolCard {
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s;
+    cursor: pointer;
+    border: 1px solid var(--gray-200);
+}
+
+.toolCard:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.toolImage {
+    width: 100%;
+    height: 200px;
+    overflow: hidden;
+    background: var(--bg-surface);
+}
+
+.toolImage img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.toolTitle {
+    padding: 20px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--primary);
+    margin: 0;
+    text-align: center;
+}
+
+@media (max-width: 1200px) {
+    .toolsGrid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .toolsGrid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .heroTitleNew {
+        font-size: 36px;
+    }
+
+    .heroSubtitleNew {
+        font-size: 16px;
+    }
+}
+
+@media (max-width: 480px) {
+    .toolsGrid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .visualWrapper {
     background: var(--bg-surface);
     border-radius: 24px;
@@ -688,17 +883,26 @@
 }
 
 .containerInner {
-    max-width: 1400px;
+    max-width: 1600px;
     margin: 0 auto;
-    padding: 0 24px;
+    padding: 0 40px;
 }
 
 .sectionTitle {
     font-size: 36px;
     font-weight: 700;
     text-align: center;
-    margin-bottom: 60px;
+    margin-bottom: 16px;
     color: var(--dark);
+}
+
+.sectionSubtitle {
+    font-size: 16px;
+    color: var(--gray-600);
+    text-align: center;
+    margin: 0 auto;
+    max-width: 800px;
+    line-height: 1.6;
 }
 
 /* Feature Cards */
@@ -747,8 +951,8 @@
 .featureLink {
     color: var(--primary);
     text-decoration: none;
-    font-weight: 500;
-    font-size: 14px;
+    font-weight: inherit;
+    font-size: inherit;
 }
 
 .featureLink:hover {
@@ -756,162 +960,232 @@
 }
 
 /* How To Section */
-.howToContainer {
+.featureGrid {
     display: grid;
-    grid-template-columns: 1fr 1.2fr;
-    gap: 60px;
-    align-items: center;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 32px;
+    margin-top: 48px;
 }
 
-.howToSteps {
+.featureCard {
+    background: var(--bg-surface);
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--gray-200);
+    transition: all 0.3s;
     display: flex;
     flex-direction: column;
-    gap: 24px;
 }
 
-.stepItem {
-    padding: 24px;
-    border-left: 4px solid var(--gray-200);
+.featureCard:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-4px);
+}
+
+.featureContent {
+    padding: 32px;
+    flex: 1;
+    text-align: left;
+}
+
+.featureTitle {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0 0 16px 0;
+    color: var(--dark);
+    line-height: 1.3;
+    text-align: left;
+}
+
+.featureDesc {
+    font-size: 15px;
+    color: var(--gray-600);
+    line-height: 1.7;
+    margin: 0;
+    text-align: left;
+}
+
+.featureImage {
+    width: 100%;
+    height: 280px;
+    overflow: hidden;
+    background: var(--bg-main);
+}
+
+.featureImage img,
+.featureImage video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+@media (max-width: 1024px) {
+    .featureGrid {
+        grid-template-columns: 1fr;
+        gap: 24px;
+    }
+
+    .featureImage {
+        height: 240px;
+    }
+}
+
+/* Gallery Section - Coohom Style Masonry */
+.galleryHeader {
+    text-align: center;
+    margin-bottom: 48px;
+}
+
+.galleryMainTitle {
+    font-size: 48px;
+    font-weight: 700;
+    color: var(--dark);
+    margin: 0 0 16px 0;
+    letter-spacing: -0.5px;
+}
+
+.gallerySubtitle {
+    font-size: 16px;
+    color: var(--gray-600);
+    margin: 0 auto 32px;
+    max-width: 800px;
+    line-height: 1.6;
+}
+
+.btnViewAll {
+    background: #000000;
+    color: white;
+    border: none;
+    padding: 14px 32px;
+    border-radius: 50px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btnViewAll:hover {
+    background: #333333;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.categoryTabs {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 40px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.categoryTab {
+    background: var(--bg-surface);
+    border: 1px solid var(--gray-200);
+    padding: 10px 24px;
+    border-radius: 50px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--dark);
     cursor: pointer;
     transition: all 0.2s;
 }
 
-.stepItem:hover {
-    background: rgba(0, 0, 0, 0.02);
-}
-
-.stepActive {
-    border-left-color: var(--primary);
-    background: var(--bg-surface);
-    box-shadow: var(--shadow-sm);
-    border-radius: 0 8px 8px 0;
-}
-
-.stepTitle {
-    font-size: 20px;
-    font-weight: 600;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.stepNumber {
-    background: var(--gray-200);
-    color: var(--gray-600);
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: 700;
-}
-
-.stepActive .stepNumber {
-    background: var(--primary);
-    color: #ffffff;
-    /* Always white text on primary */
-}
-
-.stepDesc {
-    color: var(--gray-600);
-    line-height: 1.5;
-    margin-left: 36px;
-}
-
-.howToVisual {
-    height: 500px;
-    background: var(--bg-surface);
-    border-radius: 16px;
-    box-shadow: var(--shadow-lg);
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--gray-200);
-}
-
-.stepVisualPlaceholder {
-    font-size: 24px;
-    color: var(--gray-400);
-    font-weight: 600;
-}
-
-@media (max-width: 1024px) {
-    .howToContainer {
-        grid-template-columns: 1fr;
-    }
-
-    .howToVisual {
-        height: 300px;
-        order: -1;
-        /* Show image on top for mobile */
-    }
-}
-
-/* Gallery Section */
-.sectionHeaderRow {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    margin-bottom: 40px;
-}
-
-.sectionTitleLeft {
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--dark);
-    max-width: 600px;
-}
-
-.viewAllLink {
+.categoryTab:hover {
+    border-color: var(--primary);
     color: var(--primary);
-    font-weight: 600;
-    text-decoration: none;
 }
 
-.galleryGrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 24px;
+.categoryTabActive {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
 }
 
-.galleryItem {
+/* Masonry Card */
+.masonryCard {
+    position: relative;
+    margin-bottom: 24px;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    transition: all 0.25s ease;
     cursor: pointer;
+    break-inside: avoid;
 }
 
-.galleryImagePlaceholder {
-    height: 240px;
-    background: var(--gray-100);
-    border-radius: 12px;
-    margin-bottom: 16px;
+.masonryCard:hover {
+    transform: scale(1.02);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.masonryImage {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: cover;
+}
+
+/* Overlay Button */
+.cardOverlay {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+
+.cardImageWrapper:hover .cardOverlay {
+    opacity: 1;
+}
+
+.viewMoreButton {
     display: flex;
     align-items: center;
-    justify-content: center;
-    color: var(--gray-600);
-    overflow: hidden;
-    transition: transform 0.3s;
-}
-
-.galleryItem:hover .galleryImagePlaceholder {
-    transform: scale(1.02);
-}
-
-.galleryCategory {
-    font-size: 12px;
-    color: var(--gray-600);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-radius: 30px;
+    padding: 6px 12px;
+    color: white;
+    font-size: 13px;
     font-weight: 600;
 }
 
-.galleryTitle {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--dark);
-    margin-top: 4px;
+.viewMoreButton svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .masonryCard {
+        margin-bottom: 16px;
+    }
+
+    .galleryMainTitle {
+        font-size: 36px;
+    }
+
+    .gallerySubtitle {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .masonryCard {
+        margin-bottom: 12px;
+    }
+
+    .categoryTabs {
+        gap: 8px;
+    }
+
+    .categoryTab {
+        padding: 8px 16px;
+        font-size: 13px;
+    }
 }
 
 /* Education Section */
@@ -951,9 +1225,14 @@
     position: relative;
     cursor: pointer;
     border: 1px solid var(--gray-200);
+    overflow: hidden;
 }
 
 .playButton {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     width: 64px;
     height: 64px;
     background: rgba(255, 255, 255, 0.1);
@@ -964,13 +1243,12 @@
     justify-content: center;
     color: var(--primary);
     font-size: 24px;
-    margin-top: 16px;
     transition: transform 0.2s;
     border: 1px solid var(--primary);
 }
 
 .videoPlaceholder:hover .playButton {
-    transform: scale(1.1);
+    transform: translate(-50%, -50%) scale(1.1);
 }
 
 /* Trust Section */
@@ -1024,9 +1302,9 @@
 }
 
 .footerContent {
-    max-width: 1400px;
+    max-width: 1600px;
     margin: 0 auto;
-    padding: 0 24px;
+    padding: 0 40px;
     display: grid;
     grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr;
     gap: 40px;
@@ -1087,9 +1365,9 @@
 }
 
 .copyright {
-    max-width: 1400px;
+    max-width: 1600px;
     margin: 0 auto;
-    padding: 24px;
+    padding: 24px 40px;
     border-top: 1px solid rgba(255, 255, 255, 0.2);
     text-align: center;
     color: rgba(255, 255, 255, 0.6);

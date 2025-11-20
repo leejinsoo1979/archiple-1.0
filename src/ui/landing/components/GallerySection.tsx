@@ -75,7 +75,7 @@ const GallerySection: React.FC = () => {
                             />
                             <div className={styles.masonryOverlay}>
                                 <div className={styles.masonryBadge}>
-                                    <BiJoystick size={16} />
+                                    <BiJoystick size={20} />
                                     <span>Play</span>
                                 </div>
                             </div>
