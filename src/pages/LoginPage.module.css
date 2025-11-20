@@ -1,90 +1,131 @@
-.container {
-  display: flex;
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
-}
-
-/* Left Panel - Branding */
-.leftPanel {
-  flex: 1;
-  background: linear-gradient(135deg, var(--theme-color, #3fae7a) 0%, #2d8a5f 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 60px;
-  position: relative;
-  overflow: hidden;
-}
-
-.leftPanel::before {
-  content: '';
-  position: absolute;
+/* Modal Overlay */
+.overlay {
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1" fill="white" opacity="0.1"/></svg>');
-  background-size: 50px 50px;
-  opacity: 0.3;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
-.brandingContent {
+.modalContainer {
   position: relative;
-  z-index: 1;
-  max-width: 500px;
-  color: white;
+  background: var(--bg-primary, #ffffff);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 900px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: hidden;
+  animation: modalFadeIn 0.3s ease;
 }
 
-.logo {
-  margin-bottom: 40px;
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Close Button */
+.closeBtn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 50%;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: all 0.2s;
+  color: rgba(0, 0, 0, 0.6);
 }
 
-.logoImage {
-  width: 180px;
-  height: 40px;
-  background: white;
+.closeBtn:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.8);
+  transform: rotate(90deg);
+}
+
+/* Modal Content - Split Layout */
+.modalContent {
+  display: flex;
+  min-height: 600px;
+}
+
+/* Left Panel - Branding */
+.leftPanel {
+  flex: 0 0 45%;
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px 0 0 16px;
+  background: #000;
+}
+
+.videoPlayer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.logoOverlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+}
+
+.logoShadow {
+  position: absolute;
+  width: 140px;
+  height: 34px;
+  background-color: rgba(0, 0, 0, 0.4);
   -webkit-mask-image: url('/images/archiple_logo.png');
   -webkit-mask-size: contain;
   -webkit-mask-repeat: no-repeat;
-  -webkit-mask-position: left center;
+  -webkit-mask-position: center;
   mask-image: url('/images/archiple_logo.png');
   mask-size: contain;
   mask-repeat: no-repeat;
-  mask-position: left center;
+  mask-position: center;
+  filter: blur(4px);
+  transform: translate(1px, 2px);
 }
 
-.brandTitle {
-  font-size: 42px;
-  font-weight: 700;
-  margin: 0 0 16px 0;
-  line-height: 1.2;
-}
-
-.brandSubtitle {
-  font-size: 18px;
-  line-height: 1.6;
-  opacity: 0.95;
-  margin: 0 0 40px 0;
-}
-
-.features {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.feature {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 16px;
-  font-weight: 500;
-}
-
-.feature svg {
-  flex-shrink: 0;
+.logo {
+  position: relative;
+  width: 140px;
+  height: 34px;
+  background-color: white;
+  -webkit-mask-image: url('/images/archiple_logo.png');
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-image: url('/images/archiple_logo.png');
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
 }
 
 /* Right Panel - Login Form */
@@ -94,8 +135,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 60px;
+  padding: 50px;
   overflow-y: auto;
+  border-radius: 0 16px 16px 0;
 }
 
 .formContainer {
@@ -297,56 +339,82 @@
 
 /* Responsive */
 @media (max-width: 968px) {
-  .container {
+  .modalContent {
     flex-direction: column;
+    min-height: auto;
+    max-height: 90vh;
   }
 
   .leftPanel {
-    min-height: 300px;
-    padding: 40px 24px;
+    flex: 0 0 auto;
+    min-height: 280px;
+    border-radius: 16px 16px 0 0;
   }
 
-  .brandTitle {
-    font-size: 32px;
+  .logoShadow {
+    width: 120px;
+    height: 28px;
   }
 
-  .brandSubtitle {
-    font-size: 16px;
+  .logo {
+    width: 120px;
+    height: 28px;
   }
 
   .rightPanel {
-    padding: 40px 24px;
+    padding: 32px 24px;
+    border-radius: 0 0 16px 16px;
   }
 
   .formTitle {
     font-size: 24px;
   }
+
+  .closeBtn {
+    background: rgba(255, 255, 255, 0.9);
+    color: rgba(0, 0, 0, 0.6);
+  }
+
+  .closeBtn:hover {
+    background: rgba(255, 255, 255, 1);
+  }
 }
 
 @media (max-width: 480px) {
+  .overlay {
+    padding: 10px;
+  }
+
+  .modalContainer {
+    border-radius: 12px;
+  }
+
   .leftPanel {
-    min-height: 250px;
-    padding: 32px 20px;
+    min-height: 220px;
+    border-radius: 12px 12px 0 0;
   }
 
-  .brandTitle {
-    font-size: 28px;
+  .logoShadow {
+    width: 100px;
+    height: 24px;
   }
 
-  .features {
-    gap: 16px;
-  }
-
-  .feature {
-    font-size: 14px;
+  .logo {
+    width: 100px;
+    height: 24px;
   }
 
   .rightPanel {
-    padding: 32px 20px;
+    padding: 24px 20px;
+    border-radius: 0 0 12px 12px;
   }
 
   .formContainer {
     max-width: 100%;
+  }
+
+  .formTitle {
+    font-size: 22px;
   }
 
   .socialLogin {
@@ -356,5 +424,12 @@
   .socialBtn {
     padding: 10px 16px;
     font-size: 13px;
+  }
+
+  .closeBtn {
+    top: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
   }
 }

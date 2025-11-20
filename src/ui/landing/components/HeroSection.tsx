@@ -1,12 +1,9 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import styles from '../../../pages/LandingPage.module.css';
 
 const HeroSection: React.FC = () => {
-    // Placeholder for onStartClick function, as it's introduced in the change
-    const onStartClick = () => {
-        console.log('Start button clicked!');
-        // Implement navigation or other logic here
-    };
+    const navigate = useNavigate();
 
     return (
         <section className={styles.heroSection}>
@@ -22,7 +19,7 @@ const HeroSection: React.FC = () => {
                     </p>
 
                     <div className={styles.heroButtons}>
-                        <button className={styles.btnPrimaryLarge} onClick={onStartClick}>
+                        <button className={styles.btnPrimaryLarge} onClick={() => navigate('/editor')}>
                             Home Design for Free
                         </button>
                         <button className={styles.btnSecondaryLarge}>
@@ -31,7 +28,6 @@ const HeroSection: React.FC = () => {
                     </div>
 
                     <div className={styles.trustBadges}>
-                        {/* Placeholder for trust badges like G2, Capterra */}
                         <div className={styles.trustBadgeItem}>
                             <span>Rated 4.5/5 on G2</span>
                             <span style={{ color: '#FFB900' }}>★★★★★</span>

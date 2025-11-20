@@ -16,8 +16,16 @@ const EducationSection: React.FC = () => {
                     </div>
                     <div className={styles.educationVisual}>
                         <div className={styles.videoPlaceholder}>
-                            <span>Video Thumbnail</span>
-                            <div className={styles.playButton}>▶</div>
+                            <iframe
+                                width="100%"
+                                height="100%"
+                                src="https://www.youtube.com/embed/-K4djTGmdNk?autoplay=1&mute=1&loop=1&playlist=-K4djTGmdNk"
+                                title="YouTube video player"
+                                frameBorder="0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: '16px' }}
+                            ></iframe>
                         </div>
                     </div>
                 </div>
