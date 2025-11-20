@@ -45,6 +45,8 @@ const EditorPage = () => {
   const [screenshotResolution, setScreenshotResolution] = useState<'1080p' | '4k' | '8k'>('4k');
   const [aiRenderStyle, setAiRenderStyle] = useState<'photorealistic' | 'product' | 'minimalist' | 'sticker'>('photorealistic');
   const [aiAspectRatio, setAiAspectRatio] = useState<'1:1' | '2:3' | '3:2' | '3:4' | '4:3' | '4:5' | '5:4' | '9:16' | '16:9' | '21:9'>('1:1');
+  const [aiTimeOfDay, setAiTimeOfDay] = useState<'day' | 'golden_hour' | 'blue_hour' | 'night' | 'overcast'>('day');
+  const [aiLightingMood, setAiLightingMood] = useState<'bright' | 'soft' | 'moody' | 'dramatic'>('soft');
   const [aiRenderPanelOpen, setAiRenderPanelOpen] = useState(false);
   const [aiInputImage, setAiInputImage] = useState<string | null>(null);
   const [aiOutputImage, setAiOutputImage] = useState<string | null>(null);
@@ -290,8 +292,48 @@ const EditorPage = () => {
     }
   };
 
+  // Generate lighting description based on time of day and mood
+  const getLightingPrompt = (timeOfDay: typeof aiTimeOfDay, mood: typeof aiLightingMood): string => {
+    const timeDescriptions = {
+      day: {
+        bright: 'Bright midday sunlight (12000K) streaming through windows, strong direct light, crisp sharp shadows, high contrast, vibrant colors, clear blue sky visible through windows',
+        soft: 'Soft natural daylight (6500K), diffused through sheer curtains or clouds, gentle shadows with soft edges, balanced exposure, warm inviting atmosphere',
+        moody: 'Dramatic side-lit daylight, strong directional light creating defined shadow areas, high contrast between light and shadow, cinematic depth',
+        dramatic: 'Intense direct sunlight with dramatic light shafts, strong contrast, deep shadows in corners, spotlight effect from windows, theatrical lighting'
+      },
+      golden_hour: {
+        bright: 'Intense golden hour sunlight (3500K), warm amber and orange tones flooding the room, long dramatic shadows, rich golden highlights, magic hour glow',
+        soft: 'Soft golden hour light (4000K), warm honey tones, gentle amber glow, romantic atmosphere, soft peachy highlights, dreamy sunset ambiance',
+        moody: 'Deep golden hour shadows, strong warm/cool contrast, dramatic side lighting, rich amber shadows, cinematic sunset mood',
+        dramatic: 'Theatrical golden hour with intense orange sunbeams, extreme warm light, deep contrasting shadows, epic sunset atmosphere, HDR golden glow'
+      },
+      blue_hour: {
+        bright: 'Bright twilight blue hour (8000K), cool blue-purple ambient light, some warm interior artificial lights, magical dusk atmosphere',
+        soft: 'Gentle blue hour glow (7000K), soft cool blue ambient light, warm interior lights creating cozy contrast, serene twilight mood',
+        moody: 'Moody blue hour with deep blue shadows, cool atmospheric lighting, mysterious twilight ambiance, dramatic blue tones',
+        dramatic: 'Cinematic blue hour with intense cool blue exterior light vs. warm golden interior lights, strong color contrast, theatrical dusk lighting'
+      },
+      night: {
+        bright: 'Well-lit night interior, multiple warm artificial lights (3000-3500K), bright and welcoming, minimal shadows, cozy evening atmosphere',
+        soft: 'Soft ambient night lighting (2700K), warm dim interior lights, intimate atmosphere, gentle shadows, peaceful evening mood',
+        moody: 'Atmospheric night lighting, selective illumination, areas of darkness and light, mysterious shadows, dramatic contrast',
+        dramatic: 'Dramatic night scene with strong artificial lighting, theatrical spotlighting, deep shadows, high contrast, cinematic night atmosphere'
+      },
+      overcast: {
+        bright: 'Bright overcast daylight (6500K), even diffused illumination from all directions, no direct shadows, soft uniform lighting, gallery-like conditions',
+        soft: 'Gentle overcast light (6000K), extremely soft diffused illumination, almost shadowless, calm neutral atmosphere, peaceful even lighting',
+        moody: 'Dark overcast with low light levels, muted colors, soft but dim illumination, melancholic atmosphere, subtle shadows',
+        dramatic: 'Stormy overcast with dark moody light, low contrast, heavy atmospheric feeling, dramatic weather lighting, somber tones'
+      }
+    };
+
+    return timeDescriptions[timeOfDay][mood];
+  };
+
   // Generate style-specific prompts for AI rendering
-  const getStylePrompt = (style: typeof aiRenderStyle): string => {
+  const getStylePrompt = (style: typeof aiRenderStyle, timeOfDay: typeof aiTimeOfDay, mood: typeof aiLightingMood): string => {
+    const lightingDescription = getLightingPrompt(timeOfDay, mood);
+
     switch (style) {
       case 'photorealistic':
         return `Transform this 3D architectural rendering into an ULTRA-REALISTIC, PHOTO-QUALITY interior photograph that is INDISTINGUISHABLE from a real photograph.
@@ -310,13 +352,12 @@ MATERIALS & TEXTURES (Maximum Realism):
 - Metal surfaces: True metallic reflections, brushed/polished finishes, environmental map reflections
 
 LIGHTING (Professional Architectural Photography):
-- Natural sunlight streaming through windows with REALISTIC sun rays, dust particles visible in light beams
-- Soft, natural shadows with proper penumbra (soft edges), no harsh black shadows
+SPECIFIC LIGHTING SETUP: ${lightingDescription}
 - Global illumination: Light bouncing realistically off all surfaces, color bleeding from colored surfaces
 - Ambient occlusion in corners and crevices for depth
 - Realistic HDR lighting with natural exposure, highlights that don't blow out, shadows that retain detail
-- Window light creating natural gradient across room, warm sunlight color temperature (5000-6500K)
-- Soft fill light simulating skylight and ambient bounce light
+- Dust particles visible in light beams for atmospheric depth
+- Soft fill light and ambient bounce light for natural illumination
 
 CAMERA & OPTICS (Professional DSLR):
 - Shot with professional full-frame camera (Canon EOS 5D, Sony A7R)
@@ -505,9 +546,11 @@ ARTISTIC APPROACH:
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-image' });
 
-      const prompt = getStylePrompt(aiRenderStyle);
+      const prompt = getStylePrompt(aiRenderStyle, aiTimeOfDay, aiLightingMood);
 
       console.log('[EditorPage] Prompt:', prompt);
+      console.log('[EditorPage] Time of day:', aiTimeOfDay);
+      console.log('[EditorPage] Lighting mood:', aiLightingMood);
       console.log('[EditorPage] Aspect ratio:', aiAspectRatio);
       console.log('[EditorPage] Base64 length:', base64.length);
 
@@ -2069,27 +2112,27 @@ ARTISTIC APPROACH:
                     )}
 
                     {/* Style Selection */}
-                    <div style={{ marginBottom: '20px' }}>
-                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '10px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
                         Rendering Style
                       </label>
                       <div style={{
                         display: 'grid',
                         gridTemplateColumns: 'repeat(2, 1fr)',
-                        gap: '10px'
+                        gap: '8px'
                       }}>
                         {(['photorealistic', 'product', 'minimalist', 'sticker'] as const).map((style) => (
                           <button
                             key={style}
                             onClick={() => setAiRenderStyle(style)}
                             style={{
-                              padding: '14px 10px',
+                              padding: '12px 8px',
                               borderRadius: '8px',
                               border: aiRenderStyle === style ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
                               background: aiRenderStyle === style ? `${themeColor}15` : (themeMode === 'dark' ? '#252525' : '#f8f8f8'),
                               color: themeMode === 'dark' ? '#fff' : '#000',
                               cursor: 'pointer',
-                              fontSize: '13px',
+                              fontSize: '12px',
                               fontWeight: aiRenderStyle === style ? '600' : '500',
                               transition: 'all 0.2s',
                               textAlign: 'center',
@@ -2097,6 +2140,83 @@ ARTISTIC APPROACH:
                             }}
                           >
                             {style}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Time of Day */}
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '10px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
+                        Time of Day
+                      </label>
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(3, 1fr)',
+                        gap: '8px'
+                      }}>
+                        {([
+                          { value: 'day', label: '☀️ Day' },
+                          { value: 'golden_hour', label: '🌅 Golden' },
+                          { value: 'blue_hour', label: '🌆 Blue Hour' },
+                          { value: 'night', label: '🌙 Night' },
+                          { value: 'overcast', label: '☁️ Overcast' }
+                        ] as const).map((time) => (
+                          <button
+                            key={time.value}
+                            onClick={() => setAiTimeOfDay(time.value)}
+                            style={{
+                              padding: '10px 6px',
+                              borderRadius: '6px',
+                              border: aiTimeOfDay === time.value ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
+                              background: aiTimeOfDay === time.value ? `${themeColor}15` : 'transparent',
+                              color: aiTimeOfDay === time.value ? themeColor : (themeMode === 'dark' ? '#fff' : '#000'),
+                              cursor: 'pointer',
+                              fontWeight: aiTimeOfDay === time.value ? '600' : '500',
+                              fontSize: '11px',
+                              transition: 'all 0.2s',
+                              textAlign: 'center'
+                            }}
+                          >
+                            {time.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Lighting Mood */}
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '10px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
+                        Lighting Mood
+                      </label>
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(4, 1fr)',
+                        gap: '8px'
+                      }}>
+                        {([
+                          { value: 'bright', label: '☀️ Bright' },
+                          { value: 'soft', label: '🌤️ Soft' },
+                          { value: 'moody', label: '🌥️ Moody' },
+                          { value: 'dramatic', label: '⚡ Dramatic' }
+                        ] as const).map((mood) => (
+                          <button
+                            key={mood.value}
+                            onClick={() => setAiLightingMood(mood.value)}
+                            style={{
+                              padding: '10px 6px',
+                              borderRadius: '6px',
+                              border: aiLightingMood === mood.value ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
+                              background: aiLightingMood === mood.value ? `${themeColor}15` : 'transparent',
+                              color: aiLightingMood === mood.value ? themeColor : (themeMode === 'dark' ? '#fff' : '#000'),
+                              cursor: 'pointer',
+                              fontWeight: aiLightingMood === mood.value ? '600' : '500',
+                              fontSize: '11px',
+                              transition: 'all 0.2s',
+                              textAlign: 'center'
+                            }}
+                          >
+                            {mood.label}
                           </button>
                         ))}
                       </div>
