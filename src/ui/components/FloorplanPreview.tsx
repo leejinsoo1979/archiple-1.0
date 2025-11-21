@@ -26,6 +26,7 @@ const FloorplanPreview = ({ viewMode = '2D', previewContainerId }: FloorplanPrev
     sourceContainer.style.visibility = 'visible';
     sourceContainer.style.width = '100%';
     sourceContainer.style.height = '100%';
+    sourceContainer.style.pointerEvents = 'auto'; // Enable interactions
 
     // Cleanup function to move it back when component unmounts or ID changes
     return () => {
@@ -34,6 +35,7 @@ const FloorplanPreview = ({ viewMode = '2D', previewContainerId }: FloorplanPrev
         sourceContainer.style.visibility = 'hidden';
         sourceContainer.style.width = '100%';
         sourceContainer.style.height = '100%';
+        sourceContainer.style.pointerEvents = 'none'; // Disable interactions
         // Move back to body or original parent
         document.body.appendChild(sourceContainer);
       }

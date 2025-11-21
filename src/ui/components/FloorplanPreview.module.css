@@ -54,6 +54,11 @@
   background: var(--bg-secondary);
   overflow: hidden;
   position: relative;
+  cursor: grab;
+}
+
+.previewCanvas:active {
+  cursor: grabbing;
 }
 
 .previewCanvas > * {
