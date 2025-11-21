@@ -12,6 +12,7 @@ export interface RoomLayerConfig {
   showLabels?: boolean;
   labelFont?: string;
   labelColor?: string;
+  wallThickness?: number; // Wall thickness for floor inset calculation
 }
 
 /**
@@ -46,6 +47,7 @@ export class RoomLayer extends BaseLayer {
       showLabels: config?.showLabels ?? true,
       labelFont: config?.labelFont || '14px Arial',
       labelColor: config?.labelColor || '#2c3e50',
+      wallThickness: config?.wallThickness || 100, // 100mm default wall thickness
     };
 
     // Load wood texture pattern
@@ -121,9 +123,9 @@ export class RoomLayer extends BaseLayer {
 
     if (roomPoints.length < 3) return;
 
-    // Inset the polygon by 70mm to place floor clearly inside wall boundaries
-    // Room points are at centerline, inset more than half-thickness to avoid overlap
-    const insetDistance = 70; // Positive value = inward
+    // Inset the polygon by wall half-thickness to align with wall inner edge
+    // Room points are at centerline, inset by half-thickness to reach inner wall boundary
+    const insetDistance = this.config.wallThickness / 2;
     const floorPoints = this.insetPolygon(roomPoints, insetDistance);
 
     // Determine fill style based on render mode
