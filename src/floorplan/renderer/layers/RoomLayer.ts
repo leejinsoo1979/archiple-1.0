@@ -121,9 +121,9 @@ export class RoomLayer extends BaseLayer {
 
     if (roomPoints.length < 3) return;
 
-    // Inset the polygon by wall half-thickness to align with wall inner edge
-    const wallHalfThickness = 50; // 100mm wall thickness / 2
-    const insetPoints = this.insetPolygon(roomPoints, wallHalfThickness);
+    // Room points are already at wall centerline - no inset needed
+    // Floor should fill the area bounded by wall centerlines
+    const floorPoints = roomPoints;
 
     // Determine fill style based on render mode
     let fillStyle: string | CanvasPattern = this.config.fillColor;
@@ -160,21 +160,13 @@ export class RoomLayer extends BaseLayer {
       }
     }
 
-    // Draw polygon with inset points
+    // Draw floor polygon
     ctx.save();
 
     ctx.beginPath();
-    if (insetPoints.length > 0) {
-      ctx.moveTo(insetPoints[0].x, insetPoints[0].y);
-      for (let i = 1; i < insetPoints.length; i++) {
-        ctx.lineTo(insetPoints[i].x, insetPoints[i].y);
-      }
-    } else {
-      // Fallback to original points if inset failed
-      ctx.moveTo(roomPoints[0].x, roomPoints[0].y);
-      for (let i = 1; i < roomPoints.length; i++) {
-        ctx.lineTo(roomPoints[i].x, roomPoints[i].y);
-      }
+    ctx.moveTo(floorPoints[0].x, floorPoints[0].y);
+    for (let i = 1; i < floorPoints.length; i++) {
+      ctx.lineTo(floorPoints[i].x, floorPoints[i].y);
     }
     ctx.closePath();
 
