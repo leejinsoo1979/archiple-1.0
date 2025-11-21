@@ -2,13 +2,15 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
+let genAI: GoogleGenerativeAI | null = null;
+
 if (!API_KEY) {
-    console.error('CRITICAL: Missing VITE_GEMINI_API_KEY environment variable. AI features will not work.');
-    throw new Error('Missing Google Gemini API Key. Please check your .env file.');
+    console.warn('⚠️ VITE_GEMINI_API_KEY environment variable is missing. AI rendering features will be disabled.');
+} else {
+    console.log('[Nanobanana] Initializing Gemini Service with key:', API_KEY.substring(0, 4) + '****');
+    genAI = new GoogleGenerativeAI(API_KEY);
 }
 
-console.log('[Nanobanana] Initializing Gemini Service with key:', API_KEY.substring(0, 4) + '****');
-const genAI = new GoogleGenerativeAI(API_KEY);
 
 export interface GenerateImageOptions {
     prompt: string;
@@ -38,6 +40,10 @@ export const NanobananaService = {
      * Supports Image-to-Image if an image is provided in options.
      */
     generateImage: async (options: GenerateImageOptions): Promise<string> => {
+        if (!genAI) {
+            throw new Error('Gemini API is not initialized. Please set VITE_GEMINI_API_KEY in your environment variables.');
+        }
+
         try {
             // Select model based on user choice
             const modelName = options.model === 'nanobanana1'
@@ -128,6 +134,10 @@ export const NanobananaService = {
      * Analyzes an image and generates a detailed prompt for architectural rendering.
      */
     describeImage: async (imageBase64: string): Promise<string> => {
+        if (!genAI) {
+            throw new Error('Gemini API is not initialized. Please set VITE_GEMINI_API_KEY in your environment variables.');
+        }
+
         try {
             const model = genAI.getGenerativeModel({ model: 'gemini-3-pro-image' });
 
