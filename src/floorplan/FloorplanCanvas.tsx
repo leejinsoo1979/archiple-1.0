@@ -162,7 +162,9 @@ const FloorplanCanvas = ({
     gridLayer.setSize(logicalWidth * dpr, logicalHeight * dpr);
     gridLayerRef.current = gridLayer;
 
-    const roomLayer = new RoomLayer();
+    const roomLayer = new RoomLayer({
+      wallThickness: config.wallThickness,
+    });
     roomLayerRef.current = roomLayer;
 
     const wallLayer = new WallLayer({
