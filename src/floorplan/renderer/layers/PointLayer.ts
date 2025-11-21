@@ -34,8 +34,8 @@ export class PointLayer extends BaseLayer {
     super(3); // z-index: 3
 
     this.config = {
-      pointRadius: config?.pointRadius || 8, // Screen space pixels
-      pointColor: config?.pointColor || '#e74c3c',
+      pointRadius: config?.pointRadius || 4, // Smaller size - Screen space pixels
+      pointColor: config?.pointColor || '#ffffff', // White color
       selectedColor: config?.selectedColor || '#3498db',
       hoveredColor: config?.hoveredColor || '#f39c12',
       snapIndicatorColor: config?.snapIndicatorColor || '#2ecc71',
@@ -117,8 +117,8 @@ export class PointLayer extends BaseLayer {
 
     // Draw outline - 다크모드 대응
     const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
-    ctx.strokeStyle = isDarkMode ? '#1e1e1e' : '#ffffff';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = isDarkMode ? '#333333' : '#cccccc';
+    ctx.lineWidth = 1;
     ctx.stroke();
 
     ctx.restore();

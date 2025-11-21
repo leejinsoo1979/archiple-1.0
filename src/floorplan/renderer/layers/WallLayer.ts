@@ -506,7 +506,7 @@ export class WallLayer extends BaseLayer {
     // Check current theme for color selection - 다크모드 대응
     const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
     ctx.fillStyle = isDarkMode ? '#E0E0E0' : this.config.wallColor;
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = 0.3; // Increased transparency
 
     ctx.beginPath();
     ctx.moveTo(p1.x, p1.y);
