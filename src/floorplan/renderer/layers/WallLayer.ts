@@ -180,12 +180,14 @@ export class WallLayer extends BaseLayer {
     // Check current theme for color selection
     const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
 
-    // Determine color - 다크모드 대응
-    let color = isDarkMode ? '#E0E0E0' : this.config.wallColor;
+    // Determine color with transparency - 다크모드 대응
+    let color: string;
     if (isSelected) {
-      color = isDarkMode ? '#64B5F6' : '#3498db'; // Blue for selected
+      color = isDarkMode ? 'rgba(100, 181, 246, 1)' : 'rgba(52, 152, 219, 1)'; // Blue for selected (opaque)
     } else if (isHovered) {
-      color = '#3fae7a'; // Theme color for hovered
+      color = 'rgba(63, 174, 122, 0.8)'; // Theme color for hovered (semi-transparent)
+    } else {
+      color = isDarkMode ? 'rgba(224, 224, 224, 0.3)' : 'rgba(51, 51, 51, 0.3)'; // Normal wall (transparent)
     }
 
     ctx.fillStyle = color;
