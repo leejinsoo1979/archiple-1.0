@@ -29,6 +29,7 @@ import { RectangleTool } from './tools/RectangleTool';
 import { SelectTool } from './tools/SelectTool';
 import { DoorTool } from './tools/DoorTool';
 import { WindowTool } from './tools/WindowTool';
+import { FloatingOptionBar } from './ui/FloatingOptionBar';
 
 // Services
 import { SnapService } from './services/SnapService';
@@ -85,6 +86,14 @@ const FloorplanCanvas = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [_mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
   const [_stats, setStats] = useState({ points: 0, walls: 0, rooms: 0, fps: 0 });
+
+  // Option Bar State
+  const [optionBarState, setOptionBarState] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    doorId: string | null;
+  }>({ visible: false, x: 0, y: 0, doorId: null });
 
   // Ruler label hitbox (in screen coordinates)
   const rulerLabelHitboxRef = useRef<{ x: number; y: number; width: number; height: number; distanceMm: number } | null>(null);
@@ -575,6 +584,77 @@ const FloorplanCanvas = ({
     // Store toolManager in ref for tool switching
     toolManagerRef.current = toolManager;
 
+    // 7. Event Listeners
+    const handleSelectionChanged = () => {
+      const selection = sceneManager.selectionManager.getSelection();
+
+      // Check if a single door is selected
+      if (selection.length === 1) {
+        const id = selection[0];
+        const door = sceneManager.objectManager.getDoor(id);
+
+        if (door) {
+          // Calculate position
+          // We need the wall to find the door's world position
+          const wall = sceneManager.objectManager.getWall(door.wallId);
+          if (wall) {
+            const start = sceneManager.objectManager.getPoint(wall.startPointId);
+            const end = sceneManager.objectManager.getPoint(wall.endPointId);
+
+            if (start && end) {
+              // Calculate world position of the door center
+              const wx = start.x + (end.x - start.x) * door.position;
+              const wy = start.y + (end.y - start.y) * door.position;
+
+              // Convert to screen position
+              const screenPos = renderer.getCamera().worldToScreen(wx, wy);
+
+              setOptionBarState({
+                visible: true,
+                x: screenPos.x,
+                y: screenPos.y,
+                doorId: door.id
+              });
+              return;
+            }
+          }
+        }
+      }
+
+      // Hide if not a single door
+      setOptionBarState(prev => ({ ...prev, visible: false, doorId: null }));
+    };
+
+    const handleViewportChanged = () => {
+      // Update position if visible
+      setOptionBarState(prev => {
+        if (!prev.visible || !prev.doorId) return prev;
+
+        const door = sceneManager.objectManager.getDoor(prev.doorId);
+        if (!door) return { ...prev, visible: false };
+
+        const wall = sceneManager.objectManager.getWall(door.wallId);
+        if (!wall) return { ...prev, visible: false };
+
+        const start = sceneManager.objectManager.getPoint(wall.startPointId);
+        const end = sceneManager.objectManager.getPoint(wall.endPointId);
+
+        if (start && end) {
+          const wx = start.x + (end.x - start.x) * door.position;
+          const wy = start.y + (end.y - start.y) * door.position;
+          const screenPos = renderer.getCamera().worldToScreen(wx, wy);
+          return { ...prev, x: screenPos.x, y: screenPos.y };
+        }
+        return prev;
+      });
+    };
+
+    eventBus.on(EditorEvents.SELECTION_CHANGED, handleSelectionChanged);
+    eventBus.on(EditorEvents.VIEWPORT_CHANGED, handleViewportChanged);
+    // Also update on door modified (e.g. undo/redo or drag)
+    eventBus.on(FloorEvents.DOOR_MODIFIED, handleViewportChanged);
+    eventBus.on(FloorEvents.DOOR_ADDED, handleSelectionChanged); // In case tool selects it
+
     // Cleanup
     return () => {
       console.log('[FloorplanCanvas] Cleaning up...');
@@ -585,6 +665,11 @@ const FloorplanCanvas = ({
       renderer.stop();
       renderer.dispose();
 
+      eventBus.off(EditorEvents.SELECTION_CHANGED, handleSelectionChanged);
+      eventBus.off(EditorEvents.VIEWPORT_CHANGED, handleViewportChanged);
+      eventBus.off(FloorEvents.DOOR_MODIFIED, handleViewportChanged);
+      eventBus.off(FloorEvents.DOOR_ADDED, handleSelectionChanged);
+
       // Dispose controllers
       mouseController.dispose();
       keyboardController.dispose();
@@ -594,8 +679,9 @@ const FloorplanCanvas = ({
       eventBus.off(FloorEvents.WALL_ADDED, updateLayers);
       eventBus.off(FloorEvents.ROOM_DETECTED, updateLayers);
 
-      // Reset SceneManager singleton for re-initialization
-      SceneManager.resetInstance();
+      // DO NOT reset SceneManager singleton - it should persist across re-renders
+      // Only clear on actual page navigation/unmount
+      // SceneManager.resetInstance();
     };
   }, []);
 
@@ -1067,6 +1153,31 @@ const FloorplanCanvas = ({
     };
   }, [scannedWalls, imageScale, backgroundImage]);
 
+  const handleFlipHorizontal = () => {
+    if (!optionBarState.doorId || !sceneManagerRef.current) return;
+    const door = sceneManagerRef.current.objectManager.getDoor(optionBarState.doorId);
+    if (door) {
+      const newSwing = door.swing === 'left' ? 'right' : 'left';
+      sceneManagerRef.current.objectManager.updateDoor(door.id, { swing: newSwing });
+    }
+  };
+
+  const handleFlipVertical = () => {
+    if (!optionBarState.doorId || !sceneManagerRef.current) return;
+    const door = sceneManagerRef.current.objectManager.getDoor(optionBarState.doorId);
+    if (door) {
+      const newSide = door.openSide === 'left' ? 'right' : 'left';
+      sceneManagerRef.current.objectManager.updateDoor(door.id, { openSide: newSide });
+    }
+  };
+
+  const handleDelete = () => {
+    if (!optionBarState.doorId || !sceneManagerRef.current) return;
+    sceneManagerRef.current.objectManager.removeDoor(optionBarState.doorId);
+    sceneManagerRef.current.selectionManager.clearSelection();
+    setOptionBarState(prev => ({ ...prev, visible: false, doorId: null }));
+  };
+
   return (
     <div ref={containerRef} className={styles.canvasContainer}>
       <canvas
@@ -1074,6 +1185,15 @@ const FloorplanCanvas = ({
         className={styles.canvas}
         onMouseMove={handleMouseMove}
         style={{ cursor: draggingRulerPoint ? 'grabbing' : 'default' }}
+      />
+
+      <FloatingOptionBar
+        x={optionBarState.x}
+        y={optionBarState.y}
+        visible={optionBarState.visible}
+        onFlipHorizontal={handleFlipHorizontal}
+        onFlipVertical={handleFlipVertical}
+        onDelete={handleDelete}
       />
     </div>
   );
