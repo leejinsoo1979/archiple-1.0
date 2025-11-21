@@ -363,7 +363,7 @@ export class WallLayer extends BaseLayer {
         const otherWall = this.walls.find(w => w.id === otherId);
         if (!otherWall) return;
 
-        const relDir = this.getRelativeDirection(wall, otherWall, junctionPoint);
+        // const relDir = this.getRelativeDirection(wall, otherWall, junctionPoint);
         const adjustment = this.calculateCornerAdjustment(wall, otherWall, junctionPoint, normal, halfThickness);
 
         if (adjustment) {
@@ -371,19 +371,9 @@ export class WallLayer extends BaseLayer {
           // adjustment.right corresponds to 'bl'/'br' (Left side)
           // This naming confusion comes from calculateCornerAdjustment using add(normal) for 'left'
 
-          // If Straight (Collinear), apply to BOTH
-          if (relDir === 'straight') {
-            rightCandidates.push(adjustment.left); // Right side (tl/tr)
-            leftCandidates.push(adjustment.right); // Left side (bl/br)
-          }
-          // If Right turn (CW), apply to Right side (tl/tr)
-          else if (relDir === 'right') {
-            rightCandidates.push(adjustment.left);
-          }
-          // If Left turn (CCW), apply to Left side (bl/br)
-          else if (relDir === 'left') {
-            leftCandidates.push(adjustment.right);
-          }
+          // Always apply to BOTH sides to ensure miter joint on both inner and outer corners
+          rightCandidates.push(adjustment.left); // Right side (tl/tr)
+          leftCandidates.push(adjustment.right); // Left side (bl/br)
         }
       });
 
@@ -416,35 +406,7 @@ export class WallLayer extends BaseLayer {
     return { tl, tr, br, bl };
   }
 
-  private getRelativeDirection(currentWall: Wall, otherWall: Wall, junctionPoint: Point): 'left' | 'right' | 'straight' {
-    const getDir = (w: Wall, p: Point) => {
-      const s = Vector2.from(this.points.get(w.startPointId)!);
-      const e = Vector2.from(this.points.get(w.endPointId)!);
-      // Direction pointing AWAY from junction
-      return w.startPointId === p.id ? e.subtract(s).normalize() : s.subtract(e).normalize();
-    };
 
-    const dir1 = getDir(currentWall, junctionPoint);
-    const dir2 = getDir(otherWall, junctionPoint);
-
-    // Cross product (2D)
-    // Positive = Left turn (CCW), Negative = Right turn (CW)
-    // Note: dir1 is "backwards" relative to incoming path.
-    // If we walk towards junction, dir1 is opposite.
-    // Standard relative angle: angle between outgoing vector (dir2) and incoming vector (-dir1).
-    // But here we use two outgoing vectors.
-
-    const cross = dir1.x * dir2.y - dir1.y * dir2.x;
-    const dot = dir1.dot(dir2);
-
-    // Collinear (opposite directions)
-    if (dot < -0.99) return 'straight';
-
-    // Cross > 0 means dir2 is CCW from dir1.
-    // If we stand at junction looking along dir1, dir2 is to our Left.
-    // So this affects the Left side of the wall.
-    return cross > 0 ? 'left' : 'right';
-  }
 
   private calculateCornerAdjustment(
     currentWall: Wall,
@@ -720,45 +682,38 @@ export class WallLayer extends BaseLayer {
     ctx.lineTo(dim2.x, dim2.y);
     ctx.stroke();
 
-    // Draw arrows at dimension line endpoints - CAD style
-    const arrowSize = 6;
+    // Draw slashes at dimension line endpoints - CAD style
+    const slashSize = 8;
     const dimLineAngle = Math.atan2(dim2.y - dim1.y, dim2.x - dim1.x);
-    const arrowAngle = Math.PI / 6; // 30 degrees
+    const slashAngle = Math.PI / 4; // 45 degrees
 
     ctx.lineWidth = 1.5;
 
-    // Arrow at start (pointing right along dimension line)
+    // Slash at start (diagonal line)
     ctx.beginPath();
-    ctx.moveTo(dim1.x, dim1.y);
-    ctx.lineTo(
-      dim1.x - arrowSize * Math.cos(dimLineAngle - arrowAngle),
-      dim1.y - arrowSize * Math.sin(dimLineAngle - arrowAngle)
+    ctx.moveTo(
+      dim1.x - slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
+      dim1.y - slashSize * Math.sin(dimLineAngle + slashAngle) / 2
     );
-    ctx.moveTo(dim1.x, dim1.y);
     ctx.lineTo(
-      dim1.x - arrowSize * Math.cos(dimLineAngle + arrowAngle),
-      dim1.y - arrowSize * Math.sin(dimLineAngle + arrowAngle)
+      dim1.x + slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
+      dim1.y + slashSize * Math.sin(dimLineAngle + slashAngle) / 2
     );
     ctx.stroke();
 
-    // Arrow at end (pointing left along dimension line)
+    // Slash at end (diagonal line)
     ctx.beginPath();
-    ctx.moveTo(dim2.x, dim2.y);
-    ctx.lineTo(
-      dim2.x + arrowSize * Math.cos(dimLineAngle - arrowAngle),
-      dim2.y + arrowSize * Math.sin(dimLineAngle - arrowAngle)
+    ctx.moveTo(
+      dim2.x - slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
+      dim2.y - slashSize * Math.sin(dimLineAngle + slashAngle) / 2
     );
-    ctx.moveTo(dim2.x, dim2.y);
     ctx.lineTo(
-      dim2.x + arrowSize * Math.cos(dimLineAngle + arrowAngle),
-      dim2.y + arrowSize * Math.sin(dimLineAngle + arrowAngle)
+      dim2.x + slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
+      dim2.y + slashSize * Math.sin(dimLineAngle + slashAngle) / 2
     );
     ctx.stroke();
 
     // Draw slashes at extension line endpoints
-    const slashSize = 5;
-    const slashAngle = Math.PI / 4; // 45 degrees
-
     // Extension line angles (perpendicular to wall)
     const extAngle = Math.atan2(ext1End.y - ext1Start.y, ext1End.x - ext1Start.x);
 
