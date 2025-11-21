@@ -1021,12 +1021,20 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           engine.stopRenderLoop();
         }
 
-        // Dispose scene and engine safely
+        // Dispose scene first
         if (scene) {
           scene.dispose();
         }
-        if (engine) {
-          engine.dispose();
+
+        // Detach engine from canvas before disposing to prevent DOM errors
+        if (engine && canvas) {
+          try {
+            // This prevents the engine from trying to manipulate DOM during disposal
+            (engine as any)._renderingCanvas = null;
+            engine.dispose();
+          } catch (e) {
+            console.warn('[Babylon3DCanvas] Engine disposal warning:', e);
+          }
         }
       };
     };
