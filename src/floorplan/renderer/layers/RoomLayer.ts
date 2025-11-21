@@ -121,9 +121,10 @@ export class RoomLayer extends BaseLayer {
 
     if (roomPoints.length < 3) return;
 
-    // Room points are already at wall centerline - no inset needed
-    // Floor should fill the area bounded by wall centerlines
-    const floorPoints = roomPoints;
+    // Outset the polygon by 50mm to align with wall inner edge
+    // Room points are at centerline, we need to move 50mm outward to reach inner wall edge
+    const outsetDistance = -50; // Negative value = outward
+    const floorPoints = this.insetPolygon(roomPoints, outsetDistance);
 
     // Determine fill style based on render mode
     let fillStyle: string | CanvasPattern = this.config.fillColor;
@@ -164,9 +165,17 @@ export class RoomLayer extends BaseLayer {
     ctx.save();
 
     ctx.beginPath();
-    ctx.moveTo(floorPoints[0].x, floorPoints[0].y);
-    for (let i = 1; i < floorPoints.length; i++) {
-      ctx.lineTo(floorPoints[i].x, floorPoints[i].y);
+    if (floorPoints.length > 0) {
+      ctx.moveTo(floorPoints[0].x, floorPoints[0].y);
+      for (let i = 1; i < floorPoints.length; i++) {
+        ctx.lineTo(floorPoints[i].x, floorPoints[i].y);
+      }
+    } else {
+      // Fallback to room points if outset failed
+      ctx.moveTo(roomPoints[0].x, roomPoints[0].y);
+      for (let i = 1; i < roomPoints.length; i++) {
+        ctx.lineTo(roomPoints[i].x, roomPoints[i].y);
+      }
     }
     ctx.closePath();
 
