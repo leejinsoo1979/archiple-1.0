@@ -657,6 +657,17 @@ ARTISTIC APPROACH:
     }
   }, []);
 
+  // Listen for tool changes from keyboard shortcuts (e.g., ESC key)
+  useEffect(() => {
+    const handleToolChanged = (event: any) => {
+      const tool = event.detail.tool as ToolType;
+      setActiveTool(tool);
+    };
+
+    window.addEventListener('tool-changed', handleToolChanged);
+    return () => window.removeEventListener('tool-changed', handleToolChanged);
+  }, []);
+
   // Apply theme to document root
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', themeMode);
@@ -3123,11 +3134,7 @@ ARTISTIC APPROACH:
             />
           </div>
 
-          {/* 2D View - Preview in right panel (only render in 3D mode to avoid duplicate SceneManager issues) */}
-          {/* TEMPORARILY DISABLED - This was causing React DOM errors when switching from 3D to 2D
-              Two FloorplanCanvas instances caused conflicts during cleanup
-              TODO: Re-implement preview using a different approach (e.g., screenshot or separate renderer)
-          */}
+          {/* 2D View - Preview in right panel - DISABLED due to React DOM conflicts */}
           {/* {viewMode === '3D' && (
             <div id="preview-2d-container" style={{
               position: 'absolute',
@@ -3135,10 +3142,11 @@ ARTISTIC APPROACH:
               left: 0,
               width: '100%',
               height: '100%',
-              visibility: 'hidden', // Hidden in main viewport, shown in preview
+              visibility: 'hidden',
               pointerEvents: 'none'
             }}>
               <FloorplanCanvas
+                key="preview-2d-canvas"
                 activeTool={ToolType.SELECT}
                 onDataChange={() => {}}
                 backgroundImage={null}

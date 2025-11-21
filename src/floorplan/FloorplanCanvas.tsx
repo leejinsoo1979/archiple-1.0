@@ -346,6 +346,14 @@ const FloorplanCanvas = ({
         console.error('[FloorplanCanvas] Error in updateLayers:', e);
       }
     });
+    eventBus.on(FloorEvents.DOOR_MODIFIED, () => {
+      console.log('[FloorplanCanvas] DOOR_MODIFIED event received');
+      try {
+        updateLayers();
+      } catch (e) {
+        console.error('[FloorplanCanvas] Error in updateLayers:', e);
+      }
+    });
     eventBus.on(FloorEvents.WALL_ADDED, updateLayers);
     eventBus.on(FloorEvents.ROOM_DETECTED, updateLayers);
 
@@ -623,6 +631,9 @@ const FloorplanCanvas = ({
         const door = sceneManager.objectManager.getDoor(id);
 
         if (door) {
+          // Update door layer to show selection handles
+          doorLayer.setSelectedDoor(door.id);
+
           // Calculate position
           // We need the wall to find the door's world position
           const wall = sceneManager.objectManager.getWall(door.wallId);
@@ -651,6 +662,7 @@ const FloorplanCanvas = ({
       }
 
       // Hide if not a single door
+      doorLayer.setSelectedDoor(null);
       setOptionBarState(prev => ({ ...prev, visible: false, doorId: null }));
     };
 

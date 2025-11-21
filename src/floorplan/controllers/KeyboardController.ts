@@ -99,6 +99,8 @@ export class KeyboardController {
           this.toolManager.getActiveTool()?.cancel();
           this.toolManager.setActiveTool(ToolType.SELECT);
           this.sceneManager.setTool(ToolType.SELECT);
+          // Notify EditorPage to update UI
+          window.dispatchEvent(new CustomEvent('tool-changed', { detail: { tool: ToolType.SELECT } }));
           break;
 
         case ' ':

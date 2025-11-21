@@ -10,6 +10,7 @@ export class DoorLayer extends BaseLayer {
   private doors: Door[] = [];
   private walls: Wall[] = [];
   private points: Point[] = [];
+  private selectedDoorId: string | null = null;
   private previewDoor: {
     wall: Wall;
     position: number;
@@ -31,6 +32,10 @@ export class DoorLayer extends BaseLayer {
 
   setPoints(points: Point[]): void {
     this.points = points;
+  }
+
+  setSelectedDoor(doorId: string | null): void {
+    this.selectedDoorId = doorId;
   }
 
   setPreview(preview: {
@@ -81,6 +86,7 @@ export class DoorLayer extends BaseLayer {
     pointMap: Map<string, Point>,
     _isPreview: boolean
   ): void {
+    const isSelected = door.id === this.selectedDoorId;
     const startPoint = pointMap.get(wall.startPointId);
     const endPoint = pointMap.get(wall.endPointId);
 
@@ -255,5 +261,28 @@ export class DoorLayer extends BaseLayer {
     ctx.restore();
 
     ctx.restore();
+
+    // 4. Draw Selection Handles (if selected)
+    if (isSelected && !_isPreview) {
+      const handleRadiusMm = 100; // 100mm = 10cm
+
+      // Left handle (at openingStart)
+      ctx.beginPath();
+      ctx.arc(openingStart.x, openingStart.y, handleRadiusMm, 0, Math.PI * 2);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fill();
+      ctx.strokeStyle = '#007AFF'; // Blue color
+      ctx.lineWidth = 20; // Thicker border for visibility
+      ctx.stroke();
+
+      // Right handle (at openingEnd)
+      ctx.beginPath();
+      ctx.arc(openingEnd.x, openingEnd.y, handleRadiusMm, 0, Math.PI * 2);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fill();
+      ctx.strokeStyle = '#007AFF';
+      ctx.lineWidth = 20;
+      ctx.stroke();
+    }
   }
 }
