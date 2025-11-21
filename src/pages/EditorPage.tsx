@@ -16,6 +16,7 @@ import { useCameraSettingsStore } from '../stores/cameraSettingsStore';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 import { AIRenderModal } from '../ui/landing/components/AIRenderModal';
+import FloorplanPreview from '../ui/components/FloorplanPreview';
 
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 
@@ -116,7 +117,7 @@ const EditorPage = () => {
 
   // Render style state (for header panel)
   const [renderStyleOpen, setRenderStyleOpen] = useState(false);
-  const [renderStyle, setRenderStyle] = useState<'wireframe' | 'hidden-line' | 'solid' | 'realistic'>('solid');
+  const [renderStyle, setRenderStyle] = useState<'wireframe' | 'hidden-line' | 'solid' | 'realistic'>('realistic');
 
   // Grid visibility state
   const [showGrid, setShowGrid] = useState(true);
@@ -3475,6 +3476,12 @@ ARTISTIC APPROACH:
               <h3>Layer Settings</h3>
               <button onClick={() => setRightPanelOpen(false)}>×</button>
             </div>
+
+            {/* 3D Preview */}
+            <FloorplanPreview
+              floorplanData={floorplanData}
+              viewMode={viewMode}
+            />
 
             {/* Basic Parameters */}
             <div className={styles.settingsSection}>
