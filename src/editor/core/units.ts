@@ -268,13 +268,21 @@ export function applyZoom(
 
   // 줌 중심점이 주어진 경우, 해당 점을 기준으로 줌
   if (centerPx) {
-    const worldPosBefore = screenToWorld(centerPx, viewport);
-    const newViewport = { ...viewport, scalePxPerMm: newScale };
-    const worldPosAfter = screenToWorld(centerPx, newViewport);
+    // 1. 현재 마우스 위치의 World 좌표 계산
+    const worldPos = screenToWorld(centerPx, viewport);
 
-    // offset 조정하여 중심점 고정
-    const dx = (worldPosAfter.x - worldPosBefore.x) * newScale;
-    const dy = (worldPosAfter.y - worldPosBefore.y) * newScale;
+    // 2. 새로운 스케일 적용
+    const newViewport = { ...viewport, scalePxPerMm: newScale };
+
+    // 3. 줌 중심점 유지 공식:
+    // Screen = World * Scale + Offset
+    // Screen_new = Screen_old (마우스 위치 고정)
+    // World * NewScale + NewOffset = World * OldScale + OldOffset
+    // NewOffset = OldOffset - World * (NewScale - OldScale)
+
+    const scaleDiff = newScale - viewport.scalePxPerMm;
+    const dx = worldPos.x * scaleDiff;
+    const dy = worldPos.y * scaleDiff;
 
     return {
       ...newViewport,

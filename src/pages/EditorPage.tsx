@@ -100,6 +100,10 @@ const EditorPage = () => {
   const [editingWallId, setEditingWallId] = useState<string | null>(null);
   const [dimensionInput, setDimensionInput] = useState<string>('');
 
+  // Wall settings state (for right panel)
+  const [wallHeight, setWallHeight] = useState(2400); // mm
+  const [wallThickness, setWallThickness] = useState(100); // mm
+
   // GLB model state
   const [glbModelFile, setGlbModelFile] = useState<File | null>(null);
 
@@ -3105,6 +3109,8 @@ ARTISTIC APPROACH:
               imageScale={imageScale}
               imageOpacity={imageOpacity}
               onDimensionClick={handleDimensionClick}
+              wallHeight={wallHeight}
+              wallThickness={wallThickness}
               rulerVisible={rulerVisible}
               rulerStart={rulerStart}
               rulerEnd={rulerEnd}
@@ -3117,26 +3123,32 @@ ARTISTIC APPROACH:
             />
           </div>
 
-          {/* 2D View - Preview in right panel (always rendered) */}
-          <div id="preview-2d-container" style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            visibility: 'hidden', // Hidden in main viewport, shown in preview
-            pointerEvents: 'none'
-          }}>
-            <FloorplanCanvas
-              activeTool={ToolType.SELECT}
-              onDataChange={() => {}}
-              backgroundImage={null}
-              renderStyle={renderStyle}
-              showGrid={showGrid}
-              imageScale={imageScale}
-              imageOpacity={imageOpacity}
-            />
-          </div>
+          {/* 2D View - Preview in right panel (only render in 3D mode to avoid duplicate SceneManager issues) */}
+          {/* TEMPORARILY DISABLED - This was causing React DOM errors when switching from 3D to 2D
+              Two FloorplanCanvas instances caused conflicts during cleanup
+              TODO: Re-implement preview using a different approach (e.g., screenshot or separate renderer)
+          */}
+          {/* {viewMode === '3D' && (
+            <div id="preview-2d-container" style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              visibility: 'hidden', // Hidden in main viewport, shown in preview
+              pointerEvents: 'none'
+            }}>
+              <FloorplanCanvas
+                activeTool={ToolType.SELECT}
+                onDataChange={() => {}}
+                backgroundImage={null}
+                renderStyle={renderStyle}
+                showGrid={showGrid}
+                imageScale={imageScale}
+                imageOpacity={imageOpacity}
+              />
+            </div>
+          )} */}
 
           {/* 3D View - Main Viewport */}
           <div style={{
@@ -3551,11 +3563,21 @@ ARTISTIC APPROACH:
               </div>
               <div className={styles.settingRow}>
                 <label>Wall Height</label>
-                <input type="text" defaultValue="2400 mm" />
+                <input
+                  type="number"
+                  value={wallHeight}
+                  onChange={(e) => setWallHeight(parseInt(e.target.value) || 2400)}
+                  style={{ width: '80px' }}
+                /> mm
               </div>
               <div className={styles.settingRow}>
                 <label>Wall Thickness</label>
-                <input type="text" defaultValue="100 mm" />
+                <input
+                  type="number"
+                  value={wallThickness}
+                  onChange={(e) => setWallThickness(parseInt(e.target.value) || 100)}
+                  style={{ width: '80px' }}
+                /> mm
               </div>
               <button className={styles.deleteBtn}>Delete All Walls</button>
             </div>

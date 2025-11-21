@@ -10,6 +10,7 @@ export interface Door {
   width: number; // mm
   height: number; // mm
   swing: 'left' | 'right' | 'double';
+  openSide?: 'left' | 'right'; // Side of the wall the door opens to (relative to wall direction)
   thickness: number; // mm
 }
 

@@ -17,6 +17,7 @@ export const AIRenderModal: React.FC<AIRenderModalProps> = ({ isOpen, onClose, t
     const [generatedImage, setGeneratedImage] = useState<string | null>(null);
     const [aspectRatio, setAspectRatio] = useState<'1:1' | '16:9' | '9:16' | '4:3'>('1:1');
     const [stylePreset, setStylePreset] = useState('photorealistic');
+    const [selectedModel, setSelectedModel] = useState<'nanobanana1' | 'nanobanana2'>('nanobanana2');
 
     if (!isOpen) return null;
 
@@ -48,7 +49,8 @@ export const AIRenderModal: React.FC<AIRenderModalProps> = ({ isOpen, onClose, t
             const imageBase64 = await NanobananaService.generateImage({
                 prompt: enhancedPrompt,
                 aspectRatio: aspectRatio,
-                image: initialImage || undefined
+                image: initialImage || undefined,
+                model: selectedModel
             });
             setGeneratedImage(imageBase64);
         } catch (error) {
@@ -114,6 +116,13 @@ export const AIRenderModal: React.FC<AIRenderModalProps> = ({ isOpen, onClose, t
                             </div>
 
                             <div className={styles.optionsGrid}>
+                                <div className={styles.optionGroup}>
+                                    <label>Model</label>
+                                    <select value={selectedModel} onChange={e => setSelectedModel(e.target.value as 'nanobanana1' | 'nanobanana2')}>
+                                        <option value="nanobanana2">Nanobanana 2 (Imagen 3)</option>
+                                        <option value="nanobanana1">Nanobanana 1 (Flash)</option>
+                                    </select>
+                                </div>
                                 <div className={styles.optionGroup}>
                                     <label>Style</label>
                                     <select value={stylePreset} onChange={e => setStylePreset(e.target.value)}>

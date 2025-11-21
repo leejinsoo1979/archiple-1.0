@@ -289,7 +289,7 @@ export class GuideLayer extends BaseLayer {
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
 
-    const size = 10;
+    const size = 5; // Reduced from 10 to 5
     ctx.beginPath();
     ctx.moveTo(point.x - size, point.y);
     ctx.lineTo(point.x + size, point.y);
@@ -301,7 +301,7 @@ export class GuideLayer extends BaseLayer {
     ctx.strokeStyle = this.config.gridSnapColor;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
+    ctx.arc(point.x, point.y, 3, 0, Math.PI * 2); // Reduced from 6 to 3
     ctx.stroke();
 
     ctx.restore();

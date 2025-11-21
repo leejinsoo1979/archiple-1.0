@@ -53,9 +53,9 @@ export class SnapService {
       angleSnapEnabled: true, // ENABLED - angle guides (0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°)
       orthogonalSnapEnabled: false, // DISABLED by default - enable with Shift key
       perpendicularSnapEnabled: false, // DISABLED - free drawing
-      midpointSnapEnabled: false, // DISABLED - free drawing
+      midpointSnapEnabled: true, // ENABLED - snap to wall midpoints like Coohom
       pointSnapThreshold: 150, // 150mm = 15cm snap range (zoom independent)
-      wallSnapThreshold: 50, // 50mm = 5cm snap range for walls
+      wallSnapThreshold: 150, // 150mm = 15cm snap range for wall midpoints (increased for visibility)
       gridSize: 100, // 100mm grid display only
       angleSnapDegrees: [0, 45, 90, 135, 180, 225, 270, 315], // 8-direction angle snap
       orthogonalAngles: [0, 90, 180, 270], // Orthogonal angles for Shift key
@@ -131,7 +131,16 @@ export class SnapService {
       }
     }
 
-    // 2. Wall snap (snap to existing walls)
+    // 2. Midpoint snap (snap to wall midpoints - Coohom style)
+    if (this.config.midpointSnapEnabled) {
+      const midpointSnap = this.snapToMidpoint(position);
+      if (midpointSnap) {
+        console.log('[SnapService] Midpoint snap triggered');
+        return midpointSnap;
+      }
+    }
+
+    // 3. Wall snap (snap to existing walls)
     if (this.config.wallSnapEnabled) {
       const wallSnap = this.snapToWall(position);
       if (wallSnap) {
@@ -176,13 +185,7 @@ export class SnapService {
       }
     }
 
-    // 6. Midpoint snap
-    if (this.config.midpointSnapEnabled) {
-      const midpointSnap = this.snapToMidpoint(position);
-      if (midpointSnap) return midpointSnap;
-    }
-
-    // 7. Grid snap (lowest priority)
+    // 6. Grid snap (lowest priority)
     if (this.config.gridSnapEnabled) {
       return this.snapToGrid(position);
     }
@@ -199,8 +202,8 @@ export class SnapService {
   }
 
   /**
-   * Snap to nearest wall
-   * Finds closest point on any wall within threshold
+   * Snap to nearest wall CENTERLINE (Any point on the wall)
+   * Allows connecting T-junctions at any point along the wall
    */
   private snapToWall(position: Vector2): SnapResult | null {
     if (this.walls.length === 0) return null;
@@ -215,11 +218,18 @@ export class SnapService {
 
       if (!startPt || !endPt) continue;
 
-      const wallStart = new Vector2(startPt.x, startPt.y);
-      const wallEnd = new Vector2(endPt.x, endPt.y);
+      const start = new Vector2(startPt.x, startPt.y);
+      const end = new Vector2(endPt.x, endPt.y);
+      const wallVec = end.subtract(start);
+      const wallLengthSq = wallVec.lengthSquared();
 
-      // Calculate closest point on wall line segment
-      const closestPoint = this.closestPointOnLineSegment(position, wallStart, wallEnd);
+      if (wallLengthSq === 0) continue;
+
+      // Calculate projection of position onto wall vector
+      const toMouse = position.subtract(start);
+      const t = Math.max(0, Math.min(1, toMouse.dot(wallVec) / wallLengthSq));
+
+      const closestPoint = start.add(wallVec.multiply(t));
       const distance = position.distanceTo(closestPoint);
 
       if (distance < minDistance) {
@@ -246,30 +256,6 @@ export class SnapService {
     }
 
     return null;
-  }
-
-  /**
-   * Calculate closest point on line segment
-   */
-  private closestPointOnLineSegment(point: Vector2, lineStart: Vector2, lineEnd: Vector2): Vector2 {
-    const px = point.x - lineStart.x;
-    const py = point.y - lineStart.y;
-    const lx = lineEnd.x - lineStart.x;
-    const ly = lineEnd.y - lineStart.y;
-    const lineLengthSq = lx * lx + ly * ly;
-
-    if (lineLengthSq === 0) {
-      return lineStart.clone();
-    }
-
-    const t = Math.max(0, Math.min(1, (px * lx + py * ly) / lineLengthSq));
-    const closestX = lineStart.x + t * lx;
-    const closestY = lineStart.y + t * ly;
-
-    return new Vector2(
-      this.snapToPrecision(closestX),
-      this.snapToPrecision(closestY)
-    );
   }
 
   /**
@@ -402,15 +388,6 @@ export class SnapService {
       position: new Vector2(snappedX, snappedY),
       snappedTo: 'angle',
     };
-  }
-
-  /**
-   * Snap to midpoint of existing lines
-   */
-  private snapToMidpoint(_position: Vector2): SnapResult | null {
-    // TODO: Implement midpoint snap for walls
-    // This requires wall data, will implement in Phase 3
-    return null;
   }
 
   /**
@@ -566,6 +543,96 @@ export class SnapService {
           snappedTo: 'perpendicular',
         };
       }
+    }
+
+    return null;
+  }
+
+  /**
+   * Snap to wall midpoint (Coohom style)
+   * Shows + icon and guide line at wall center
+   */
+  private snapToMidpoint(position: Vector2): SnapResult | null {
+    if (this.walls.length === 0) return null;
+
+    let nearestWall: Wall | null = null;
+    let nearestMidpoint: Vector2 | null = null;
+    let minDistance = this.config.wallSnapThreshold;
+
+    for (const wall of this.walls) {
+      const startPt = this.pointMap.get(wall.startPointId);
+      const endPt = this.pointMap.get(wall.endPointId);
+
+      if (!startPt || !endPt) continue;
+
+      // Calculate wall midpoint
+      const midX = (startPt.x + endPt.x) / 2;
+      const midY = (startPt.y + endPt.y) / 2;
+      const midpoint = new Vector2(midX, midY);
+
+      const distance = position.distanceTo(midpoint);
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearestWall = wall;
+        nearestMidpoint = midpoint;
+      }
+    }
+
+    if (nearestWall && nearestMidpoint) {
+      const startPt = this.pointMap.get(nearestWall.startPointId);
+      const endPt = this.pointMap.get(nearestWall.endPointId);
+
+      if (startPt && endPt) {
+        // Emit wall midpoint guide (vertical line through midpoint)
+        const dx = endPt.x - startPt.x;
+        const dy = endPt.y - startPt.y;
+        const wallAngle = Math.atan2(dy, dx);
+
+        // Perpendicular angle for guide line
+        const perpAngle = wallAngle + Math.PI / 2;
+        const guideLength = 5000; // 5000mm guide line length
+
+        // Calculate guide line endpoints
+        const guideStartX = nearestMidpoint.x - Math.cos(perpAngle) * guideLength;
+        const guideStartY = nearestMidpoint.y - Math.sin(perpAngle) * guideLength;
+        const guideEndX = nearestMidpoint.x + Math.cos(perpAngle) * guideLength;
+        const guideEndY = nearestMidpoint.y + Math.sin(perpAngle) * guideLength;
+
+        // Emit vertical guide through midpoint
+        if (Math.abs(Math.cos(perpAngle)) > 0.7) {
+          // More vertical
+          eventBus.emit(FloorEvents.VERTICAL_GUIDE_UPDATED, {
+            x: nearestMidpoint.x,
+            fromY: guideStartY,
+            toY: guideEndY,
+          });
+        } else {
+          // More horizontal
+          eventBus.emit(FloorEvents.HORIZONTAL_GUIDE_UPDATED, {
+            y: nearestMidpoint.y,
+            fromX: guideStartX,
+            toX: guideEndX,
+          });
+        }
+      }
+
+      // Create a temporary point for snap indicator (+ icon)
+      const snapPoint: Point = {
+        id: 'wall-midpoint-snap-temp',
+        x: nearestMidpoint.x,
+        y: nearestMidpoint.y,
+        connectedWalls: []
+      };
+
+      return {
+        position: new Vector2(
+          this.snapToPrecision(nearestMidpoint.x),
+          this.snapToPrecision(nearestMidpoint.y)
+        ),
+        snappedTo: 'midpoint',
+        snapPoint: snapPoint,
+      };
     }
 
     return null;

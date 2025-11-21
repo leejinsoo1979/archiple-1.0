@@ -95,6 +95,7 @@ export class KeyboardController {
 
         case 'escape':
           // ESC: Cancel current tool operation and return to SELECT tool
+          event.preventDefault();
           this.toolManager.getActiveTool()?.cancel();
           this.toolManager.setActiveTool(ToolType.SELECT);
           this.sceneManager.setTool(ToolType.SELECT);

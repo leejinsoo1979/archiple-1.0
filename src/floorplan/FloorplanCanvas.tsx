@@ -34,6 +34,7 @@ import { FloatingOptionBar } from './ui/FloatingOptionBar';
 // Services
 import { SnapService } from './services/SnapService';
 import { RoomDetectionService } from './services/RoomDetectionService';
+import { WallSplitService } from './services/WallSplitService';
 
 // Controllers
 import { MouseController } from './controllers/MouseController';
@@ -108,8 +109,10 @@ const FloorplanCanvas = ({
   const toolManagerRef = useRef<ToolManager | null>(null);
   const snapServiceRef = useRef<SnapService | null>(null);
   const roomDetectionServiceRef = useRef<RoomDetectionService | null>(null);
+  const wallSplitServiceRef = useRef<WallSplitService | null>(null);
   const mouseControllerRef = useRef<MouseController | null>(null);
   const keyboardControllerRef = useRef<KeyboardController | null>(null);
+  const isCleanedUpRef = useRef<boolean>(false); // Guard against double cleanup
 
   // Layers
   const backgroundLayerRef = useRef<BackgroundImageLayer | null>(null);
@@ -223,6 +226,9 @@ const FloorplanCanvas = ({
 
     const roomDetectionService = new RoomDetectionService();
     roomDetectionServiceRef.current = roomDetectionService;
+
+    const wallSplitService = new WallSplitService();
+    wallSplitServiceRef.current = wallSplitService;
 
     // 6. Initialize ToolManager
     const toolManager = new ToolManager();
@@ -508,18 +514,41 @@ const FloorplanCanvas = ({
       updateLayers();
     });
 
-    // 9. Automatic Room Detection
+    // 9. Automatic Room Detection with Wall Splitting
     const detectRooms = () => {
-      const walls = sceneManager.objectManager.getAllWalls();
+      let walls = sceneManager.objectManager.getAllWalls();
       const points = sceneManager.objectManager.getAllPoints();
 
-      // Detect rooms
+      console.log('[FloorplanCanvas] Starting room detection with wall splitting...');
+
+      // Step 1: Split walls at T-junctions
+      const splitResult = wallSplitService.splitWallsAtTJunctions(walls, points);
+
+      // Apply wall splits to SceneManager if any walls were split
+      if (splitResult.removedWallIds.length > 0) {
+        console.log(`[FloorplanCanvas] Applying wall splits: removing ${splitResult.removedWallIds.length} walls, adding ${splitResult.walls.length - walls.length + splitResult.removedWallIds.length} new segments`);
+
+        // Remove old walls
+        splitResult.removedWallIds.forEach(wallId => {
+          sceneManager.objectManager.removeWall(wallId);
+        });
+
+        // Add new wall segments (only the new ones, not the unchanged ones)
+        const existingWallIds = new Set(walls.map(w => w.id));
+        splitResult.walls.forEach(wall => {
+          if (!existingWallIds.has(wall.id)) {
+            sceneManager.objectManager.addWall(wall);
+          }
+        });
+
+        // Update walls array with split result
+        walls = splitResult.walls;
+      }
+
+      // Step 2: Detect rooms using split walls
       const rooms = roomDetectionService.detectRooms(walls, points);
 
-      // Update ObjectManager (replace old rooms with new ones)
-      // Note: In a real app, we might want to preserve room names/properties if the ID matches
-      // For now, we just replace them to ensure geometry is correct
-
+      // Step 3: Update rooms in ObjectManager
       // Clear existing rooms
       const existingRooms = sceneManager.objectManager.getAllRooms();
       existingRooms.forEach(r => sceneManager.objectManager.removeRoom(r.id));
@@ -527,7 +556,7 @@ const FloorplanCanvas = ({
       // Add new rooms
       rooms.forEach(r => sceneManager.objectManager.addRoom(r));
 
-      console.log(`[FloorplanCanvas] Detected ${rooms.length} rooms`);
+      console.log(`[FloorplanCanvas] Detected ${rooms.length} rooms after wall splitting`);
     };
 
     // Listen to wall events for automatic detection
@@ -659,25 +688,57 @@ const FloorplanCanvas = ({
     return () => {
       console.log('[FloorplanCanvas] Cleaning up...');
 
-      window.removeEventListener('resize', handleResize);
+      // Add cleanup guard to prevent double cleanup
+      if (isCleanedUpRef.current) {
+        console.log('[FloorplanCanvas] Already cleaned up, skipping...');
+        return;
+      }
 
-      // Stop renderer
-      renderer.stop();
-      renderer.dispose();
+      try {
+        window.removeEventListener('resize', handleResize);
 
-      eventBus.off(EditorEvents.SELECTION_CHANGED, handleSelectionChanged);
-      eventBus.off(EditorEvents.VIEWPORT_CHANGED, handleViewportChanged);
-      eventBus.off(FloorEvents.DOOR_MODIFIED, handleViewportChanged);
-      eventBus.off(FloorEvents.DOOR_ADDED, handleSelectionChanged);
+        // Stop renderer safely
+        if (renderer) {
+          try {
+            renderer.stop();
+            renderer.dispose();
+          } catch (e) {
+            console.warn('[FloorplanCanvas] Renderer cleanup warning:', e);
+          }
+        }
 
-      // Dispose controllers
-      mouseController.dispose();
-      keyboardController.dispose();
+        // Remove event listeners safely
+        try {
+          eventBus.off(EditorEvents.SELECTION_CHANGED, handleSelectionChanged);
+          eventBus.off(EditorEvents.VIEWPORT_CHANGED, handleViewportChanged);
+          eventBus.off(FloorEvents.DOOR_MODIFIED, handleViewportChanged);
+          eventBus.off(FloorEvents.DOOR_ADDED, handleSelectionChanged);
+        } catch (e) {
+          console.warn('[FloorplanCanvas] Event cleanup warning:', e);
+        }
 
-      // Clear event listeners
-      eventBus.off(FloorEvents.POINT_ADDED, updateLayers);
-      eventBus.off(FloorEvents.WALL_ADDED, updateLayers);
-      eventBus.off(FloorEvents.ROOM_DETECTED, updateLayers);
+        // Dispose controllers safely
+        try {
+          if (mouseController) mouseController.dispose();
+          if (keyboardController) keyboardController.dispose();
+        } catch (e) {
+          console.warn('[FloorplanCanvas] Controller cleanup warning:', e);
+        }
+
+        // Clear event listeners
+        try {
+          eventBus.off(FloorEvents.POINT_ADDED, updateLayers);
+          eventBus.off(FloorEvents.WALL_ADDED, updateLayers);
+          eventBus.off(FloorEvents.ROOM_DETECTED, updateLayers);
+        } catch (e) {
+          console.warn('[FloorplanCanvas] Event listener cleanup warning:', e);
+        }
+
+        isCleanedUpRef.current = true;
+        console.log('[FloorplanCanvas] Cleanup completed successfully');
+      } catch (error) {
+        console.error('[FloorplanCanvas] Cleanup error:', error);
+      }
 
       // DO NOT reset SceneManager singleton - it should persist across re-renders
       // Only clear on actual page navigation/unmount

@@ -430,9 +430,9 @@ export class WallLayer extends BaseLayer {
         break;
 
       case 'hidden-line':
-        // Fill with light color + outline
+        // Fill with light color + outline (semi-transparent to see floor)
         const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
-        ctx.fillStyle = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
+        ctx.fillStyle = isDarkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)';
         ctx.fill();
         // Use selection/hover color for stroke
         ctx.strokeStyle = isSelected || isHovered ? color : this.config.wallColor;
@@ -441,12 +441,13 @@ export class WallLayer extends BaseLayer {
         break;
 
       case 'realistic':
-        // Gradient fill for realistic effect
+        // Gradient fill for realistic effect (semi-transparent to see floor)
+        ctx.globalAlpha = 0.7; // 70% opacity to see floor beneath
         const centerX = (poly[0].x + poly[1].x + poly[2].x + poly[3].x) / 4;
         const centerY = (poly[0].y + poly[1].y + poly[2].y + poly[3].y) / 4;
         const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, this.config.wallThickness / 2);
-        // Use selection/hover color for gradient
-        const baseColor = isSelected || isHovered ? color : this.config.wallColor;
+        // Use selection/hover color for gradient - always use hex format for realistic mode
+        const baseColor = isSelected ? themeColor : (isHovered ? themeColor : this.config.wallColor);
         gradient.addColorStop(0, baseColor);
         gradient.addColorStop(1, this.darkenColor(baseColor, 0.3));
         ctx.fillStyle = gradient;
@@ -455,13 +456,16 @@ export class WallLayer extends BaseLayer {
         ctx.strokeStyle = this.darkenColor(baseColor, 0.5);
         ctx.lineWidth = isSelected || isHovered ? 1 : 0.5;
         ctx.stroke();
+        ctx.globalAlpha = 1.0; // Reset opacity
         break;
 
       case 'solid':
       default:
-        // Standard solid fill
+        // Standard solid fill (semi-transparent to see floor)
+        ctx.globalAlpha = 0.6; // 60% opacity to see floor beneath
         ctx.fillStyle = color;
         ctx.fill();
+        ctx.globalAlpha = 1.0; // Reset opacity
         break;
     }
   }

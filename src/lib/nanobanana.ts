@@ -15,6 +15,7 @@ export interface GenerateImageOptions {
     negativePrompt?: string; // Gemini doesn't strictly support negative prompts in the same way as SD, but we can append to prompt
     aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:4';
     image?: string; // Base64 encoded image string (data:image/png;base64,...)
+    model?: 'nanobanana1' | 'nanobanana2'; // Model selection: Nanobanana 1 (gemini-2.5-flash-image) or Nanobanana 2 (gemini-3-pro-image)
     generationConfig?: {
         temperature?: number;
         topP?: number;
@@ -38,8 +39,15 @@ export const NanobananaService = {
      */
     generateImage: async (options: GenerateImageOptions): Promise<string> => {
         try {
+            // Select model based on user choice
+            const modelName = options.model === 'nanobanana1'
+                ? 'gemini-2.5-flash-image'  // Nanobanana 1
+                : 'gemini-3-pro-image';      // Nanobanana 2 (default)
+
+            console.log('[Nanobanana] Using model:', modelName);
+
             const model = genAI.getGenerativeModel({
-                model: 'gemini-2.5-flash-image',
+                model: modelName,
                 generationConfig: options.generationConfig
             });
 
@@ -121,7 +129,7 @@ export const NanobananaService = {
      */
     describeImage: async (imageBase64: string): Promise<string> => {
         try {
-            const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-image' });
+            const model = genAI.getGenerativeModel({ model: 'gemini-3-pro-image' });
 
             const matches = imageBase64.match(/^data:(.+);base64,(.+)$/);
             if (!matches || matches.length !== 3) {

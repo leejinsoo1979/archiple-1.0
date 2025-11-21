@@ -77,20 +77,32 @@ export class GridLayer extends BaseLayer {
     ctx.fillStyle = isDarkMode ? '#1e1e1e' : this.config.backgroundColor;
     ctx.fillRect(viewLeft - margin, viewTop - margin, (viewRight - viewLeft) + margin * 2, (viewBottom - viewTop) + margin * 2);
 
-    // Constant high opacity - no fade with zoom
-    // Grid should always be clearly visible at any zoom level
-    const minorOpacity = 0.8; // 80% for minor grid (clearly visible)
-    const majorOpacity = 1.0; // 100% for major grid (always clear)
+    // Adaptive grid rendering based on zoom level
+    // Calculate how many pixels one grid cell occupies on screen
+    const minorGridPixels = this.config.gridSize * zoom;
+    const majorGridPixels = this.config.majorGridSize * zoom;
 
     // Theme-aware grid colors
     const minorColor = isDarkMode ? '#555555' : this.config.minorColor;
     const majorColor = isDarkMode ? '#707070' : this.config.majorColor;
 
-    // Draw minor grid (10cm) - lighter color with moderate opacity
-    this.drawGrid(ctx, this.config.gridSize, minorColor, 1, viewLeft, viewTop, viewRight, viewBottom, minorOpacity);
+    // Only show minor grid if it's large enough to be visible (at least 5 pixels per cell)
+    // This prevents grid lines from becoming too dense and flickering
+    if (minorGridPixels >= 5) {
+      // Adaptive opacity based on zoom - fade out as zoom decreases
+      const minorOpacity = Math.min(1.0, Math.max(0.3, (minorGridPixels - 5) / 20));
+      // Adaptive line width - thinner when zoomed out
+      const minorLineWidth = minorGridPixels < 10 ? 0.5 : 1;
 
-    // Draw major grid (1m) - darker color with full opacity
-    this.drawGrid(ctx, this.config.majorGridSize, majorColor, 2, viewLeft, viewTop, viewRight, viewBottom, majorOpacity);
+      this.drawGrid(ctx, this.config.gridSize, minorColor, minorLineWidth, viewLeft, viewTop, viewRight, viewBottom, minorOpacity);
+    }
+
+    // Always show major grid with adaptive styling
+    // Increase opacity and line width when minor grid is hidden
+    const majorOpacity = minorGridPixels < 5 ? 1.0 : 0.8;
+    const majorLineWidth = minorGridPixels < 5 ? 2 : (majorGridPixels < 20 ? 1.5 : 2);
+
+    this.drawGrid(ctx, this.config.majorGridSize, majorColor, majorLineWidth, viewLeft, viewTop, viewRight, viewBottom, majorOpacity);
 
     this.resetOpacity(ctx);
   }
@@ -140,10 +152,10 @@ export class GridLayer extends BaseLayer {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result
       ? {
-          r: parseInt(result[1], 16),
-          g: parseInt(result[2], 16),
-          b: parseInt(result[3], 16),
-        }
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16),
+      }
       : { r: 0, g: 0, b: 0 };
   }
 }

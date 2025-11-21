@@ -79,7 +79,7 @@ export class DoorLayer extends BaseLayer {
     door: Door,
     wall: Wall,
     pointMap: Map<string, Point>,
-    isPreview: boolean
+    _isPreview: boolean
   ): void {
     const startPoint = pointMap.get(wall.startPointId);
     const endPoint = pointMap.get(wall.endPointId);
@@ -100,7 +100,7 @@ export class DoorLayer extends BaseLayer {
     const halfWidth = doorWidth / 2;
 
     // Check current theme for color selection
-    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+    // const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
 
     ctx.save();
 
@@ -115,84 +115,144 @@ export class DoorLayer extends BaseLayer {
     };
 
     // Determine swing direction
+    // Determine swing direction
     const swingDirection = door.swing === 'left' ? -1 : 1;
+
+    // Determine open side (default to 'right' if undefined)
+    // 'right' means opening to the "positive" side of the wall vector (down/right usually)
+    const openSide = door.openSide || 'right';
+    const sideMultiplier = openSide === 'left' ? -1 : 1;
 
     // Hinge point (where door rotates)
     const hingePoint = swingDirection === 1 ? openingStart : openingEnd;
 
-    // Draw door swing arc (90도 호) - 더 굵고 명확하게, 다크모드 대응
-    ctx.strokeStyle = isPreview
-      ? (isDarkMode ? '#81C784' : '#4CAF50')
-      : (isDarkMode ? '#64B5F6' : '#1976D2');
-    ctx.lineWidth = 15;
-    ctx.lineCap = 'round';
-    if (isPreview) {
-      ctx.globalAlpha = 0.7;
-    }
+    // Arc angles
+    const arcStartAngle = swingDirection === 1 ? wallAngle : wallAngle + Math.PI;
+    // Calculate end angle based on swing and side
+    // If side is flipped (-1), we rotate in the opposite direction relative to the wall
+    const arcEndAngle = arcStartAngle + (Math.PI / 2) * swingDirection * sideMultiplier;
+
+    // Determine arc direction (CW/CCW)
+    // R(1), R(1) -> CW (false)
+    // R(1), L(-1) -> CCW (true)
+    // L(-1), R(1) -> CCW (true)
+    // L(-1), L(-1) -> CW (false)
+    const anticlockwise = (swingDirection * sideMultiplier) < 0;
+
+    // 1. Draw Threshold (Moon-teul/Sill) - White rectangle at the bottom
+    // Coohom style: Distinct white rectangle for the threshold
+    ctx.fillStyle = '#FFFFFF';
+    ctx.strokeStyle = '#333333'; // Dark grey border
+    ctx.lineWidth = 1;
 
     ctx.beginPath();
-    // Arc showing door swing path (90 degrees)
-    const arcStartAngle = swingDirection === 1 ? wallAngle : wallAngle + Math.PI;
-    const arcEndAngle = arcStartAngle + (Math.PI / 2) * swingDirection;
+    // Draw rectangle rotated to wall angle
+    // We need 4 points for the threshold rectangle
+    // It spans from openingStart to openingEnd, with some thickness (e.g. wall thickness or slightly less)
+    // Let's match wall thickness for now
+    const thickness = 100; // Should ideally come from wall.thickness or door.thickness
+    const halfThick = thickness / 2;
 
+    const t1 = {
+      x: openingStart.x + Math.sin(wallAngle) * halfThick,
+      y: openingStart.y - Math.cos(wallAngle) * halfThick
+    };
+    const t2 = {
+      x: openingEnd.x + Math.sin(wallAngle) * halfThick,
+      y: openingEnd.y - Math.cos(wallAngle) * halfThick
+    };
+    const t3 = {
+      x: openingEnd.x - Math.sin(wallAngle) * halfThick,
+      y: openingEnd.y + Math.cos(wallAngle) * halfThick
+    };
+    const t4 = {
+      x: openingStart.x - Math.sin(wallAngle) * halfThick,
+      y: openingStart.y + Math.cos(wallAngle) * halfThick
+    };
+
+    ctx.moveTo(t1.x, t1.y);
+    ctx.lineTo(t2.x, t2.y);
+    ctx.lineTo(t3.x, t3.y);
+    ctx.lineTo(t4.x, t4.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+
+    // 2. Draw Door Swing Arc (Filled Sector)
+    // Coohom style: Light grey fill, thin dark arc line
+    ctx.beginPath();
+    ctx.moveTo(hingePoint.x, hingePoint.y);
     ctx.arc(
       hingePoint.x,
       hingePoint.y,
       doorWidth,
       arcStartAngle,
       arcEndAngle,
-      swingDirection < 0
+      anticlockwise
     );
-    ctx.stroke();
+    ctx.closePath();
 
-    // Draw door slab (closed position) - 더 굵게, 다크모드 대응
-    ctx.strokeStyle = isPreview
-      ? (isDarkMode ? '#66BB6A' : '#388E3C')
-      : (isDarkMode ? '#42A5F5' : '#0D47A1');
-    ctx.lineWidth = 20;
-    ctx.lineCap = 'round';
-
-    ctx.beginPath();
-    ctx.moveTo(openingStart.x, openingStart.y);
-    ctx.lineTo(openingEnd.x, openingEnd.y);
-    ctx.stroke();
-
-    // Draw hinge marker (rotation point) - 더 크게, 다크모드 대응
-    ctx.fillStyle = isPreview
-      ? (isDarkMode ? '#81C784' : '#4CAF50')
-      : (isDarkMode ? '#EF5350' : '#E53935');
-    ctx.beginPath();
-    ctx.arc(hingePoint.x, hingePoint.y, 20, 0, Math.PI * 2);
+    // Fill style
+    ctx.fillStyle = 'rgba(200, 200, 200, 0.3)'; // Light grey transparent
     ctx.fill();
 
-    // Draw opening edges (문틀 표시) - 다크모드 대응
-    ctx.globalAlpha = 1.0;
-    ctx.strokeStyle = isPreview
-      ? (isDarkMode ? '#A5D6A7' : '#66BB6A')
-      : (isDarkMode ? '#90CAF9' : '#42A5F5');
-    ctx.lineWidth = 10;
-
-    // Perpendicular direction for edge markers
-    const perpAngle = wallAngle + Math.PI / 2;
-    const edgeLength = 120; // 120mm edge marker
-
-    // Left edge
+    // Stroke style (Arc only, not the radii)
     ctx.beginPath();
-    ctx.moveTo(openingStart.x, openingStart.y);
-    ctx.lineTo(
-      openingStart.x + Math.cos(perpAngle) * edgeLength,
-      openingStart.y + Math.sin(perpAngle) * edgeLength
+    ctx.arc(
+      hingePoint.x,
+      hingePoint.y,
+      doorWidth,
+      arcStartAngle,
+      arcEndAngle,
+      anticlockwise
     );
+    ctx.strokeStyle = '#666666';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 5]); // Dashed line for swing path? Coohom seems solid or dashed. Let's use solid thin.
+    ctx.setLineDash([]);
     ctx.stroke();
 
-    // Right edge
-    ctx.beginPath();
-    ctx.moveTo(openingEnd.x, openingEnd.y);
-    ctx.lineTo(
-      openingEnd.x + Math.cos(perpAngle) * edgeLength,
-      openingEnd.y + Math.sin(perpAngle) * edgeLength
-    );
-    ctx.stroke();
+
+    // 3. Draw Door Leaf (Rectangular)
+    // Coohom style: White rectangle with dark border
+    const leafThickness = 40; // 40mm standard door leaf
+
+    ctx.save();
+    ctx.translate(hingePoint.x, hingePoint.y);
+    ctx.rotate(arcStartAngle + (swingDirection === 1 ? 0 : 0)); // Start angle matches wall
+    // If swing is left (-1), we rotate -90 deg? No, open position is 90 deg from closed.
+    // Wait, Coohom shows door in OPEN position (90 degrees).
+
+    // Rotate to open position
+    // If swing is right (1): Rotate +90 deg (PI/2)
+    // If swing is left (-1): Rotate -90 deg (-PI/2)
+    // Apply side multiplier
+    ctx.rotate(swingDirection * sideMultiplier * Math.PI / 2);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.strokeStyle = '#333333';
+    ctx.lineWidth = 1;
+
+    // Draw rectangle
+    // Origin is hinge.
+    // Width is doorWidth.
+    // Height is leafThickness.
+    // We need to align it correctly relative to hinge.
+    // If swing right: Hinge is at (0,0). Door extends along X axis. Thickness is centered or offset?
+    // Usually flush with the frame.
+
+    if (swingDirection === 1) {
+      // Right swing
+      ctx.fillRect(0, -leafThickness, doorWidth, leafThickness);
+      ctx.strokeRect(0, -leafThickness, doorWidth, leafThickness);
+    } else {
+      // Left swing
+      ctx.fillRect(0, 0, doorWidth, leafThickness);
+      ctx.strokeRect(0, 0, doorWidth, leafThickness);
+    }
+
+    ctx.restore();
 
     ctx.restore();
   }

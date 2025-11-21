@@ -32,7 +32,7 @@ export class SelectTool extends BaseTool {
 
   // Config
   private pointSelectRadius = 200; // 200mm selection radius (easier to click)
-  private wallSelectDistance = 500; // 500mm distance from wall to select (increased for easier selection)
+  private wallSelectDistance = 1000; // 1000mm distance from wall to select (increased for easier selection)
 
   constructor(sceneManager: SceneManager, snapService: SnapService) {
     super('select');
@@ -87,8 +87,10 @@ export class SelectTool extends BaseTool {
       return;
     }
 
-    // Clicked empty space - deselect
+    // Clicked empty space - deselect everything (including doors)
     this.resetState();
+    // Clear any door selection to hide FloatingOptionBar
+    this.sceneManager.selectionManager.clearSelection();
   }
 
   handleMouseMove(position: Vector2, _event: MouseEvent): void {
@@ -137,16 +139,13 @@ export class SelectTool extends BaseTool {
       const snapResult = this.snapService.snap(position);
       const snappedPos = snapResult.position;
 
-      // Move point to snapped position
-      this.selectedPoint.x = snappedPos.x;
-      this.selectedPoint.y = snappedPos.y;
-
-      // Emit point moved event for live preview
-      eventBus.emit(FloorEvents.POINT_MOVED, {
-        point: this.selectedPoint,
+      // Update point using SceneManager's updatePoint method
+      this.sceneManager.objectManager.updatePoint(this.selectedPoint.id, {
+        x: snappedPos.x,
+        y: snappedPos.y,
       });
     }
-    // Handle wall dragging with axis constraints
+    // Handle wall dragging
     else if (this.selectedWall && this.dragStartPos) {
       const allPoints = this.sceneManager.objectManager.getAllPoints();
 
@@ -156,35 +155,52 @@ export class SelectTool extends BaseTool {
 
       if (!startPoint || !endPoint) return;
 
-      // Determine if wall is horizontal or vertical
-      const dx = endPoint.x - startPoint.x;
-      const dy = endPoint.y - startPoint.y;
-      const isHorizontal = Math.abs(dx) > Math.abs(dy);
+      // Calculate wall direction vector
+      const wallVec = new Vector2(endPoint.x - startPoint.x, endPoint.y - startPoint.y);
+      const wallLength = wallVec.length();
+      if (wallLength < 0.001) return; // Zero-length wall
+
+      const wallDir = wallVec.normalize();
 
       // Calculate drag delta
-      const dragDx = position.x - this.dragStartPos.x;
-      const dragDy = position.y - this.dragStartPos.y;
+      const dragDelta = new Vector2(position.x - this.dragStartPos.x, position.y - this.dragStartPos.y);
 
-      if (isHorizontal) {
-        // Horizontal wall - only move Y axis (상하)
-        startPoint.y += dragDy;
-        endPoint.y += dragDy;
-      } else {
-        // Vertical wall - only move X axis (좌우)
-        startPoint.x += dragDx;
-        endPoint.x += dragDx;
+      // Project drag delta onto wall perpendicular direction (normal)
+      // This allows moving the wall sideways but not along its length
+      const wallNormal = new Vector2(-wallDir.y, wallDir.x);
+      const perpDist = dragDelta.dot(wallNormal);
+
+      // Calculate the perpendicular offset
+      const offsetX = wallNormal.x * perpDist;
+      const offsetY = wallNormal.y * perpDist;
+
+      // Only update points if they are NOT shared by other walls (T-junction check)
+      // Check if start point is only used by this wall
+      const allWalls = this.sceneManager.objectManager.getAllWalls();
+      const startPointWalls = allWalls.filter(w =>
+        w.startPointId === startPoint.id || w.endPointId === startPoint.id
+      );
+      const endPointWalls = allWalls.filter(w =>
+        w.startPointId === endPoint.id || w.endPointId === endPoint.id
+      );
+
+      // Only move endpoints that are exclusive to this wall (not shared with other walls)
+      if (startPointWalls.length === 1) {
+        this.sceneManager.objectManager.updatePoint(startPoint.id, {
+          x: startPoint.x + offsetX,
+          y: startPoint.y + offsetY,
+        });
+      }
+
+      if (endPointWalls.length === 1) {
+        this.sceneManager.objectManager.updatePoint(endPoint.id, {
+          x: endPoint.x + offsetX,
+          y: endPoint.y + offsetY,
+        });
       }
 
       // Update drag start position for next frame
       this.dragStartPos = position.clone();
-
-      // Emit point moved events for both points
-      eventBus.emit(FloorEvents.POINT_MOVED, {
-        point: startPoint,
-      });
-      eventBus.emit(FloorEvents.POINT_MOVED, {
-        point: endPoint,
-      });
     }
   }
 
@@ -222,6 +238,26 @@ export class SelectTool extends BaseTool {
 
   cancel(): void {
     this.resetState();
+  }
+
+  handleKeyDown(event: KeyboardEvent): void {
+    // Call parent to handle Escape
+    super.handleKeyDown(event);
+
+    // Handle Delete and Backspace keys
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      if (this.selectedWall) {
+        // Delete the selected wall
+        this.sceneManager.objectManager.removeWall(this.selectedWall.id);
+        this.resetState();
+        event.preventDefault();
+      } else if (this.selectedPoint) {
+        // Delete the selected point
+        this.sceneManager.objectManager.removePoint(this.selectedPoint.id);
+        this.resetState();
+        event.preventDefault();
+      }
+    }
   }
 
   /**

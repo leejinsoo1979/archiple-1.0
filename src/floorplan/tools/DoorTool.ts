@@ -155,6 +155,9 @@ export class DoorTool extends BaseTool {
     this.sceneManager.objectManager.addDoor(door);
     console.log('[DoorTool] Door placed:', door);
 
+    // Select the placed door to show option bar
+    this.sceneManager.selectionManager.select(door.id);
+
     // Clear preview after placing
     eventBus.emit(FloorEvents.DOOR_PREVIEW_CLEARED, {});
   }
