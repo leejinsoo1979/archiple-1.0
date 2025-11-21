@@ -23,9 +23,10 @@ const FloorplanPreview = ({ floorplanData, viewMode = '2D' }: FloorplanPreviewPr
     ctx.fillStyle = '#f5f5f5';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw placeholder content based on viewMode
-    if (viewMode === '3D') {
-      // 3D perspective view placeholder
+    // Draw placeholder content - show OPPOSITE of current viewMode
+    // If current view is 2D, show 3D preview. If current is 3D, show 2D preview.
+    if (viewMode === '2D') {
+      // Show 3D perspective view placeholder (opposite of current 2D view)
       ctx.fillStyle = '#e0e0e0';
       ctx.fillRect(20, 40, 180, 100);
 
@@ -51,9 +52,9 @@ const FloorplanPreview = ({ floorplanData, viewMode = '2D' }: FloorplanPreviewPr
       ctx.fillStyle = '#666';
       ctx.font = '12px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('3D View', 110, 90);
+      ctx.fillText('3D Preview', 110, 90);
     } else {
-      // 2D top-down view placeholder
+      // Show 2D top-down view placeholder (opposite of current 3D view)
       ctx.strokeStyle = '#999';
       ctx.lineWidth = 2;
       ctx.strokeRect(30, 30, 160, 100);
@@ -65,7 +66,7 @@ const FloorplanPreview = ({ floorplanData, viewMode = '2D' }: FloorplanPreviewPr
       ctx.fillStyle = '#666';
       ctx.font = '12px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('2D Floor Plan', 110, 90);
+      ctx.fillText('2D Preview', 110, 90);
     }
 
     // If floorplanData exists, draw actual floor plan
@@ -75,12 +76,15 @@ const FloorplanPreview = ({ floorplanData, viewMode = '2D' }: FloorplanPreviewPr
     }
   }, [floorplanData, viewMode]);
 
+  // Show the opposite view mode in the preview
+  const previewMode = viewMode === '2D' ? '3D' : '2D';
+
   return (
     <div className={styles.previewContainer}>
       <div className={styles.previewHeader}>
         <span className={styles.previewTitle}>Preview</span>
         <div className={styles.viewModeIndicator}>
-          <span className={viewMode === '3D' ? styles.active : ''}>{viewMode}</span>
+          <span className={styles.active}>{previewMode}</span>
         </div>
       </div>
       <div className={styles.previewCanvas}>
