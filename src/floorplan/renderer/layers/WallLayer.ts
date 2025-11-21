@@ -155,14 +155,34 @@ export class WallLayer extends BaseLayer {
     // Clear hitboxes for this frame
     this.dimensionHitboxes = [];
 
-    // 1. Identify all T-junctions and split walls into segments
-    const wallSegments = this.generateRenderSegments();
+    // Generate segments for all walls
+    const segments = this.generateRenderSegments();
 
-    // 2. Render each segment
-    wallSegments.forEach(segment => {
+    // Build connectivity map for segments
+    // Map<PointID, RenderSegment[]>
+    const segmentMap = new Map<string, RenderSegment[]>();
+
+    segments.forEach(seg => {
+      if (seg.isHole) return; // Don't connect to holes? Actually we might need them for continuity, but for rendering corners, holes don't contribute geometry.
+      // Wait, if a wall connects to a door edge, we need to know.
+      // But usually walls connect to the main wall points.
+
+      const add = (pid: string) => {
+        if (!segmentMap.has(pid)) segmentMap.set(pid, []);
+        segmentMap.get(pid)!.push(seg);
+      };
+      add(seg.start.id);
+      add(seg.end.id);
+    });
+
+    // Render segments
+    segments.forEach(segment => {
+      if (segment.isHole) return;
+
       const isHovered = segment.wallId === this.hoveredWallId;
       const isSelected = segment.wallId === this.selectedWallId;
-      this.renderSegment(ctx, segment, isHovered, isSelected);
+
+      this.renderSegment(ctx, segment, segmentMap, isHovered, isSelected);
     });
 
     // Render wall dimensions (keep original logic for now, or update to use segments if needed)
@@ -305,6 +325,7 @@ export class WallLayer extends BaseLayer {
   private renderSegment(
     ctx: CanvasRenderingContext2D,
     segment: RenderSegment,
+    segmentMap: Map<string, RenderSegment[]>,
     isHovered: boolean,
     isSelected: boolean
   ): void {
@@ -313,9 +334,9 @@ export class WallLayer extends BaseLayer {
     const start = Vector2.from(segment.start);
     const end = Vector2.from(segment.end);
 
-    // Calculate corners at start and end (use actual wall thickness from segment)
-    const startCorners = this.calculateJointCorners(segment.start, start, end, segment.wallId, segment.thickness);
-    const endCorners = this.calculateJointCorners(segment.end, end, start, segment.wallId, segment.thickness);
+    // Calculate corners at start and end using segment connectivity
+    const startCorners = this.calculateJointCorners(segment.start, start, end, segment, segmentMap);
+    const endCorners = this.calculateJointCorners(segment.end, end, start, segment, segmentMap);
 
     // startCorners returns { left, right } relative to the direction AWAY from the joint
     // For segment start: direction is Start->End. 
@@ -402,8 +423,9 @@ export class WallLayer extends BaseLayer {
     switch (this.renderStyle) {
       case 'wireframe':
         // Only outline, no fill
-        ctx.strokeStyle = this.config.wallColor;
-        ctx.lineWidth = 1;
+        // Use selection/hover color for stroke
+        ctx.strokeStyle = isSelected || isHovered ? color : this.config.wallColor;
+        ctx.lineWidth = isSelected || isHovered ? 2 : 1;
         ctx.stroke();
         break;
 
@@ -412,8 +434,9 @@ export class WallLayer extends BaseLayer {
         const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
         ctx.fillStyle = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
         ctx.fill();
-        ctx.strokeStyle = this.config.wallColor;
-        ctx.lineWidth = 1.5;
+        // Use selection/hover color for stroke
+        ctx.strokeStyle = isSelected || isHovered ? color : this.config.wallColor;
+        ctx.lineWidth = isSelected || isHovered ? 2.5 : 1.5;
         ctx.stroke();
         break;
 
@@ -422,14 +445,15 @@ export class WallLayer extends BaseLayer {
         const centerX = (poly[0].x + poly[1].x + poly[2].x + poly[3].x) / 4;
         const centerY = (poly[0].y + poly[1].y + poly[2].y + poly[3].y) / 4;
         const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, this.config.wallThickness / 2);
-        const baseColor = this.config.wallColor;
+        // Use selection/hover color for gradient
+        const baseColor = isSelected || isHovered ? color : this.config.wallColor;
         gradient.addColorStop(0, baseColor);
         gradient.addColorStop(1, this.darkenColor(baseColor, 0.3));
         ctx.fillStyle = gradient;
         ctx.fill();
         // Subtle outline
         ctx.strokeStyle = this.darkenColor(baseColor, 0.5);
-        ctx.lineWidth = 0.5;
+        ctx.lineWidth = isSelected || isHovered ? 1 : 0.5;
         ctx.stroke();
         break;
 
@@ -460,106 +484,39 @@ export class WallLayer extends BaseLayer {
     junctionPoint: Point,
     currentStart: Vector2,
     currentEnd: Vector2,
-    currentWallId: string,
-    wallThickness: number
+    currentSegment: RenderSegment,
+    segmentMap: Map<string, RenderSegment[]>
   ): { left: Vector2, right: Vector2 } {
-    const thickness = wallThickness;
-    const halfThickness = thickness / 2;
-
-    // 1. Find all segments connected to this junction point
-    // This includes the current segment AND any other wall segments starting/ending here.
-    const connectedSegments: { vec: Vector2, angle: number, wallId: string, isCurrent: boolean }[] = [];
-
-    // Direction of current segment (pointing AWAY from junction)
+    const halfThickness = this.config.wallThickness / 2;
     const currentDir = currentEnd.subtract(currentStart).normalize();
-    connectedSegments.push({
-      vec: currentDir,
-      angle: Math.atan2(currentDir.y, currentDir.x),
-      wallId: currentWallId,
-      isCurrent: true
-    });
 
-    // Find other walls connected to this point
-    // We need to look at ALL walls to see if they have an endpoint at 'junctionPoint'
-    // OR if they pass through 'junctionPoint' (T-junction split).
+    // Get all connected segments at this junction
+    const connected = segmentMap.get(junctionPoint.id) || [];
 
-    // Since we are in 'render', we assume 'junctionPoint' is a node in our graph.
-    // We can iterate all walls and check if they connect to this point.
+    // Filter and map to vectors
+    const connectedSegments: { vec: Vector2, angle: number, segment: RenderSegment, isCurrent: boolean }[] = [];
 
-    this.walls.forEach(wall => {
-      if (wall.id === currentWallId) {
-        // Check if this is the OTHER side of the split (if it's a T-junction on itself?)
-        // No, 'currentWallId' is the ID of the original wall.
-        // If we split a wall into segments, they share the wallID.
-        // We need to treat the "other part" of the same wall as a connected segment.
-
-        // Check if there is another segment of the same wall connected here.
-        // The junctionPoint lies on the wall line.
-        // If junctionPoint is NOT the start or end of the original wall, then there are TWO segments of this wall meeting here.
-        // We already added the "current" one (currentStart -> currentEnd).
-        // We need the "other" one (currentStart -> OtherEnd).
-
-        // Let's find the two directions from this point along the wall.
-        // const wStart = Vector2.from(this.points.get(wall.startPointId)!);
-        // const wEnd = Vector2.from(this.points.get(wall.endPointId)!);
-        // const wDir = wEnd.subtract(wStart).normalize();
-
-        // Check if currentDir is roughly wDir or -wDir
-        // If dot > 0, current is going towards End. The "other" side would be going towards Start (-wDir).
-        // If dot < 0, current is going towards Start. The "other" side would be going towards End (wDir).
-
-        // Only add the "other" side if it exists (i.e., we are not at the physical end of the wall)
-        const isStartNode = junctionPoint.id === wall.startPointId;
-        const isEndNode = junctionPoint.id === wall.endPointId;
-
-        if (!isStartNode && !isEndNode) {
-          // We are in the middle. Add the opposite direction.
-          const otherDir = currentDir.multiply(-1);
-          connectedSegments.push({
-            vec: otherDir,
-            angle: Math.atan2(otherDir.y, otherDir.x),
-            wallId: wall.id,
-            isCurrent: false
-          });
-        }
+    connected.forEach(seg => {
+      // Determine vector pointing AWAY from junction
+      let dir: Vector2;
+      if (seg.start.id === junctionPoint.id) {
+        dir = Vector2.from(seg.end).subtract(Vector2.from(seg.start)).normalize();
+      } else if (seg.end.id === junctionPoint.id) {
+        dir = Vector2.from(seg.start).subtract(Vector2.from(seg.end)).normalize();
+      } else {
+        // Should not happen if map is built correctly
         return;
       }
 
-      // For other walls
-      const wStart = this.points.get(wall.startPointId)!;
-      const wEnd = this.points.get(wall.endPointId)!;
+      // Check if this is the current segment (same object reference)
+      const isCurrent = seg === currentSegment;
 
-      // Check if this wall starts/ends at junctionPoint
-      if (wStart.id === junctionPoint.id) {
-        const dir = Vector2.from(wEnd).subtract(Vector2.from(wStart)).normalize();
-        connectedSegments.push({ vec: dir, angle: Math.atan2(dir.y, dir.x), wallId: wall.id, isCurrent: false });
-      } else if (wEnd.id === junctionPoint.id) {
-        const dir = Vector2.from(wStart).subtract(Vector2.from(wEnd)).normalize();
-        connectedSegments.push({ vec: dir, angle: Math.atan2(dir.y, dir.x), wallId: wall.id, isCurrent: false });
-      } else {
-        // Check if this wall passes through junctionPoint (T-junction where junctionPoint is on this wall)
-        // We can reuse the distance check or assume our segment generation logic is consistent.
-        // If junctionPoint is "on" this wall, then this wall splits here.
-        // We need to add BOTH directions of this wall as connected segments.
-
-        const pVec = Vector2.from(junctionPoint);
-        const sVec = Vector2.from(wStart);
-        const eVec = Vector2.from(wEnd);
-        const wallVec = eVec.subtract(sVec);
-        const lenSquared = wallVec.lengthSquared();
-        const t = pVec.subtract(sVec).dot(wallVec) / lenSquared;
-
-        if (t > 0.001 && t < 0.999) {
-          const dist = pVec.distanceTo(sVec.add(wallVec.multiply(t)));
-          if (dist < 10) {
-            // It's a T-junction on this wall. Add both directions.
-            const dir1 = wallVec.normalize();
-            const dir2 = dir1.multiply(-1);
-            connectedSegments.push({ vec: dir1, angle: Math.atan2(dir1.y, dir1.x), wallId: wall.id, isCurrent: false });
-            connectedSegments.push({ vec: dir2, angle: Math.atan2(dir2.y, dir2.x), wallId: wall.id, isCurrent: false });
-          }
-        }
-      }
+      connectedSegments.push({
+        vec: dir,
+        angle: Math.atan2(dir.y, dir.x),
+        segment: seg,
+        isCurrent
+      });
     });
 
     // Sort segments by angle
@@ -568,6 +525,15 @@ export class WallLayer extends BaseLayer {
     // Find current segment index
     const currentIndex = connectedSegments.findIndex(s => s.isCurrent);
 
+    if (currentIndex === -1) {
+      // Should not happen
+      const normal = new Vector2(-currentDir.y, currentDir.x);
+      return {
+        left: currentStart.add(normal.multiply(halfThickness)),
+        right: currentStart.subtract(normal.multiply(halfThickness))
+      };
+    }
+
     // Find neighbors (cyclic)
     const prevIndex = (currentIndex - 1 + connectedSegments.length) % connectedSegments.length;
     const nextIndex = (currentIndex + 1) % connectedSegments.length;
@@ -575,7 +541,6 @@ export class WallLayer extends BaseLayer {
     const prevSeg = connectedSegments[prevIndex];
     const nextSeg = connectedSegments[nextIndex];
 
-    // Left corner (between Current and Next)
     // If Current is the ONLY segment (endpoint), corners are just perpendicular.
     if (connectedSegments.length === 1) {
       const normal = new Vector2(-currentDir.y, currentDir.x);
@@ -587,24 +552,19 @@ export class WallLayer extends BaseLayer {
 
     // Calculate miter vectors
     // Left side interacts with Next segment
+    // We pass the vectors pointing AWAY from the junction.
+    // calculateMiterVector expects (Dir1, Dir2) where Dir1 is Current and Dir2 is Next?
+    // No, calculateMiterVector expects two vectors and finds the intersection of their "left" and "right" offsets.
+    // My previous analysis:
+    // "Left" of Current meets "Right" of Next.
+    // calculateMiterVector(current, next) finds intersection of Left(current) and Right(next).
     const leftMiter = this.calculateMiterVector(currentDir, nextSeg.vec, halfThickness);
 
     // Right side interacts with Prev segment
-    // Note: calculateMiterVector expects (Dir1, Dir2).
-    // For Right side, we are between Prev and Current.
-    // The "Right" side of Current faces Prev.
+    // "Right" of Current meets "Left" of Prev.
+    // So we want intersection of Left(Prev) and Right(Current).
+    // This is calculateMiterVector(prev, current).
     const rightMiter = this.calculateMiterVector(prevSeg.vec, currentDir, halfThickness);
-
-    // The miter vector points from junction center to the corner.
-    // But calculateMiterVector returns the OFFSET vector.
-    // So we just add it to junctionPoint.
-
-    // However, calculateMiterVector might return a vector that is "too long" for very sharp angles.
-    // We might need to cap it, but for standard walls it's fine.
-
-    // One detail: calculateMiterVector returns the intersection of the two parallel edge lines.
-    // It correctly handles the sign?
-    // Let's check the implementation of calculateMiterVector.
 
     return {
       left: currentStart.add(leftMiter),

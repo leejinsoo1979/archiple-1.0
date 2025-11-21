@@ -268,10 +268,12 @@ export class WallTool extends BaseTool {
     this.currentPreviewEnd = null;
 
     // Check if closing loop - ENHANCED LOGIC
+    // Important: Check with wallChain.length >= 2 because after adding 2 walls (3 points),
+    // we can close a loop by connecting to an existing wall
     let isClosingLoop = false;
     let loopPoints: Point[] = [];
 
-    if (this.wallChain.length > 2) {
+    if (this.wallChain.length >= 2) {
       const firstPoint = this.wallChain[0];
 
       console.log('[WallTool] Checking loop closure:', {
@@ -288,6 +290,7 @@ export class WallTool extends BaseTool {
         console.log('[WallTool] Direct loop closure detected');
       }
       // Smart closure - connecting to any existing point that has a path back to first point
+      // The newly created wall is already in connectedWalls thanks to createWall()
       else if (endPoint.connectedWalls && endPoint.connectedWalls.length > 0) {
         console.log('[WallTool] Searching for path from', endPoint.id, 'to', firstPoint.id);
         const pathToStart = this.findPathBetweenPoints(endPoint, firstPoint);
