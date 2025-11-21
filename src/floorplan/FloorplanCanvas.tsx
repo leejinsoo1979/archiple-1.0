@@ -47,6 +47,8 @@ interface FloorplanCanvasProps {
   renderStyle?: 'wireframe' | 'hidden-line' | 'solid' | 'realistic';
   showGrid?: boolean;
   onDimensionClick?: (wallId: string) => void;
+  wallHeight?: number;
+  wallThickness?: number;
   rulerVisible?: boolean;
   rulerStart?: { x: number; y: number } | null;
   rulerEnd?: { x: number; y: number } | null;
@@ -67,6 +69,8 @@ const FloorplanCanvas = ({
   renderStyle = 'solid',
   showGrid = true,
   onDimensionClick,
+  wallHeight = 2400,
+  wallThickness = 100,
   rulerVisible = false,
   rulerStart = null,
   rulerEnd = null,
@@ -605,6 +609,25 @@ const FloorplanCanvas = ({
       sceneManager.setTool(activeTool);
     }
   }, [activeTool]);
+
+  // Update wall settings when they change
+  useEffect(() => {
+    const toolManager = toolManagerRef.current;
+    if (toolManager) {
+      const wallTool = toolManager.getTool(ToolType.WALL) as any;
+      const rectangleTool = toolManager.getTool(ToolType.RECTANGLE) as any;
+
+      if (wallTool && typeof wallTool.setWallThickness === 'function') {
+        wallTool.setWallThickness(wallThickness);
+        wallTool.setWallHeight(wallHeight);
+      }
+
+      if (rectangleTool && typeof rectangleTool.setWallThickness === 'function') {
+        rectangleTool.setWallThickness(wallThickness);
+        rectangleTool.setWallHeight(wallHeight);
+      }
+    }
+  }, [wallHeight, wallThickness]);
 
   // Update render style for layers when it changes
   useEffect(() => {

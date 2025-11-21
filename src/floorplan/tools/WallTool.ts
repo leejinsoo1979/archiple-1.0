@@ -40,6 +40,20 @@ export class WallTool extends BaseTool {
     this.snapService = snapService;
   }
 
+  /**
+   * Update wall thickness setting
+   */
+  setWallThickness(thickness: number): void {
+    this.defaultWallThickness = thickness;
+  }
+
+  /**
+   * Update wall height setting
+   */
+  setWallHeight(height: number): void {
+    this.defaultWallHeight = height;
+  }
+
   protected onActivate(): void {
     console.log('[WallTool] Activated');
     this.resetState();
@@ -167,6 +181,12 @@ export class WallTool extends BaseTool {
 
     // Clear preview
     eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
+
+    // Clear snap indicators and guides
+    eventBus.emit(FloorEvents.SNAP_POINT_UPDATED, { point: null });
+    eventBus.emit(FloorEvents.VERTICAL_GUIDE_CLEARED, {});
+    eventBus.emit(FloorEvents.HORIZONTAL_GUIDE_CLEARED, {});
+    eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, { from: null, angle: null });
   }
 
   /**
@@ -177,7 +197,7 @@ export class WallTool extends BaseTool {
 
     // Use existing point or create new one
     // Check if existingPoint is a temporary wall snap point
-    if (existingPoint && existingPoint.id !== 'wall-snap-temp') {
+    if (existingPoint && existingPoint.id !== 'wall-snap-temp' && existingPoint.id !== 'wall-midpoint-snap-temp') {
       this.startPoint = existingPoint;
     } else {
       // Create new point (either no existing point or wall snap temp point)
@@ -207,21 +227,36 @@ export class WallTool extends BaseTool {
 
     // Create or reuse end point
     let endPoint: Point;
+    let isNewPointOnExistingWall = false;
+    let existingWallAtPoint: Wall | null = null;
+
     // Check if existingPoint is a temporary wall snap point
-    if (existingPoint && existingPoint.id !== 'wall-snap-temp') {
+    if (existingPoint && existingPoint.id !== 'wall-snap-temp' && existingPoint.id !== 'wall-midpoint-snap-temp') {
       endPoint = existingPoint;
     } else {
       // Create new point (either no existing point or wall snap temp point)
       const tempPoint = this.createPoint(position);
       endPoint = this.sceneManager.objectManager.addPoint(tempPoint);
+
+      // If this was a midpoint snap, find which wall it's on
+      if (existingPoint && existingPoint.id === 'wall-midpoint-snap-temp') {
+        isNewPointOnExistingWall = true;
+        // Find the wall that this midpoint is on
+        const allWalls = this.sceneManager.objectManager.getAllWalls();
+        existingWallAtPoint = this.findWallAtPoint(position, allWalls);
+      }
       // NOTE: POINT_ADDED event is emitted by BlueprintObjectManager, no need to emit here
     }
 
-    // **WALL SPLITTING LOGIC**
-    // Check if either startPoint or endPoint lands on an existing wall (not at endpoints)
-    // If so, split that wall to ensure proper graph connectivity
-    this.splitWallsAtPoint(this.startPoint);
-    this.splitWallsAtPoint(endPoint);
+    // NO WALL SPLITTING - Walls connect at midpoints without splitting the existing wall
+    // The T-junction rendering is handled by WallLayer's corner calculation
+
+    // If point was created on existing wall's midpoint, add connection to that wall
+    if (isNewPointOnExistingWall && existingWallAtPoint) {
+      if (!endPoint.connectedWalls) endPoint.connectedWalls = [];
+      endPoint.connectedWalls.push(existingWallAtPoint.id);
+      console.log('[WallTool] Connected new point to existing wall at midpoint');
+    }
 
     // Create wall
     const wall = this.createWall(this.startPoint, endPoint);
@@ -239,6 +274,13 @@ export class WallTool extends BaseTool {
     if (this.wallChain.length > 2) {
       const firstPoint = this.wallChain[0];
 
+      console.log('[WallTool] Checking loop closure:', {
+        wallChainLength: this.wallChain.length,
+        endPointId: endPoint.id,
+        firstPointId: firstPoint.id,
+        endPointConnections: endPoint.connectedWalls?.length || 0,
+      });
+
       // Direct closure - clicking on the first point
       if (endPoint.id === firstPoint.id) {
         isClosingLoop = true;
@@ -246,8 +288,11 @@ export class WallTool extends BaseTool {
         console.log('[WallTool] Direct loop closure detected');
       }
       // Smart closure - connecting to any existing point that has a path back to first point
-      else if (existingPoint && existingPoint.connectedWalls && existingPoint.connectedWalls.length > 0) {
+      else if (endPoint.connectedWalls && endPoint.connectedWalls.length > 0) {
+        console.log('[WallTool] Searching for path from', endPoint.id, 'to', firstPoint.id);
         const pathToStart = this.findPathBetweenPoints(endPoint, firstPoint);
+        console.log('[WallTool] Path result:', pathToStart?.map(p => p.id));
+
         if (pathToStart && pathToStart.length > 0) {
           isClosingLoop = true;
           // Combine wallChain with the path back to start (excluding duplicate endPoint)
@@ -282,6 +327,32 @@ export class WallTool extends BaseTool {
     this.snapService.setLastPoint(position);
     this.snapService.setPoints(this.sceneManager.objectManager.getAllPoints());
     this.snapService.setWalls(this.sceneManager.objectManager.getAllWalls());
+  }
+
+  /**
+   * Find which wall a point is on (for midpoint connections)
+   */
+  private findWallAtPoint(position: Vector2, walls: Wall[]): Wall | null {
+    const allPoints = this.sceneManager.objectManager.getAllPoints();
+    const pointMap = new Map(allPoints.map(p => [p.id, p]));
+
+    for (const wall of walls) {
+      const startPt = pointMap.get(wall.startPointId);
+      const endPt = pointMap.get(wall.endPointId);
+      if (!startPt || !endPt) continue;
+
+      // Check if position is at midpoint of this wall
+      const midX = (startPt.x + endPt.x) / 2;
+      const midY = (startPt.y + endPt.y) / 2;
+      const distance = Math.sqrt((position.x - midX) ** 2 + (position.y - midY) ** 2);
+
+      // Within 10mm tolerance
+      if (distance < 10) {
+        return wall;
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -417,89 +488,6 @@ export class WallTool extends BaseTool {
     endPoint.connectedWalls.push(wall.id);
 
     return wall;
-  }
-
-  /**
-   * Split any walls that pass through the given point
-   * This ensures proper graph connectivity when walls intersect
-   */
-  private splitWallsAtPoint(point: Point): void {
-    const allWalls = this.sceneManager.objectManager.getAllWalls();
-    const allPoints = this.sceneManager.objectManager.getAllPoints();
-    const pointMap = new Map<string, Point>();
-    allPoints.forEach(p => pointMap.set(p.id, p));
-
-    const threshold = 50; // Increased from 10mm to 50mm for better detection
-
-    console.log(`[WallTool] Checking ${allWalls.length} walls for splitting at point (${point.x}, ${point.y})`);
-
-    for (const wall of allWalls) {
-      // Skip if point is already an endpoint of this wall
-      if (wall.startPointId === point.id || wall.endPointId === point.id) {
-        continue;
-      }
-
-      const startPt = pointMap.get(wall.startPointId);
-      const endPt = pointMap.get(wall.endPointId);
-
-      if (!startPt || !endPt) continue;
-
-      // Check if point lies on this wall (using point-to-line-segment distance)
-      const distance = this.pointToLineSegmentDistance(
-        new Vector2(point.x, point.y),
-        new Vector2(startPt.x, startPt.y),
-        new Vector2(endPt.x, endPt.y)
-      );
-
-      console.log(`[WallTool] Distance from point to wall ${wall.id}: ${distance.toFixed(2)}mm (threshold: ${threshold}mm)`);
-
-      if (distance < threshold) {
-        console.log(`[WallTool] ✅ Splitting wall ${wall.id} at point ${point.id}`);
-
-        // Remove the old wall
-        this.sceneManager.objectManager.removeWall(wall.id);
-
-        // Update point connections - remove old wall reference
-        if (startPt.connectedWalls) {
-          startPt.connectedWalls = startPt.connectedWalls.filter(id => id !== wall.id);
-        }
-        if (endPt.connectedWalls) {
-          endPt.connectedWalls = endPt.connectedWalls.filter(id => id !== wall.id);
-        }
-
-        // Create two new walls
-        const wall1 = this.createWall(startPt, point);
-        const wall2 = this.createWall(point, endPt);
-
-        this.sceneManager.objectManager.addWall(wall1);
-        this.sceneManager.objectManager.addWall(wall2);
-
-        console.log(`[WallTool] Created walls ${wall1.id} and ${wall2.id}`);
-      }
-    }
-  }
-
-  /**
-   * Calculate distance from point to line segment
-   */
-  private pointToLineSegmentDistance(point: Vector2, lineStart: Vector2, lineEnd: Vector2): number {
-    const px = point.x - lineStart.x;
-    const py = point.y - lineStart.y;
-    const lx = lineEnd.x - lineStart.x;
-    const ly = lineEnd.y - lineStart.y;
-    const lineLengthSq = lx * lx + ly * ly;
-
-    if (lineLengthSq === 0) {
-      return point.distanceTo(lineStart);
-    }
-
-    const t = Math.max(0, Math.min(1, (px * lx + py * ly) / lineLengthSq));
-    const closestX = lineStart.x + t * lx;
-    const closestY = lineStart.y + t * ly;
-    const dx = point.x - closestX;
-    const dy = point.y - closestY;
-
-    return Math.sqrt(dx * dx + dy * dy);
   }
 
   getCursor(): string {

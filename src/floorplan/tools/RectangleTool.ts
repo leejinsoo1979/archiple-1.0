@@ -35,6 +35,20 @@ export class RectangleTool extends BaseTool {
     this.snapService = snapService;
   }
 
+  /**
+   * Update wall thickness setting
+   */
+  setWallThickness(thickness: number): void {
+    this.defaultWallThickness = thickness;
+  }
+
+  /**
+   * Update wall height setting
+   */
+  setWallHeight(height: number): void {
+    this.defaultWallHeight = height;
+  }
+
   protected onActivate(): void {
     console.log('[RectangleTool] Activated');
     this.resetState();
