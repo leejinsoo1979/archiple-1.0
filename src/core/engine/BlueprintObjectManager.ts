@@ -15,6 +15,7 @@ export class BlueprintObjectManager {
   private floorplan: Floorplan;
   private doors: Map<string, Door> = new Map();
   private windows: Map<string, Window> = new Map();
+  private detectedRooms: Room[] = []; // Store rooms from RoomDetectionService
 
   constructor() {
     this.floorplan = new Floorplan();
@@ -170,9 +171,13 @@ export class BlueprintObjectManager {
   }
 
   // Room management
-  addRoom(_room: Room): void {
-    // Rooms are auto-detected by blueprint, no manual add needed
-    console.log('[BlueprintObjectManager] Rooms are auto-detected, skipping manual add');
+  addRoom(room: Room): void {
+    // Store room from RoomDetectionService
+    this.detectedRooms.push(room);
+    console.log('[BlueprintObjectManager] Added detected room:', room.id, 'Total rooms:', this.detectedRooms.length);
+
+    // Emit room added event
+    eventBus.emit(FloorEvents.ROOM_DETECTED, { room });
   }
 
   getRoom(id: string): Room | undefined {
@@ -181,6 +186,12 @@ export class BlueprintObjectManager {
   }
 
   getAllRooms(): Room[] {
+    // Return rooms detected by RoomDetectionService instead of blueprint's auto-detection
+    console.log('[BlueprintObjectManager] getAllRooms returning', this.detectedRooms.length, 'detected rooms');
+    return this.detectedRooms;
+
+    // OLD: Use blueprint's auto-detected rooms (doesn't handle T-junctions well)
+    /*
     return this.floorplan.getRooms().map((room, idx) => {
       const points = room.corners.map(c => c.id);
 
@@ -223,6 +234,7 @@ export class BlueprintObjectManager {
         area,
       };
     });
+    */
   }
 
   updateRoom(_id: string, _updates: Partial<Room>): void {
@@ -230,9 +242,13 @@ export class BlueprintObjectManager {
     console.log('[BlueprintObjectManager] Rooms are auto-managed by blueprint');
   }
 
-  removeRoom(_id: string): void {
-    // Rooms are auto-managed by blueprint
-    console.log('[BlueprintObjectManager] Rooms are auto-managed by blueprint');
+  removeRoom(id: string): void {
+    // Remove room from detectedRooms
+    const index = this.detectedRooms.findIndex(r => r.id === id);
+    if (index !== -1) {
+      this.detectedRooms.splice(index, 1);
+      console.log('[BlueprintObjectManager] Removed room:', id, 'Remaining rooms:', this.detectedRooms.length);
+    }
   }
 
   // Door management
