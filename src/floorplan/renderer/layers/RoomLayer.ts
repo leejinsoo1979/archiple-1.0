@@ -273,65 +273,40 @@ export class RoomLayer extends BaseLayer {
   }
 
   /**
-   * Inset a polygon by a given distance
-   * Uses offset algorithm to move each edge inward by the specified amount
+   * Inset a polygon by a given distance using simple centroid-based approach
+   * Moves each point toward the room center by the specified distance
    */
   private insetPolygon(points: Point[], insetDistance: number): Point[] {
     if (points.length < 3) return points;
 
+    // Calculate room centroid
+    const centroid = this.calculateCentroid(points);
+
     const insetPoints: Point[] = [];
-    const n = points.length;
 
-    for (let i = 0; i < n; i++) {
-      const prev = points[(i - 1 + n) % n];
-      const curr = points[i];
-      const next = points[(i + 1) % n];
+    for (const point of points) {
+      // Vector from point to centroid
+      const toCenterX = centroid.x - point.x;
+      const toCenterY = centroid.y - point.y;
 
-      // Calculate edge vectors
-      const edge1 = { x: curr.x - prev.x, y: curr.y - prev.y };
-      const edge2 = { x: next.x - curr.x, y: next.y - curr.y };
+      // Distance to center
+      const dist = Math.sqrt(toCenterX * toCenterX + toCenterY * toCenterY);
 
-      // Calculate edge lengths
-      const len1 = Math.sqrt(edge1.x * edge1.x + edge1.y * edge1.y);
-      const len2 = Math.sqrt(edge2.x * edge2.x + edge2.y * edge2.y);
+      if (dist === 0) {
+        // Point is at center, no inset needed
+        insetPoints.push({ ...point });
+        continue;
+      }
 
-      if (len1 === 0 || len2 === 0) continue;
+      // Normalize direction vector
+      const dirX = toCenterX / dist;
+      const dirY = toCenterY / dist;
 
-      // Normalize edge vectors
-      const norm1 = { x: edge1.x / len1, y: edge1.y / len1 };
-      const norm2 = { x: edge2.x / len2, y: edge2.y / len2 };
-
-      // Calculate perpendicular inward normals (rotate 90° counter-clockwise for inward)
-      const perp1 = { x: -norm1.y, y: norm1.x };
-      const perp2 = { x: -norm2.y, y: norm2.x };
-
-      // Calculate bisector direction
-      const bisector = {
-        x: perp1.x + perp2.x,
-        y: perp1.y + perp2.y,
-      };
-
-      const bisectorLen = Math.sqrt(bisector.x * bisector.x + bisector.y * bisector.y);
-      if (bisectorLen === 0) continue;
-
-      // Normalize bisector
-      const normBisector = {
-        x: bisector.x / bisectorLen,
-        y: bisector.y / bisectorLen,
-      };
-
-      // Calculate angle between edges
-      const cosAngle = perp1.x * perp2.x + perp1.y * perp2.y;
-      const sinAngle = Math.sqrt(1 - cosAngle * cosAngle);
-
-      // Calculate offset distance (adjusted for angle)
-      const offsetDist = sinAngle > 0.1 ? insetDistance / sinAngle : insetDistance;
-
-      // Create inset point
+      // Move point toward center by insetDistance
       insetPoints.push({
-        id: curr.id,
-        x: curr.x + normBisector.x * offsetDist,
-        y: curr.y + normBisector.y * offsetDist,
+        id: point.id,
+        x: point.x + dirX * insetDistance,
+        y: point.y + dirY * insetDistance,
       });
     }
 
