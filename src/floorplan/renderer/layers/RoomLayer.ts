@@ -121,9 +121,9 @@ export class RoomLayer extends BaseLayer {
 
     if (roomPoints.length < 3) return;
 
-    // Inset the polygon by 60mm to place floor clearly inside wall boundaries
+    // Inset the polygon by 70mm to place floor clearly inside wall boundaries
     // Room points are at centerline, inset more than half-thickness to avoid overlap
-    const insetDistance = 60; // Positive value = inward
+    const insetDistance = 70; // Positive value = inward
     const floorPoints = this.insetPolygon(roomPoints, insetDistance);
 
     // Determine fill style based on render mode
