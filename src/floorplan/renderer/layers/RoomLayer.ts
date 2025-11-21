@@ -298,9 +298,9 @@ export class RoomLayer extends BaseLayer {
       const norm1 = { x: edge1.x / len1, y: edge1.y / len1 };
       const norm2 = { x: edge2.x / len2, y: edge2.y / len2 };
 
-      // Calculate perpendicular inward normals (rotate 90° clockwise for inward)
-      const perp1 = { x: norm1.y, y: -norm1.x };
-      const perp2 = { x: norm2.y, y: -norm2.x };
+      // Calculate perpendicular inward normals (rotate 90° counter-clockwise for inward)
+      const perp1 = { x: -norm1.y, y: norm1.x };
+      const perp2 = { x: -norm2.y, y: norm2.x };
 
       // Calculate bisector direction
       const bisector = {
