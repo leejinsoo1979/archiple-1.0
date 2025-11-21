@@ -185,7 +185,7 @@ export class WallLayer extends BaseLayer {
     if (isSelected) {
       color = isDarkMode ? '#64B5F6' : '#3498db'; // Blue for selected
     } else if (isHovered) {
-      color = isDarkMode ? '#EF5350' : '#e74c3c'; // Red for hovered
+      color = '#3fae7a'; // Theme color for hovered
     }
 
     ctx.fillStyle = color;
