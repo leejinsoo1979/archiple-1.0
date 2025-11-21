@@ -1,83 +1,44 @@
-import { useRef, useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import styles from './FloorplanPreview.module.css';
 
 interface FloorplanPreviewProps {
-  floorplanData?: any;
   viewMode?: '2D' | '3D';
+  previewContainerId: string; // ID of the container to show in preview
 }
 
-const FloorplanPreview = ({ floorplanData, viewMode = '2D' }: FloorplanPreviewProps) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Draw background
-    ctx.fillStyle = '#f5f5f5';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Draw placeholder content - show OPPOSITE of current viewMode
-    // If current view is 2D, show 3D preview. If current is 3D, show 2D preview.
-    if (viewMode === '2D') {
-      // Show 3D perspective view placeholder (opposite of current 2D view)
-      ctx.fillStyle = '#e0e0e0';
-      ctx.fillRect(20, 40, 180, 100);
-
-      ctx.fillStyle = '#c0c0c0';
-      ctx.beginPath();
-      ctx.moveTo(20, 40);
-      ctx.lineTo(110, 10);
-      ctx.lineTo(290, 10);
-      ctx.lineTo(200, 40);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.fillStyle = '#d0d0d0';
-      ctx.beginPath();
-      ctx.moveTo(200, 40);
-      ctx.lineTo(290, 10);
-      ctx.lineTo(290, 110);
-      ctx.lineTo(200, 140);
-      ctx.closePath();
-      ctx.fill();
-
-      // Add text
-      ctx.fillStyle = '#666';
-      ctx.font = '12px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('3D Preview', 110, 90);
-    } else {
-      // Show 2D top-down view placeholder (opposite of current 3D view)
-      ctx.strokeStyle = '#999';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(30, 30, 160, 100);
-
-      ctx.strokeRect(70, 30, 40, 10);
-      ctx.strokeRect(140, 65, 10, 30);
-
-      // Add text
-      ctx.fillStyle = '#666';
-      ctx.font = '12px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('2D Preview', 110, 90);
-    }
-
-    // If floorplanData exists, draw actual floor plan
-    if (floorplanData && floorplanData.rooms) {
-      // TODO: Draw actual floor plan data
-      // This will be implemented based on your floorplan data structure
-    }
-  }, [floorplanData, viewMode]);
+const FloorplanPreview = ({ viewMode = '2D', previewContainerId }: FloorplanPreviewProps) => {
+  const previewCanvasRef = useRef<HTMLDivElement>(null);
 
   // Show the opposite view mode in the preview
   const previewMode = viewMode === '2D' ? '3D' : '2D';
+
+  useEffect(() => {
+    const previewCanvas = previewCanvasRef.current;
+    if (!previewCanvas) return;
+
+    // Find the container to move
+    const sourceContainer = document.getElementById(previewContainerId);
+    if (!sourceContainer) return;
+
+    // Move the container into the preview
+    previewCanvas.appendChild(sourceContainer);
+    sourceContainer.style.position = 'relative';
+    sourceContainer.style.visibility = 'visible';
+    sourceContainer.style.width = '100%';
+    sourceContainer.style.height = '100%';
+
+    // Cleanup function to move it back when component unmounts or ID changes
+    return () => {
+      if (sourceContainer.parentElement === previewCanvas) {
+        sourceContainer.style.position = 'absolute';
+        sourceContainer.style.visibility = 'hidden';
+        sourceContainer.style.width = '100%';
+        sourceContainer.style.height = '100%';
+        // Move back to body or original parent
+        document.body.appendChild(sourceContainer);
+      }
+    };
+  }, [previewContainerId]);
 
   return (
     <div className={styles.previewContainer}>
@@ -87,13 +48,8 @@ const FloorplanPreview = ({ floorplanData, viewMode = '2D' }: FloorplanPreviewPr
           <span className={styles.active}>{previewMode}</span>
         </div>
       </div>
-      <div className={styles.previewCanvas}>
-        <canvas
-          ref={canvasRef}
-          width={220}
-          height={150}
-          className={styles.canvas}
-        />
+      <div className={styles.previewCanvas} ref={previewCanvasRef}>
+        {/* The actual canvas will be moved here via DOM manipulation */}
       </div>
     </div>
   );

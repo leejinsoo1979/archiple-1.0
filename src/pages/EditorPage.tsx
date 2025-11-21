@@ -3086,6 +3086,7 @@ ARTISTIC APPROACH:
             </button>
           </div>
 
+          {/* 2D View - Main Viewport */}
           <div style={{
             position: 'absolute',
             top: 0,
@@ -3115,6 +3116,29 @@ ARTISTIC APPROACH:
               scannedWalls={scannedWalls}
             />
           </div>
+
+          {/* 2D View - Preview in right panel (always rendered) */}
+          <div id="preview-2d-container" style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            visibility: 'hidden', // Hidden in main viewport, shown in preview
+            pointerEvents: 'none'
+          }}>
+            <FloorplanCanvas
+              activeTool={ToolType.SELECT}
+              onDataChange={() => {}}
+              backgroundImage={null}
+              renderStyle={renderStyle}
+              showGrid={showGrid}
+              imageScale={imageScale}
+              imageOpacity={imageOpacity}
+            />
+          </div>
+
+          {/* 3D View - Main Viewport */}
           <div style={{
             position: 'absolute',
             top: 0,
@@ -3175,6 +3199,32 @@ ARTISTIC APPROACH:
                 </div>
               </div>
             )}
+          </div>
+
+          {/* 3D View - Preview in right panel (always rendered) */}
+          <div id="preview-3d-container" style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            visibility: 'hidden', // Hidden in main viewport, shown in preview
+            pointerEvents: 'none'
+          }}>
+            <Babylon3DCanvas
+              floorplanData={floorplanData}
+              visible={true}
+              sunSettings={sunSettings}
+              playMode={false}
+              showCharacter={false}
+              glbModelFile={null}
+              photoRealisticMode={false}
+              renderSettings={renderSettings}
+              lights={lights}
+              lightPlacementMode={false}
+              displayStyle={displayStyle}
+              showGrid={false}
+            />
           </div>
 
           {/* Dimension Edit Modal */}
@@ -3479,8 +3529,8 @@ ARTISTIC APPROACH:
 
             {/* 3D Preview */}
             <FloorplanPreview
-              floorplanData={floorplanData}
               viewMode={viewMode}
+              previewContainerId={viewMode === '2D' ? 'preview-3d-container' : 'preview-2d-container'}
             />
 
             {/* Basic Parameters */}

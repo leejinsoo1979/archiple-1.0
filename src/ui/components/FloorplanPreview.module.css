@@ -46,27 +46,27 @@
 
 .previewCanvas {
   width: 100%;
-  padding: 16px;
+  height: 180px;
+  padding: 0;
   display: flex;
   justify-content: center;
   align-items: center;
   background: var(--bg-secondary);
-  min-height: 180px;
+  overflow: hidden;
+  position: relative;
 }
 
-.canvas {
-  width: 100%;
-  height: auto;
-  border-radius: 8px;
-  background: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border: 1px solid var(--border-light);
+.previewCanvas > * {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0;
+  border: none;
 }
 
-/* Dark mode adjustments */
-[data-theme="dark"] .canvas {
-  background: var(--bg-primary);
-  border-color: var(--border-color);
+.previewCanvas canvas {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain;
 }
 
 /* Hover effect */
