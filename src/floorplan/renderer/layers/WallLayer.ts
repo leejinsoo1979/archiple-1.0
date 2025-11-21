@@ -713,34 +713,6 @@ export class WallLayer extends BaseLayer {
     );
     ctx.stroke();
 
-    // Draw slashes at extension line endpoints
-    // Extension line angles (perpendicular to wall)
-    const extAngle = Math.atan2(ext1End.y - ext1Start.y, ext1End.x - ext1Start.x);
-
-    // Slash at extension line 1 end
-    ctx.beginPath();
-    ctx.moveTo(
-      ext1End.x - slashSize * Math.cos(extAngle - slashAngle),
-      ext1End.y - slashSize * Math.sin(extAngle - slashAngle)
-    );
-    ctx.lineTo(
-      ext1End.x + slashSize * Math.cos(extAngle + slashAngle),
-      ext1End.y + slashSize * Math.sin(extAngle + slashAngle)
-    );
-    ctx.stroke();
-
-    // Slash at extension line 2 end
-    ctx.beginPath();
-    ctx.moveTo(
-      ext2End.x - slashSize * Math.cos(extAngle - slashAngle),
-      ext2End.y - slashSize * Math.sin(extAngle - slashAngle)
-    );
-    ctx.lineTo(
-      ext2End.x + slashSize * Math.cos(extAngle + slashAngle),
-      ext2End.y + slashSize * Math.sin(extAngle + slashAngle)
-    );
-    ctx.stroke();
-
     // Draw dimension text - rotated to align with dimension line
     const label = `${distanceMm.toFixed(0)}mm`;
     ctx.font = '12px system-ui';
