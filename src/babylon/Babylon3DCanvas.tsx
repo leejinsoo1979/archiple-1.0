@@ -684,6 +684,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       arcCamera.inertia = 0.9;
       arcCamera.angularSensibilityX = 1000;
       arcCamera.angularSensibilityY = 1000;
+      arcCamera.zoomToMouseLocation = true; // Enable zoom to mouse pointer
       arcCameraRef.current = arcCamera;
 
       // Create FPS camera (first-person view)
@@ -1014,8 +1015,19 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         console.log('[Babylon3DCanvas] Cleaning up...');
         window.removeEventListener('resize', handleResize);
         document.removeEventListener('fullscreenchange', handleFullscreenChange);
-        scene.dispose();
-        engine.dispose();
+
+        // Stop render loop first
+        if (engine) {
+          engine.stopRenderLoop();
+        }
+
+        // Dispose scene and engine safely
+        if (scene) {
+          scene.dispose();
+        }
+        if (engine) {
+          engine.dispose();
+        }
       };
     };
 
@@ -1592,14 +1604,14 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     floorMaterial.environmentIntensity = 0.6;
 
     // Load real wood textures
-    const diffuseTexture = new Texture('/texture/floor/f2 diffuse.JPG', scene);
+    const diffuseTexture = new Texture('/texture/floor/f2%20diffuse.JPG', scene);
     diffuseTexture.uScale = 1.0; // Will be set per-room based on size
     diffuseTexture.vScale = 1.0;
     diffuseTexture.wrapU = Texture.WRAP_ADDRESSMODE;
     diffuseTexture.wrapV = Texture.WRAP_ADDRESSMODE;
     floorMaterial.albedoTexture = diffuseTexture;
 
-    const glossTexture = new Texture('/texture/floor/f2 gloss.png', scene);
+    const glossTexture = new Texture('/texture/floor/f2%20gloss.png', scene);
     glossTexture.uScale = 1.0;
     glossTexture.vScale = 1.0;
     glossTexture.wrapU = Texture.WRAP_ADDRESSMODE;
@@ -1609,7 +1621,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     floorMaterial.useRoughnessFromMetallicTextureGreen = false;
     floorMaterial.useRoughnessFromMetallicTextureAlpha = true;
 
-    const normalTexture = new Texture('/texture/floor/f2 normal.png', scene);
+    const normalTexture = new Texture('/texture/floor/f2%20normal.png', scene);
     normalTexture.uScale = 1.0;
     normalTexture.vScale = 1.0;
     normalTexture.wrapU = Texture.WRAP_ADDRESSMODE;
@@ -1926,8 +1938,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         const uvs: number[] = [];
 
         roomPoints.forEach((p: Vector3) => {
-          // Position on XZ plane (Y=0.01 for floor height)
-          positions.push(p.x, 0.01, p.z);
+          // Position on XZ plane (Y=0 to match wall bottom)
+          positions.push(p.x, 0, p.z);
 
           // Normal pointing UP (+Y)
           normals.push(0, 1, 0);
