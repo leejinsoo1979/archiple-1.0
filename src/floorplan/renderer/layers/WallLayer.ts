@@ -621,22 +621,23 @@ export class WallLayer extends BaseLayer {
       }
     }
 
-    // Start extension lines from wall surface (center + half thickness)
-    const surfaceOffset = wallHalfThickness + extensionGap;
-    const ext1StartX = startPoint.x + perpX * surfaceOffset;
-    const ext1StartY = startPoint.y + perpY * surfaceOffset;
-    const ext2StartX = endPoint.x + perpX * surfaceOffset;
-    const ext2StartY = endPoint.y + perpY * surfaceOffset;
+    // Start extension lines from wall inner edge (center - half thickness on inside)
+    // perpX/perpY points OUTWARD, so we need to go INWARD (opposite direction) by wallHalfThickness
+    const innerEdgeOffset = -wallHalfThickness + extensionGap;
+    const ext1StartX = startPoint.x + perpX * innerEdgeOffset;
+    const ext1StartY = startPoint.y + perpY * innerEdgeOffset;
+    const ext2StartX = endPoint.x + perpX * innerEdgeOffset;
+    const ext2StartY = endPoint.y + perpY * innerEdgeOffset;
 
-    // Extension line end points (beyond dimension line)
-    const totalExtension = wallHalfThickness + extensionGap + offsetDistanceMm + extensionOverhang;
+    // Extension line end points (beyond dimension line) - from inner edge
+    const totalExtension = -wallHalfThickness + extensionGap + offsetDistanceMm + extensionOverhang;
     const ext1EndX = startPoint.x + perpX * totalExtension;
     const ext1EndY = startPoint.y + perpY * totalExtension;
     const ext2EndX = endPoint.x + perpX * totalExtension;
     const ext2EndY = endPoint.y + perpY * totalExtension;
 
-    // Dimension line points (offset from wall surface)
-    const dimOffset = wallHalfThickness + extensionGap + offsetDistanceMm;
+    // Dimension line points (offset from inner edge)
+    const dimOffset = -wallHalfThickness + extensionGap + offsetDistanceMm;
     const dim1X = startPoint.x + perpX * dimOffset;
     const dim1Y = startPoint.y + perpY * dimOffset;
     const dim2X = endPoint.x + perpX * dimOffset;
