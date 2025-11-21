@@ -121,10 +121,10 @@ export class RoomLayer extends BaseLayer {
 
     if (roomPoints.length < 3) return;
 
-    // Outset the polygon by 50mm to align with wall inner edge
-    // Room points are at centerline, we need to move 50mm outward to reach inner wall edge
-    const outsetDistance = -50; // Negative value = outward
-    const floorPoints = this.insetPolygon(roomPoints, outsetDistance);
+    // Inset the polygon by 50mm to align with wall inner edge
+    // Room points are at centerline, we need to move 50mm inward to reach inner wall edge
+    const insetDistance = 50; // Positive value = inward
+    const floorPoints = this.insetPolygon(roomPoints, insetDistance);
 
     // Determine fill style based on render mode
     let fillStyle: string | CanvasPattern = this.config.fillColor;
