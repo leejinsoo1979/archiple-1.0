@@ -41,6 +41,7 @@ interface RenderSegment {
   start: Point;
   end: Point;
   thickness: number;
+  isHole?: boolean;
 }
 
 export class WallLayer extends BaseLayer {
@@ -237,6 +238,35 @@ export class WallLayer extends BaseLayer {
         checkPoint(otherWall.endPointId);
       });
 
+      // Add door endpoints
+      this.doors.forEach(door => {
+        if (door.wallId !== wall.id) return;
+
+        // Door position is 0-1 along the wall
+        // We assume position is the CENTER of the door
+        const wallLength = Math.sqrt(wallLengthSq);
+        const halfWidthT = (door.width / 2) / wallLength;
+
+        const startT = Math.max(0, door.position - halfWidthT);
+        const endT = Math.min(1, door.position + halfWidthT);
+
+        // Create points for door start/end
+        // We need unique IDs for these temporary points
+        const startP = startVec.add(wallVec.multiply(startT));
+        const endP = startVec.add(wallVec.multiply(endT));
+
+        points.push({
+          point: { id: `door-${door.id}-start`, x: startP.x, y: startP.y },
+          t: startT,
+          isEndpoint: false
+        });
+        points.push({
+          point: { id: `door-${door.id}-end`, x: endP.x, y: endP.y },
+          t: endT,
+          isEndpoint: false
+        });
+      });
+
       return points.sort((a, b) => a.t - b.t);
     };
 
@@ -248,13 +278,23 @@ export class WallLayer extends BaseLayer {
         const p1 = pointsOnWall[i];
         const p2 = pointsOnWall[i + 1];
 
+        // Check if this segment is a hole (inside a door)
+        const midT = (p1.t + p2.t) / 2;
+        const isHole = this.doors.some(door => {
+          if (door.wallId !== wall.id) return false;
+          const wallLength = Vector2.from(this.points.get(wall.endPointId)!).distance(Vector2.from(this.points.get(wall.startPointId)!));
+          const halfWidthT = (door.width / 2) / wallLength;
+          const startT = door.position - halfWidthT;
+          const endT = door.position + halfWidthT;
+          return midT >= startT && midT <= endT;
+        });
+
         segments.push({
           wallId: wall.id,
           start: p1.point,
           end: p2.point,
           thickness: this.config.wallThickness,
-          // We need to know if the start/end of this segment are original wall endpoints
-          // or T-junction split points to handle caps correctly if needed (though miter logic handles it)
+          isHole
         });
       }
     });
@@ -268,12 +308,14 @@ export class WallLayer extends BaseLayer {
     isHovered: boolean,
     isSelected: boolean
   ): void {
+    if (segment.isHole) return;
+
     const start = Vector2.from(segment.start);
     const end = Vector2.from(segment.end);
 
-    // Calculate corners at start and end
-    const startCorners = this.calculateJointCorners(segment.start, start, end, segment.wallId);
-    const endCorners = this.calculateJointCorners(segment.end, end, start, segment.wallId);
+    // Calculate corners at start and end (use actual wall thickness from segment)
+    const startCorners = this.calculateJointCorners(segment.start, start, end, segment.wallId, segment.thickness);
+    const endCorners = this.calculateJointCorners(segment.end, end, start, segment.wallId, segment.thickness);
 
     // startCorners returns { left, right } relative to the direction AWAY from the joint
     // For segment start: direction is Start->End. 
@@ -415,502 +457,502 @@ export class WallLayer extends BaseLayer {
   }
 
   private calculateJointCorners(
-  junctionPoint: Point,
-  currentStart: Vector2,
-  currentEnd: Vector2,
-  currentWallId: string
-): { left: Vector2, right: Vector2 } {
-  const thickness = this.config.wallThickness;
-  const halfThickness = thickness / 2;
+    junctionPoint: Point,
+    currentStart: Vector2,
+    currentEnd: Vector2,
+    currentWallId: string,
+    wallThickness: number
+  ): { left: Vector2, right: Vector2 } {
+    const thickness = wallThickness;
+    const halfThickness = thickness / 2;
 
-  // 1. Find all segments connected to this junction point
-  // This includes the current segment AND any other wall segments starting/ending here.
-  const connectedSegments: { vec: Vector2, angle: number, wallId: string, isCurrent: boolean }[] = [];
+    // 1. Find all segments connected to this junction point
+    // This includes the current segment AND any other wall segments starting/ending here.
+    const connectedSegments: { vec: Vector2, angle: number, wallId: string, isCurrent: boolean }[] = [];
 
-  // Direction of current segment (pointing AWAY from junction)
-  const currentDir = currentEnd.subtract(currentStart).normalize();
-  connectedSegments.push({
-    vec: currentDir,
-    angle: Math.atan2(currentDir.y, currentDir.x),
-    wallId: currentWallId,
-    isCurrent: true
-  });
+    // Direction of current segment (pointing AWAY from junction)
+    const currentDir = currentEnd.subtract(currentStart).normalize();
+    connectedSegments.push({
+      vec: currentDir,
+      angle: Math.atan2(currentDir.y, currentDir.x),
+      wallId: currentWallId,
+      isCurrent: true
+    });
 
-  // Find other walls connected to this point
-  // We need to look at ALL walls to see if they have an endpoint at 'junctionPoint'
-  // OR if they pass through 'junctionPoint' (T-junction split).
+    // Find other walls connected to this point
+    // We need to look at ALL walls to see if they have an endpoint at 'junctionPoint'
+    // OR if they pass through 'junctionPoint' (T-junction split).
 
-  // Since we are in 'render', we assume 'junctionPoint' is a node in our graph.
-  // We can iterate all walls and check if they connect to this point.
+    // Since we are in 'render', we assume 'junctionPoint' is a node in our graph.
+    // We can iterate all walls and check if they connect to this point.
 
-  this.walls.forEach(wall => {
-    if (wall.id === currentWallId) {
-      // Check if this is the OTHER side of the split (if it's a T-junction on itself?)
-      // No, 'currentWallId' is the ID of the original wall.
-      // If we split a wall into segments, they share the wallID.
-      // We need to treat the "other part" of the same wall as a connected segment.
+    this.walls.forEach(wall => {
+      if (wall.id === currentWallId) {
+        // Check if this is the OTHER side of the split (if it's a T-junction on itself?)
+        // No, 'currentWallId' is the ID of the original wall.
+        // If we split a wall into segments, they share the wallID.
+        // We need to treat the "other part" of the same wall as a connected segment.
 
-      // Check if there is another segment of the same wall connected here.
-      // The junctionPoint lies on the wall line.
-      // If junctionPoint is NOT the start or end of the original wall, then there are TWO segments of this wall meeting here.
-      // We already added the "current" one (currentStart -> currentEnd).
-      // We need the "other" one (currentStart -> OtherEnd).
+        // Check if there is another segment of the same wall connected here.
+        // The junctionPoint lies on the wall line.
+        // If junctionPoint is NOT the start or end of the original wall, then there are TWO segments of this wall meeting here.
+        // We already added the "current" one (currentStart -> currentEnd).
+        // We need the "other" one (currentStart -> OtherEnd).
 
-      // Let's find the two directions from this point along the wall.
-      const wStart = Vector2.from(this.points.get(wall.startPointId)!);
-      const wEnd = Vector2.from(this.points.get(wall.endPointId)!);
-      const wDir = wEnd.subtract(wStart).normalize();
+        // Let's find the two directions from this point along the wall.
+        // const wStart = Vector2.from(this.points.get(wall.startPointId)!);
+        // const wEnd = Vector2.from(this.points.get(wall.endPointId)!);
+        // const wDir = wEnd.subtract(wStart).normalize();
 
-      // Check if currentDir is roughly wDir or -wDir
-      const dot = currentDir.dot(wDir);
-      // If dot > 0, current is going towards End. The "other" side would be going towards Start (-wDir).
-      // If dot < 0, current is going towards Start. The "other" side would be going towards End (wDir).
+        // Check if currentDir is roughly wDir or -wDir
+        // If dot > 0, current is going towards End. The "other" side would be going towards Start (-wDir).
+        // If dot < 0, current is going towards Start. The "other" side would be going towards End (wDir).
 
-      // Only add the "other" side if it exists (i.e., we are not at the physical end of the wall)
-      const isStartNode = junctionPoint.id === wall.startPointId;
-      const isEndNode = junctionPoint.id === wall.endPointId;
+        // Only add the "other" side if it exists (i.e., we are not at the physical end of the wall)
+        const isStartNode = junctionPoint.id === wall.startPointId;
+        const isEndNode = junctionPoint.id === wall.endPointId;
 
-      if (!isStartNode && !isEndNode) {
-        // We are in the middle. Add the opposite direction.
-        const otherDir = currentDir.multiply(-1);
-        connectedSegments.push({
-          vec: otherDir,
-          angle: Math.atan2(otherDir.y, otherDir.x),
-          wallId: wall.id,
-          isCurrent: false
-        });
+        if (!isStartNode && !isEndNode) {
+          // We are in the middle. Add the opposite direction.
+          const otherDir = currentDir.multiply(-1);
+          connectedSegments.push({
+            vec: otherDir,
+            angle: Math.atan2(otherDir.y, otherDir.x),
+            wallId: wall.id,
+            isCurrent: false
+          });
+        }
+        return;
       }
-      return;
-    }
 
-    // For other walls
-    const wStart = this.points.get(wall.startPointId)!;
-    const wEnd = this.points.get(wall.endPointId)!;
+      // For other walls
+      const wStart = this.points.get(wall.startPointId)!;
+      const wEnd = this.points.get(wall.endPointId)!;
 
-    // Check if this wall starts/ends at junctionPoint
-    if (wStart.id === junctionPoint.id) {
-      const dir = Vector2.from(wEnd).subtract(Vector2.from(wStart)).normalize();
-      connectedSegments.push({ vec: dir, angle: Math.atan2(dir.y, dir.x), wallId: wall.id, isCurrent: false });
-    } else if (wEnd.id === junctionPoint.id) {
-      const dir = Vector2.from(wStart).subtract(Vector2.from(wEnd)).normalize();
-      connectedSegments.push({ vec: dir, angle: Math.atan2(dir.y, dir.x), wallId: wall.id, isCurrent: false });
-    } else {
-      // Check if this wall passes through junctionPoint (T-junction where junctionPoint is on this wall)
-      // We can reuse the distance check or assume our segment generation logic is consistent.
-      // If junctionPoint is "on" this wall, then this wall splits here.
-      // We need to add BOTH directions of this wall as connected segments.
+      // Check if this wall starts/ends at junctionPoint
+      if (wStart.id === junctionPoint.id) {
+        const dir = Vector2.from(wEnd).subtract(Vector2.from(wStart)).normalize();
+        connectedSegments.push({ vec: dir, angle: Math.atan2(dir.y, dir.x), wallId: wall.id, isCurrent: false });
+      } else if (wEnd.id === junctionPoint.id) {
+        const dir = Vector2.from(wStart).subtract(Vector2.from(wEnd)).normalize();
+        connectedSegments.push({ vec: dir, angle: Math.atan2(dir.y, dir.x), wallId: wall.id, isCurrent: false });
+      } else {
+        // Check if this wall passes through junctionPoint (T-junction where junctionPoint is on this wall)
+        // We can reuse the distance check or assume our segment generation logic is consistent.
+        // If junctionPoint is "on" this wall, then this wall splits here.
+        // We need to add BOTH directions of this wall as connected segments.
 
-      const pVec = Vector2.from(junctionPoint);
-      const sVec = Vector2.from(wStart);
-      const eVec = Vector2.from(wEnd);
-      const wallVec = eVec.subtract(sVec);
-      const lenSquared = wallVec.lengthSquared();
-      const t = pVec.subtract(sVec).dot(wallVec) / lenSquared;
+        const pVec = Vector2.from(junctionPoint);
+        const sVec = Vector2.from(wStart);
+        const eVec = Vector2.from(wEnd);
+        const wallVec = eVec.subtract(sVec);
+        const lenSquared = wallVec.lengthSquared();
+        const t = pVec.subtract(sVec).dot(wallVec) / lenSquared;
 
-      if (t > 0.001 && t < 0.999) {
-        const dist = pVec.distanceTo(sVec.add(wallVec.multiply(t)));
-        if (dist < 10) {
-          // It's a T-junction on this wall. Add both directions.
-          const dir1 = wallVec.normalize();
-          const dir2 = dir1.multiply(-1);
-          connectedSegments.push({ vec: dir1, angle: Math.atan2(dir1.y, dir1.x), wallId: wall.id, isCurrent: false });
-          connectedSegments.push({ vec: dir2, angle: Math.atan2(dir2.y, dir2.x), wallId: wall.id, isCurrent: false });
+        if (t > 0.001 && t < 0.999) {
+          const dist = pVec.distanceTo(sVec.add(wallVec.multiply(t)));
+          if (dist < 10) {
+            // It's a T-junction on this wall. Add both directions.
+            const dir1 = wallVec.normalize();
+            const dir2 = dir1.multiply(-1);
+            connectedSegments.push({ vec: dir1, angle: Math.atan2(dir1.y, dir1.x), wallId: wall.id, isCurrent: false });
+            connectedSegments.push({ vec: dir2, angle: Math.atan2(dir2.y, dir2.x), wallId: wall.id, isCurrent: false });
+          }
         }
       }
+    });
+
+    // Sort segments by angle
+    connectedSegments.sort((a, b) => a.angle - b.angle);
+
+    // Find current segment index
+    const currentIndex = connectedSegments.findIndex(s => s.isCurrent);
+
+    // Find neighbors (cyclic)
+    const prevIndex = (currentIndex - 1 + connectedSegments.length) % connectedSegments.length;
+    const nextIndex = (currentIndex + 1) % connectedSegments.length;
+
+    const prevSeg = connectedSegments[prevIndex];
+    const nextSeg = connectedSegments[nextIndex];
+
+    // Left corner (between Current and Next)
+    // If Current is the ONLY segment (endpoint), corners are just perpendicular.
+    if (connectedSegments.length === 1) {
+      const normal = new Vector2(-currentDir.y, currentDir.x);
+      return {
+        left: currentStart.add(normal.multiply(halfThickness)),
+        right: currentStart.subtract(normal.multiply(halfThickness))
+      };
     }
-  });
 
-  // Sort segments by angle
-  connectedSegments.sort((a, b) => a.angle - b.angle);
+    // Calculate miter vectors
+    // Left side interacts with Next segment
+    const leftMiter = this.calculateMiterVector(currentDir, nextSeg.vec, halfThickness);
 
-  // Find current segment index
-  const currentIndex = connectedSegments.findIndex(s => s.isCurrent);
+    // Right side interacts with Prev segment
+    // Note: calculateMiterVector expects (Dir1, Dir2).
+    // For Right side, we are between Prev and Current.
+    // The "Right" side of Current faces Prev.
+    const rightMiter = this.calculateMiterVector(prevSeg.vec, currentDir, halfThickness);
 
-  // Find neighbors (cyclic)
-  const prevIndex = (currentIndex - 1 + connectedSegments.length) % connectedSegments.length;
-  const nextIndex = (currentIndex + 1) % connectedSegments.length;
+    // The miter vector points from junction center to the corner.
+    // But calculateMiterVector returns the OFFSET vector.
+    // So we just add it to junctionPoint.
 
-  const prevSeg = connectedSegments[prevIndex];
-  const nextSeg = connectedSegments[nextIndex];
+    // However, calculateMiterVector might return a vector that is "too long" for very sharp angles.
+    // We might need to cap it, but for standard walls it's fine.
 
-  // Left corner (between Current and Next)
-  // If Current is the ONLY segment (endpoint), corners are just perpendicular.
-  if (connectedSegments.length === 1) {
-    const normal = new Vector2(-currentDir.y, currentDir.x);
+    // One detail: calculateMiterVector returns the intersection of the two parallel edge lines.
+    // It correctly handles the sign?
+    // Let's check the implementation of calculateMiterVector.
+
     return {
-      left: currentStart.add(normal.multiply(halfThickness)),
-      right: currentStart.subtract(normal.multiply(halfThickness))
+      left: currentStart.add(leftMiter),
+      right: currentStart.add(rightMiter)
     };
   }
 
-  // Calculate miter vectors
-  // Left side interacts with Next segment
-  const leftMiter = this.calculateMiterVector(currentDir, nextSeg.vec, halfThickness);
-
-  // Right side interacts with Prev segment
-  // Note: calculateMiterVector expects (Dir1, Dir2).
-  // For Right side, we are between Prev and Current.
-  // The "Right" side of Current faces Prev.
-  const rightMiter = this.calculateMiterVector(prevSeg.vec, currentDir, halfThickness);
-
-  // The miter vector points from junction center to the corner.
-  // But calculateMiterVector returns the OFFSET vector.
-  // So we just add it to junctionPoint.
-
-  // However, calculateMiterVector might return a vector that is "too long" for very sharp angles.
-  // We might need to cap it, but for standard walls it's fine.
-
-  // One detail: calculateMiterVector returns the intersection of the two parallel edge lines.
-  // It correctly handles the sign?
-  // Let's check the implementation of calculateMiterVector.
-
-  return {
-    left: currentStart.add(leftMiter),
-    right: currentStart.add(rightMiter)
-  };
-}
-
   private calculateMiterVector(dir1: Vector2, dir2: Vector2, offset: number): Vector2 {
-  // Returns the vector from the junction point to the intersection of the two offset lines.
-  // Line 1: parallel to dir1, at distance 'offset' to the LEFT (rotated 90 deg CCW).
-  // Line 2: parallel to dir2, at distance 'offset' to the RIGHT (rotated -90 deg)?
+    // Returns the vector from the junction point to the intersection of the two offset lines.
+    // Line 1: parallel to dir1, at distance 'offset' to the LEFT (rotated 90 deg CCW).
+    // Line 2: parallel to dir2, at distance 'offset' to the RIGHT (rotated -90 deg)?
 
-  // Wait, let's standardize.
-  // We are looking for the corner between Dir1 and Dir2.
-  // In the sorted list: Dir1 -> Dir2.
-  // This is the gap "Left" of Dir1 and "Right" of Dir2.
-  // So we want intersection of:
-  // L1: Left of Dir1.
-  // L2: Right of Dir2.
+    // Wait, let's standardize.
+    // We are looking for the corner between Dir1 and Dir2.
+    // In the sorted list: Dir1 -> Dir2.
+    // This is the gap "Left" of Dir1 and "Right" of Dir2.
+    // So we want intersection of:
+    // L1: Left of Dir1.
+    // L2: Right of Dir2.
 
-  const normal1 = new Vector2(-dir1.y, dir1.x); // Left of Dir1
-  const normal2 = new Vector2(dir2.y, -dir2.x); // Right of Dir2 (CW rotation)
+    const normal1 = new Vector2(-dir1.y, dir1.x); // Left of Dir1
+    const normal2 = new Vector2(dir2.y, -dir2.x); // Right of Dir2 (CW rotation)
 
-  // If walls are collinear (180 deg), normals are opposite.
-  // If walls are same (0 deg), normals are opposite? No.
+    // If walls are collinear (180 deg), normals are opposite.
+    // If walls are same (0 deg), normals are opposite? No.
 
-  // Check angle between walls
-  const dot = dir1.dot(dir2);
-  if (dot < -0.99) {
-    // Collinear, opposite directions (End of one, Start of another).
-    // This is a straight wall joint.
-    // Miter is just the normal.
-    return normal1.multiply(offset);
+    // Check angle between walls
+    const dot = dir1.dot(dir2);
+    if (dot < -0.99) {
+      // Collinear, opposite directions (End of one, Start of another).
+      // This is a straight wall joint.
+      // Miter is just the normal.
+      return normal1.multiply(offset);
+    }
+
+    // Line 1 point: P + normal1 * offset
+    // Line 2 point: P + normal2 * offset
+    // We want intersection of these two lines.
+    // L1: P + n1*w + t*d1
+    // L2: P + n2*w + u*d2
+    // n1*w + t*d1 = n2*w + u*d2
+    // t*d1 - u*d2 = (n2 - n1)*w
+
+    // Solve for t.
+    // Cross product in 2D is determinant.
+    // det(d1, -d2) = -d1.x*d2.y + d1.y*d2.x = -(d1 x d2)
+
+    const det = dir2.x * dir1.y - dir2.y * dir1.x; // Cross product (z component)
+
+    if (Math.abs(det) < 0.001) {
+      // Parallel lines? Should be caught by dot check, but maybe close.
+      return normal1.multiply(offset);
+    }
+
+    // Solve system:
+    // t * d1.x - u * d2.x = (n2.x - n1.x) * offset
+    // t * d1.y - u * d2.y = (n2.y - n1.y) * offset
+
+    // Using Cramer's rule or simple substitution.
+    // Vector delta = (n2 - n1) * offset
+    // t * d1 - u * d2 = delta
+    // Cross both sides with d2:
+    // t * (d1 x d2) = delta x d2
+    // t = (delta x d2) / (d1 x d2)
+
+    const nDiff = normal2.subtract(normal1).multiply(offset);
+    const num = nDiff.x * dir2.y - nDiff.y * dir2.x;
+    const den = dir1.x * dir2.y - dir1.y * dir2.x;
+
+    const t = num / den;
+
+    // Result vector is normal1*offset + dir1*t
+    return normal1.multiply(offset).add(dir1.multiply(t));
   }
-
-  // Line 1 point: P + normal1 * offset
-  // Line 2 point: P + normal2 * offset
-  // We want intersection of these two lines.
-  // L1: P + n1*w + t*d1
-  // L2: P + n2*w + u*d2
-  // n1*w + t*d1 = n2*w + u*d2
-  // t*d1 - u*d2 = (n2 - n1)*w
-
-  // Solve for t.
-  // Cross product in 2D is determinant.
-  // det(d1, -d2) = -d1.x*d2.y + d1.y*d2.x = -(d1 x d2)
-
-  const det = dir2.x * dir1.y - dir2.y * dir1.x; // Cross product (z component)
-
-  if (Math.abs(det) < 0.001) {
-    // Parallel lines? Should be caught by dot check, but maybe close.
-    return normal1.multiply(offset);
-  }
-
-  // Solve system:
-  // t * d1.x - u * d2.x = (n2.x - n1.x) * offset
-  // t * d1.y - u * d2.y = (n2.y - n1.y) * offset
-
-  // Using Cramer's rule or simple substitution.
-  // Vector delta = (n2 - n1) * offset
-  // t * d1 - u * d2 = delta
-  // Cross both sides with d2:
-  // t * (d1 x d2) = delta x d2
-  // t = (delta x d2) / (d1 x d2)
-
-  const nDiff = normal2.subtract(normal1).multiply(offset);
-  const num = nDiff.x * dir2.y - nDiff.y * dir2.x;
-  const den = dir1.x * dir2.y - dir1.y * dir2.x;
-
-  const t = num / den;
-
-  // Result vector is normal1*offset + dir1*t
-  return normal1.multiply(offset).add(dir1.multiply(t));
-}
 
 
 
 
 
   private renderPreviewWall(ctx: CanvasRenderingContext2D, start: Point, end: Point): void {
-  ctx.save();
+    ctx.save();
 
-  const thickness = this.config.wallThickness;
+    const thickness = this.config.wallThickness;
 
-  // Draw preview as a simple rectangle (no miter)
-  const s = Vector2.from(start);
-  const e = Vector2.from(end);
-  const dir = e.subtract(s).normalize();
-  const normal = new Vector2(-dir.y, dir.x);
-  const halfThickness = thickness / 2;
+    // Draw preview as a simple rectangle (no miter)
+    const s = Vector2.from(start);
+    const e = Vector2.from(end);
+    const dir = e.subtract(s).normalize();
+    const normal = new Vector2(-dir.y, dir.x);
+    const halfThickness = thickness / 2;
 
-  const p1 = s.add(normal.multiply(halfThickness));
-  const p2 = e.add(normal.multiply(halfThickness));
-  const p3 = e.subtract(normal.multiply(halfThickness));
-  const p4 = s.subtract(normal.multiply(halfThickness));
+    const p1 = s.add(normal.multiply(halfThickness));
+    const p2 = e.add(normal.multiply(halfThickness));
+    const p3 = e.subtract(normal.multiply(halfThickness));
+    const p4 = s.subtract(normal.multiply(halfThickness));
 
-  // Use dark gray with no transparency
-  ctx.fillStyle = '#505050';
+    // Use dark gray with no transparency
+    ctx.fillStyle = '#505050';
 
-  ctx.beginPath();
-  ctx.moveTo(p1.x, p1.y);
-  ctx.lineTo(p2.x, p2.y);
-  ctx.lineTo(p3.x, p3.y);
-  ctx.lineTo(p4.x, p4.y);
-  ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.lineTo(p3.x, p3.y);
+    ctx.lineTo(p4.x, p4.y);
+    ctx.fill();
 
-  ctx.restore();
-}
+    ctx.restore();
+  }
 
   /**
    * Render angle guide line
    */
   private renderAngleGuide(ctx: CanvasRenderingContext2D, from: Point, angleDeg: number): void {
-  ctx.save();
+    ctx.save();
 
-  // Convert angle to radians
-  const angleRad = (angleDeg * Math.PI) / 180;
+    // Convert angle to radians
+    const angleRad = (angleDeg * Math.PI) / 180;
 
-  // Draw a long line in that direction (10000mm = 10m)
-  const length = 10000;
-  const toX = from.x + Math.cos(angleRad) * length;
-  const toY = from.y + Math.sin(angleRad) * length;
+    // Draw a long line in that direction (10000mm = 10m)
+    const length = 10000;
+    const toX = from.x + Math.cos(angleRad) * length;
+    const toY = from.y + Math.sin(angleRad) * length;
 
-  // Check current theme for color selection
-  const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+    // Check current theme for color selection
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
 
-  // Dashed line style - 다크모드 대응
-  ctx.strokeStyle = isDarkMode ? '#64B5F6' : '#3498db';
-  ctx.lineWidth = 2; // Thin guide line
-  ctx.setLineDash([20, 10]); // Dashed pattern
-  ctx.globalAlpha = 0.6;
+    // Dashed line style - 다크모드 대응
+    ctx.strokeStyle = isDarkMode ? '#64B5F6' : '#3498db';
+    ctx.lineWidth = 2; // Thin guide line
+    ctx.setLineDash([20, 10]); // Dashed pattern
+    ctx.globalAlpha = 0.6;
 
-  ctx.beginPath();
-  ctx.moveTo(from.x, from.y);
-  ctx.lineTo(toX, toY);
-  ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(toX, toY);
+    ctx.stroke();
 
-  ctx.restore();
-}
+    ctx.restore();
+  }
 
   /**
    * Render wall dimension label in CAD style with extension lines and arrows
    * Dimensions are ALWAYS placed OUTSIDE the room space
    */
   private renderWallDimension(ctx: CanvasRenderingContext2D, wall: Wall): void {
-  if(!this.camera) return;
+    if (!this.camera) return;
 
-  const startPoint = this.points.get(wall.startPointId);
-  const endPoint = this.points.get(wall.endPointId);
+    const startPoint = this.points.get(wall.startPointId);
+    const endPoint = this.points.get(wall.endPointId);
 
-  if(!startPoint || !endPoint) return;
+    if (!startPoint || !endPoint) return;
 
-const dx = endPoint.x - startPoint.x;
-const dy = endPoint.y - startPoint.y;
-const distanceMm = Math.sqrt(dx * dx + dy * dy);
-const angle = Math.atan2(dy, dx);
+    const dx = endPoint.x - startPoint.x;
+    const dy = endPoint.y - startPoint.y;
+    const distanceMm = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx);
 
-// CAD-style configuration
-const wallHalfThickness = this.config.wallThickness / 2; // 50mm (half of 100mm)
-const extensionGap = 100; // 100mm gap from wall surface
-const offsetDistanceMm = 600; // 600mm offset for dimension line from wall surface
-const extensionOverhang = 100; // Extension line extends 100mm beyond dimension line
+    // CAD-style configuration
+    const wallHalfThickness = this.config.wallThickness / 2; // 50mm (half of 100mm)
+    const extensionGap = 100; // 100mm gap from wall surface
+    const offsetDistanceMm = 600; // 600mm offset for dimension line from wall surface
+    const extensionOverhang = 100; // Extension line extends 100mm beyond dimension line
 
-// Calculate perpendicular offset direction
-// Find which room this wall belongs to and place dimension OUTSIDE the room
-let perpX = -Math.sin(angle); // Default: left side
-let perpY = Math.cos(angle);
+    // Calculate perpendicular offset direction
+    // Find which room this wall belongs to and place dimension OUTSIDE the room
+    let perpX = -Math.sin(angle); // Default: left side
+    let perpY = Math.cos(angle);
 
-// Find the room containing this wall
-const parentRoom = this.rooms.find(room => room.walls.includes(wall.id));
+    // Find the room containing this wall
+    const parentRoom = this.rooms.find(room => room.walls.includes(wall.id));
 
-if (parentRoom && parentRoom.points.length > 0) {
-  // Calculate room centroid
-  let centerX = 0;
-  let centerY = 0;
-  parentRoom.points.forEach(pointId => {
-    const point = this.points.get(pointId);
-    if (point) {
-      centerX += point.x;
-      centerY += point.y;
+    if (parentRoom && parentRoom.points.length > 0) {
+      // Calculate room centroid
+      let centerX = 0;
+      let centerY = 0;
+      parentRoom.points.forEach(pointId => {
+        const point = this.points.get(pointId);
+        if (point) {
+          centerX += point.x;
+          centerY += point.y;
+        }
+      });
+      centerX /= parentRoom.points.length;
+      centerY /= parentRoom.points.length;
+
+      // Calculate wall midpoint
+      const wallMidX = (startPoint.x + endPoint.x) / 2;
+      const wallMidY = (startPoint.y + endPoint.y) / 2;
+
+      // Vector from room center to wall midpoint
+      const toWallX = wallMidX - centerX;
+      const toWallY = wallMidY - centerY;
+
+      // Two possible perpendicular directions
+      const perp1X = -Math.sin(angle);
+      const perp1Y = Math.cos(angle);
+      const perp2X = Math.sin(angle);
+      const perp2Y = -Math.cos(angle);
+
+      // Choose the direction that points AWAY from room center
+      // Dot product with toWall vector: positive means same direction (away from center)
+      const dot1 = perp1X * toWallX + perp1Y * toWallY;
+      const dot2 = perp2X * toWallX + perp2Y * toWallY;
+
+      if (dot2 > dot1) {
+        perpX = perp2X;
+        perpY = perp2Y;
+      }
     }
-  });
-  centerX /= parentRoom.points.length;
-  centerY /= parentRoom.points.length;
 
-  // Calculate wall midpoint
-  const wallMidX = (startPoint.x + endPoint.x) / 2;
-  const wallMidY = (startPoint.y + endPoint.y) / 2;
+    // Start extension lines from wall inner edge (center - half thickness on inside)
+    // perpX/perpY points OUTWARD, so we need to go INWARD (opposite direction) by wallHalfThickness
+    const innerEdgeOffset = -wallHalfThickness + extensionGap;
+    const ext1StartX = startPoint.x + perpX * innerEdgeOffset;
+    const ext1StartY = startPoint.y + perpY * innerEdgeOffset;
+    const ext2StartX = endPoint.x + perpX * innerEdgeOffset;
+    const ext2StartY = endPoint.y + perpY * innerEdgeOffset;
 
-  // Vector from room center to wall midpoint
-  const toWallX = wallMidX - centerX;
-  const toWallY = wallMidY - centerY;
+    // Extension line end points (beyond dimension line) - from inner edge
+    const totalExtension = -wallHalfThickness + extensionGap + offsetDistanceMm + extensionOverhang;
+    const ext1EndX = startPoint.x + perpX * totalExtension;
+    const ext1EndY = startPoint.y + perpY * totalExtension;
+    const ext2EndX = endPoint.x + perpX * totalExtension;
+    const ext2EndY = endPoint.y + perpY * totalExtension;
 
-  // Two possible perpendicular directions
-  const perp1X = -Math.sin(angle);
-  const perp1Y = Math.cos(angle);
-  const perp2X = Math.sin(angle);
-  const perp2Y = -Math.cos(angle);
+    // Dimension line points (offset from inner edge)
+    const dimOffset = -wallHalfThickness + extensionGap + offsetDistanceMm;
+    const dim1X = startPoint.x + perpX * dimOffset;
+    const dim1Y = startPoint.y + perpY * dimOffset;
+    const dim2X = endPoint.x + perpX * dimOffset;
+    const dim2Y = endPoint.y + perpY * dimOffset;
 
-  // Choose the direction that points AWAY from room center
-  // Dot product with toWall vector: positive means same direction (away from center)
-  const dot1 = perp1X * toWallX + perp1Y * toWallY;
-  const dot2 = perp2X * toWallX + perp2Y * toWallY;
+    // Convert to screen space
+    const ext1Start = this.camera.worldToScreen(ext1StartX, ext1StartY);
+    const ext1End = this.camera.worldToScreen(ext1EndX, ext1EndY);
+    const ext2Start = this.camera.worldToScreen(ext2StartX, ext2StartY);
+    const ext2End = this.camera.worldToScreen(ext2EndX, ext2EndY);
+    const dim1 = this.camera.worldToScreen(dim1X, dim1Y);
+    const dim2 = this.camera.worldToScreen(dim2X, dim2Y);
 
-  if (dot2 > dot1) {
-    perpX = perp2X;
-    perpY = perp2Y;
-  }
-}
+    // Midpoint for label
+    const labelX = (dim1.x + dim2.x) / 2;
+    const labelY = (dim1.y + dim2.y) / 2;
 
-// Start extension lines from wall inner edge (center - half thickness on inside)
-// perpX/perpY points OUTWARD, so we need to go INWARD (opposite direction) by wallHalfThickness
-const innerEdgeOffset = -wallHalfThickness + extensionGap;
-const ext1StartX = startPoint.x + perpX * innerEdgeOffset;
-const ext1StartY = startPoint.y + perpY * innerEdgeOffset;
-const ext2StartX = endPoint.x + perpX * innerEdgeOffset;
-const ext2StartY = endPoint.y + perpY * innerEdgeOffset;
+    ctx.save();
+    this.camera.applyScreenTransform(ctx);
 
-// Extension line end points (beyond dimension line) - from inner edge
-const totalExtension = -wallHalfThickness + extensionGap + offsetDistanceMm + extensionOverhang;
-const ext1EndX = startPoint.x + perpX * totalExtension;
-const ext1EndY = startPoint.y + perpY * totalExtension;
-const ext2EndX = endPoint.x + perpX * totalExtension;
-const ext2EndY = endPoint.y + perpY * totalExtension;
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+    const dimColor = isDarkMode ? '#90CAF9' : '#666666';
+    const textColor = isDarkMode ? '#E0E0E0' : '#333333';
 
-// Dimension line points (offset from inner edge)
-const dimOffset = -wallHalfThickness + extensionGap + offsetDistanceMm;
-const dim1X = startPoint.x + perpX * dimOffset;
-const dim1Y = startPoint.y + perpY * dimOffset;
-const dim2X = endPoint.x + perpX * dimOffset;
-const dim2Y = endPoint.y + perpY * dimOffset;
+    // Draw extension lines (thin, solid) - CAD style
+    ctx.strokeStyle = dimColor;
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1.0;
 
-// Convert to screen space
-const ext1Start = this.camera.worldToScreen(ext1StartX, ext1StartY);
-const ext1End = this.camera.worldToScreen(ext1EndX, ext1EndY);
-const ext2Start = this.camera.worldToScreen(ext2StartX, ext2StartY);
-const ext2End = this.camera.worldToScreen(ext2EndX, ext2EndY);
-const dim1 = this.camera.worldToScreen(dim1X, dim1Y);
-const dim2 = this.camera.worldToScreen(dim2X, dim2Y);
+    ctx.beginPath();
+    ctx.moveTo(ext1Start.x, ext1Start.y);
+    ctx.lineTo(ext1End.x, ext1End.y);
+    ctx.stroke();
 
-// Midpoint for label
-const labelX = (dim1.x + dim2.x) / 2;
-const labelY = (dim1.y + dim2.y) / 2;
+    ctx.beginPath();
+    ctx.moveTo(ext2Start.x, ext2Start.y);
+    ctx.lineTo(ext2End.x, ext2End.y);
+    ctx.stroke();
 
-ctx.save();
-this.camera.applyScreenTransform(ctx);
+    // Draw dimension line (thin, solid)
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(dim1.x, dim1.y);
+    ctx.lineTo(dim2.x, dim2.y);
+    ctx.stroke();
 
-const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
-const dimColor = isDarkMode ? '#90CAF9' : '#666666';
-const textColor = isDarkMode ? '#E0E0E0' : '#333333';
+    // Draw slashes at dimension line endpoints - CAD style
+    const slashSize = 8;
+    const dimLineAngle = Math.atan2(dim2.y - dim1.y, dim2.x - dim1.x);
+    const slashAngle = Math.PI / 4; // 45 degrees
 
-// Draw extension lines (thin, solid) - CAD style
-ctx.strokeStyle = dimColor;
-ctx.lineWidth = 0.5;
-ctx.setLineDash([]);
-ctx.globalAlpha = 1.0;
+    ctx.lineWidth = 1.5;
 
-ctx.beginPath();
-ctx.moveTo(ext1Start.x, ext1Start.y);
-ctx.lineTo(ext1End.x, ext1End.y);
-ctx.stroke();
+    // Slash at start (diagonal line)
+    ctx.beginPath();
+    ctx.moveTo(
+      dim1.x - slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
+      dim1.y - slashSize * Math.sin(dimLineAngle + slashAngle) / 2
+    );
+    ctx.lineTo(
+      dim1.x + slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
+      dim1.y + slashSize * Math.sin(dimLineAngle + slashAngle) / 2
+    );
+    ctx.stroke();
 
-ctx.beginPath();
-ctx.moveTo(ext2Start.x, ext2Start.y);
-ctx.lineTo(ext2End.x, ext2End.y);
-ctx.stroke();
+    // Slash at end (diagonal line)
+    ctx.beginPath();
+    ctx.moveTo(
+      dim2.x - slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
+      dim2.y - slashSize * Math.sin(dimLineAngle + slashAngle) / 2
+    );
+    ctx.lineTo(
+      dim2.x + slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
+      dim2.y + slashSize * Math.sin(dimLineAngle + slashAngle) / 2
+    );
+    ctx.stroke();
 
-// Draw dimension line (thin, solid)
-ctx.lineWidth = 1;
-ctx.beginPath();
-ctx.moveTo(dim1.x, dim1.y);
-ctx.lineTo(dim2.x, dim2.y);
-ctx.stroke();
+    // Draw dimension text - rotated to align with dimension line
+    const label = `${distanceMm.toFixed(0)}mm`;
+    ctx.font = '12px system-ui';
 
-// Draw slashes at dimension line endpoints - CAD style
-const slashSize = 8;
-const dimLineAngle = Math.atan2(dim2.y - dim1.y, dim2.x - dim1.x);
-const slashAngle = Math.PI / 4; // 45 degrees
+    ctx.save();
+    ctx.translate(labelX, labelY);
 
-ctx.lineWidth = 1.5;
-
-// Slash at start (diagonal line)
-ctx.beginPath();
-ctx.moveTo(
-  dim1.x - slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
-  dim1.y - slashSize * Math.sin(dimLineAngle + slashAngle) / 2
-);
-ctx.lineTo(
-  dim1.x + slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
-  dim1.y + slashSize * Math.sin(dimLineAngle + slashAngle) / 2
-);
-ctx.stroke();
-
-// Slash at end (diagonal line)
-ctx.beginPath();
-ctx.moveTo(
-  dim2.x - slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
-  dim2.y - slashSize * Math.sin(dimLineAngle + slashAngle) / 2
-);
-ctx.lineTo(
-  dim2.x + slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
-  dim2.y + slashSize * Math.sin(dimLineAngle + slashAngle) / 2
-);
-ctx.stroke();
-
-// Draw dimension text - rotated to align with dimension line
-const label = `${distanceMm.toFixed(0)}mm`;
-ctx.font = '12px system-ui';
-
-ctx.save();
-ctx.translate(labelX, labelY);
-
-// Rotate text to align with dimension line
-// Keep text readable (not upside down)
-let textAngle = dimLineAngle;
-if (textAngle > Math.PI / 2 || textAngle <= -Math.PI / 2) {
-  textAngle += Math.PI;
-}
-ctx.rotate(textAngle);
-
-// Draw text without background
-ctx.fillStyle = textColor;
-ctx.textAlign = 'center';
-ctx.textBaseline = 'bottom';
-ctx.fillText(label, 0, -4);
-
-ctx.restore();
-
-ctx.restore();
-  }
-
-/**
- * Check if screen coordinates are clicking a dimension label
- * Returns wall ID if clicked, null otherwise
- */
-getDimensionAtPoint(screenX: number, screenY: number): string | null {
-  for (const hitbox of this.dimensionHitboxes) {
-    if (
-      screenX >= hitbox.x &&
-      screenX <= hitbox.x + hitbox.width &&
-      screenY >= hitbox.y &&
-      screenY <= hitbox.y + hitbox.height
-    ) {
-      return hitbox.wallId;
+    // Rotate text to align with dimension line
+    // Keep text readable (not upside down)
+    let textAngle = dimLineAngle;
+    if (textAngle > Math.PI / 2 || textAngle <= -Math.PI / 2) {
+      textAngle += Math.PI;
     }
+    ctx.rotate(textAngle);
+
+    // Draw text without background
+    ctx.fillStyle = textColor;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(label, 0, -4);
+
+    ctx.restore();
+
+    ctx.restore();
   }
-  return null;
-}
+
+  /**
+   * Check if screen coordinates are clicking a dimension label
+   * Returns wall ID if clicked, null otherwise
+   */
+  getDimensionAtPoint(screenX: number, screenY: number): string | null {
+    for (const hitbox of this.dimensionHitboxes) {
+      if (
+        screenX >= hitbox.x &&
+        screenX <= hitbox.x + hitbox.width &&
+        screenY >= hitbox.y &&
+        screenY <= hitbox.y + hitbox.height
+      ) {
+        return hitbox.wallId;
+      }
+    }
+    return null;
+  }
 
 }
 
