@@ -68,7 +68,10 @@ export class RoomLayer extends BaseLayer {
         this.woodPattern = ctx.createPattern(canvas, 'repeat');
       }
     };
-    img.src = '/texture/floor/f2 diffuse.JPG';
+    img.onerror = (e) => {
+      console.error('[RoomLayer] Failed to load texture:', img.src, e);
+    };
+    img.src = '/texture/floor/f2%20diffuse.JPG';
   }
 
   setRooms(rooms: Room[]): void {
@@ -118,6 +121,10 @@ export class RoomLayer extends BaseLayer {
 
     if (roomPoints.length < 3) return;
 
+    // Inset the polygon by wall half-thickness (100mm wall = 50mm inset)
+    const wallHalfThickness = 50; // 100mm wall thickness / 2
+    const insetPoints = this.insetPolygon(roomPoints, wallHalfThickness);
+
     // Determine fill style based on render mode
     let fillStyle: string | CanvasPattern = this.config.fillColor;
     let fillOpacity = this.config.fillOpacity;
@@ -153,13 +160,21 @@ export class RoomLayer extends BaseLayer {
       }
     }
 
-    // Draw polygon
+    // Draw polygon with inset points
     ctx.save();
 
     ctx.beginPath();
-    ctx.moveTo(roomPoints[0].x, roomPoints[0].y);
-    for (let i = 1; i < roomPoints.length; i++) {
-      ctx.lineTo(roomPoints[i].x, roomPoints[i].y);
+    if (insetPoints.length > 0) {
+      ctx.moveTo(insetPoints[0].x, insetPoints[0].y);
+      for (let i = 1; i < insetPoints.length; i++) {
+        ctx.lineTo(insetPoints[i].x, insetPoints[i].y);
+      }
+    } else {
+      // Fallback to original points if inset failed
+      ctx.moveTo(roomPoints[0].x, roomPoints[0].y);
+      for (let i = 1; i < roomPoints.length; i++) {
+        ctx.lineTo(roomPoints[i].x, roomPoints[i].y);
+      }
     }
     ctx.closePath();
 
@@ -252,5 +267,71 @@ export class RoomLayer extends BaseLayer {
       x: sum.x / points.length,
       y: sum.y / points.length,
     };
+  }
+
+  /**
+   * Inset a polygon by a given distance
+   * Uses offset algorithm to move each edge inward by the specified amount
+   */
+  private insetPolygon(points: Point[], insetDistance: number): Point[] {
+    if (points.length < 3) return points;
+
+    const insetPoints: Point[] = [];
+    const n = points.length;
+
+    for (let i = 0; i < n; i++) {
+      const prev = points[(i - 1 + n) % n];
+      const curr = points[i];
+      const next = points[(i + 1) % n];
+
+      // Calculate edge vectors
+      const edge1 = { x: curr.x - prev.x, y: curr.y - prev.y };
+      const edge2 = { x: next.x - curr.x, y: next.y - curr.y };
+
+      // Calculate edge lengths
+      const len1 = Math.sqrt(edge1.x * edge1.x + edge1.y * edge1.y);
+      const len2 = Math.sqrt(edge2.x * edge2.x + edge2.y * edge2.y);
+
+      if (len1 === 0 || len2 === 0) continue;
+
+      // Normalize edge vectors
+      const norm1 = { x: edge1.x / len1, y: edge1.y / len1 };
+      const norm2 = { x: edge2.x / len2, y: edge2.y / len2 };
+
+      // Calculate perpendicular inward normals (rotate 90° clockwise for inward)
+      const perp1 = { x: norm1.y, y: -norm1.x };
+      const perp2 = { x: norm2.y, y: -norm2.x };
+
+      // Calculate bisector direction
+      const bisector = {
+        x: perp1.x + perp2.x,
+        y: perp1.y + perp2.y,
+      };
+
+      const bisectorLen = Math.sqrt(bisector.x * bisector.x + bisector.y * bisector.y);
+      if (bisectorLen === 0) continue;
+
+      // Normalize bisector
+      const normBisector = {
+        x: bisector.x / bisectorLen,
+        y: bisector.y / bisectorLen,
+      };
+
+      // Calculate angle between edges
+      const cosAngle = perp1.x * perp2.x + perp1.y * perp2.y;
+      const sinAngle = Math.sqrt(1 - cosAngle * cosAngle);
+
+      // Calculate offset distance (adjusted for angle)
+      const offsetDist = sinAngle > 0.1 ? insetDistance / sinAngle : insetDistance;
+
+      // Create inset point
+      insetPoints.push({
+        id: curr.id,
+        x: curr.x + normBisector.x * offsetDist,
+        y: curr.y + normBisector.y * offsetDist,
+      });
+    }
+
+    return insetPoints;
   }
 }
