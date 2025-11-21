@@ -121,9 +121,9 @@ export class RoomLayer extends BaseLayer {
 
     if (roomPoints.length < 3) return;
 
-    // Inset the polygon by wall half-thickness (100mm wall = 50mm inset)
-    const wallHalfThickness = 50; // 100mm wall thickness / 2
-    const insetPoints = this.insetPolygon(roomPoints, wallHalfThickness);
+    // Inset the polygon by full wall thickness to place floor inside walls
+    const wallThickness = 100; // 100mm wall thickness
+    const insetPoints = this.insetPolygon(roomPoints, wallThickness);
 
     // Determine fill style based on render mode
     let fillStyle: string | CanvasPattern = this.config.fillColor;
