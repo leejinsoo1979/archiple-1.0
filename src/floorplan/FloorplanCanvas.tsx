@@ -48,7 +48,7 @@ interface FloorplanCanvasProps {
   imageOpacity?: number;
   renderStyle?: 'wireframe' | 'hidden-line' | 'solid' | 'realistic';
   showGrid?: boolean;
-  onDimensionClick?: (wallId: string) => void;
+  onDimensionClick?: (data: string | { roomId: string; wallIndex: number; p1: any; p2: any; isCW: boolean }) => void;
   wallHeight?: number;
   wallThickness?: number;
   rulerVisible?: boolean;
@@ -928,6 +928,22 @@ const FloorplanCanvas = ({
 
       // Check for dimension click (left-click)
       if (event.button === 0 && onDimensionClick) {
+        const camera = renderer.getCamera();
+        const worldPos = camera.screenToWorld(screenX, screenY);
+
+        // First check room dimensions (interior dimensions)
+        const roomLayer = roomLayerRef.current;
+        if (roomLayer) {
+          const clickedRoomDimension = roomLayer.getDimensionAtPoint(worldPos.x, worldPos.y);
+          if (clickedRoomDimension) {
+            event.preventDefault();
+            event.stopPropagation();
+            onDimensionClick(clickedRoomDimension);
+            return;
+          }
+        }
+
+        // Then check wall dimensions (guide layer dimensions)
         const wallLayer = wallLayerRef.current;
         if (wallLayer) {
           const clickedWallId = wallLayer.getDimensionAtPoint(screenX, screenY);

@@ -35,7 +35,7 @@ export class SelectTool extends BaseTool {
 
   // Config
   private pointSelectRadius = 200; // 200mm selection radius (easier to click)
-  private wallSelectDistance = 500; // 500mm distance from wall to select
+
   private doorHandleRadius = 300; // 300mm radius for door handle selection
   private doorBodyRadius = 500; // 500mm radius for door body selection
 
@@ -365,7 +365,7 @@ export class SelectTool extends BaseTool {
    */
   private findWallNear(position: Vector2, walls: Wall[], points: Point[]): Wall | null {
     let nearestWall: Wall | null = null;
-    let minDistance = this.wallSelectDistance;
+    let minDistance = Infinity;
 
     for (const wall of walls) {
       // Get wall endpoints
@@ -383,9 +383,16 @@ export class SelectTool extends BaseTool {
         new Vector2(endPoint.x, endPoint.y)
       );
 
-      if (distance < minDistance) {
-        minDistance = distance;
-        nearestWall = wall;
+      // Check if inside wall thickness
+      // Strictly inside: distance <= wall.thickness / 2
+      const threshold = wall.thickness / 2;
+
+      if (distance <= threshold) {
+        // Find the wall closest to its centerline among those we are inside
+        if (distance < minDistance) {
+          minDistance = distance;
+          nearestWall = wall;
+        }
       }
     }
 
@@ -550,10 +557,59 @@ export class SelectTool extends BaseTool {
 
   getCursor(): string {
     if (this.isDragging) {
+      if (this.selectedWall) {
+        return this.getWallCursor(this.selectedWall);
+      }
       return 'grabbing';
-    } else if (this.selectedPoint || this.selectedWall || this.hoveredPoint || this.hoveredWall) {
+    } else if (this.hoveredWall) {
+      return this.getWallCursor(this.hoveredWall);
+    } else if (this.selectedPoint || this.selectedWall || this.hoveredPoint) {
       return 'grab';
     }
     return 'default';
+  }
+
+  /**
+   * Get cursor based on wall angle
+   */
+  private getWallCursor(wall: Wall): string {
+    const allPoints = this.sceneManager.objectManager.getAllPoints();
+    const startPoint = allPoints.find(p => p.id === wall.startPointId);
+    const endPoint = allPoints.find(p => p.id === wall.endPointId);
+
+    if (!startPoint || !endPoint) {
+      return 'ew-resize';
+    }
+
+    // Calculate wall angle in degrees
+    const dx = endPoint.x - startPoint.x;
+    const dy = endPoint.y - startPoint.y;
+    let angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+    // Normalize angle to 0-180 range
+    angle = Math.abs(angle);
+    if (angle > 90) {
+      angle = 180 - angle;
+    }
+
+    // Choose cursor based on angle
+    // 0-22.5°: horizontal (ew-resize)
+    // 22.5-67.5°: diagonal (nwse-resize or nesw-resize)
+    // 67.5-90°: vertical (ns-resize)
+
+    if (angle <= 22.5) {
+      return 'ns-resize'; // Horizontal wall -> vertical drag
+    } else if (angle >= 67.5) {
+      return 'ew-resize'; // Vertical wall -> horizontal drag
+    } else {
+      // Diagonal wall
+      // Check if it's NW-SE or NE-SW direction
+      const originalAngle = Math.atan2(dy, dx) * (180 / Math.PI);
+      if ((originalAngle >= -45 && originalAngle < 45) || (originalAngle >= 135 || originalAngle < -135)) {
+        return 'nwse-resize';
+      } else {
+        return 'nesw-resize';
+      }
+    }
   }
 }

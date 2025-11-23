@@ -45,7 +45,7 @@ export class RoomLayer extends BaseLayer {
       selectedFillColor: config?.selectedFillColor || '#3498db',
       hoveredFillColor: config?.hoveredFillColor || '#e67e22',
       showLabels: config?.showLabels ?? true,
-      labelFont: config?.labelFont || 'bold 240px Arial',
+      labelFont: config?.labelFont || 'bold 180px Arial',
       labelColor: config?.labelColor || '#2c3e50',
       wallThickness: config?.wallThickness || 100, // 100mm default wall thickness
     };
@@ -99,6 +99,9 @@ export class RoomLayer extends BaseLayer {
 
   render(ctx: CanvasRenderingContext2D): void {
     if (!this.visible) return;
+
+    // Clear dimension labels before rendering
+    this.dimensionLabels = [];
 
     this.applyOpacity(ctx);
 
@@ -194,11 +197,128 @@ export class RoomLayer extends BaseLayer {
 
     // Draw label
     if (this.config.showLabels) {
-      this.renderLabel(ctx, room, roomPoints);
+      this.renderLabel(ctx, room, roomPoints, floorPoints);
+      this.renderWallDimensions(ctx, floorPoints, room.id);
     }
   }
 
-  private renderLabel(ctx: CanvasRenderingContext2D, room: Room, roomPoints: Point[]): void {
+  // Store dimension label positions for click detection
+  private dimensionLabels: Array<{
+    roomId: string;
+    wallIndex: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    p1: Point;
+    p2: Point;
+    isCW: boolean;
+  }> = [];
+
+  private renderWallDimensions(ctx: CanvasRenderingContext2D, points: Point[], roomId: string): void {
+    if (points.length < 3) return;
+
+    // Calculate signed area to determine winding order
+    let signedArea = 0;
+    for (let i = 0; i < points.length; i++) {
+      const j = (i + 1) % points.length;
+      signedArea += points[i].x * points[j].y - points[j].x * points[i].y;
+    }
+    const isCW = signedArea > 0; // In Canvas coords (Y-down), Positive area = CW
+
+    ctx.save();
+    ctx.font = 'bold 150px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle'; // Center vertically on the offset line
+
+    for (let i = 0; i < points.length; i++) {
+      const p1 = points[i];
+      const p2 = points[(i + 1) % points.length];
+
+      // Calculate distance (mm)
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      // Skip very short segments
+      if (dist < 200) continue;
+
+      // Midpoint
+      const midX = (p1.x + p2.x) / 2;
+      const midY = (p1.y + p2.y) / 2;
+
+      // Calculate Unit Normal Vector pointing INWARD
+      // Vector p1->p2 is (dx, dy)
+      // If CW: Inside is Right. Normal (-dy, dx)
+      // If CCW: Inside is Left. Normal (dy, -dx)
+      let nx, ny;
+      if (isCW) {
+        nx = -dy;
+        ny = dx;
+      } else {
+        nx = dy;
+        ny = -dx;
+      }
+      // Normalize
+      const len = Math.sqrt(nx * nx + ny * ny);
+      nx /= len;
+      ny /= len;
+
+      // Text Position: Midpoint + Normal * Offset
+      const offset = 150; // 150mm inward offset
+      const textX = midX + nx * offset;
+      const textY = midY + ny * offset;
+
+      // Calculate Angle
+      let angle = Math.atan2(dy, dx);
+
+      // Normalize Angle to [-PI/2, PI/2) for consistent readability (Bottom or Right)
+      if (angle >= Math.PI / 2) {
+        angle -= Math.PI;
+      } else if (angle < -Math.PI / 2) {
+        angle += Math.PI;
+      }
+
+      ctx.save();
+      ctx.translate(textX, textY);
+      ctx.rotate(angle);
+
+      const text = `${Math.round(dist)}`;
+
+      // Measure text for click detection
+      const metrics = ctx.measureText(text);
+      const textWidth = metrics.width;
+      const textHeight = 150; // Font size
+
+      // Store label position for click detection (in rotated coordinates)
+      this.dimensionLabels.push({
+        roomId,
+        wallIndex: i,
+        x: textX,
+        y: textY,
+        width: textWidth,
+        height: textHeight,
+        p1,
+        p2,
+        isCW
+      });
+
+      // Outline
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = 20;
+      ctx.strokeText(text, 0, 0);
+
+      // Fill
+      ctx.fillStyle = '#555';
+      ctx.fillText(text, 0, 0);
+
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  private renderLabel(ctx: CanvasRenderingContext2D, room: Room, roomPoints: Point[], floorPoints: Point[]): void {
     // Room points are already at the wall inner edge, use them directly
     const centroid = this.calculateCentroid(roomPoints);
 
@@ -211,19 +331,24 @@ export class RoomLayer extends BaseLayer {
     if (room.name) {
       // Draw text with white outline for better visibility
       ctx.strokeStyle = 'white';
-      ctx.lineWidth = 40;
+      ctx.lineWidth = 20;
       ctx.strokeText(room.name, centroid.x, centroid.y - 130);
 
       ctx.fillStyle = this.config.labelColor;
       ctx.fillText(room.name, centroid.x, centroid.y - 130);
     }
 
+    // Calculate actual floor area from inset polygon (floorPoints)
+    // Convert from mm² to m²
+    const areaMm2 = Math.abs(this.calculatePolygonArea(floorPoints));
+    const areaM2 = areaMm2 / 1000000;
+
     // Room area with better visibility
-    const areaText = `${room.area.toFixed(2)} m²`;
+    const areaText = `${areaM2.toFixed(2)} m²`;
 
     // Draw white outline
     ctx.strokeStyle = 'white';
-    ctx.lineWidth = 40;
+    ctx.lineWidth = 20;
     ctx.strokeText(areaText, centroid.x, centroid.y + 130);
 
     // Draw main text
@@ -242,6 +367,17 @@ export class RoomLayer extends BaseLayer {
       x: sum.x / points.length,
       y: sum.y / points.length,
     };
+  }
+
+  private calculatePolygonArea(points: Point[]): number {
+    if (points.length < 3) return 0;
+    let area = 0;
+    for (let i = 0; i < points.length; i++) {
+      const j = (i + 1) % points.length;
+      area += points[i].x * points[j].y;
+      area -= points[j].x * points[i].y;
+    }
+    return area / 2;
   }
 
   /**
@@ -331,5 +467,36 @@ export class RoomLayer extends BaseLayer {
     }
 
     return insetPoints;
+  }
+
+  /**
+   * Check if a point (world coordinates) is on a dimension label
+   * Returns {roomId, wallIndex, p1, p2} if clicked, null otherwise
+   */
+  getDimensionAtPoint(worldX: number, worldY: number): { roomId: string; wallIndex: number; p1: Point; p2: Point; isCW: boolean } | null {
+    // Increased hitbox for easier clicking
+    const hitboxPadding = 100; // 100mm padding around text
+
+    for (const label of this.dimensionLabels) {
+      // Calculate distance from click point to label center
+      const dx = worldX - label.x;
+      const dy = worldY - label.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // Simple circular hitbox for easier clicking
+      const hitboxRadius = Math.max(label.width, label.height) / 2 + hitboxPadding;
+
+      if (distance < hitboxRadius) {
+        return {
+          roomId: label.roomId,
+          wallIndex: label.wallIndex,
+          p1: label.p1,
+          p2: label.p2,
+          isCW: label.isCW
+        };
+      }
+    }
+
+    return null;
   }
 }

@@ -37,24 +37,44 @@ export class RoomDetectionService {
 
     console.log('[RoomDetection] Found', cycles.length, 'raw cycles');
 
-    // Convert to rooms
-    const rooms: Room[] = [];
+    // Filter out composite rooms (rooms that contain other rooms)
+    const finalRooms: Room[] = [];
+
     for (const cycle of cycles) {
       const cyclePoints = cycle.map(id => pointMap.get(id)!);
       const area = Math.abs(this.calculateSignedArea(cyclePoints));
 
       const MIN_AREA = 0.5; // 0.5 m²
 
-      console.log(`[RoomDetection] Cycle with ${cycle.length} points, area=${area.toFixed(2)}m² ${area >= MIN_AREA ? '✓' : '✗ (too small)'}`);
+      if (area < MIN_AREA) continue;
 
-      if (area >= MIN_AREA) {
+      // Check if this room contains any already accepted room
+      // Since we process smallest rooms first, if this room contains an existing room,
+      // it must be a composite room (e.g. the outer loop of two adjacent rooms)
+      let isComposite = false;
+      const polygon = cyclePoints;
+
+      for (const existingRoom of finalRooms) {
+        // Check if centroid of existing room is inside this polygon
+        // We need to reconstruct points for existing room to get centroid
+        const existingPoints = existingRoom.points.map(id => pointMap.get(id)!);
+        const centroid = this.calculateCentroid(existingPoints);
+
+        if (this.isPointInPolygon(centroid, polygon)) {
+          isComposite = true;
+          console.log(`[RoomDetection] Cycle rejected: contains existing room ${existingRoom.id}`);
+          break;
+        }
+      }
+
+      if (!isComposite) {
         const room = this.createRoom(cycle, walls, area, pointMap);
-        rooms.push(room);
+        finalRooms.push(room);
       }
     }
 
-    console.log('[RoomDetection] Created', rooms.length, 'rooms');
-    return rooms;
+    console.log('[RoomDetection] Created', finalRooms.length, 'rooms');
+    return finalRooms;
   }
 
   /**
@@ -92,19 +112,15 @@ export class RoomDetectionService {
       pointsOnWall.push({ id: end.id, t: 1 });
 
       // Check other points
-      // We only care about points that are explicitly connected to this wall
-      // OR points that geometrically lie on the wall (though the latter should be handled by wall splitting ideally)
-      // For now, let's rely on the 'connectedWalls' property if available, or geometric check
-
-      // Geometric check for all points
       points.forEach(p => {
         if (p.id === start.id || p.id === end.id) return;
 
-        // Optimization: Check bounding box first
-        const minX = Math.min(start.x, end.x) - 10;
-        const maxX = Math.max(start.x, end.x) + 10;
-        const minY = Math.min(start.y, end.y) - 10;
-        const maxY = Math.max(start.y, end.y) + 10;
+        // Optimization: Check bounding box first with generous margin
+        const margin = (wall.thickness || 200) / 2 + 100; // Wall half-thickness + extra buffer
+        const minX = Math.min(start.x, end.x) - margin;
+        const maxX = Math.max(start.x, end.x) + margin;
+        const minY = Math.min(start.y, end.y) - margin;
+        const maxY = Math.max(start.y, end.y) + margin;
 
         if (p.x < minX || p.x > maxX || p.y < minY || p.y > maxY) return;
 
@@ -114,10 +130,16 @@ export class RoomDetectionService {
         if (t > 0.001 && t < 0.999) {
           const projected = startVec.add(wallVec.multiply(t));
           const dist = pVec.distanceTo(projected);
-          if (dist < 10) { // 10mm tolerance
+
+          // Dynamic tolerance based on wall thickness
+          // Allow points snapped to the wall FACE to be considered "on" the wall
+          // Tolerance = Half Thickness + 50mm buffer
+          const tolerance = (wall.thickness || 100) / 2 + 50;
+
+          if (dist < tolerance) {
             pointsOnWall.push({ id: p.id, t });
             totalSplits++;
-            console.log(`[RoomDetection] T-junction found: point ${p.id.slice(0,8)} on wall ${wall.id.slice(0,8)} at t=${t.toFixed(3)}, dist=${dist.toFixed(1)}mm`);
+            console.log(`[RoomDetection] T-junction found: point ${p.id.slice(0, 8)} on wall ${wall.id.slice(0, 8)} at t=${t.toFixed(3)}, dist=${dist.toFixed(1)}mm (tol=${tolerance}mm)`);
           }
         }
       });
@@ -131,13 +153,35 @@ export class RoomDetectionService {
       }
 
       if (pointsOnWall.length > 2) {
-        console.log(`[RoomDetection] Wall ${wall.id.slice(0,8)} split into ${pointsOnWall.length - 1} segments`);
+        console.log(`[RoomDetection] Wall ${wall.id.slice(0, 8)} split into ${pointsOnWall.length - 1} segments`);
       }
     }
 
     console.log(`[RoomDetection] Total T-junctions detected: ${totalSplits}`);
 
     return graph;
+  }
+
+  private calculateCentroid(points: Point[]): Point {
+    let x = 0, y = 0;
+    for (const p of points) {
+      x += p.x;
+      y += p.y;
+    }
+    return { id: 'centroid', x: x / points.length, y: y / points.length };
+  }
+
+  private isPointInPolygon(point: Point, polygon: Point[]): boolean {
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const xi = polygon[i].x, yi = polygon[i].y;
+      const xj = polygon[j].x, yj = polygon[j].y;
+
+      const intersect = ((yi > point.y) !== (yj > point.y))
+        && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
   }
 
   /**

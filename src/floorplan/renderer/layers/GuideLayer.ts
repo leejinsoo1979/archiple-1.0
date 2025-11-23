@@ -184,7 +184,7 @@ export class GuideLayer extends BaseLayer {
     ctx.shadowColor = isDarkMode ? '#64B5F6' : '#3498db';
 
     ctx.strokeStyle = isDarkMode ? '#64B5F6' : '#2980b9'; // Slightly darker in light mode for contrast
-    ctx.lineWidth = 2; // Bolder
+    ctx.lineWidth = 1; // Crisp 1px line
     ctx.setLineDash([10, 5]);
 
     if (guide.type === 'horizontal') {
@@ -234,7 +234,7 @@ export class GuideLayer extends BaseLayer {
     ctx.shadowColor = this.config.angleGuideColor;
 
     ctx.strokeStyle = this.config.angleGuideColor;
-    ctx.lineWidth = 2.5; // Even thicker for angle guide
+    ctx.lineWidth = 1; // Crisp 1px line
     ctx.setLineDash([15, 8]); // Longer dashes
 
     ctx.beginPath();
@@ -311,7 +311,7 @@ export class GuideLayer extends BaseLayer {
     ctx: CanvasRenderingContext2D,
     from: Point,
     to: Point,
-    distance: number
+    _distance: number
   ): void {
     if (!this.camera) return;
 
@@ -331,25 +331,52 @@ export class GuideLayer extends BaseLayer {
     const perpX = Math.sin(angle);
     const perpY = -Math.cos(angle);
 
+    // Calculate wall direction for interior measurement
+    // We want to measure the distance between the inner faces of perpendicular walls at the ends
+    // So we move the measurement points inwards along the wall direction by half wall thickness
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const dirX = dx / dist;
+    const dirY = dy / dist;
+
+    const halfThickness = this.wallThickness / 2;
+
+    // Inner points (shifted inwards along wall)
+    const innerFromX = from.x + dirX * halfThickness;
+    const innerFromY = from.y + dirY * halfThickness;
+    const innerToX = to.x - dirX * halfThickness;
+    const innerToY = to.y - dirY * halfThickness;
+
+    // Calculate distance between inner points
+    const innerDx = innerToX - innerFromX;
+    const innerDy = innerToY - innerFromY;
+    const innerDistance = Math.sqrt(innerDx * innerDx + innerDy * innerDy);
+
     // Extension Lines
-    // Start after gap
-    const ext1StartX = from.x + perpX * extensionGap;
-    const ext1StartY = from.y + perpY * extensionGap;
-    const ext2StartX = to.x + perpX * extensionGap;
-    const ext2StartY = to.y + perpY * extensionGap;
+    // Start from the wall face (offset perpendicular)
+    // perp points towards the dimension line, so we add halfThickness * perp to get to the face
+    const faceOffsetX = perpX * halfThickness;
+    const faceOffsetY = perpY * halfThickness;
+
+    const ext1StartX = innerFromX + faceOffsetX + perpX * extensionGap;
+    const ext1StartY = innerFromY + faceOffsetY + perpY * extensionGap;
+    const ext2StartX = innerToX + faceOffsetX + perpX * extensionGap;
+    const ext2StartY = innerToY + faceOffsetY + perpY * extensionGap;
 
     // End after dimension line
     const totalOffset = offsetDistanceMm + extensionOverhang;
-    const ext1EndX = from.x + perpX * totalOffset;
-    const ext1EndY = from.y + perpY * totalOffset;
-    const ext2EndX = to.x + perpX * totalOffset;
-    const ext2EndY = to.y + perpY * totalOffset;
+    // Note: offsetDistanceMm is from the center, so we need to adjust if we want fixed distance from face
+    // But usually dimension line distance is fixed from center or face. Let's keep it simple relative to center for now,
+    // but using the inner horizontal positions.
+    const ext1EndX = innerFromX + perpX * totalOffset;
+    const ext1EndY = innerFromY + perpY * totalOffset;
+    const ext2EndX = innerToX + perpX * totalOffset;
+    const ext2EndY = innerToY + perpY * totalOffset;
 
     // Dimension Line
-    const dim1X = from.x + perpX * offsetDistanceMm;
-    const dim1Y = from.y + perpY * offsetDistanceMm;
-    const dim2X = to.x + perpX * offsetDistanceMm;
-    const dim2Y = to.y + perpY * offsetDistanceMm;
+    const dim1X = innerFromX + perpX * offsetDistanceMm;
+    const dim1Y = innerFromY + perpY * offsetDistanceMm;
+    const dim2X = innerToX + perpX * offsetDistanceMm;
+    const dim2Y = innerToY + perpY * offsetDistanceMm;
 
     // Convert to Screen Space (Logical Pixels)
     const ext1Start = this.camera.worldToScreen(ext1StartX, ext1StartY);
@@ -368,7 +395,7 @@ export class GuideLayer extends BaseLayer {
 
     // Draw Extension Lines (Thin, Solid)
     ctx.strokeStyle = lineColor;
-    ctx.lineWidth = 0.5; // Thinner
+    ctx.lineWidth = 1; // Crisp 1px line
     ctx.setLineDash([]); // Solid
 
     ctx.beginPath();
@@ -390,7 +417,7 @@ export class GuideLayer extends BaseLayer {
 
     // Draw Ticks (Oblique strokes) instead of arrows for CAD style
     const tickSize = 4;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1;
 
     // Tick 1
     ctx.beginPath();
@@ -425,7 +452,7 @@ export class GuideLayer extends BaseLayer {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom'; // Draw above the line
 
-    const label = `${Math.round(distance)}mm`;
+    const label = `${Math.round(innerDistance)}mm`;
     // Offset slightly above line (-4px)
     ctx.fillText(label, 0, -4);
 
@@ -445,7 +472,7 @@ export class GuideLayer extends BaseLayer {
 
     // Draw vertical guide line (수직 가이드)
     ctx.strokeStyle = '#e74c3c'; // 빨간색으로 명확하게 표시
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1; // Crisp 1px line
     ctx.setLineDash([10, 5]);
 
     ctx.beginPath();
@@ -468,7 +495,7 @@ export class GuideLayer extends BaseLayer {
 
     // Draw horizontal guide line (수평 가이드)
     ctx.strokeStyle = '#e74c3c'; // 빨간색으로 명확하게 표시
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1; // Crisp 1px line
     ctx.setLineDash([10, 5]);
 
     ctx.beginPath();
@@ -506,10 +533,11 @@ export class GuideLayer extends BaseLayer {
     ctx.setLineDash([]);
 
     // Calculate dimensions (1 pixel = 1mm)
+    // Subtract wall thickness to show room interior dimensions
     const width = Math.abs(corners[1].x - corners[0].x);
     const height = Math.abs(corners[2].y - corners[1].y);
-    const widthMm = width; // Already in mm
-    const heightMm = height; // Already in mm
+    const widthMm = width - this.wallThickness; // Interior width
+    const heightMm = height - this.wallThickness; // Interior height
 
     // Format labels
     const widthLabel = `${Math.round(widthMm)}mm`;
@@ -610,7 +638,7 @@ export class GuideLayer extends BaseLayer {
 
     // Border - 다크모드 대응
     ctx.strokeStyle = isDarkMode ? '#64B5F6' : '#3498db';
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1;
     ctx.strokeRect(
       screenPos.x - metrics.width / 2 - padding,
       screenPos.y - 9,

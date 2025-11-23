@@ -125,6 +125,20 @@ export class MouseController {
    */
   private updateCursor(): void {
     const cursor = this.toolManager.getCursor();
-    this.canvas.style.cursor = cursor;
+
+    // Simple solid triangle cursors with white outline
+    const customCursors: Record<string, string> = {
+      'ew-resize': `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M2 12 L8 6 L8 18 Z' fill='%23000000' stroke='%23ffffff' stroke-width='1.5'/%3E%3Cpath d='M22 12 L16 6 L16 18 Z' fill='%23000000' stroke='%23ffffff' stroke-width='1.5'/%3E%3C/svg%3E") 12 12, ew-resize`,
+      'ns-resize': `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M12 2 L6 8 L18 8 Z' fill='%23000000' stroke='%23ffffff' stroke-width='1.5'/%3E%3Cpath d='M12 22 L6 16 L18 16 Z' fill='%23000000' stroke='%23ffffff' stroke-width='1.5'/%3E%3C/svg%3E") 12 12, ns-resize`,
+      'nwse-resize': `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cg transform='rotate(-45 12 12)'%3E%3Cpath d='M2 12 L8 6 L8 18 Z' fill='%23000000' stroke='%23ffffff' stroke-width='1.5'/%3E%3Cpath d='M22 12 L16 6 L16 18 Z' fill='%23000000' stroke='%23ffffff' stroke-width='1.5'/%3E%3C/g%3E%3C/svg%3E") 12 12, nwse-resize`,
+      'nesw-resize': `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cg transform='rotate(45 12 12)'%3E%3Cpath d='M2 12 L8 6 L8 18 Z' fill='%23000000' stroke='%23ffffff' stroke-width='1.5'/%3E%3Cpath d='M22 12 L16 6 L16 18 Z' fill='%23000000' stroke='%23ffffff' stroke-width='1.5'/%3E%3C/g%3E%3C/svg%3E") 12 12, nesw-resize`,
+    };
+
+    // Apply custom cursor if available, otherwise use default
+    if (customCursors[cursor]) {
+      this.canvas.style.cursor = customCursors[cursor];
+    } else {
+      this.canvas.style.cursor = cursor;
+    }
   }
 }

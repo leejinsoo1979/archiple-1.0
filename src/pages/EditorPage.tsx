@@ -914,10 +914,26 @@ ARTISTIC APPROACH:
   };
 
   // Handle dimension click
-  const handleDimensionClick = (wallId: string) => {
-    // Find the wall in floorplanData
+  const handleDimensionClick = (data: string | { roomId: string; wallIndex: number; p1: any; p2: any; isCW: boolean }) => {
     if (!floorplanData) return;
 
+    // Handle room interior dimension click
+    if (typeof data === 'object') {
+      const { p1, p2 } = data;
+
+      // Calculate current interior distance
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const currentDistance = Math.sqrt(dx * dx + dy * dy);
+
+      // Store room dimension data for later use
+      setEditingWallId(JSON.stringify(data));
+      setDimensionInput(currentDistance.toFixed(0));
+      return;
+    }
+
+    // Handle wall dimension click (legacy)
+    const wallId = data;
     const wall = floorplanData.walls.find((w: any) => w.id === wallId);
     if (!wall) return;
 
@@ -946,7 +962,74 @@ ARTISTIC APPROACH:
       return;
     }
 
-    // Find the wall
+    // Check if this is a room interior dimension
+    try {
+      const roomDimData = JSON.parse(editingWallId);
+      if (roomDimData.roomId && roomDimData.p1 && roomDimData.p2) {
+        // Handle room interior dimension change
+        const { p1, p2, isCW } = roomDimData;
+
+        // Calculate current interior distance
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const currentDistance = Math.sqrt(dx * dx + dy * dy);
+
+        if (currentDistance === 0) return;
+
+        // Calculate the change in distance
+        const distanceChange = newDistance - currentDistance;
+
+        // Calculate the perpendicular direction (outward from room interior)
+        // The normal vector should point outward from the room
+        let nx, ny;
+        if (isCW) {
+          // For CW rooms, inside is to the right, so outward normal is to the left
+          nx = dy;
+          ny = -dx;
+        } else {
+          // For CCW rooms, inside is to the left, so outward normal is to the right
+          nx = -dy;
+          ny = dx;
+        }
+
+        // Normalize
+        const len = Math.sqrt(nx * nx + ny * ny);
+        nx /= len;
+        ny /= len;
+
+        // Move p2 point outward by half the distance change (to maintain symmetry)
+        // This expands/contracts the room uniformly
+        const offsetX = nx * distanceChange / 2;
+        const offsetY = ny * distanceChange / 2;
+
+        // Find and update the point
+        const updatedPoints = floorplanData.points.map((point: any) => {
+          if (point.id === p2.id) {
+            return {
+              ...point,
+              x: point.x + offsetX,
+              y: point.y + offsetY,
+            };
+          }
+          return point;
+        });
+
+        // Update floorplan data
+        const updatedData = {
+          ...floorplanData,
+          points: updatedPoints,
+        };
+
+        setFloorplanData(updatedData);
+        setEditingWallId(null);
+        setDimensionInput('');
+        return;
+      }
+    } catch (e) {
+      // Not a room dimension, continue with wall dimension logic
+    }
+
+    // Handle wall dimension click (legacy)
     const wall = floorplanData.walls.find((w: any) => w.id === editingWallId);
     if (!wall) return;
 
