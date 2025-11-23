@@ -44,7 +44,6 @@ import styles from './Babylon3DCanvas.module.css';
 import { eventBus } from '../core/events/EventBus';
 import { EditorEvents } from '../core/events/EditorEvents';
 import {
-  findConnectedWalls,
   calculateWallCorners,
   type WallCorners,
 } from './utils/WallMiterUtils';
@@ -1670,14 +1669,25 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         const wallDoors = doors.filter((door: any) => door.wallId === wall.id);
         const wallWindows = windows.filter((window: any) => window.wallId === wall.id);
 
-        // Find connected walls and calculate miter joint corners
-        const connections = findConnectedWalls(walls as Wall[], wall as Wall, pointMap);
-        const corners = calculateWallCorners(wall as Wall, connections, pointMap);
+        // Calculate miter joint corners (same algorithm as 2D)
+        const corners = calculateWallCorners(wall as Wall, walls as Wall[], pointMap);
 
         if (!corners) {
           console.error('[Babylon3DCanvas] Failed to calculate corners for wall:', wall.id);
           return;
         }
+
+        // Debug logging
+        console.log(`[3D Wall ${wallIndex}] ${wall.id}:`, {
+          start: startPoint,
+          end: endPoint,
+          corners: {
+            startLeft: corners.startLeft,
+            startRight: corners.startRight,
+            endLeft: corners.endLeft,
+            endRight: corners.endRight
+          }
+        });
 
         // Create full wall with miter joints
         let wallMesh = createWallMeshFromCorners(

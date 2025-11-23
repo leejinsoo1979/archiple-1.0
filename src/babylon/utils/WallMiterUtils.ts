@@ -146,15 +146,16 @@ function calculateMiterAngle(
 
 /**
  * 벽의 4개 코너 계산 (Miter 적용)
+ * 2D WallLayer의 calculateJointCorners 로직과 동일하게 처리
  *
  * @param wall 대상 벽
- * @param connections 연결된 벽 정보
+ * @param allWalls 모든 벽 목록 (연결된 벽들을 찾기 위해)
  * @param pointMap Point ID → Point 매핑
  * @returns 4개 코너 좌표 (mm 단위)
  */
 export function calculateWallCorners(
   wall: Wall,
-  connections: WallConnections,
+  allWalls: Wall[],
   pointMap: Map<string, Point>
 ): WallCorners | null {
   const startPoint = pointMap.get(wall.startPointId);
@@ -193,109 +194,214 @@ export function calculateWallCorners(
     },
   };
 
-  // Helper: Get wall lines (Left and Right)
-  // Note: Using 2D coordinates (x, y) internally for calculation, then mapping y -> z
-  const getWallLines = (w: Wall) => {
-    const s = pointMap.get(w.startPointId)!;
-    const e = pointMap.get(w.endPointId)!;
-    const dx = e.x - s.x;
-    const dy = e.y - s.y;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    const dir = { x: dx / len, y: dy / len };
-    const normal = { x: -dir.y, y: dir.x }; // Left normal
-    const halfT = w.thickness / 2;
+  // Calculate miter joints at start and end points
+  // Using same algorithm as 2D WallLayer.calculateJointCorners
 
-    // Left line origin
-    const leftOrigin = {
-      x: s.x + normal.x * halfT,
-      y: s.y + normal.y * halfT
-    };
-    // Right line origin
-    const rightOrigin = {
-      x: s.x - normal.x * halfT,
-      y: s.y - normal.y * halfT
-    };
-
-    return {
-      left: { p: leftOrigin, d: dir },
-      right: { p: rightOrigin, d: dir }
-    };
-  };
-
-  // Helper: Intersect two lines
-  const intersect = (l1: { p: { x: number, y: number }, d: { x: number, y: number } }, l2: { p: { x: number, y: number }, d: { x: number, y: number } }) => {
-    const det = l1.d.x * l2.d.y - l1.d.y * l2.d.x;
-    if (Math.abs(det) < 0.0001) return null; // Parallel
-    const t = ((l2.p.x - l1.p.x) * l2.d.y - (l2.p.y - l1.p.y) * l2.d.x) / det;
-    return {
-      x: l1.p.x + l1.d.x * t,
-      y: l1.p.y + l1.d.y * t
-    };
-  };
-
-  // ===== 시작점 Miter 적용 =====
-  if (connections.startConnected) {
-    const connectedWall = connections.startConnected.wall;
-    const atStart = connections.startConnected.atStart;
-
-    const w1Lines = getWallLines(wall);
-    const w2Lines = getWallLines(connectedWall);
-
-    // Logic from WallLayer.ts:
-    // isW1Start is TRUE (we are at start of current wall)
-    // isW2Start is `atStart`
-
-    let newLeft = null;
-    let newRight = null;
-
-    if (true === atStart) {
-      // Tail-Tail (Start-Start): Connect Left to Right, Right to Left
-      newLeft = intersect(w1Lines.left, w2Lines.right);
-      newRight = intersect(w1Lines.right, w2Lines.left);
-    } else {
-      // Head-Tail (Start-End): Connect Left to Left, Right to Right
-      newLeft = intersect(w1Lines.left, w2Lines.left);
-      newRight = intersect(w1Lines.right, w2Lines.right);
-    }
-
-    if (newLeft && newRight) {
-      corners.startLeft = { x: newLeft.x, z: newLeft.y };
-      corners.startRight = { x: newRight.x, z: newRight.y };
-    }
+  // Start point miter
+  const startCorners = calculateJointCornersAt(
+    startPoint,
+    wallDir,
+    wall,
+    allWalls,
+    pointMap,
+    t
+  );
+  if (startCorners) {
+    corners.startLeft = startCorners.left;
+    corners.startRight = startCorners.right;
   }
 
-  // ===== 끝점 Miter 적용 =====
-  if (connections.endConnected) {
-    const connectedWall = connections.endConnected.wall;
-    const atStart = connections.endConnected.atStart;
-
-    const w1Lines = getWallLines(wall);
-    const w2Lines = getWallLines(connectedWall);
-
-    // Logic from WallLayer.ts:
-    // isW1Start is FALSE (we are at end of current wall)
-    // isW2Start is `atStart`
-
-    let newLeft = null;
-    let newRight = null;
-
-    if (false === atStart) {
-      // Head-Head (End-End): Connect Left to Right, Right to Left
-      newLeft = intersect(w1Lines.left, w2Lines.right);
-      newRight = intersect(w1Lines.right, w2Lines.left);
-    } else {
-      // Tail-Head (End-Start): Connect Left to Left, Right to Right
-      newLeft = intersect(w1Lines.left, w2Lines.left);
-      newRight = intersect(w1Lines.right, w2Lines.right);
-    }
-
-    if (newLeft && newRight) {
-      corners.endLeft = { x: newLeft.x, z: newLeft.y };
-      corners.endRight = { x: newRight.x, z: newRight.y };
-    }
+  // End point miter (direction reversed)
+  const endDir = { x: -wallDir.x, z: -wallDir.z };
+  const endCorners = calculateJointCornersAt(
+    endPoint,
+    endDir,
+    wall,
+    allWalls,
+    pointMap,
+    t
+  );
+  if (endCorners) {
+    // endCorners are relative to reversed direction, so swap left/right
+    corners.endLeft = endCorners.right;
+    corners.endRight = endCorners.left;
   }
 
   return corners;
+}
+
+/**
+ * Calculate miter corner at a junction point
+ * Same algorithm as 2D WallLayer.calculateJointCorners
+ */
+function calculateJointCornersAt(
+  junctionPoint: Point,
+  currentDir: WallDirection,
+  currentWall: Wall,
+  allWalls: Wall[],
+  pointMap: Map<string, Point>,
+  halfThickness: number
+): { left: { x: number; z: number }; right: { x: number; z: number } } | null {
+  // Find all walls connected at this junction
+  interface ConnectedWall {
+    wall: Wall;
+    dir: { x: number; y: number };
+    angle: number;
+    isCurrent: boolean;
+  }
+
+  const connectedWalls: ConnectedWall[] = [];
+
+  for (const w of allWalls) {
+    const startPt = pointMap.get(w.startPointId);
+    const endPt = pointMap.get(w.endPointId);
+    if (!startPt || !endPt) continue;
+
+    let dir: { x: number; y: number } | null = null;
+
+    // Check if this wall connects at junction
+    if (pointsEqual(startPt, junctionPoint)) {
+      // Wall starts at junction, direction is start->end
+      const dx = endPt.x - startPt.x;
+      const dy = endPt.y - startPt.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len > 0) {
+        dir = { x: dx / len, y: dy / len };
+      }
+    } else if (pointsEqual(endPt, junctionPoint)) {
+      // Wall ends at junction, direction is end->start (reversed)
+      const dx = startPt.x - endPt.x;
+      const dy = startPt.y - endPt.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len > 0) {
+        dir = { x: dx / len, y: dy / len };
+      }
+    }
+
+    if (dir) {
+      const isCurrent = w.id === currentWall.id;
+      connectedWalls.push({
+        wall: w,
+        dir,
+        angle: Math.atan2(dir.y, dir.x),
+        isCurrent
+      });
+    }
+  }
+
+  // If no walls connected (shouldn't happen), return basic corners
+  if (connectedWalls.length === 0) {
+    const normal = { x: -currentDir.z, z: currentDir.x };
+    return {
+      left: {
+        x: junctionPoint.x + normal.x * halfThickness,
+        z: junctionPoint.y + normal.z * halfThickness
+      },
+      right: {
+        x: junctionPoint.x - normal.x * halfThickness,
+        z: junctionPoint.y - normal.z * halfThickness
+      }
+    };
+  }
+
+  // Sort by angle
+  connectedWalls.sort((a, b) => a.angle - b.angle);
+
+  // Find current wall index
+  const currentIndex = connectedWalls.findIndex(w => w.isCurrent);
+  if (currentIndex === -1) {
+    const normal = { x: -currentDir.z, z: currentDir.x };
+    return {
+      left: {
+        x: junctionPoint.x + normal.x * halfThickness,
+        z: junctionPoint.y + normal.z * halfThickness
+      },
+      right: {
+        x: junctionPoint.x - normal.x * halfThickness,
+        z: junctionPoint.y - normal.z * halfThickness
+      }
+    };
+  }
+
+  // Only one wall (endpoint)
+  if (connectedWalls.length === 1) {
+    const normal = { x: -currentDir.z, z: currentDir.x };
+    return {
+      left: {
+        x: junctionPoint.x + normal.x * halfThickness,
+        z: junctionPoint.y + normal.z * halfThickness
+      },
+      right: {
+        x: junctionPoint.x - normal.x * halfThickness,
+        z: junctionPoint.y - normal.z * halfThickness
+      }
+    };
+  }
+
+  // Find neighbors (cyclic)
+  const prevIndex = (currentIndex - 1 + connectedWalls.length) % connectedWalls.length;
+  const nextIndex = (currentIndex + 1) % connectedWalls.length;
+
+  const prevWall = connectedWalls[prevIndex];
+  const nextWall = connectedWalls[nextIndex];
+
+  // Calculate miter intersections
+  const currentDir2D = { x: currentDir.x, y: currentDir.z };
+  const prevDir2D = prevWall.dir;
+  const nextDir2D = nextWall.dir;
+
+  const leftMiter = calculateMiterVector(currentDir2D, nextDir2D, halfThickness);
+  const rightMiter = calculateMiterVector(prevDir2D, currentDir2D, halfThickness);
+
+  return {
+    left: {
+      x: junctionPoint.x + leftMiter.x,
+      z: junctionPoint.y + leftMiter.y
+    },
+    right: {
+      x: junctionPoint.x + rightMiter.x,
+      z: junctionPoint.y + rightMiter.y
+    }
+  };
+}
+
+/**
+ * Calculate miter vector for corner between two directions
+ * Same as 2D WallLayer.calculateMiterVector
+ */
+function calculateMiterVector(
+  dir1: { x: number; y: number },
+  dir2: { x: number; y: number },
+  offset: number
+): { x: number; y: number } {
+  const normal1 = { x: -dir1.y, y: dir1.x }; // Left of dir1
+  const normal2 = { x: dir2.y, y: -dir2.x }; // Right of dir2
+
+  // Check if nearly collinear (opposite directions)
+  const dot = dir1.x * dir2.x + dir1.y * dir2.y;
+  if (dot < -0.99) {
+    return { x: normal1.x * offset, y: normal1.y * offset };
+  }
+
+  // Calculate intersection
+  const det = dir1.x * dir2.y - dir1.y * dir2.x;
+  if (Math.abs(det) < 0.001) {
+    return { x: normal1.x * offset, y: normal1.y * offset };
+  }
+
+  const nDiff = {
+    x: (normal2.x - normal1.x) * offset,
+    y: (normal2.y - normal1.y) * offset
+  };
+
+  const num = nDiff.x * dir2.y - nDiff.y * dir2.x;
+  const den = dir1.x * dir2.y - dir1.y * dir2.x;
+  const t = num / den;
+
+  return {
+    x: normal1.x * offset + dir1.x * t,
+    y: normal1.y * offset + dir1.y * t
+  };
 }
 
 /**
