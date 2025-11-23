@@ -45,7 +45,7 @@ export class RoomLayer extends BaseLayer {
       selectedFillColor: config?.selectedFillColor || '#3498db',
       hoveredFillColor: config?.hoveredFillColor || '#e67e22',
       showLabels: config?.showLabels ?? true,
-      labelFont: config?.labelFont || 'bold 24px Arial',
+      labelFont: config?.labelFont || 'bold 240px Arial',
       labelColor: config?.labelColor || '#2c3e50',
       wallThickness: config?.wallThickness || 100, // 100mm default wall thickness
     };
@@ -211,11 +211,11 @@ export class RoomLayer extends BaseLayer {
     if (room.name) {
       // Draw text with white outline for better visibility
       ctx.strokeStyle = 'white';
-      ctx.lineWidth = 4;
-      ctx.strokeText(room.name, centroid.x, centroid.y - 15);
+      ctx.lineWidth = 40;
+      ctx.strokeText(room.name, centroid.x, centroid.y - 150);
 
       ctx.fillStyle = this.config.labelColor;
-      ctx.fillText(room.name, centroid.x, centroid.y - 15);
+      ctx.fillText(room.name, centroid.x, centroid.y - 150);
     }
 
     // Room area with better visibility
@@ -223,12 +223,12 @@ export class RoomLayer extends BaseLayer {
 
     // Draw white outline
     ctx.strokeStyle = 'white';
-    ctx.lineWidth = 4;
-    ctx.strokeText(areaText, centroid.x, centroid.y + 15);
+    ctx.lineWidth = 40;
+    ctx.strokeText(areaText, centroid.x, centroid.y + 150);
 
     // Draw main text
     ctx.fillStyle = this.config.labelColor;
-    ctx.fillText(areaText, centroid.x, centroid.y + 15);
+    ctx.fillText(areaText, centroid.x, centroid.y + 150);
 
     ctx.restore();
   }
