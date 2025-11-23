@@ -147,6 +147,97 @@ const computePlanMetrics = (points?: any[] | null): PlanMetrics | null => {
 };
 
 /**
+ * Inset a polygon by moving each edge perpendicular inward by the specified distance
+ * (Same algorithm as RoomLayer.ts for consistent floor rendering)
+ * @param points - Array of 2D points {x, y} in mm
+ * @param insetDistance - Distance to inset in mm
+ * @returns Inset polygon points
+ */
+const insetPolygon = (points: Array<{x: number; y: number}>, insetDistance: number): Array<{x: number; y: number}> => {
+  if (points.length < 3) return [];
+
+  // Calculate signed area to determine winding order
+  let signedArea = 0;
+  const n = points.length;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    signedArea += points[i].x * points[j].y - points[j].x * points[i].y;
+  }
+  signedArea = signedArea / 2;
+
+  // Determine inset direction based on winding order
+  // Positive area = CCW, negative area = CW
+  // We want to inset inward (shrink the polygon)
+  const insetSign = signedArea > 0 ? 1 : -1;
+
+  const insetPoints: Array<{x: number; y: number}> = [];
+
+  for (let i = 0; i < n; i++) {
+    const prev = points[(i - 1 + n) % n];
+    const curr = points[i];
+    const next = points[(i + 1) % n];
+
+    // Edge vectors
+    const edge1X = curr.x - prev.x;
+    const edge1Y = curr.y - prev.y;
+    const edge2X = next.x - curr.x;
+    const edge2Y = next.y - curr.y;
+
+    // Edge lengths
+    const len1 = Math.sqrt(edge1X * edge1X + edge1Y * edge1Y);
+    const len2 = Math.sqrt(edge2X * edge2X + edge2Y * edge2Y);
+
+    if (len1 === 0 || len2 === 0) {
+      insetPoints.push({ ...curr });
+      continue;
+    }
+
+    // Normalized edge vectors
+    const norm1X = edge1X / len1;
+    const norm1Y = edge1Y / len1;
+    const norm2X = edge2X / len2;
+    const norm2Y = edge2Y / len2;
+
+    // Perpendicular vectors (90° rotation)
+    // Use insetSign to ensure inward direction
+    const perp1X = -norm1Y * insetSign;
+    const perp1Y = norm1X * insetSign;
+    const perp2X = -norm2Y * insetSign;
+    const perp2Y = norm2X * insetSign;
+
+    // Bisector
+    const bisectorX = perp1X + perp2X;
+    const bisectorY = perp1Y + perp2Y;
+    const bisectorLen = Math.sqrt(bisectorX * bisectorX + bisectorY * bisectorY);
+
+    if (bisectorLen < 0.001) {
+      // Parallel edges
+      insetPoints.push({
+        x: curr.x + perp1X * insetDistance,
+        y: curr.y + perp1Y * insetDistance,
+      });
+      continue;
+    }
+
+    // Normalize and scale bisector
+    const normBisectorX = bisectorX / bisectorLen;
+    const normBisectorY = bisectorY / bisectorLen;
+
+    // Calculate offset distance
+    const sinHalfAngle = bisectorLen / 2;
+    const offsetDist = sinHalfAngle > 0.001 ? insetDistance / sinHalfAngle : insetDistance;
+    const clampedOffset = Math.min(offsetDist, insetDistance * 10);
+
+    insetPoints.push({
+      x: curr.x + normBisectorX * clampedOffset,
+      y: curr.y + normBisectorY * clampedOffset,
+    });
+  }
+
+  return insetPoints;
+};
+
+/**
  * Find nearest wall and snap to it if within threshold
  * @param x - Click position X (meters)
  * @param z - Click position Z (meters)
@@ -1073,10 +1164,12 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       z: -(z * MM_TO_METERS) - centerZ, // Z축 반전
     });
 
-    const c1 = toMeters(corners.startLeft.x, corners.startLeft.z);
-    const c2 = toMeters(corners.endLeft.x, corners.endLeft.z);
-    const c3 = toMeters(corners.endRight.x, corners.endRight.z);
-    const c4 = toMeters(corners.startRight.x, corners.startRight.z);
+    // 2D WallLayer와 동일한 순서로 정점 매핑
+    // 2D: [startLeft, endRight, endLeft, startRight]
+    const c1 = toMeters(corners.startLeft.x, corners.startLeft.z);   // 0
+    const c2 = toMeters(corners.endRight.x, corners.endRight.z);     // 1
+    const c3 = toMeters(corners.endLeft.x, corners.endLeft.z);       // 2
+    const c4 = toMeters(corners.startRight.x, corners.startRight.z); // 3
 
     // VertexData로 직접 mesh 생성
     const positions: number[] = [];
@@ -1117,35 +1210,35 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     positions.push(c4.x, topY, c4.z); // 11
     colors.push(topFaceColor, topFaceColor, topFaceColor, 1);
 
-    // Indices
-    // 바닥 (시계방향) - skipBottomFace가 false일 때만 생성
+    // Indices - 모든 삼각형의 winding order를 반대로 (backface culling 방지)
+    // 바닥: 시계방향으로 변경
     if (!skipBottomFace) {
-      indices.push(0, 2, 1);
-      indices.push(0, 3, 2);
+      indices.push(0, 2, 1); // startLeft, endLeft, endRight
+      indices.push(0, 3, 2); // startLeft, startRight, endLeft
     }
 
-    // 천장 단면 (반시계방향) - skipTopFace가 false일 때만 생성
+    // 천장 단면: 시계방향
     if (!skipTopFace) {
       indices.push(8, 9, 10);
       indices.push(8, 10, 11);
     }
 
-    // 측면 4개 - 흰색 vertex 사용 (4-7)
-    // Left side (0-1-5-4)
-    indices.push(0, 1, 5);
-    indices.push(0, 5, 4);
+    // 측면 4개 - 올바른 사각형 perimeter: startLeft→startRight→endRight→endLeft
+    // Side 1: startLeft(0) to startRight(3)
+    indices.push(0, 4, 7);
+    indices.push(0, 7, 3);
 
-    // Front side (1-2-6-5)
-    indices.push(1, 2, 6);
-    indices.push(1, 6, 5);
+    // Side 2: startRight(3) to endRight(1)  
+    indices.push(3, 7, 5);
+    indices.push(3, 5, 1);
 
-    // Right side (2-3-7-6)
-    indices.push(2, 3, 7);
-    indices.push(2, 7, 6);
+    // Side 3: endRight(1) to endLeft(2)
+    indices.push(1, 5, 6);
+    indices.push(1, 6, 2);
 
-    // Back side (3-0-4-7)
-    indices.push(3, 0, 4);
-    indices.push(3, 4, 7);
+    // Side 4: endLeft(2) to startLeft(0)
+    indices.push(2, 6, 4);
+    indices.push(2, 4, 0);
 
     const vertexData = new VertexData();
     vertexData.positions = positions;
@@ -1639,9 +1732,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     // Clear and prepare wall meshes array for snap detection
     wallMeshesRef.current = [];
 
-    // Toggle between CSG and Miter wall generation
-    // Miter mode is default (CSG has issues)
-    const USE_CSG_WALLS = false; // Default: false (Miter)
+    // Use CSG mode with 2D polygon extrusion
+    const USE_CSG_WALLS = true;
 
     if (USE_CSG_WALLS) {
       console.log('[Babylon3DCanvas] Using CSG-based wall system');
@@ -1900,23 +1992,53 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     const { rooms } = floorplanData;
     if (rooms && rooms.length > 0) {
       rooms.forEach((room, roomIndex) => {
-        // Get room boundary points in 3D space (flip Z axis)
-        const roomPoints = room.points.map((pid: string) => {
+        // Get room boundary points at wall centerline (in mm)
+        const roomPointsMM = room.points.map((pid: string) => {
           const p = pointMap.get(pid);
           if (!p) return null;
-          return new Vector3(
-            p.x * MM_TO_METERS - centerX,
-            0.01, // Slightly above Y=0 to prevent z-fighting
-            -(p.y * MM_TO_METERS) - centerZ
-          );
+          return {
+            x: p.x,  // mm
+            y: p.y   // mm
+          };
         }).filter((p: any) => p !== null);
 
-        if (roomPoints.length < 3) return;
+        if (roomPointsMM.length < 3) return;
+
+        // Get wall thickness for this room (default 100mm if not found)
+        let wallThickness = 100; // Default
+        const firstWallId = room.points.length > 0 ? walls.find((w: any) =>
+          w.startPointId === room.points[0] || w.endPointId === room.points[0]
+        ) : null;
+        if (firstWallId) {
+          wallThickness = firstWallId.thickness || 100;
+        }
+
+        // Inset polygon by half wall thickness to get floor polygon inside walls
+        const insetDistance = wallThickness / 2;
+        const floorPointsMM = insetPolygon(roomPointsMM, insetDistance);
+
+        if (floorPointsMM.length < 3) {
+          console.error(`[Babylon3DCanvas] Inset failed for room ${roomIndex}, using original points`);
+          // Fallback to original points if inset fails
+          const roomPoints = roomPointsMM.map((p: any) => new Vector3(
+            p.x * MM_TO_METERS - centerX,
+            0.01,
+            -(p.y * MM_TO_METERS) - centerZ
+          ));
+          continue;
+        }
+
+        // Convert inset points to 3D (flip Z axis)
+        const roomPoints = floorPointsMM.map((p: any) => new Vector3(
+          p.x * MM_TO_METERS - centerX,
+          0.01, // Slightly above Y=0 to prevent z-fighting
+          -(p.y * MM_TO_METERS) - centerZ
+        ));
 
         // Create polygon floor directly on XZ plane (horizontal ground)
         // Using custom mesh with earcut triangulation
 
-        console.log(`[Babylon3DCanvas] Creating polygon floor ${roomIndex} with ${roomPoints.length} points`);
+        console.log(`[Babylon3DCanvas] Creating polygon floor ${roomIndex} with ${roomPoints.length} points (inset by ${insetDistance}mm)`);
 
         // Calculate bounds for texture scaling
         const minX = Math.min(...roomPoints.map((p: Vector3) => p.x));
@@ -2013,18 +2135,42 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         ceilingMaterial.environmentIntensity = 0.7;
 
         rooms.forEach((room, roomIndex) => {
-          // Get room boundary points
-          const roomPoints = room.points.map((pid: string) => {
+          // Get room boundary points at wall centerline (in mm)
+          const roomPointsMM = room.points.map((pid: string) => {
             const p = pointMap.get(pid);
             if (!p) return null;
-            return new Vector3(
-              p.x * MM_TO_METERS - centerX,
-              ceilingY,
-              -(p.y * MM_TO_METERS) - centerZ
-            );
+            return {
+              x: p.x,  // mm
+              y: p.y   // mm
+            };
           }).filter((p: any) => p !== null);
 
-          if (roomPoints.length < 3) return;
+          if (roomPointsMM.length < 3) return;
+
+          // Get wall thickness for this room (default 100mm if not found)
+          let wallThickness = 100; // Default
+          const firstWallId = room.points.length > 0 ? walls.find((w: any) =>
+            w.startPointId === room.points[0] || w.endPointId === room.points[0]
+          ) : null;
+          if (firstWallId) {
+            wallThickness = firstWallId.thickness || 100;
+          }
+
+          // Inset polygon by half wall thickness to get ceiling polygon inside walls
+          const insetDistance = wallThickness / 2;
+          const ceilingPointsMM = insetPolygon(roomPointsMM, insetDistance);
+
+          if (ceilingPointsMM.length < 3) {
+            console.error(`[Babylon3DCanvas] Ceiling inset failed for room ${roomIndex}, using original points`);
+            return;
+          }
+
+          // Convert inset points to 3D (flip Z axis)
+          const roomPoints = ceilingPointsMM.map((p: any) => new Vector3(
+            p.x * MM_TO_METERS - centerX,
+            ceilingY,
+            -(p.y * MM_TO_METERS) - centerZ
+          ));
 
           // Flatten XZ coordinates for earcut
           const flatCoords: number[] = [];
