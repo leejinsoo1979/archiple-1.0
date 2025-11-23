@@ -675,10 +675,10 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         scene
       );
       arcCamera.attachControl(canvas, true);
-      arcCamera.lowerRadiusLimit = 0.5;
+      arcCamera.lowerRadiusLimit = 0.1; // Allow much closer zoom (10cm minimum distance)
       arcCamera.upperRadiusLimit = 50;
       arcCamera.upperBetaLimit = Math.PI / 2.05;
-      arcCamera.wheelPrecision = 20;
+      arcCamera.wheelPrecision = 50; // Finer zoom control (higher = slower zoom)
       arcCamera.panningSensibility = 200;
       arcCamera.inertia = 0.9;
       arcCamera.angularSensibilityX = 1000;
