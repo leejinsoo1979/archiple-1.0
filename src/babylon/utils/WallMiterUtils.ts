@@ -289,17 +289,20 @@ function calculateJointCornersAt(
     }
   }
 
+  // Convert currentDir from 3D {x,z} to 2D {x,y} for calculations
+  const currentDir2D = { x: currentDir.x, y: currentDir.z };
+
   // If no walls connected (shouldn't happen), return basic corners
   if (connectedWalls.length === 0) {
-    const normal = { x: -currentDir.z, z: currentDir.x };
+    const normal = { x: -currentDir2D.y, y: currentDir2D.x }; // Left normal in 2D
     return {
       left: {
         x: junctionPoint.x + normal.x * halfThickness,
-        z: junctionPoint.y + normal.z * halfThickness
+        z: junctionPoint.y + normal.y * halfThickness
       },
       right: {
         x: junctionPoint.x - normal.x * halfThickness,
-        z: junctionPoint.y - normal.z * halfThickness
+        z: junctionPoint.y - normal.y * halfThickness
       }
     };
   }
@@ -310,30 +313,30 @@ function calculateJointCornersAt(
   // Find current wall index
   const currentIndex = connectedWalls.findIndex(w => w.isCurrent);
   if (currentIndex === -1) {
-    const normal = { x: -currentDir.z, z: currentDir.x };
+    const normal = { x: -currentDir2D.y, y: currentDir2D.x }; // Left normal in 2D
     return {
       left: {
         x: junctionPoint.x + normal.x * halfThickness,
-        z: junctionPoint.y + normal.z * halfThickness
+        z: junctionPoint.y + normal.y * halfThickness
       },
       right: {
         x: junctionPoint.x - normal.x * halfThickness,
-        z: junctionPoint.y - normal.z * halfThickness
+        z: junctionPoint.y - normal.y * halfThickness
       }
     };
   }
 
   // Only one wall (endpoint)
   if (connectedWalls.length === 1) {
-    const normal = { x: -currentDir.z, z: currentDir.x };
+    const normal = { x: -currentDir2D.y, y: currentDir2D.x }; // Left normal in 2D
     return {
       left: {
         x: junctionPoint.x + normal.x * halfThickness,
-        z: junctionPoint.y + normal.z * halfThickness
+        z: junctionPoint.y + normal.y * halfThickness
       },
       right: {
         x: junctionPoint.x - normal.x * halfThickness,
-        z: junctionPoint.y - normal.z * halfThickness
+        z: junctionPoint.y - normal.y * halfThickness
       }
     };
   }
@@ -345,8 +348,7 @@ function calculateJointCornersAt(
   const prevWall = connectedWalls[prevIndex];
   const nextWall = connectedWalls[nextIndex];
 
-  // Calculate miter intersections
-  const currentDir2D = { x: currentDir.x, y: currentDir.z };
+  // Calculate miter intersections (currentDir2D already defined above)
   const prevDir2D = prevWall.dir;
   const nextDir2D = nextWall.dir;
 
