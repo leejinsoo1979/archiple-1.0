@@ -46,7 +46,10 @@ export class RoomDetectionService {
 
       const MIN_AREA = 0.5; // 0.5 m²
 
-      if (area < MIN_AREA) continue;
+      if (area < MIN_AREA) {
+        console.log(`[RoomDetection] Cycle rejected: area ${area.toFixed(2)} m² < MIN_AREA ${MIN_AREA} m²`);
+        continue;
+      }
 
       // Check if this room contains any already accepted room
       // Since we process smallest rooms first, if this room contains an existing room,

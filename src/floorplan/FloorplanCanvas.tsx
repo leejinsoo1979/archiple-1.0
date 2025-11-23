@@ -622,6 +622,9 @@ const FloorplanCanvas = ({
       rooms.forEach(r => sceneManager.objectManager.addRoom(r));
 
       console.log(`[FloorplanCanvas] Detected ${rooms.length} rooms after wall splitting`);
+
+      // Step 4: Update layers and sync to Babylon
+      updateLayers();
     };
 
     // Listen to wall events for automatic detection

@@ -65,7 +65,10 @@ export function convertFloorplanToBabylon(floorplan: Floorplan, doors: any[] = [
   const corners = floorplan.getCorners();
   const walls = floorplan.getWalls();
   // Use detected rooms if provided (from RoomDetectionService), otherwise fallback to blueprint rooms
-  const rooms = detectedRooms && detectedRooms.length > 0 ? detectedRooms : floorplan.getRooms();
+  const blueprintRooms = floorplan.getRooms();
+  const rooms = detectedRooms && detectedRooms.length > 0 ? detectedRooms : blueprintRooms;
+
+  console.log('[BlueprintToBabylonAdapter] detectedRooms:', detectedRooms?.length || 0, 'blueprintRooms:', blueprintRooms.length, 'using:', rooms.length, 'rooms');
 
   // Pass through corners (already in mm)
   const points: BabylonPoint[] = corners.map(corner => ({
