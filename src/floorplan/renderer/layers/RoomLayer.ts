@@ -212,10 +212,10 @@ export class RoomLayer extends BaseLayer {
       // Draw text with white outline for better visibility
       ctx.strokeStyle = 'white';
       ctx.lineWidth = 40;
-      ctx.strokeText(room.name, centroid.x, centroid.y - 150);
+      ctx.strokeText(room.name, centroid.x, centroid.y - 130);
 
       ctx.fillStyle = this.config.labelColor;
-      ctx.fillText(room.name, centroid.x, centroid.y - 150);
+      ctx.fillText(room.name, centroid.x, centroid.y - 130);
     }
 
     // Room area with better visibility
@@ -224,11 +224,11 @@ export class RoomLayer extends BaseLayer {
     // Draw white outline
     ctx.strokeStyle = 'white';
     ctx.lineWidth = 40;
-    ctx.strokeText(areaText, centroid.x, centroid.y + 150);
+    ctx.strokeText(areaText, centroid.x, centroid.y + 130);
 
     // Draw main text
     ctx.fillStyle = this.config.labelColor;
-    ctx.fillText(areaText, centroid.x, centroid.y + 150);
+    ctx.fillText(areaText, centroid.x, centroid.y + 130);
 
     ctx.restore();
   }
