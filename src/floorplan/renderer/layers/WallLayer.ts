@@ -389,8 +389,10 @@ export class WallLayer extends BaseLayer {
     const poly = [
       startCorners.left,
       endCorners.right,
+      end, // Include center point to fill T-junction gaps (Y-shape)
       endCorners.left,
-      startCorners.right
+      startCorners.right,
+      start // Include center point
     ];
 
     // Determine color
@@ -414,9 +416,9 @@ export class WallLayer extends BaseLayer {
 
     ctx.beginPath();
     ctx.moveTo(poly[0].x, poly[0].y);
-    ctx.lineTo(poly[1].x, poly[1].y);
-    ctx.lineTo(poly[2].x, poly[2].y);
-    ctx.lineTo(poly[3].x, poly[3].y);
+    for (let i = 1; i < poly.length; i++) {
+      ctx.lineTo(poly[i].x, poly[i].y);
+    }
     ctx.closePath();
 
     // Render based on style
@@ -737,8 +739,14 @@ export class WallLayer extends BaseLayer {
     let perpX = -Math.sin(angle); // Default: left side
     let perpY = Math.cos(angle);
 
-    // Find the room containing this wall
-    const parentRoom = this.rooms.find(room => room.walls.includes(wall.id));
+    // Check if this is an interior wall (shared by multiple rooms)
+    // If so, we don't render the dimension as per user request (redundant with room interior dimensions)
+    const containingRooms = this.rooms.filter(room => room.walls.includes(wall.id));
+    if (containingRooms.length > 1) {
+      return;
+    }
+
+    const parentRoom = containingRooms[0];
 
     if (parentRoom && parentRoom.points.length > 0) {
       // Calculate room centroid
