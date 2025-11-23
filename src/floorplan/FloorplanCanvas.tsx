@@ -391,6 +391,23 @@ const FloorplanCanvas = ({
             endPoint.connectedWalls.push(wall.id);
           }
         }
+
+        // Re-detect rooms after wall split
+        console.log('[FloorplanCanvas] Re-detecting rooms after wall split');
+        const updatedWalls = sceneManager.objectManager.getAllWalls();
+        const updatedPoints = sceneManager.objectManager.getAllPoints();
+        const newRooms = roomDetectionService.detectRooms(updatedWalls, updatedPoints);
+
+        // Clear old rooms and add new ones
+        const oldRooms = sceneManager.objectManager.getAllRooms();
+        for (const room of oldRooms) {
+          sceneManager.objectManager.removeRoom(room.id);
+        }
+        for (const room of newRooms) {
+          sceneManager.objectManager.addRoom(room);
+        }
+
+        console.log('[FloorplanCanvas] Rooms updated:', oldRooms.length, '->', newRooms.length);
       }
 
       updateLayers();
