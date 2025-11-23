@@ -7,6 +7,7 @@ import { SnapService } from '../services/SnapService';
 import { eventBus } from '../../core/events/EventBus';
 import { FloorEvents } from '../../core/events/FloorEvents';
 import { v4 as uuidv4 } from 'uuid';
+import { AddWallCommand } from '../../core/commands/AddWallCommand';
 
 /**
  * WallTool - Coohom-style wall drawing tool
@@ -258,10 +259,11 @@ export class WallTool extends BaseTool {
       console.log('[WallTool] Connected new point to existing wall at midpoint');
     }
 
-    // Create wall
+    // Create wall and execute through command pattern for undo/redo support
     const wall = this.createWall(this.startPoint, endPoint);
-    this.sceneManager.objectManager.addWall(wall);
-    // NOTE: WALL_ADDED event is emitted by BlueprintObjectManager, no need to emit here
+    const command = new AddWallCommand(wall, this.startPoint, endPoint, this.sceneManager.objectManager);
+    this.sceneManager.historyManager.execute(command);
+    // NOTE: WALL_ADDED event is emitted by BlueprintObjectManager via command execution
 
     // Clear preview of confirmed wall
     eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
