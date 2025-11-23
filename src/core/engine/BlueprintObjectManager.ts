@@ -166,7 +166,12 @@ export class BlueprintObjectManager {
   removeWall(id: string): void {
     const wall = this.floorplan.getWalls().find(w => w.id === id);
     if (wall) {
+      console.log('[BlueprintObjectManager] Removing wall:', id);
       wall.remove();
+
+      // Emit WALL_REMOVED event to update UI
+      eventBus.emit(FloorEvents.WALL_REMOVED, { wallId: id });
+      console.log('[BlueprintObjectManager] Wall removed event emitted');
     }
   }
 
