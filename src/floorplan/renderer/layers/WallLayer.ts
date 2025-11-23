@@ -338,20 +338,6 @@ export class WallLayer extends BaseLayer {
     const startCorners = this.calculateJointCorners(segment.start, start, end, segment, segmentMap);
     const endCorners = this.calculateJointCorners(segment.end, end, start, segment, segmentMap);
 
-    // Debug logging
-    console.log(`[2D Segment] wall=${segment.wallId}:`, {
-      start: segment.start,
-      end: segment.end,
-      startCorners: {
-        left: { x: startCorners.left.x, y: startCorners.left.y },
-        right: { x: startCorners.right.x, y: startCorners.right.y }
-      },
-      endCorners: {
-        left: { x: endCorners.left.x, y: endCorners.left.y },
-        right: { x: endCorners.right.x, y: endCorners.right.y }
-      }
-    });
-
     // startCorners returns { left, right } relative to the direction AWAY from the joint
     // For segment start: direction is Start->End. 
     // But calculateJointCorners expects 'dir' to be OUT of the joint.

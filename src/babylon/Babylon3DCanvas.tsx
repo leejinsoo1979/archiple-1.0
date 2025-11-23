@@ -1677,18 +1677,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           return;
         }
 
-        // Debug logging
-        console.log(`[3D Wall ${wallIndex}] ${wall.id}:`, {
-          start: startPoint,
-          end: endPoint,
-          corners: {
-            startLeft: corners.startLeft,
-            startRight: corners.startRight,
-            endLeft: corners.endLeft,
-            endRight: corners.endRight
-          }
-        });
-
         // Create full wall with miter joints
         let wallMesh = createWallMeshFromCorners(
           corners,
