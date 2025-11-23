@@ -51,11 +51,11 @@ export class SnapService {
       wallSnapEnabled: true, // ENABLED - snap to existing walls
       gridSnapEnabled: false, // DISABLED - free drawing with 1mm precision
       angleSnapEnabled: true, // ENABLED - angle guides (0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°)
-      orthogonalSnapEnabled: false, // DISABLED by default - enable with Shift key
+      orthogonalSnapEnabled: true, // ENABLED by default - disable with Shift key for free drawing
       perpendicularSnapEnabled: false, // DISABLED - free drawing
       midpointSnapEnabled: true, // ENABLED - snap to wall midpoints like Coohom
-      pointSnapThreshold: 150, // 150mm = 15cm snap range (zoom independent)
-      wallSnapThreshold: 150, // 150mm = 15cm snap range for wall midpoints (increased for visibility)
+      pointSnapThreshold: 300, // 300mm = 30cm snap range (zoom independent)
+      wallSnapThreshold: 300, // 300mm = 30cm snap range for wall midpoints (increased for visibility)
       gridSize: 100, // 100mm grid display only
       angleSnapDegrees: [0, 45, 90, 135, 180, 225, 270, 315], // 8-direction angle snap
       orthogonalAngles: [0, 90, 180, 270], // Orthogonal angles for Shift key
