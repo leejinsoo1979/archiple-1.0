@@ -356,16 +356,21 @@ const FloorplanCanvas = ({
       }
     });
     eventBus.on(FloorEvents.WALL_ADDED, () => {
-      console.log('[FloorplanCanvas] WALL_ADDED event received - checking for wall splits');
+      console.log('[FloorplanCanvas] WALL_ADDED event received - checking for wall splits and intersections');
 
-      // Split walls at T-junctions before updating layers
+      // Split walls at T-junctions and wall-wall intersections before updating layers
       const points = sceneManager.objectManager.getAllPoints();
       const walls = sceneManager.objectManager.getAllWalls();
 
       const splitResult = wallSplitService.splitWallsAtTJunctions(walls, points);
 
-      if (splitResult.removedWallIds.length > 0) {
-        console.log('[FloorplanCanvas] Applying wall splits:', splitResult.removedWallIds.length, 'walls split into', splitResult.walls.length - walls.length + splitResult.removedWallIds.length, 'segments');
+      if (splitResult.removedWallIds.length > 0 || splitResult.newPoints.length > 0) {
+        console.log('[FloorplanCanvas] Applying wall splits:', splitResult.removedWallIds.length, 'walls split into', splitResult.walls.length - walls.length + splitResult.removedWallIds.length, 'segments,', splitResult.newPoints.length, 'intersection points created');
+
+        // Add new intersection points
+        for (const point of splitResult.newPoints) {
+          sceneManager.objectManager.addPoint(point);
+        }
 
         // Remove old walls
         for (const wallId of splitResult.removedWallIds) {
@@ -379,9 +384,10 @@ const FloorplanCanvas = ({
         }
 
         // Update point connections
+        const allPoints = sceneManager.objectManager.getAllPoints();
         for (const wall of splitResult.walls) {
-          const startPoint = points.find(p => p.id === wall.startPointId);
-          const endPoint = points.find(p => p.id === wall.endPointId);
+          const startPoint = allPoints.find(p => p.id === wall.startPointId);
+          const endPoint = allPoints.find(p => p.id === wall.endPointId);
           if (startPoint && !startPoint.connectedWalls?.includes(wall.id)) {
             if (!startPoint.connectedWalls) startPoint.connectedWalls = [];
             startPoint.connectedWalls.push(wall.id);
@@ -582,16 +588,21 @@ const FloorplanCanvas = ({
     // 9. Automatic Room Detection with Wall Splitting
     const detectRooms = () => {
       let walls = sceneManager.objectManager.getAllWalls();
-      const points = sceneManager.objectManager.getAllPoints();
+      let points = sceneManager.objectManager.getAllPoints();
 
       console.log('[FloorplanCanvas] Starting room detection with wall splitting...');
 
-      // Step 1: Split walls at T-junctions
+      // Step 1: Split walls at T-junctions and wall-wall intersections
       const splitResult = wallSplitService.splitWallsAtTJunctions(walls, points);
 
       // Apply wall splits to SceneManager if any walls were split
-      if (splitResult.removedWallIds.length > 0) {
-        console.log(`[FloorplanCanvas] Applying wall splits: removing ${splitResult.removedWallIds.length} walls, adding ${splitResult.walls.length - walls.length + splitResult.removedWallIds.length} new segments`);
+      if (splitResult.removedWallIds.length > 0 || splitResult.newPoints.length > 0) {
+        console.log(`[FloorplanCanvas] Applying wall splits: removing ${splitResult.removedWallIds.length} walls, adding ${splitResult.walls.length - walls.length + splitResult.removedWallIds.length} new segments, creating ${splitResult.newPoints.length} intersection points`);
+
+        // Add new intersection points
+        splitResult.newPoints.forEach(point => {
+          sceneManager.objectManager.addPoint(point);
+        });
 
         // Remove old walls
         splitResult.removedWallIds.forEach(wallId => {
@@ -606,11 +617,12 @@ const FloorplanCanvas = ({
           }
         });
 
-        // Update walls array with split result
+        // Update walls and points arrays with split result
         walls = splitResult.walls;
+        points = sceneManager.objectManager.getAllPoints(); // Get updated points including new intersection points
       }
 
-      // Step 2: Detect rooms using split walls
+      // Step 2: Detect rooms using split walls and all points (including intersection points)
       const rooms = roomDetectionService.detectRooms(walls, points);
 
       // Step 3: Update rooms in ObjectManager

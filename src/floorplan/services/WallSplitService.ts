@@ -19,12 +19,55 @@ export class WallSplitService {
     points: Point[]
   ): { walls: Wall[]; newPoints: Point[]; removedWallIds: string[] } {
     const pointMap = new Map(points.map(p => [p.id, p]));
-    const newWalls: Wall[] = [];
+    let currentPoints = [...points];
     const newPoints: Point[] = [];
-    const removedWallIds: string[] = [];
-    const processedWalls = new Set<string>();
 
     console.log('[WallSplit] Starting wall split analysis for', walls.length, 'walls and', points.length, 'points');
+
+    // STEP 1: Find wall-wall intersections and create new points
+    console.log('[WallSplit] Step 1: Checking for wall-wall intersections...');
+    for (let i = 0; i < walls.length; i++) {
+      for (let j = i + 1; j < walls.length; j++) {
+        const wall1 = walls[i];
+        const wall2 = walls[j];
+
+        const start1 = pointMap.get(wall1.startPointId);
+        const end1 = pointMap.get(wall1.endPointId);
+        const start2 = pointMap.get(wall2.startPointId);
+        const end2 = pointMap.get(wall2.endPointId);
+
+        if (!start1 || !end1 || !start2 || !end2) continue;
+
+        // Check if walls share an endpoint (skip if they do)
+        if (wall1.startPointId === wall2.startPointId || wall1.startPointId === wall2.endPointId ||
+            wall1.endPointId === wall2.startPointId || wall1.endPointId === wall2.endPointId) {
+          continue;
+        }
+
+        // Find intersection point
+        const intersection = this.getLineIntersection(start1, end1, start2, end2);
+        if (intersection) {
+          console.log(`[WallSplit] Found wall-wall intersection between ${wall1.id.slice(0, 8)} and ${wall2.id.slice(0, 8)} at (${intersection.x.toFixed(1)}, ${intersection.y.toFixed(1)})`);
+
+          // Create new point at intersection
+          const newPoint: Point = {
+            id: uuidv4(),
+            x: intersection.x,
+            y: intersection.y,
+          };
+
+          currentPoints.push(newPoint);
+          pointMap.set(newPoint.id, newPoint);
+          newPoints.push(newPoint);
+        }
+      }
+    }
+
+    // STEP 2: Split walls at T-junctions and intersections
+    console.log('[WallSplit] Step 2: Splitting walls at T-junctions and intersections...');
+    const newWalls: Wall[] = [];
+    const removedWallIds: string[] = [];
+    const processedWalls = new Set<string>();
 
     for (const wall of walls) {
       if (processedWalls.has(wall.id)) continue;
@@ -50,7 +93,7 @@ export class WallSplitService {
       }
 
       // Check all points to see if they lie on this wall
-      for (const p of points) {
+      for (const p of currentPoints) {
         if (p.id === start.id || p.id === end.id) continue;
 
         // Optimization: Check bounding box first
@@ -123,5 +166,39 @@ export class WallSplitService {
     );
 
     return { walls: newWalls, newPoints, removedWallIds };
+  }
+
+  /**
+   * Find intersection point between two line segments
+   * Returns null if lines don't intersect or are parallel
+   */
+  private getLineIntersection(
+    p1: Point,
+    p2: Point,
+    p3: Point,
+    p4: Point
+  ): { x: number; y: number } | null {
+    const x1 = p1.x, y1 = p1.y;
+    const x2 = p2.x, y2 = p2.y;
+    const x3 = p3.x, y3 = p3.y;
+    const x4 = p4.x, y4 = p4.y;
+
+    const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+
+    // Lines are parallel
+    if (Math.abs(denom) < 0.0001) return null;
+
+    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+    const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
+
+    // Check if intersection is within both line segments (not at endpoints)
+    if (t > 0.01 && t < 0.99 && u > 0.01 && u < 0.99) {
+      return {
+        x: x1 + t * (x2 - x1),
+        y: y1 + t * (y2 - y1)
+      };
+    }
+
+    return null;
   }
 }
