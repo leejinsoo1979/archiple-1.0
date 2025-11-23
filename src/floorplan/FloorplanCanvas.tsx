@@ -354,7 +354,46 @@ const FloorplanCanvas = ({
         console.error('[FloorplanCanvas] Error in updateLayers:', e);
       }
     });
-    eventBus.on(FloorEvents.WALL_ADDED, updateLayers);
+    eventBus.on(FloorEvents.WALL_ADDED, () => {
+      console.log('[FloorplanCanvas] WALL_ADDED event received - checking for wall splits');
+
+      // Split walls at T-junctions before updating layers
+      const points = sceneManager.objectManager.getAllPoints();
+      const walls = sceneManager.objectManager.getAllWalls();
+
+      const splitResult = wallSplitService.splitWallsAtTJunctions(walls, points);
+
+      if (splitResult.removedWallIds.length > 0) {
+        console.log('[FloorplanCanvas] Applying wall splits:', splitResult.removedWallIds.length, 'walls split into', splitResult.walls.length - walls.length + splitResult.removedWallIds.length, 'segments');
+
+        // Remove old walls
+        for (const wallId of splitResult.removedWallIds) {
+          sceneManager.objectManager.removeWall(wallId);
+        }
+
+        // Add new split walls
+        const newWalls = splitResult.walls.filter(w => !walls.find(ow => ow.id === w.id));
+        for (const wall of newWalls) {
+          sceneManager.objectManager.addWall(wall);
+        }
+
+        // Update point connections
+        for (const wall of splitResult.walls) {
+          const startPoint = points.find(p => p.id === wall.startPointId);
+          const endPoint = points.find(p => p.id === wall.endPointId);
+          if (startPoint && !startPoint.connectedWalls?.includes(wall.id)) {
+            if (!startPoint.connectedWalls) startPoint.connectedWalls = [];
+            startPoint.connectedWalls.push(wall.id);
+          }
+          if (endPoint && !endPoint.connectedWalls?.includes(wall.id)) {
+            if (!endPoint.connectedWalls) endPoint.connectedWalls = [];
+            endPoint.connectedWalls.push(wall.id);
+          }
+        }
+      }
+
+      updateLayers();
+    });
     eventBus.on(FloorEvents.ROOM_DETECTED, updateLayers);
 
     // Camera reset event
