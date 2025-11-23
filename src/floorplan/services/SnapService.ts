@@ -54,8 +54,8 @@ export class SnapService {
       orthogonalSnapEnabled: true, // ENABLED by default - disable with Shift key for free drawing
       perpendicularSnapEnabled: false, // DISABLED - free drawing
       midpointSnapEnabled: true, // ENABLED - snap to wall midpoints like Coohom
-      pointSnapThreshold: 100, // 100mm = 10cm snap range (zoom independent)
-      wallSnapThreshold: 100, // 100mm = 10cm snap range for wall midpoints
+      pointSnapThreshold: 200, // 200mm = 20cm snap range (zoom independent)
+      wallSnapThreshold: 200, // 200mm = 20cm snap range for wall midpoints
       gridSize: 100, // 100mm grid display only
       angleSnapDegrees: [0, 45, 90, 135, 180, 225, 270, 315], // 8-direction angle snap
       orthogonalAngles: [0, 90, 180, 270], // Orthogonal angles for Shift key
@@ -114,48 +114,53 @@ export class SnapService {
     // Clear transient guides at the start of each snap cycle
     eventBus.emit(FloorEvents.VERTICAL_GUIDE_CLEARED, {});
     eventBus.emit(FloorEvents.HORIZONTAL_GUIDE_CLEARED, {});
-    // Note: We don't clear ANGLE_GUIDE here because it might be used by other snaps, 
-    // but we should probably reset it if no snap occurs.
-    // For now, let's rely on the specific snap methods to emit ANGLE_GUIDE_UPDATED if needed.
-    // Actually, if we don't emit it, the layer keeps the old one. 
-    // We should probably emit a "clear" if no snap happens at the end.
 
-    // 1. Point snap (highest priority - snap to existing points)
+    // PRIORITY 1: Orthogonal snap (when enabled) - Apply angle constraint FIRST
+    // This ensures the cursor always moves in 90° increments
+    let constrainedPosition = position;
+    if (this.config.orthogonalSnapEnabled && this.lastPoint) {
+      const orthogonalSnap = this.snapToOrthogonal(position, this.lastPoint);
+      if (orthogonalSnap) {
+        console.log('[SnapService] Orthogonal constraint applied');
+        constrainedPosition = orthogonalSnap.position;
+      }
+    }
+
+    // PRIORITY 2: Point snap on the constrained line
     if (this.config.pointSnapEnabled) {
-      const pointSnap = this.snapToPoint(position);
+      const pointSnap = this.snapToPoint(constrainedPosition);
       if (pointSnap) {
-        console.log('[SnapService] Point snap triggered');
-        // Clear angle guide when point snapping
+        console.log('[SnapService] Point snap triggered (on constrained line)');
         eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, { from: null, angle: null });
         return pointSnap;
       }
     }
 
-    // 2. Midpoint snap (snap to wall midpoints - Coohom style)
+    // PRIORITY 3: Midpoint snap on the constrained line
     if (this.config.midpointSnapEnabled) {
-      const midpointSnap = this.snapToMidpoint(position);
+      const midpointSnap = this.snapToMidpoint(constrainedPosition);
       if (midpointSnap) {
-        console.log('[SnapService] Midpoint snap triggered');
+        console.log('[SnapService] Midpoint snap triggered (on constrained line)');
         return midpointSnap;
       }
     }
 
-    // 3. Wall snap (snap to existing walls)
+    // PRIORITY 4: Wall snap on the constrained line
     if (this.config.wallSnapEnabled) {
-      const wallSnap = this.snapToWall(position);
+      const wallSnap = this.snapToWall(constrainedPosition);
       if (wallSnap) {
-        console.log('[SnapService] Wall snap triggered');
+        console.log('[SnapService] Wall snap triggered (on constrained line)');
         return wallSnap;
       }
     }
 
-    // 3. Orthogonal snap (when Shift key pressed)
+    // If orthogonal was applied, return the constrained position
     if (this.config.orthogonalSnapEnabled && this.lastPoint) {
-      const orthogonalSnap = this.snapToOrthogonal(position, this.lastPoint);
-      if (orthogonalSnap) {
-        console.log('[SnapService] Orthogonal snap triggered');
-        return orthogonalSnap;
-      }
+      console.log('[SnapService] Returning orthogonal-constrained position');
+      return {
+        position: constrainedPosition,
+        snappedTo: 'angle',
+      };
     }
 
     // 3.5 Intersection Snap (Smart Guides) - HIGH PRIORITY
