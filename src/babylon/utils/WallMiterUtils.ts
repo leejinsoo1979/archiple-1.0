@@ -351,7 +351,29 @@ function calculateJointCornersAt(
   const prevDir2D = prevWall.dir;
   const nextDir2D = nextWall.dir;
 
-  // Calculate miter intersections for all junctions (same as 2D)
+  // Check if this is a T-junction (3 walls meeting)
+  // If prev and next are nearly opposite (collinear), current wall is either:
+  // - the main wall (if prev and next are ~180 degrees apart) -> keep straight
+  // - the branch wall (if current makes ~90 degree with the collinear pair) -> apply miter
+  const prevDot = prevDir2D.x * nextDir2D.x + prevDir2D.y * nextDir2D.y;
+  const isCollinear = prevDot < -0.9; // prev and next are ~180 degrees apart
+
+  if (isCollinear) {
+    // This is a T-junction. Current wall is the main wall - keep it straight (no miter)
+    const normal = { x: -currentDir2D.y, y: currentDir2D.x };
+    return {
+      left: {
+        x: junctionPoint.x + normal.x * halfThickness,
+        z: junctionPoint.y + normal.y * halfThickness
+      },
+      right: {
+        x: junctionPoint.x - normal.x * halfThickness,
+        z: junctionPoint.y - normal.y * halfThickness
+      }
+    };
+  }
+
+  // Regular corner junction - calculate miter intersections
   const leftMiter = calculateMiterVector(currentDir2D, nextDir2D, halfThickness);
   const rightMiter = calculateMiterVector(prevDir2D, currentDir2D, halfThickness);
 
