@@ -2025,7 +2025,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
             0.01,
             -(p.y * MM_TO_METERS) - centerZ
           ));
-          continue;
+          return;
         }
 
         // Convert inset points to 3D (flip Z axis)
