@@ -188,6 +188,8 @@ export class WallSplitService {
   /**
    * Find intersection point between two line segments
    * Returns null if lines don't intersect or are parallel
+   * IMPORTANT: Only detects true X-junctions (both walls cross in the middle)
+   * T-junctions (where one wall's endpoint is on another wall) are handled separately
    */
   private getLineIntersection(
     p1: Point,
@@ -208,8 +210,10 @@ export class WallSplitService {
     const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
     const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
 
-    // Check if intersection is within both line segments (not at endpoints)
-    if (t > 0.01 && t < 0.99 && u > 0.01 && u < 0.99) {
+    // STRICT CHECK: Only accept intersections well inside BOTH segments
+    // This prevents detecting T-junctions as X-junctions
+    // Use 0.1 (10%) instead of 0.01 to avoid near-endpoint intersections
+    if (t > 0.1 && t < 0.9 && u > 0.1 && u < 0.9) {
       return {
         x: x1 + t * (x2 - x1),
         y: y1 + t * (y2 - y1)

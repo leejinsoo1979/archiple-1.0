@@ -352,15 +352,37 @@ function calculateJointCornersAt(
   const nextDir2D = nextWall.dir;
 
   // Check if this is a T-junction (3 walls meeting)
-  // If prev and next are nearly opposite (collinear), current wall is either:
-  // - the main wall (if prev and next are ~180 degrees apart) -> keep straight
-  // - the branch wall (if current makes ~90 degree with the collinear pair) -> apply miter
   const prevDot = prevDir2D.x * nextDir2D.x + prevDir2D.y * nextDir2D.y;
-  const isCollinear = prevDot < -0.9; // prev and next are ~180 degrees apart
+  const isMainWallCollinear = prevDot < -0.9; // prev and next are ~180 degrees apart
 
-  if (isCollinear) {
-    // This is a T-junction. Current wall is the main wall - keep it straight (no miter)
+  if (isMainWallCollinear) {
+    // Current wall is the main wall in a T-junction - keep it straight (no miter)
     const normal = { x: -currentDir2D.y, y: currentDir2D.x };
+    return {
+      left: {
+        x: junctionPoint.x + normal.x * halfThickness,
+        z: junctionPoint.y + normal.y * halfThickness
+      },
+      right: {
+        x: junctionPoint.x - normal.x * halfThickness,
+        z: junctionPoint.y - normal.y * halfThickness
+      }
+    };
+  }
+
+  // Check if current wall is the branch wall in a T-junction
+  // Branch wall: prev and current are collinear, OR next and current are collinear
+  const prevCurrentDot = prevDir2D.x * currentDir2D.x + prevDir2D.y * currentDir2D.y;
+  const nextCurrentDot = nextDir2D.x * currentDir2D.x + nextDir2D.y * currentDir2D.y;
+  const isBranchWall = prevCurrentDot < -0.9 || nextCurrentDot < -0.9;
+
+  if (isBranchWall) {
+    // Branch wall in T-junction - extend only to centerline (Y-shape, not V-shape)
+    // The branch wall should only go halfway into the main wall
+    const normal = { x: -currentDir2D.y, y: currentDir2D.x };
+
+    // For branch wall, we limit the miter to only go to the centerline
+    // This creates a Y-shape where the branch only reaches the center of the main wall
     return {
       left: {
         x: junctionPoint.x + normal.x * halfThickness,
