@@ -47,18 +47,34 @@ export class WallSplitService {
         // Find intersection point
         const intersection = this.getLineIntersection(start1, end1, start2, end2);
         if (intersection) {
-          console.log(`[WallSplit] Found wall-wall intersection between ${wall1.id.slice(0, 8)} and ${wall2.id.slice(0, 8)} at (${intersection.x.toFixed(1)}, ${intersection.y.toFixed(1)})`);
+          // Check if a point already exists at this location (within 1mm tolerance)
+          let existingPoint: Point | undefined;
+          for (const p of currentPoints) {
+            const dx = p.x - intersection.x;
+            const dy = p.y - intersection.y;
+            const distSq = dx * dx + dy * dy;
+            if (distSq < 1) { // 1mm tolerance
+              existingPoint = p;
+              break;
+            }
+          }
 
-          // Create new point at intersection
-          const newPoint: Point = {
-            id: uuidv4(),
-            x: intersection.x,
-            y: intersection.y,
-          };
+          if (existingPoint) {
+            console.log(`[WallSplit] Found wall-wall intersection between ${wall1.id.slice(0, 8)} and ${wall2.id.slice(0, 8)} at existing point ${existingPoint.id.slice(0, 8)}`);
+          } else {
+            console.log(`[WallSplit] Found wall-wall intersection between ${wall1.id.slice(0, 8)} and ${wall2.id.slice(0, 8)} at (${intersection.x.toFixed(1)}, ${intersection.y.toFixed(1)})`);
 
-          currentPoints.push(newPoint);
-          pointMap.set(newPoint.id, newPoint);
-          newPoints.push(newPoint);
+            // Create new point at intersection
+            const newPoint: Point = {
+              id: uuidv4(),
+              x: intersection.x,
+              y: intersection.y,
+            };
+
+            currentPoints.push(newPoint);
+            pointMap.set(newPoint.id, newPoint);
+            newPoints.push(newPoint);
+          }
         }
       }
     }
@@ -97,10 +113,10 @@ export class WallSplitService {
         if (p.id === start.id || p.id === end.id) continue;
 
         // Optimization: Check bounding box first
-        const minX = Math.min(start.x, end.x) - 10;
-        const maxX = Math.max(start.x, end.x) + 10;
-        const minY = Math.min(start.y, end.y) - 10;
-        const maxY = Math.max(start.y, end.y) + 10;
+        const minX = Math.min(start.x, end.x) - 50;
+        const maxX = Math.max(start.x, end.x) + 50;
+        const minY = Math.min(start.y, end.y) - 50;
+        const maxY = Math.max(start.y, end.y) + 50;
 
         if (p.x < minX || p.x > maxX || p.y < minY || p.y > maxY) continue;
 
@@ -110,9 +126,10 @@ export class WallSplitService {
         if (t > 0.001 && t < 0.999) {
           const projected = startVec.add(wallVec.multiply(t));
           const dist = pVec.distanceTo(projected);
-          if (dist < 10) {
-            // 10mm tolerance
+          if (dist < 50) {
+            // 50mm tolerance (increased from 10mm for better intersection detection)
             pointsOnWall.push({ point: p, t });
+            console.log(`[WallSplit] Point ${p.id.slice(0, 8)} lies on wall ${wall.id.slice(0, 8)} at t=${t.toFixed(3)}, dist=${dist.toFixed(1)}mm`);
           }
         }
       }
