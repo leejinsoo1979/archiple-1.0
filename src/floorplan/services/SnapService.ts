@@ -54,8 +54,8 @@ export class SnapService {
       orthogonalSnapEnabled: true, // ENABLED by default - disable with Shift key for free drawing
       perpendicularSnapEnabled: false, // DISABLED - free drawing
       midpointSnapEnabled: true, // ENABLED - snap to wall midpoints like Coohom
-      pointSnapThreshold: 300, // 300mm = 30cm snap range (zoom independent)
-      wallSnapThreshold: 300, // 300mm = 30cm snap range for wall midpoints (increased for visibility)
+      pointSnapThreshold: 100, // 100mm = 10cm snap range (zoom independent)
+      wallSnapThreshold: 100, // 100mm = 10cm snap range for wall midpoints
       gridSize: 100, // 100mm grid display only
       angleSnapDegrees: [0, 45, 90, 135, 180, 225, 270, 315], // 8-direction angle snap
       orthogonalAngles: [0, 90, 180, 270], // Orthogonal angles for Shift key
@@ -264,7 +264,7 @@ export class SnapService {
    */
   private snapToPoint(position: Vector2): SnapResult | null {
     let nearestPoint: Point | null = null;
-    let minDistance = 30; // 30mm - very tight snap range to not interfere with axis snap
+    let minDistance = this.config.pointSnapThreshold; // Use config threshold
 
     for (const point of this.points) {
       const pointVec = new Vector2(point.x, point.y);
