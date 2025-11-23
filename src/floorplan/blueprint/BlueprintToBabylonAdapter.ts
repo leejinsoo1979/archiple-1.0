@@ -61,10 +61,11 @@ export interface BabylonFloorplanData {
  * Convert blueprint Floorplan to Babylon3DCanvas data format
  * All coordinates are already in mm - pass through directly
  */
-export function convertFloorplanToBabylon(floorplan: Floorplan, doors: any[] = [], windows: any[] = []): BabylonFloorplanData {
+export function convertFloorplanToBabylon(floorplan: Floorplan, doors: any[] = [], windows: any[] = [], detectedRooms?: any[]): BabylonFloorplanData {
   const corners = floorplan.getCorners();
   const walls = floorplan.getWalls();
-  const rooms = floorplan.getRooms();
+  // Use detected rooms if provided (from RoomDetectionService), otherwise fallback to blueprint rooms
+  const rooms = detectedRooms && detectedRooms.length > 0 ? detectedRooms : floorplan.getRooms();
 
   // Pass through corners (already in mm)
   const points: BabylonPoint[] = corners.map(corner => ({
@@ -82,16 +83,18 @@ export function convertFloorplanToBabylon(floorplan: Floorplan, doors: any[] = [
     height: wall.height, // Already in mm (2400mm = 2.4m)
   }));
 
-  // Convert rooms
-  const babylonRooms: BabylonRoom[] = rooms.map((room, index) => {
-    const roomPoints = room.corners.map(c => c.id);
-
-    // Calculate area (mm�)
-    const area = calculateRoomArea(room.corners);
+  // Convert rooms (handle both Blueprint rooms and detected rooms)
+  const babylonRooms: BabylonRoom[] = rooms.map((room: any, index) => {
+    // Detected rooms from RoomDetectionService have 'points' and 'area' directly
+    // Blueprint rooms have 'corners' that need to be converted
+    const roomPoints = room.points || room.corners.map((c: any) => c.id);
+    const area = room.area || calculateRoomArea(room.corners);
+    const roomId = room.id || `room-${index}`;
+    const roomName = room.name || `Room ${index + 1}`;
 
     return {
-      id: `room-${index}`,
-      name: `Room ${index + 1}`,
+      id: roomId,
+      name: roomName,
       points: roomPoints,
       area,
     };

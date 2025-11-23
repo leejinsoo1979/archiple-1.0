@@ -306,8 +306,9 @@ const FloorplanCanvas = ({
         const floorplan = sceneManager.objectManager.getFloorplan();
         const doors = sceneManager.objectManager.getAllDoors();
         const windows = sceneManager.objectManager.getAllWindows();
-        const babylonData = convertFloorplanToBabylon(floorplan, doors, windows);
-        console.log('[FloorplanCanvas] Sending blueprint data to Babylon:', babylonData);
+        const detectedRooms = sceneManager.objectManager.getAllRooms(); // Get detected rooms from RoomDetectionService
+        const babylonData = convertFloorplanToBabylon(floorplan, doors, windows, detectedRooms);
+        console.log('[FloorplanCanvas] Sending blueprint data to Babylon with', detectedRooms.length, 'detected rooms');
         onDataChange(babylonData);
       }
     };
