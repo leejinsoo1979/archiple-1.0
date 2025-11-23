@@ -51,7 +51,7 @@ export class SnapService {
       wallSnapEnabled: true, // ENABLED - snap to existing walls
       gridSnapEnabled: false, // DISABLED - free drawing with 1mm precision
       angleSnapEnabled: true, // ENABLED - angle guides (0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°)
-      orthogonalSnapEnabled: true, // ENABLED by default - disable with Shift key for free drawing
+      orthogonalSnapEnabled: false, // DISABLED by default - enable with Shift key
       perpendicularSnapEnabled: false, // DISABLED - free drawing
       midpointSnapEnabled: true, // ENABLED - snap to wall midpoints like Coohom
       pointSnapThreshold: 200, // 200mm = 20cm snap range (zoom independent)

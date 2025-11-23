@@ -95,9 +95,9 @@ export class WallTool extends BaseTool {
     this.snapService.setPoints(this.sceneManager.objectManager.getAllPoints());
     this.snapService.setWalls(this.sceneManager.objectManager.getAllWalls());
 
-    // Enable orthogonal snap by default, disable when Shift key is pressed (for free drawing)
+    // Enable orthogonal snap only when Shift key is pressed
     this.snapService.updateConfig({
-      orthogonalSnapEnabled: hasActiveStart && !event.shiftKey,
+      orthogonalSnapEnabled: hasActiveStart && event.shiftKey,
     });
 
     if (hasActiveStart && this.startPoint) {
