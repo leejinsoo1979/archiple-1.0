@@ -21,10 +21,11 @@ export class HistoryManager {
    */
   execute(command: ICommand): void {
     if (!command.canExecute()) {
-      console.warn('Command cannot be executed:', command.getDescription());
+      console.warn('[HistoryManager] Command cannot be executed:', command.getDescription());
       return;
     }
 
+    console.log('[HistoryManager] Executing command:', command.getDescription());
     command.execute();
     this.undoStack.push(command);
     this.redoStack = []; // Clear redo stack when new command is executed
@@ -33,6 +34,8 @@ export class HistoryManager {
     if (this.undoStack.length > this.maxHistorySize) {
       this.undoStack.shift();
     }
+
+    console.log('[HistoryManager] Execute complete. Stack sizes - undo:', this.undoStack.length, 'redo:', this.redoStack.length);
 
     eventBus.emit(EditorEvents.STATE_CHANGED, {
       canUndo: this.canUndo(),
@@ -45,11 +48,12 @@ export class HistoryManager {
    */
   undo(): void {
     if (!this.canUndo()) {
-      console.warn('Nothing to undo');
+      console.warn('[HistoryManager] Nothing to undo');
       return;
     }
 
     const command = this.undoStack.pop()!;
+    console.log('[HistoryManager] Undoing command:', command.getDescription());
     command.undo();
     this.redoStack.push(command);
 
@@ -58,6 +62,7 @@ export class HistoryManager {
       canUndo: this.canUndo(),
       canRedo: this.canRedo(),
     });
+    console.log('[HistoryManager] Undo complete. Stack sizes - undo:', this.undoStack.length, 'redo:', this.redoStack.length);
   }
 
   /**

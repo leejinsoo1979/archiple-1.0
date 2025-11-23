@@ -47,11 +47,13 @@ export class KeyboardController {
     if (event.ctrlKey || event.metaKey) {
       if (event.shiftKey && event.key === 'z') {
         // Ctrl+Shift+Z: Redo
+        console.log('[KeyboardController] Redo triggered (Cmd/Ctrl+Shift+Z)');
         event.preventDefault();
         this.sceneManager.historyManager.redo();
         return;
       } else if (event.key === 'z') {
         // Ctrl+Z: Undo
+        console.log('[KeyboardController] Undo triggered (Cmd/Ctrl+Z)');
         event.preventDefault();
         this.sceneManager.historyManager.undo();
         return;
