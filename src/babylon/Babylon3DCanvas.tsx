@@ -1877,8 +1877,10 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
     // Create floors for each room - ONLY inside walls (polygon shape)
     const { rooms } = floorplanData;
+    console.log('[Babylon3DCanvas] Creating floors for', rooms?.length || 0, 'rooms');
     if (rooms && rooms.length > 0) {
       rooms.forEach((room, roomIndex) => {
+        console.log('[Babylon3DCanvas] Processing room', roomIndex, 'with', room.points?.length || 0, 'points:', room);
         // Get room boundary points in 3D space (flip Z axis)
         const roomPoints = room.points.map((pid: string) => {
           const p = pointMap.get(pid);
