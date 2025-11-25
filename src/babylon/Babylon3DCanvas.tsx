@@ -49,8 +49,10 @@ import {
 } from './utils/WallMiterUtils';
 import { createCSGWalls } from './utils/CSGWallBuilder';
 import type { Wall } from '../core/types/Wall';
+import type { Point } from '../core/types/Point';
 import type { Light, LightType } from '../core/types/Light';
 import { createDefaultLight } from '../core/types/Light';
+import { WallSplitService } from '../floorplan/services/WallSplitService';
 
 // Make earcut available globally for Babylon.js polygon operations
 if (typeof window !== 'undefined') {
@@ -1041,7 +1043,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     scene: Scene,
     startHeight: number = 0,
     skipTopFace: boolean = false,
-    skipBottomFace: boolean = false
+    skipBottomFace: boolean = false,
+    startPoint?: { x: number, y: number },
+    endPoint?: { x: number, y: number }
   ): Mesh => {
     const MM_TO_METERS = 0.001;
     const wallHeight = height * MM_TO_METERS;
@@ -1053,10 +1057,22 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       z: -(z * MM_TO_METERS) - centerZ, // Z축 반전
     });
 
-    const c1 = toMeters(corners.startLeft.x, corners.startLeft.z);
-    const c2 = toMeters(corners.endLeft.x, corners.endLeft.z);
-    const c3 = toMeters(corners.endRight.x, corners.endRight.z);
-    const c4 = toMeters(corners.startRight.x, corners.startRight.z);
+    const c1 = toMeters(corners.startLeft.x, corners.startLeft.z); // StartLeft
+    const c2 = toMeters(corners.endLeft.x, corners.endLeft.z);     // EndLeft
+    const c3 = toMeters(corners.endRight.x, corners.endRight.z);   // EndRight
+    const c4 = toMeters(corners.startRight.x, corners.startRight.z); // StartRight
+
+    // Center points (optional, fallback to midpoint of left/right if not provided)
+    // But for gap filling, we really need the actual junction center.
+    // If startPoint/endPoint are provided, use them.
+    const cStart = startPoint ? toMeters(startPoint.x, startPoint.y) : {
+      x: (c1.x + c4.x) / 2,
+      z: (c1.z + c4.z) / 2
+    };
+    const cEnd = endPoint ? toMeters(endPoint.x, endPoint.y) : {
+      x: (c2.x + c3.x) / 2,
+      z: (c2.z + c3.z) / 2
+    };
 
     // VertexData로 직접 mesh 생성
     const positions: number[] = [];
@@ -1064,68 +1080,100 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     const normals: number[] = [];
     const colors: number[] = [];
 
-    // 바닥 4개 vertex (y=wallStartHeight) - 흰색
-    positions.push(c1.x, wallStartHeight, c1.z); // 0
-    colors.push(1, 1, 1, 1);
-    positions.push(c2.x, wallStartHeight, c2.z); // 1
-    colors.push(1, 1, 1, 1);
-    positions.push(c3.x, wallStartHeight, c3.z); // 2
-    colors.push(1, 1, 1, 1);
-    positions.push(c4.x, wallStartHeight, c4.z); // 3
-    colors.push(1, 1, 1, 1);
+    // Vertices layout:
+    // Bottom (y=start): 0:StartLeft, 1:EndLeft, 2:EndRight, 3:StartRight, 4:StartCenter, 5:EndCenter
+    // Top (y=end):      6:StartLeft, 7:EndLeft, 8:EndRight, 9:StartRight, 10:StartCenter, 11:EndCenter
+    // TopFace (y=end):  12:StartLeft, 13:EndLeft, 14:EndRight, 15:StartRight, 16:StartCenter, 17:EndCenter (Black)
 
-    // 측면용 윗 vertex 4개 (y=wallStartHeight+wallHeight) - 흰색 (측면에 그라데이션 방지)
+    // --- Bottom Vertices (0-5) ---
+    const pushVertex = (v: { x: number, z: number }, y: number, r: number, g: number, b: number) => {
+      positions.push(v.x, y, v.z);
+      colors.push(r, g, b, 1);
+    };
+
+    // 0: StartLeft
+    pushVertex(c1, wallStartHeight, 1, 1, 1);
+    // 1: EndLeft
+    pushVertex(c2, wallStartHeight, 1, 1, 1);
+    // 2: EndRight
+    pushVertex(c3, wallStartHeight, 1, 1, 1);
+    // 3: StartRight
+    pushVertex(c4, wallStartHeight, 1, 1, 1);
+    // 4: StartCenter
+    pushVertex(cStart, wallStartHeight, 1, 1, 1);
+    // 5: EndCenter
+    pushVertex(cEnd, wallStartHeight, 1, 1, 1);
+
+    // --- Top Vertices (Side usage) (6-11) ---
     const topY = wallStartHeight + wallHeight;
-    positions.push(c1.x, topY, c1.z); // 4
-    colors.push(1, 1, 1, 1);
-    positions.push(c2.x, topY, c2.z); // 5
-    colors.push(1, 1, 1, 1);
-    positions.push(c3.x, topY, c3.z); // 6
-    colors.push(1, 1, 1, 1);
-    positions.push(c4.x, topY, c4.z); // 7
-    colors.push(1, 1, 1, 1);
+    // 6: StartLeft
+    pushVertex(c1, topY, 1, 1, 1);
+    // 7: EndLeft
+    pushVertex(c2, topY, 1, 1, 1);
+    // 8: EndRight
+    pushVertex(c3, topY, 1, 1, 1);
+    // 9: StartRight
+    pushVertex(c4, topY, 1, 1, 1);
+    // 10: StartCenter
+    pushVertex(cStart, topY, 1, 1, 1);
+    // 11: EndCenter
+    pushVertex(cEnd, topY, 1, 1, 1);
 
-    // 천장 단면용 vertex 4개 (y=wallStartHeight+wallHeight)
-    // 천장 단면은 항상 검정색 (startHeight 상관없이)
+    // --- Top Vertices (Top Face usage - Black) (12-17) ---
     const topFaceColor = 0;
-    positions.push(c1.x, topY, c1.z); // 8
-    colors.push(topFaceColor, topFaceColor, topFaceColor, 1);
-    positions.push(c2.x, topY, c2.z); // 9
-    colors.push(topFaceColor, topFaceColor, topFaceColor, 1);
-    positions.push(c3.x, topY, c3.z); // 10
-    colors.push(topFaceColor, topFaceColor, topFaceColor, 1);
-    positions.push(c4.x, topY, c4.z); // 11
-    colors.push(topFaceColor, topFaceColor, topFaceColor, 1);
+    // 12: StartLeft
+    pushVertex(c1, topY, topFaceColor, topFaceColor, topFaceColor);
+    // 13: EndLeft
+    pushVertex(c2, topY, topFaceColor, topFaceColor, topFaceColor);
+    // 14: EndRight
+    pushVertex(c3, topY, topFaceColor, topFaceColor, topFaceColor);
+    // 15: StartRight
+    pushVertex(c4, topY, topFaceColor, topFaceColor, topFaceColor);
+    // 16: StartCenter
+    pushVertex(cStart, topY, topFaceColor, topFaceColor, topFaceColor);
+    // 17: EndCenter
+    pushVertex(cEnd, topY, topFaceColor, topFaceColor, topFaceColor);
 
-    // Indices
-    // 바닥 (시계방향) - skipBottomFace가 false일 때만 생성
+    // --- Indices ---
+
+    // Helper for 6-point polygon triangulation (StartLeft, EndLeft, EndCenter, EndRight, StartRight, StartCenter)
+    // Triangles:
+    // T1: StartLeft(0), EndLeft(1), EndCenter(5)
+    // T2: StartLeft(0), EndCenter(5), StartCenter(4)
+    // T3: StartCenter(4), EndCenter(5), EndRight(2)
+    // T4: StartCenter(4), EndRight(2), StartRight(3)
+
+    // Bottom Face (Clockwise)
     if (!skipBottomFace) {
-      indices.push(0, 2, 1);
-      indices.push(0, 3, 2);
+      indices.push(0, 5, 1);
+      indices.push(0, 4, 5);
+      indices.push(4, 2, 5);
+      indices.push(4, 3, 2);
     }
 
-    // 천장 단면 (반시계방향) - skipTopFace가 false일 때만 생성
+    // Top Face (Counter-Clockwise) - using vertices 12-17
     if (!skipTopFace) {
-      indices.push(8, 9, 10);
-      indices.push(8, 10, 11);
+      indices.push(12, 13, 17);
+      indices.push(12, 17, 16);
+      indices.push(16, 17, 14);
+      indices.push(16, 14, 15);
     }
 
-    // 측면 4개 - 흰색 vertex 사용 (4-7)
-    // Left side (0-1-5-4)
-    indices.push(0, 1, 5);
-    indices.push(0, 5, 4);
+    // Side Faces (using vertices 0-11)
+    // Left Side: StartLeft(0)->EndLeft(1) -> TopEndLeft(7)->TopStartLeft(6)
+    indices.push(0, 1, 7);
+    indices.push(0, 7, 6);
 
-    // Front side (1-2-6-5)
-    indices.push(1, 2, 6);
-    indices.push(1, 6, 5);
+    // Right Side: EndRight(2)->StartRight(3) -> TopStartRight(9)->TopEndRight(8)
+    indices.push(2, 3, 9);
+    indices.push(2, 9, 8);
 
-    // Right side (2-3-7-6)
-    indices.push(2, 3, 7);
-    indices.push(2, 7, 6);
-
-    // Back side (3-0-4-7)
-    indices.push(3, 0, 4);
-    indices.push(3, 4, 7);
+    // Front/Back Caps (Start/End) - usually hidden but good to have for completeness if exposed
+    // Start Cap: StartRight(3)->StartCenter(4)->StartLeft(0) -> Top...
+    // End Cap: EndLeft(1)->EndCenter(5)->EndRight(2) -> Top...
+    // For now, we skip caps as they are internal to joints usually.
+    // If we see gaps at the vertical ends of walls, we might need them.
+    // But the "gap" reported is horizontal (empty floor/ceiling intersection).
 
     const vertexData = new VertexData();
     vertexData.positions = positions;
@@ -1140,8 +1188,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     vertexData.applyToMesh(mesh);
 
     // 얇은 그레이 윤곽선 추가 (도어 관련 세그먼트 제외)
-    // skipTopFace=true: 도어 개구부 하단 세그먼트
-    // skipBottomFace=true: 인방 (도어 위)
     if (!skipTopFace && !skipBottomFace) {
       mesh.enableEdgesRendering();
       mesh.edgesWidth = 1.0; // 얇은 선
@@ -1572,8 +1618,19 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     }
 
     // Create point lookup map
-    const pointMap = new Map();
-    points.forEach((p) => pointMap.set(p.id, p));
+    const pointMap = new Map<string, Point>();
+    points.forEach((p: Point) => pointMap.set(p.id, p));
+
+    // Split walls at T-junctions and X-junctions (same as 2D)
+    const wallSplitService = new WallSplitService();
+    const splitResult = wallSplitService.splitWallsAtTJunctions(walls as Wall[], points as Point[]);
+    const splitWalls = splitResult.walls;
+    const allPoints = [...points, ...splitResult.newPoints];
+
+    // Update pointMap with new points
+    splitResult.newPoints.forEach((p: Point) => pointMap.set(p.id, p));
+
+    console.log('[Babylon3DCanvas] Wall splitting:', walls.length, 'walls ->', splitWalls.length, 'walls,', splitResult.newPoints.length, 'new points');
 
     // Get shadow generator
     const sunLight = scene.getLightByName('sunLight') as DirectionalLight;
@@ -1626,10 +1683,10 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     if (USE_CSG_WALLS) {
       console.log('[Babylon3DCanvas] Using CSG-based wall system');
 
-      // Create all walls with CSG trimming
+      // Create all walls with CSG trimming (using split walls)
       const csgWalls = createCSGWalls(
-        walls as Wall[],
-        points, // Use points array from floorplanData
+        splitWalls as Wall[],
+        allPoints, // Use all points including new intersection points
         2400, // Default wall height
         scene,
         { x: centerX, z: centerZ }
@@ -1657,20 +1714,20 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     } else {
       console.log('[Babylon3DCanvas] Using Miter-based wall system');
 
-      // Create walls with proper miter joints using WallMiterUtils
-      walls.forEach((wall, wallIndex) => {
+      // Create walls with proper miter joints using WallMiterUtils (using split walls)
+      splitWalls.forEach((wall, wallIndex) => {
         const startPoint = pointMap.get(wall.startPointId);
         const endPoint = pointMap.get(wall.endPointId);
         if (!startPoint || !endPoint) return;
 
         const wallHeightMM = wall.height || 2400;
 
-        // Find doors and windows on this wall
+        // Find doors and windows on this wall (check original wall IDs too)
         const wallDoors = doors.filter((door: any) => door.wallId === wall.id);
         const wallWindows = windows.filter((window: any) => window.wallId === wall.id);
 
         // Calculate miter joint corners (same algorithm as 2D)
-        const corners = calculateWallCorners(wall as Wall, walls as Wall[], pointMap);
+        const corners = calculateWallCorners(wall as Wall, splitWalls as Wall[], pointMap);
 
         if (!corners) {
           console.error('[Babylon3DCanvas] Failed to calculate corners for wall:', wall.id);
@@ -1684,7 +1741,12 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           centerX,
           centerZ,
           `wall_${wallIndex}`,
-          scene
+          scene,
+          0,
+          false,
+          false,
+          startPoint,
+          endPoint
         );
 
         // Assign material immediately (crucial for display styles)

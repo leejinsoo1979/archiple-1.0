@@ -44,7 +44,7 @@ export class RoomDetectionService {
       const cyclePoints = cycle.map(id => pointMap.get(id)!);
       const area = Math.abs(this.calculateSignedArea(cyclePoints));
 
-      const MIN_AREA = 0.5; // 0.5 m²
+      const MIN_AREA = 0.1; // 0.1 m² (lowered to support small intersections/closets)
 
       if (area < MIN_AREA) {
         console.log(`[RoomDetection] Cycle rejected: area ${area.toFixed(2)} m² < MIN_AREA ${MIN_AREA} m²`);

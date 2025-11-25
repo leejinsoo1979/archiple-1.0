@@ -218,6 +218,12 @@ export class RoomLayer extends BaseLayer {
   private renderWallDimensions(ctx: CanvasRenderingContext2D, points: Point[], roomId: string): void {
     if (points.length < 3) return;
 
+    // Calculate room bounding box for responsive sizing
+    const roomSize = this.calculateRoomMinDimension(points);
+    const fontSize = this.getResponsiveFontSize(roomSize, 'dimension');
+    const strokeWidth = Math.max(2, fontSize * 0.12);
+    const textOffset = fontSize * 1.0;
+
     // Calculate signed area to determine winding order
     let signedArea = 0;
     for (let i = 0; i < points.length; i++) {
@@ -227,7 +233,7 @@ export class RoomLayer extends BaseLayer {
     const isCW = signedArea > 0; // In Canvas coords (Y-down), Positive area = CW
 
     ctx.save();
-    ctx.font = 'bold 150px Arial';
+    ctx.font = `bold ${fontSize}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle'; // Center vertically on the offset line
 
@@ -240,8 +246,8 @@ export class RoomLayer extends BaseLayer {
       const dy = p2.y - p1.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      // Skip very short segments
-      if (dist < 200) continue;
+      // Skip very short segments (responsive threshold)
+      if (dist < fontSize * 2) continue;
 
       // Midpoint
       const midX = (p1.x + p2.x) / 2;
@@ -264,10 +270,9 @@ export class RoomLayer extends BaseLayer {
       nx /= len;
       ny /= len;
 
-      // Text Position: Midpoint + Normal * Offset
-      const offset = 150; // 150mm inward offset
-      const textX = midX + nx * offset;
-      const textY = midY + ny * offset;
+      // Text Position: Midpoint + Normal * Offset (responsive)
+      const textX = midX + nx * textOffset;
+      const textY = midY + ny * textOffset;
 
       // Calculate Angle
       let angle = Math.atan2(dy, dx);
@@ -288,7 +293,7 @@ export class RoomLayer extends BaseLayer {
       // Measure text for click detection
       const metrics = ctx.measureText(text);
       const textWidth = metrics.width;
-      const textHeight = 150; // Font size
+      const textHeight = fontSize;
 
       // Store label position for click detection (in rotated coordinates)
       this.dimensionLabels.push({
@@ -305,7 +310,7 @@ export class RoomLayer extends BaseLayer {
 
       // Outline
       ctx.strokeStyle = 'white';
-      ctx.lineWidth = 20;
+      ctx.lineWidth = strokeWidth;
       ctx.strokeText(text, 0, 0);
 
       // Fill
@@ -319,23 +324,29 @@ export class RoomLayer extends BaseLayer {
   }
 
   private renderLabel(ctx: CanvasRenderingContext2D, room: Room, roomPoints: Point[], floorPoints: Point[]): void {
-    // Room points are already at the wall inner edge, use them directly
-    const centroid = this.calculateCentroid(roomPoints);
+    // Use bounding box center (where diagonals cross) for accurate center positioning
+    const center = this.calculateBoundingBoxCenter(floorPoints);
+
+    // Calculate responsive font size based on room size
+    const roomSize = this.calculateRoomMinDimension(floorPoints);
+    const fontSize = this.getResponsiveFontSize(roomSize, 'label');
+    const strokeWidth = Math.max(2, fontSize * 0.1);
+    const lineSpacing = fontSize * 1.2;
 
     ctx.save();
-    ctx.font = this.config.labelFont;
+    ctx.font = `bold ${fontSize}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // Room name
+    // Room name - exactly at center (bounding box center)
     if (room.name) {
       // Draw text with white outline for better visibility
       ctx.strokeStyle = 'white';
-      ctx.lineWidth = 20;
-      ctx.strokeText(room.name, centroid.x, centroid.y - 130);
+      ctx.lineWidth = strokeWidth;
+      ctx.strokeText(room.name, center.x, center.y);
 
       ctx.fillStyle = this.config.labelColor;
-      ctx.fillText(room.name, centroid.x, centroid.y - 130);
+      ctx.fillText(room.name, center.x, center.y);
     }
 
     // Calculate actual floor area from inset polygon (floorPoints)
@@ -343,17 +354,17 @@ export class RoomLayer extends BaseLayer {
     const areaMm2 = Math.abs(this.calculatePolygonArea(floorPoints));
     const areaM2 = areaMm2 / 1000000;
 
-    // Room area with better visibility
+    // Room area with better visibility - below room name
     const areaText = `${areaM2.toFixed(2)} m²`;
 
     // Draw white outline
     ctx.strokeStyle = 'white';
-    ctx.lineWidth = 20;
-    ctx.strokeText(areaText, centroid.x, centroid.y + 130);
+    ctx.lineWidth = strokeWidth;
+    ctx.strokeText(areaText, center.x, center.y + lineSpacing);
 
     // Draw main text
     ctx.fillStyle = this.config.labelColor;
-    ctx.fillText(areaText, centroid.x, centroid.y + 130);
+    ctx.fillText(areaText, center.x, center.y + lineSpacing);
 
     ctx.restore();
   }
@@ -369,6 +380,28 @@ export class RoomLayer extends BaseLayer {
     };
   }
 
+  /**
+   * Calculate the center of the bounding box (where diagonals cross)
+   */
+  private calculateBoundingBoxCenter(points: Point[]): { x: number; y: number } {
+    if (points.length === 0) return { x: 0, y: 0 };
+
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+
+    for (const p of points) {
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
+
+    return {
+      x: (minX + maxX) / 2,
+      y: (minY + maxY) / 2,
+    };
+  }
+
   private calculatePolygonArea(points: Point[]): number {
     if (points.length < 3) return 0;
     let area = 0;
@@ -378,6 +411,46 @@ export class RoomLayer extends BaseLayer {
       area -= points[j].x * points[i].y;
     }
     return area / 2;
+  }
+
+  /**
+   * Calculate the minimum dimension of a room (smallest of width or height)
+   * Used for responsive font sizing
+   */
+  private calculateRoomMinDimension(points: Point[]): number {
+    if (points.length < 3) return 1000; // Default 1m
+
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+
+    for (const p of points) {
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
+
+    const width = maxX - minX;
+    const height = maxY - minY;
+
+    return Math.min(width, height);
+  }
+
+  /**
+   * Get responsive font size based on room dimension
+   * @param roomMinDimension - Minimum dimension of the room in mm
+   * @param type - 'label' for room name/area, 'dimension' for wall dimensions
+   */
+  private getResponsiveFontSize(roomMinDimension: number, type: 'label' | 'dimension'): number {
+    // Base ratio: font should be about 4-5% of room's minimum dimension
+    // Clamp between reasonable min/max values
+
+    const ratio = type === 'label' ? 0.05 : 0.04;
+    const minSize = type === 'label' ? 50 : 40;
+    const maxSize = type === 'label' ? 150 : 120;
+
+    const calculatedSize = roomMinDimension * ratio;
+    return Math.max(minSize, Math.min(maxSize, calculatedSize));
   }
 
   /**

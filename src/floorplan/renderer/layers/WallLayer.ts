@@ -163,9 +163,7 @@ export class WallLayer extends BaseLayer {
     const segmentMap = new Map<string, RenderSegment[]>();
 
     segments.forEach(seg => {
-      if (seg.isHole) return; // Don't connect to holes? Actually we might need them for continuity, but for rendering corners, holes don't contribute geometry.
-      // Wait, if a wall connects to a door edge, we need to know.
-      // But usually walls connect to the main wall points.
+      if (seg.isHole) return;
 
       const add = (pid: string) => {
         if (!segmentMap.has(pid)) segmentMap.set(pid, []);
@@ -174,6 +172,7 @@ export class WallLayer extends BaseLayer {
       add(seg.start.id);
       add(seg.end.id);
     });
+
 
     // Render segments
     segments.forEach(segment => {
@@ -211,7 +210,7 @@ export class WallLayer extends BaseLayer {
   private generateRenderSegments(): RenderSegment[] {
     const segments: RenderSegment[] = [];
 
-    // Helper to find points on a wall
+    // Helper to find points on a wall (only for door splitting, T-junction splitting is done by WallSplitService)
     const getPointsOnWall = (wall: Wall): { point: Point, t: number, isEndpoint: boolean }[] => {
       const points: { point: Point, t: number, isEndpoint: boolean }[] = [];
       const start = this.points.get(wall.startPointId)!;
@@ -225,38 +224,8 @@ export class WallLayer extends BaseLayer {
       points.push({ point: start, t: 0, isEndpoint: true });
       points.push({ point: end, t: 1, isEndpoint: true });
 
-      // Find other wall endpoints that lie on this wall
-      this.walls.forEach(otherWall => {
-        if (otherWall.id === wall.id) return;
-
-        const checkPoint = (pid: string) => {
-          const p = this.points.get(pid);
-          if (!p) return;
-
-          // Skip if this point is already one of our endpoints
-          if (p.id === wall.startPointId || p.id === wall.endPointId) return;
-
-          const pVec = Vector2.from(p);
-          const toP = pVec.subtract(startVec);
-
-          // Project p onto wall line
-          const t = toP.dot(wallVec) / wallLengthSq;
-
-          // Check if on segment (with small epsilon)
-          if (t > 0.001 && t < 0.999) {
-            // Check distance from line to ensure it's actually on the wall
-            const projected = startVec.add(wallVec.multiply(t));
-            const dist = pVec.distanceTo(projected);
-
-            if (dist < 10) { // 10mm tolerance
-              points.push({ point: p, t, isEndpoint: false });
-            }
-          }
-        };
-
-        checkPoint(otherWall.startPointId);
-        checkPoint(otherWall.endPointId);
-      });
+      // NOTE: T-junction and X-junction splitting is now handled by WallSplitService
+      // This function only handles door openings
 
       // Add door endpoints
       this.doors.forEach(door => {
@@ -540,13 +509,6 @@ export class WallLayer extends BaseLayer {
       };
     }
 
-    // Find neighbors (cyclic)
-    const prevIndex = (currentIndex - 1 + connectedSegments.length) % connectedSegments.length;
-    const nextIndex = (currentIndex + 1) % connectedSegments.length;
-
-    const prevSeg = connectedSegments[prevIndex];
-    const nextSeg = connectedSegments[nextIndex];
-
     // If Current is the ONLY segment (endpoint), corners are just perpendicular.
     if (connectedSegments.length === 1) {
       const normal = new Vector2(-currentDir.y, currentDir.x);
@@ -556,20 +518,76 @@ export class WallLayer extends BaseLayer {
       };
     }
 
-    // Calculate miter vectors
-    // Left side interacts with Next segment
-    // We pass the vectors pointing AWAY from the junction.
-    // calculateMiterVector expects (Dir1, Dir2) where Dir1 is Current and Dir2 is Next?
-    // No, calculateMiterVector expects two vectors and finds the intersection of their "left" and "right" offsets.
-    // My previous analysis:
-    // "Left" of Current meets "Right" of Next.
-    // calculateMiterVector(current, next) finds intersection of Left(current) and Right(next).
-    const leftMiter = this.calculateMiterVector(currentDir, nextSeg.vec, halfThickness);
+    // Filter out duplicate/overlapping segments (same angle)
+    // We want to keep the 'current' segment if it exists in a group of duplicates
+    const uniqueSegments: typeof connectedSegments = [];
 
-    // Right side interacts with Prev segment
-    // "Right" of Current meets "Left" of Prev.
-    // So we want intersection of Left(Prev) and Right(Current).
-    // This is calculateMiterVector(prev, current).
+    // Group by angle (tolerance 10 degrees ~ 0.175 rad)
+    const ANGLE_TOLERANCE = 0.175;
+
+    for (let i = 0; i < connectedSegments.length; i++) {
+      const seg = connectedSegments[i];
+
+      // Check if we already have a segment with this angle
+      const existingIdx = uniqueSegments.findIndex(s => {
+        let diff = Math.abs(s.angle - seg.angle);
+        if (diff > Math.PI) diff = 2 * Math.PI - diff;
+        return diff < ANGLE_TOLERANCE;
+      });
+
+      if (existingIdx !== -1) {
+        // If we found a duplicate, prefer the one that is 'current'
+        if (seg.isCurrent) {
+          uniqueSegments[existingIdx] = seg;
+        }
+        // Otherwise keep the existing one
+      } else {
+        uniqueSegments.push(seg);
+      }
+    }
+
+    // Replace connectedSegments with filtered list
+    // We need to re-sort and re-find current index
+    uniqueSegments.sort((a, b) => a.angle - b.angle);
+
+    // Re-find current segment index in the filtered list
+    const newCurrentIndex = uniqueSegments.findIndex(s => s.isCurrent);
+
+    if (newCurrentIndex === -1) {
+      // This shouldn't happen if we preserved isCurrent correctly, 
+      // but as a fallback if current was somehow filtered out (unlikely with logic above)
+      // or if it wasn't in the original list:
+      const normal = new Vector2(-currentDir.y, currentDir.x);
+      return {
+        left: currentStart.add(normal.multiply(halfThickness)),
+        right: currentStart.subtract(normal.multiply(halfThickness))
+      };
+    }
+
+    const filteredSegments = uniqueSegments;
+    const numSegments = filteredSegments.length;
+
+    // Find neighbors (cyclic)
+    const prevIndex = (newCurrentIndex - 1 + numSegments) % numSegments;
+    const nextIndex = (newCurrentIndex + 1) % numSegments;
+
+    const prevSeg = filteredSegments[prevIndex];
+    const nextSeg = filteredSegments[nextIndex];
+
+    // If Current is the ONLY segment (endpoint), corners are just perpendicular.
+    if (numSegments === 1) {
+      const normal = new Vector2(-currentDir.y, currentDir.x);
+      return {
+        left: currentStart.add(normal.multiply(halfThickness)),
+        right: currentStart.subtract(normal.multiply(halfThickness))
+      };
+    }
+
+    // X-junction detection removed to allow mitered joints (X shape)
+    // We rely on miter calculation and clamping to handle 4-way intersections safely.
+
+    // Calculate miter vectors
+    const leftMiter = this.calculateMiterVector(currentDir, nextSeg.vec, halfThickness);
     const rightMiter = this.calculateMiterVector(prevSeg.vec, currentDir, halfThickness);
 
     return {
@@ -580,74 +598,51 @@ export class WallLayer extends BaseLayer {
 
   private calculateMiterVector(dir1: Vector2, dir2: Vector2, offset: number): Vector2 {
     // Returns the vector from the junction point to the intersection of the two offset lines.
-    // Line 1: parallel to dir1, at distance 'offset' to the LEFT (rotated 90 deg CCW).
-    // Line 2: parallel to dir2, at distance 'offset' to the RIGHT (rotated -90 deg)?
-
-    // Wait, let's standardize.
-    // We are looking for the corner between Dir1 and Dir2.
-    // In the sorted list: Dir1 -> Dir2.
-    // This is the gap "Left" of Dir1 and "Right" of Dir2.
-    // So we want intersection of:
-    // L1: Left of Dir1.
-    // L2: Right of Dir2.
 
     const normal1 = new Vector2(-dir1.y, dir1.x); // Left of Dir1
     const normal2 = new Vector2(dir2.y, -dir2.x); // Right of Dir2 (CW rotation)
 
-    // If walls are collinear (180 deg), normals are opposite.
-    // If walls are same (0 deg), normals are opposite? No.
-
     // Check angle between walls
     const dot = dir1.dot(dir2);
-    if (dot < -0.99) {
-      // Collinear, opposite directions (End of one, Start of another).
-      // This is a straight wall joint.
-      // Miter is just the normal.
+
+    // Parallel or nearly parallel (same direction)
+    if (dot > 0.99) {
+      // Should have been filtered, but if not, return normal
       return normal1.multiply(offset);
     }
 
-    // Line 1 point: P + normal1 * offset
-    // Line 2 point: P + normal2 * offset
-    // We want intersection of these two lines.
-    // L1: P + n1*w + t*d1
-    // L2: P + n2*w + u*d2
-    // n1*w + t*d1 = n2*w + u*d2
-    // t*d1 - u*d2 = (n2 - n1)*w
-
-    // Solve for t.
-    // Cross product in 2D is determinant.
-    // det(d1, -d2) = -d1.x*d2.y + d1.y*d2.x = -(d1 x d2)
+    // Collinear, opposite directions (End of one, Start of another) -> Straight joint
+    if (dot < -0.99) {
+      return normal1.multiply(offset);
+    }
 
     const det = dir2.x * dir1.y - dir2.y * dir1.x; // Cross product (z component)
 
-    if (Math.abs(det) < 0.001) {
-      // Parallel lines? Should be caught by dot check, but maybe close.
+    if (Math.abs(det) < 0.01) {
+      // Nearly parallel, fallback to normal
       return normal1.multiply(offset);
     }
 
-    // Solve system:
-    // t * d1.x - u * d2.x = (n2.x - n1.x) * offset
-    // t * d1.y - u * d2.y = (n2.y - n1.y) * offset
-
-    // Using Cramer's rule or simple substitution.
-    // Vector delta = (n2 - n1) * offset
-    // t * d1 - u * d2 = delta
-    // Cross both sides with d2:
-    // t * (d1 x d2) = delta x d2
-    // t = (delta x d2) / (d1 x d2)
-
+    // Solve system for intersection
     const nDiff = normal2.subtract(normal1).multiply(offset);
     const num = nDiff.x * dir2.y - nDiff.y * dir2.x;
     const den = dir1.x * dir2.y - dir1.y * dir2.x;
-
     const t = num / den;
 
     // Result vector is normal1*offset + dir1*t
-    return normal1.multiply(offset).add(dir1.multiply(t));
+    const result = normal1.multiply(offset).add(dir1.multiply(t));
+
+    // CLAMP: If miter is too long, it means the angle is very sharp.
+    // Cap it to avoid spikes.
+    const maxLen = offset * 6; // Allow some extension but not infinite
+    if (result.lengthSquared() > maxLen * maxLen) {
+      // Fallback: just use the normal (flat end) or a capped miter.
+      // For now, let's return the normal to be safe and avoid the spike entirely.
+      return normal1.multiply(offset);
+    }
+
+    return result;
   }
-
-
-
 
 
   private renderPreviewWall(ctx: CanvasRenderingContext2D, start: Point, end: Point): void {
@@ -667,7 +662,8 @@ export class WallLayer extends BaseLayer {
     const p3 = e.subtract(normal.multiply(halfThickness));
     const p4 = s.subtract(normal.multiply(halfThickness));
 
-    // Use dark gray with no transparency
+    // Use dark gray with semi-transparency to match existing walls
+    ctx.globalAlpha = 0.6;
     ctx.fillStyle = '#505050';
 
     ctx.beginPath();

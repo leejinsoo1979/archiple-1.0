@@ -310,8 +310,33 @@ function calculateJointCornersAt(
   // Sort by angle
   connectedWalls.sort((a, b) => a.angle - b.angle);
 
+  // Filter out duplicate/overlapping segments (same angle)
+  const uniqueWalls: typeof connectedWalls = [];
+  const ANGLE_TOLERANCE = 0.2; // ~11.5 degrees, relaxed to catch slightly misaligned duplicates
+
+  for (let i = 0; i < connectedWalls.length; i++) {
+    const w = connectedWalls[i];
+    const existingIdx = uniqueWalls.findIndex(s => {
+      let diff = Math.abs(s.angle - w.angle);
+      if (diff > Math.PI) diff = 2 * Math.PI - diff;
+      return diff < ANGLE_TOLERANCE;
+    });
+
+    if (existingIdx !== -1) {
+      if (w.isCurrent) {
+        uniqueWalls[existingIdx] = w;
+      }
+    } else {
+      uniqueWalls.push(w);
+    }
+  }
+
+  // Re-sort and find current
+  uniqueWalls.sort((a, b) => a.angle - b.angle);
+  const filteredWalls = uniqueWalls;
+
   // Find current wall index
-  const currentIndex = connectedWalls.findIndex(w => w.isCurrent);
+  const currentIndex = filteredWalls.findIndex(w => w.isCurrent);
   if (currentIndex === -1) {
     const normal = { x: -currentDir2D.y, y: currentDir2D.x }; // Left normal in 2D
     return {
@@ -327,7 +352,7 @@ function calculateJointCornersAt(
   }
 
   // Only one wall (endpoint)
-  if (connectedWalls.length === 1) {
+  if (filteredWalls.length === 1) {
     const normal = { x: -currentDir2D.y, y: currentDir2D.x }; // Left normal in 2D
     return {
       left: {
@@ -342,60 +367,19 @@ function calculateJointCornersAt(
   }
 
   // Find neighbors (cyclic)
-  const prevIndex = (currentIndex - 1 + connectedWalls.length) % connectedWalls.length;
-  const nextIndex = (currentIndex + 1) % connectedWalls.length;
+  const prevIndex = (currentIndex - 1 + filteredWalls.length) % filteredWalls.length;
+  const nextIndex = (currentIndex + 1) % filteredWalls.length;
 
-  const prevWall = connectedWalls[prevIndex];
-  const nextWall = connectedWalls[nextIndex];
+  const prevWall = filteredWalls[prevIndex];
+  const nextWall = filteredWalls[nextIndex];
 
   const prevDir2D = prevWall.dir;
   const nextDir2D = nextWall.dir;
 
-  // Check if this is a T-junction (3 walls meeting)
-  const prevDot = prevDir2D.x * nextDir2D.x + prevDir2D.y * nextDir2D.y;
-  const isMainWallCollinear = prevDot < -0.9; // prev and next are ~180 degrees apart
+  // T-junction and X-junction detection removed to allow mitered joints
+  // We rely on miter calculation and clamping to handle all intersections safely.
 
-  if (isMainWallCollinear) {
-    // Current wall is the main wall in a T-junction - keep it straight (no miter)
-    const normal = { x: -currentDir2D.y, y: currentDir2D.x };
-    return {
-      left: {
-        x: junctionPoint.x + normal.x * halfThickness,
-        z: junctionPoint.y + normal.y * halfThickness
-      },
-      right: {
-        x: junctionPoint.x - normal.x * halfThickness,
-        z: junctionPoint.y - normal.y * halfThickness
-      }
-    };
-  }
-
-  // Check if current wall is the branch wall in a T-junction
-  // Branch wall: prev and current are collinear, OR next and current are collinear
-  const prevCurrentDot = prevDir2D.x * currentDir2D.x + prevDir2D.y * currentDir2D.y;
-  const nextCurrentDot = nextDir2D.x * currentDir2D.x + nextDir2D.y * currentDir2D.y;
-  const isBranchWall = prevCurrentDot < -0.9 || nextCurrentDot < -0.9;
-
-  if (isBranchWall) {
-    // Branch wall in T-junction - extend only to centerline (Y-shape, not V-shape)
-    // The branch wall should only go halfway into the main wall
-    const normal = { x: -currentDir2D.y, y: currentDir2D.x };
-
-    // For branch wall, we limit the miter to only go to the centerline
-    // This creates a Y-shape where the branch only reaches the center of the main wall
-    return {
-      left: {
-        x: junctionPoint.x + normal.x * halfThickness,
-        z: junctionPoint.y + normal.y * halfThickness
-      },
-      right: {
-        x: junctionPoint.x - normal.x * halfThickness,
-        z: junctionPoint.y - normal.y * halfThickness
-      }
-    };
-  }
-
-  // Regular corner junction - calculate miter intersections
+  // Calculate miter intersections for all junction types
   const leftMiter = calculateMiterVector(currentDir2D, nextDir2D, halfThickness);
   const rightMiter = calculateMiterVector(prevDir2D, currentDir2D, halfThickness);
 
@@ -429,9 +413,14 @@ function calculateMiterVector(
     return { x: normal1.x * offset, y: normal1.y * offset };
   }
 
+  // Check if parallel (same direction)
+  if (dot > 0.99) {
+    return { x: normal1.x * offset, y: normal1.y * offset };
+  }
+
   // Calculate intersection
   const det = dir1.x * dir2.y - dir1.y * dir2.x;
-  if (Math.abs(det) < 0.001) {
+  if (Math.abs(det) < 0.01) {
     return { x: normal1.x * offset, y: normal1.y * offset };
   }
 
@@ -444,10 +433,20 @@ function calculateMiterVector(
   const den = dir1.x * dir2.y - dir1.y * dir2.x;
   const t = num / den;
 
-  return {
+  const result = {
     x: normal1.x * offset + dir1.x * t,
     y: normal1.y * offset + dir1.y * t
   };
+
+  // CLAMP: If miter is too long, it means the angle is very sharp.
+  // Cap it to avoid spikes.
+  const maxLen = offset * 6;
+  const lenSq = result.x * result.x + result.y * result.y;
+  if (lenSq > maxLen * maxLen) {
+    return { x: normal1.x * offset, y: normal1.y * offset };
+  }
+
+  return result;
 }
 
 /**
