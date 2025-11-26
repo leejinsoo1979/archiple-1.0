@@ -109,6 +109,75 @@ export class BlueprintObjectManager {
     }
   }
 
+  /**
+   * Merge sourcePoint into targetPoint
+   * All walls connected to source will be reconnected to target
+   * Source point will be removed
+   */
+  mergePoints(sourceId: string, targetId: string): boolean {
+    const corners = this.floorplan.getCorners();
+    const source = corners.find(c => c.id === sourceId);
+    const target = corners.find(c => c.id === targetId);
+
+    if (!source || !target || source === target) {
+      console.log('[BlueprintObjectManager] Cannot merge points:', { sourceId, targetId });
+      return false;
+    }
+
+    console.log('[BlueprintObjectManager] Merging point', sourceId, 'into', targetId);
+
+    // Get all walls connected to source
+    const wallStarts = [...source.getWallStarts()];
+    const wallEnds = [...source.getWallEnds()];
+
+    // Reconnect walls that start from source to start from target
+    wallStarts.forEach(wall => {
+      // Skip if this would create a zero-length wall (wall to itself)
+      if (wall.getEnd() === target) {
+        wall.remove();
+        return;
+      }
+      // Skip if there's already a wall between target and wall.end (check both directions)
+      const existingWall1 = target.wallTo(wall.getEnd());
+      const existingWall2 = target.wallFrom(wall.getEnd());
+      if (existingWall1 || existingWall2) {
+        wall.remove();
+        return;
+      }
+      wall.setStart(target);
+    });
+
+    // Reconnect walls that end at source to end at target
+    wallEnds.forEach(wall => {
+      // Skip if this would create a zero-length wall
+      if (wall.getStart() === target) {
+        wall.remove();
+        return;
+      }
+      // Skip if there's already a wall between wall.start and target (check both directions)
+      const existingWall1 = wall.getStart().wallTo(target);
+      const existingWall2 = wall.getStart().wallFrom(target);
+      if (existingWall1 || existingWall2) {
+        wall.remove();
+        return;
+      }
+      wall.setEnd(target);
+    });
+
+    // Remove the source corner (it should have no walls now)
+    source.remove();
+
+    // Update floorplan to recalculate rooms
+    this.floorplan.update();
+
+    eventBus.emit(FloorEvents.POINT_REMOVED, {
+      point: { id: sourceId, x: source.x, y: source.y }
+    });
+
+    console.log('[BlueprintObjectManager] Points merged successfully');
+    return true;
+  }
+
   // Wall management
   addWall(wall: Wall): void {
     console.log('[BlueprintObjectManager] addWall called:', wall);
@@ -242,9 +311,14 @@ export class BlueprintObjectManager {
     */
   }
 
-  updateRoom(_id: string, _updates: Partial<Room>): void {
-    // Rooms are managed by blueprint, can't update directly
-    console.log('[BlueprintObjectManager] Rooms are auto-managed by blueprint');
+  updateRoom(id: string, updates: Partial<Room>): void {
+    // Find and update room in detectedRooms
+    const room = this.detectedRooms.find(r => r.id === id);
+    if (room) {
+      Object.assign(room, updates);
+      console.log('[BlueprintObjectManager] Room updated:', id, updates);
+      eventBus.emit(FloorEvents.ROOM_DETECTED, { rooms: this.detectedRooms });
+    }
   }
 
   removeRoom(id: string): void {
@@ -335,5 +409,98 @@ export class BlueprintObjectManager {
       doors: this.doors.size,
       windows: this.windows.size,
     };
+  }
+
+  /**
+   * Remove duplicate/overlapping walls
+   * Walls are duplicates if they connect the same two points (in either direction)
+   */
+  removeDuplicateWalls(): number {
+    const walls = this.floorplan.getWalls();
+    const seen = new Map<string, typeof walls[0]>();
+    const toRemove: typeof walls[0][] = [];
+
+    walls.forEach(wall => {
+      const startId = wall.getStart().id;
+      const endId = wall.getEnd().id;
+
+      // Create a canonical key (sorted to handle both directions)
+      const key = [startId, endId].sort().join('-');
+
+      if (seen.has(key)) {
+        // Duplicate found - mark for removal
+        toRemove.push(wall);
+        console.log('[BlueprintObjectManager] Found duplicate wall:', wall.id, 'between', startId, 'and', endId);
+      } else {
+        seen.set(key, wall);
+      }
+    });
+
+    // Remove duplicates
+    toRemove.forEach(wall => {
+      wall.remove();
+      eventBus.emit(FloorEvents.WALL_REMOVED, { wallId: wall.id });
+    });
+
+    if (toRemove.length > 0) {
+      console.log('[BlueprintObjectManager] Removed', toRemove.length, 'duplicate walls');
+      this.floorplan.update();
+    }
+
+    return toRemove.length;
+  }
+
+  /**
+   * Remove duplicate/overlapping points and merge walls
+   * Points are duplicates if they are at the same location (within tolerance)
+   */
+  removeDuplicatePoints(tolerance: number = 150): number {
+    const corners = this.floorplan.getCorners();
+    const toMerge: Array<{ source: typeof corners[0], target: typeof corners[0] }> = [];
+    const processed = new Set<string>();
+
+    // Find duplicate points
+    for (let i = 0; i < corners.length; i++) {
+      if (processed.has(corners[i].id)) continue;
+
+      for (let j = i + 1; j < corners.length; j++) {
+        if (processed.has(corners[j].id)) continue;
+
+        const dx = corners[i].x - corners[j].x;
+        const dy = corners[i].y - corners[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < tolerance) {
+          console.log('[BlueprintObjectManager] Found duplicate point:', corners[j].id, 'near', corners[i].id, 'distance:', dist.toFixed(2));
+          toMerge.push({ source: corners[j], target: corners[i] });
+          processed.add(corners[j].id);
+        }
+      }
+    }
+
+    // Merge duplicates
+    let mergedCount = 0;
+    toMerge.forEach(({ source, target }) => {
+      if (this.mergePoints(source.id, target.id)) {
+        mergedCount++;
+      }
+    });
+
+    if (mergedCount > 0) {
+      console.log('[BlueprintObjectManager] Merged', mergedCount, 'duplicate points');
+    }
+
+    return mergedCount;
+  }
+
+  /**
+   * Clean up all duplicates (points and walls)
+   */
+  cleanupDuplicates(): { points: number, walls: number } {
+    console.log('[BlueprintObjectManager] Starting cleanup...');
+    const points = this.removeDuplicatePoints();
+    const walls = this.removeDuplicateWalls();
+    console.log('[BlueprintObjectManager] Cleanup complete:', points, 'points merged,', walls, 'walls removed');
+    return { points, walls };
   }
 }

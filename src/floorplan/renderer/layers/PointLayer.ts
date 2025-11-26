@@ -73,11 +73,14 @@ export class PointLayer extends BaseLayer {
       this.renderSnapIndicator(ctx, this.snapPoint);
     }
 
-    // Render all points in screen space
+    // Render only selected or hovered points (not all points)
     this.points.forEach((point) => {
       const isSelected = this.selectedPointIds.has(point.id);
       const isHovered = point.id === this.hoveredPointId;
-      this.renderPoint(ctx, point, isSelected, isHovered);
+      // Only render if selected or hovered
+      if (isSelected || isHovered) {
+        this.renderPoint(ctx, point, isSelected, isHovered);
+      }
     });
 
     this.resetOpacity(ctx);

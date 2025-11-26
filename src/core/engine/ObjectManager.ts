@@ -45,6 +45,44 @@ export class ObjectManager {
   }
 
   /**
+   * Merge sourcePoint into targetPoint
+   * All walls connected to source will be reconnected to target
+   * Source point will be removed
+   */
+  mergePoints(sourceId: string, targetId: string): boolean {
+    const source = this.points.get(sourceId);
+    const target = this.points.get(targetId);
+
+    if (!source || !target || source === target) {
+      return false;
+    }
+
+    // Update all walls connected to source to connect to target instead
+    this.getAllWalls().forEach(wall => {
+      if (wall.startPointId === sourceId) {
+        // Check for zero-length or duplicate wall
+        if (wall.endPointId === targetId) {
+          this.removeWall(wall.id);
+        } else {
+          this.updateWall(wall.id, { startPointId: targetId });
+        }
+      }
+      if (wall.endPointId === sourceId) {
+        if (wall.startPointId === targetId) {
+          this.removeWall(wall.id);
+        } else {
+          this.updateWall(wall.id, { endPointId: targetId });
+        }
+      }
+    });
+
+    // Remove source point
+    this.removePoint(sourceId);
+
+    return true;
+  }
+
+  /**
    * Wall management
    */
   addWall(wall: Wall): void {

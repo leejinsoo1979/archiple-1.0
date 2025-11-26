@@ -1604,8 +1604,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       const roomSize = Math.max(planMetrics.extentX, planMetrics.extentZ);
       const optimalRadius = roomSize * 1.5; // 1.5x room size for good view
 
-      const minRadius = Math.max(0.5, roomSize * 0.8);
-      const maxRadius = Math.max(minRadius * 5, roomSize * 3);
+      const minRadius = 0.5; // Allow close zoom regardless of room size
+      const maxRadius = Math.max(10, roomSize * 3);
       arcCamera.lowerRadiusLimit = minRadius;
       arcCamera.upperRadiusLimit = maxRadius;
       arcCamera.radius = optimalRadius;
@@ -2686,7 +2686,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       character.isVisible = true;
 
       // Configure orbit controls
-      arcCamera.lowerRadiusLimit = 5;
+      arcCamera.lowerRadiusLimit = 0.5; // Allow close zoom
       arcCamera.upperRadiusLimit = 50;
       arcCamera.lowerBetaLimit = 0.1; // Prevent going under floor
       arcCamera.upperBetaLimit = Math.PI / 2.1; // Prevent going too vertical

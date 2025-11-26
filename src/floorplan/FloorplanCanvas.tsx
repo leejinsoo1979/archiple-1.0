@@ -48,6 +48,7 @@ interface FloorplanCanvasProps {
   imageOpacity?: number;
   renderStyle?: 'wireframe' | 'hidden-line' | 'solid' | 'realistic';
   showGrid?: boolean;
+  /** @deprecated Use inline dimension editing with double-click instead */
   onDimensionClick?: (data: string | { roomId: string; wallIndex: number; p1: any; p2: any; isCW: boolean }) => void;
   wallHeight?: number;
   wallThickness?: number;
@@ -70,7 +71,7 @@ const FloorplanCanvas = ({
   imageOpacity = 0.5,
   renderStyle = 'solid',
   showGrid = true,
-  onDimensionClick,
+  onDimensionClick: _onDimensionClick,
   wallHeight = 2400,
   wallThickness = 100,
   rulerVisible = false,
@@ -95,6 +96,27 @@ const FloorplanCanvas = ({
     y: number;
     doorId: string | null;
   }>({ visible: false, x: 0, y: 0, doorId: null });
+
+  // Inline dimension editing state
+  const [editingDimension, setEditingDimension] = useState<{
+    visible: boolean;
+    screenX: number;
+    screenY: number;
+    currentValue: number;
+    data: { roomId: string; wallIndex: number; p1: any; p2: any; isCW: boolean } | null;
+    angle: number;
+  } | null>(null);
+  const dimensionInputRef = useRef<HTMLInputElement>(null);
+
+  // Room name editing state
+  const [editingRoomName, setEditingRoomName] = useState<{
+    visible: boolean;
+    roomId: string;
+    screenX: number;
+    screenY: number;
+    currentName: string;
+  } | null>(null);
+  const roomNameInputRef = useRef<HTMLInputElement>(null);
 
   // Ruler label hitbox (in screen coordinates)
   const rulerLabelHitboxRef = useRef<{ x: number; y: number; width: number; height: number; distanceMm: number } | null>(null);
@@ -146,6 +168,9 @@ const FloorplanCanvas = ({
 
     const sceneManager = SceneManager.getInstance(config);
     sceneManagerRef.current = sceneManager;
+
+    // Expose for debugging
+    (window as unknown as { __sceneManager: typeof sceneManager }).__sceneManager = sceneManager;
 
     // 2. Resize canvas
     // Handle High DPI (Retina) displays
@@ -398,6 +423,12 @@ const FloorplanCanvas = ({
           }
         }
 
+        // Clean up duplicate points and walls before room detection
+        const cleanup = sceneManager.objectManager.cleanupDuplicates();
+        if (cleanup.points > 0 || cleanup.walls > 0) {
+          console.log('[FloorplanCanvas] Cleaned up', cleanup.points, 'duplicate points,', cleanup.walls, 'duplicate walls');
+        }
+
         // Re-detect rooms after wall split
         console.log('[FloorplanCanvas] Re-detecting rooms after wall split');
         const updatedWalls = sceneManager.objectManager.getAllWalls();
@@ -622,6 +653,15 @@ const FloorplanCanvas = ({
         points = sceneManager.objectManager.getAllPoints(); // Get updated points including new intersection points
       }
 
+      // Clean up any duplicate points and walls before room detection
+      const cleanup = sceneManager.objectManager.cleanupDuplicates();
+      if (cleanup.points > 0 || cleanup.walls > 0) {
+        console.log('[FloorplanCanvas] Cleaned up', cleanup.points, 'duplicate points,', cleanup.walls, 'duplicate walls');
+        // Refresh walls and points after cleanup
+        walls = sceneManager.objectManager.getAllWalls();
+        points = sceneManager.objectManager.getAllPoints();
+      }
+
       // Step 2: Detect rooms using split walls and all points (including intersection points)
       const rooms = roomDetectionService.detectRooms(walls, points);
 
@@ -663,6 +703,8 @@ const FloorplanCanvas = ({
         renderer.resize(container.clientWidth, container.clientHeight, dpr);
         // GridLayer needs physical dimensions because ctx.getTransform() returns physical pixel matrix
         gridLayer.setSize(container.clientWidth * dpr, container.clientHeight * dpr);
+        // WallLayer needs physical dimensions for offscreen canvas
+        wallLayer.setSize(container.clientWidth * dpr, container.clientHeight * dpr);
       }
 
       // Force initial render to ensure camera transform is applied and grid is visible
@@ -680,6 +722,8 @@ const FloorplanCanvas = ({
       renderer.resize(container.clientWidth, container.clientHeight, dpr);
       // GridLayer needs physical dimensions
       gridLayer.setSize(container.clientWidth * dpr, container.clientHeight * dpr);
+      // WallLayer needs physical dimensions
+      wallLayer.setSize(container.clientWidth * dpr, container.clientHeight * dpr);
       sceneManager.resizeCanvas(container.clientWidth, container.clientHeight);
     };
 
@@ -998,35 +1042,9 @@ const FloorplanCanvas = ({
         }
       }
 
-      // Check for dimension click (left-click)
-      if (event.button === 0 && onDimensionClick) {
-        const camera = renderer.getCamera();
-        const worldPos = camera.screenToWorld(screenX, screenY);
+      // Room label click handling moved to dblclick event
 
-        // First check room dimensions (interior dimensions)
-        const roomLayer = roomLayerRef.current;
-        if (roomLayer) {
-          const clickedRoomDimension = roomLayer.getDimensionAtPoint(worldPos.x, worldPos.y);
-          if (clickedRoomDimension) {
-            event.preventDefault();
-            event.stopPropagation();
-            onDimensionClick(clickedRoomDimension);
-            return;
-          }
-        }
-
-        // Then check wall dimensions (guide layer dimensions)
-        const wallLayer = wallLayerRef.current;
-        if (wallLayer) {
-          const clickedWallId = wallLayer.getDimensionAtPoint(screenX, screenY);
-          if (clickedWallId) {
-            event.preventDefault();
-            event.stopPropagation();
-            onDimensionClick(clickedWallId);
-            return;
-          }
-        }
-      }
+      // Dimension click handling moved to dblclick event
 
       // Pan with middle mouse (button 1) or right mouse (button 2)
       // DO NOT use left-click (button 0) to avoid interfering with MouseController
@@ -1095,19 +1113,101 @@ const FloorplanCanvas = ({
       event.preventDefault();
     };
 
+    const handleDoubleClick = (event: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const screenX = event.clientX - rect.left;
+      const screenY = event.clientY - rect.top;
+
+      const camera = renderer.getCamera();
+      const worldPos = camera.screenToWorld(screenX, screenY);
+
+      const roomLayer = roomLayerRef.current;
+      if (roomLayer) {
+        // Check room label for double-click editing (higher priority)
+        const labelHit = roomLayer.getLabelAtPoint(worldPos.x, worldPos.y);
+        if (labelHit) {
+          console.log('[FloorplanCanvas] Room label double-clicked:', labelHit);
+          event.preventDefault();
+          event.stopPropagation();
+
+          // Open room name editor at the label position
+          const screenPos = camera.worldToScreen(labelHit.x, labelHit.y);
+          setEditingRoomName({
+            visible: true,
+            roomId: labelHit.roomId,
+            screenX: screenPos.x + rect.left,
+            screenY: screenPos.y + rect.top,
+            currentName: labelHit.text
+          });
+
+          // Focus input on next render
+          setTimeout(() => {
+            if (roomNameInputRef.current) {
+              roomNameInputRef.current.focus();
+              roomNameInputRef.current.select();
+            }
+          }, 0);
+          return;
+        }
+
+        // Check room dimensions (interior dimensions) for double-click editing
+        const clickedRoomDimension = roomLayer.getDimensionAtPoint(worldPos.x, worldPos.y);
+        if (clickedRoomDimension) {
+          event.preventDefault();
+          event.stopPropagation();
+
+          // Calculate current wall length
+          const dx = clickedRoomDimension.p2.x - clickedRoomDimension.p1.x;
+          const dy = clickedRoomDimension.p2.y - clickedRoomDimension.p1.y;
+          const currentLength = Math.round(Math.sqrt(dx * dx + dy * dy));
+
+          // Calculate angle for input rotation
+          let angle = Math.atan2(dy, dx);
+          if (angle >= Math.PI / 2) angle -= Math.PI;
+          else if (angle < -Math.PI / 2) angle += Math.PI;
+
+          // Get midpoint in screen coordinates
+          const midWorld = {
+            x: (clickedRoomDimension.p1.x + clickedRoomDimension.p2.x) / 2,
+            y: (clickedRoomDimension.p1.y + clickedRoomDimension.p2.y) / 2
+          };
+          const midScreen = camera.worldToScreen(midWorld.x, midWorld.y);
+
+          setEditingDimension({
+            visible: true,
+            screenX: midScreen.x + rect.left,
+            screenY: midScreen.y + rect.top,
+            currentValue: currentLength,
+            data: clickedRoomDimension,
+            angle: angle * (180 / Math.PI)
+          });
+
+          // Focus input after render
+          setTimeout(() => {
+            dimensionInputRef.current?.focus();
+            dimensionInputRef.current?.select();
+          }, 10);
+
+          return;
+        }
+      }
+    };
+
     // Use capture phase to intercept middle/right-click before MouseController
     canvas.addEventListener('mousedown', handleMouseDown, true);
     canvas.addEventListener('mousemove', handleMouseMove, true);
     canvas.addEventListener('mouseup', handleMouseUp, true);
     canvas.addEventListener('contextmenu', handleContextMenu);
+    canvas.addEventListener('dblclick', handleDoubleClick, true);
 
     return () => {
       canvas.removeEventListener('mousedown', handleMouseDown, true);
       canvas.removeEventListener('mousemove', handleMouseMove, true);
       canvas.removeEventListener('mouseup', handleMouseUp, true);
       canvas.removeEventListener('contextmenu', handleContextMenu);
+      canvas.removeEventListener('dblclick', handleDoubleClick, true);
     };
-  }, [onDimensionClick, rulerVisible, rulerStart, rulerEnd, onRulerDragStart, onRulerDrag, onRulerDragEnd, onRulerLabelClick, draggingRulerPoint]);
+  }, [rulerVisible, rulerStart, rulerEnd, onRulerDragStart, onRulerDrag, onRulerDragEnd, onRulerLabelClick, draggingRulerPoint]);
 
   // Handle mouse move for coordinate display
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -1339,6 +1439,109 @@ const FloorplanCanvas = ({
     setOptionBarState(prev => ({ ...prev, visible: false, doorId: null }));
   };
 
+  // Dimension editing handlers
+  const handleDimensionInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      applyDimensionChange();
+    } else if (e.key === 'Escape') {
+      setEditingDimension(null);
+    }
+  };
+
+  const handleDimensionInputBlur = () => {
+    // Cancel editing on blur
+    setEditingDimension(null);
+  };
+
+  const applyDimensionChange = () => {
+    if (!editingDimension || !editingDimension.data || !sceneManagerRef.current) {
+      setEditingDimension(null);
+      return;
+    }
+
+    const inputValue = dimensionInputRef.current?.value;
+    if (!inputValue) {
+      setEditingDimension(null);
+      return;
+    }
+
+    const newLengthMm = parseFloat(inputValue);
+    if (isNaN(newLengthMm) || newLengthMm <= 0) {
+      setEditingDimension(null);
+      return;
+    }
+
+    const { p1, p2 } = editingDimension.data;
+    const currentLength = editingDimension.currentValue;
+    const delta = newLengthMm - currentLength;
+
+    if (Math.abs(delta) < 1) {
+      // No significant change
+      setEditingDimension(null);
+      return;
+    }
+
+    // Calculate direction from p1 to p2
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const dirX = dx / len;
+    const dirY = dy / len;
+
+    // Move p2 by delta in the direction
+    const objectManager = sceneManagerRef.current.objectManager;
+    const points = objectManager.getAllPoints();
+
+    // Find the point that matches p2
+    const targetPoint = points.find(p =>
+      Math.abs(p.x - p2.x) < 1 && Math.abs(p.y - p2.y) < 1
+    );
+
+    if (targetPoint) {
+      const newX = p2.x + dirX * delta;
+      const newY = p2.y + dirY * delta;
+      objectManager.updatePoint(targetPoint.id, { x: newX, y: newY });
+      console.log('[FloorplanCanvas] Dimension changed:', currentLength, '→', newLengthMm, 'mm');
+    }
+
+    setEditingDimension(null);
+  };
+
+  // Room name editing handlers
+  const handleRoomNameInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      applyRoomNameChange();
+    } else if (e.key === 'Escape') {
+      setEditingRoomName(null);
+    }
+  };
+
+  const handleRoomNameInputBlur = () => {
+    // Apply change on blur instead of canceling
+    applyRoomNameChange();
+  };
+
+  const applyRoomNameChange = () => {
+    if (!editingRoomName || !sceneManagerRef.current) {
+      setEditingRoomName(null);
+      return;
+    }
+
+    const newName = roomNameInputRef.current?.value?.trim();
+    if (!newName) {
+      setEditingRoomName(null);
+      return;
+    }
+
+    const room = sceneManagerRef.current.objectManager.getRoom(editingRoomName.roomId);
+    if (room && newName !== room.name) {
+      sceneManagerRef.current.objectManager.updateRoom(editingRoomName.roomId, { name: newName });
+      console.log('[FloorplanCanvas] Room name changed:', editingRoomName.currentName, '→', newName);
+    }
+
+    setEditingRoomName(null);
+  };
+
   return (
     <div ref={containerRef} className={styles.canvasContainer}>
       <canvas
@@ -1356,6 +1559,66 @@ const FloorplanCanvas = ({
         onFlipVertical={handleFlipVertical}
         onDelete={handleDelete}
       />
+
+      {/* Inline dimension editing input */}
+      {editingDimension && editingDimension.visible && (
+        <input
+          ref={dimensionInputRef}
+          type="text"
+          defaultValue={editingDimension.currentValue.toString()}
+          onKeyDown={handleDimensionInputKeyDown}
+          onBlur={handleDimensionInputBlur}
+          style={{
+            position: 'fixed',
+            left: editingDimension.screenX,
+            top: editingDimension.screenY,
+            transform: `translate(-50%, -50%) rotate(${editingDimension.angle}deg)`,
+            width: '80px',
+            height: '24px',
+            padding: '2px 6px',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            textAlign: 'center',
+            border: '2px solid #3b82f6',
+            borderRadius: '4px',
+            backgroundColor: 'white',
+            color: '#1f2937',
+            outline: 'none',
+            zIndex: 1000,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+          }}
+        />
+      )}
+
+      {/* Inline room name editing input */}
+      {editingRoomName && editingRoomName.visible && (
+        <input
+          ref={roomNameInputRef}
+          type="text"
+          defaultValue={editingRoomName.currentName}
+          onKeyDown={handleRoomNameInputKeyDown}
+          onBlur={handleRoomNameInputBlur}
+          style={{
+            position: 'fixed',
+            left: editingRoomName.screenX,
+            top: editingRoomName.screenY,
+            transform: 'translate(-50%, -50%)',
+            width: '120px',
+            height: '28px',
+            padding: '4px 8px',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            textAlign: 'center',
+            border: '2px solid #10b981',
+            borderRadius: '4px',
+            backgroundColor: 'white',
+            color: '#1f2937',
+            outline: 'none',
+            zIndex: 1000,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+          }}
+        />
+      )}
     </div>
   );
 };

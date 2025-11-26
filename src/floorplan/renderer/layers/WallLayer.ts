@@ -65,17 +65,32 @@ export class WallLayer extends BaseLayer {
   // pointId -> list of connected wall IDs
   private connectivityMap: Map<string, string[]> = new Map();
 
+  private offscreenCanvas: HTMLCanvasElement | null = null;
+  private offscreenCtx: CanvasRenderingContext2D | null = null;
+
   constructor(config?: WallLayerConfig) {
     super(2); // z-index: 2
 
     this.config = {
-      wallColor: config?.wallColor || '#2c3e50',
+      wallColor: config?.wallColor || '#505050',
       wallThickness: config?.wallThickness || 100, // 100mm = 10cm
       previewColor: config?.previewColor || '#3498db',
       previewStyle: config?.previewStyle || 'dashed',
     };
   }
 
+  setSize(width: number, height: number): void {
+    // Initialize or resize offscreen canvas
+    if (!this.offscreenCanvas) {
+      this.offscreenCanvas = document.createElement('canvas');
+      this.offscreenCtx = this.offscreenCanvas.getContext('2d');
+    }
+
+    if (this.offscreenCanvas) {
+      this.offscreenCanvas.width = width;
+      this.offscreenCanvas.height = height;
+    }
+  }
 
   setWalls(walls: Wall[]): void {
     this.walls = walls;
@@ -147,8 +162,6 @@ export class WallLayer extends BaseLayer {
   render(ctx: CanvasRenderingContext2D): void {
     if (!this.visible) return;
 
-    this.applyOpacity(ctx);
-
     // Update connectivity map before rendering
     this.updateConnectivity();
 
@@ -173,22 +186,31 @@ export class WallLayer extends BaseLayer {
       add(seg.end.id);
     });
 
+    // Render all segments - Pass 1: Fills
+    // This creates a unified wall body
+    this.applyOpacity(ctx);
+    ctx.globalAlpha = 1.0; // Force opaque
 
-    // Render segments
-    segments.forEach(segment => {
+    segments.forEach((segment) => {
       if (segment.isHole) return;
-
-      const isHovered = segment.wallId === this.hoveredWallId;
       const isSelected = segment.wallId === this.selectedWallId;
-
-      this.renderSegment(ctx, segment, segmentMap, isHovered, isSelected);
+      const isHovered = this.hoveredWallId === segment.wallId;
+      this.renderSegmentFill(ctx, segment, segmentMap, isSelected, isHovered);
     });
 
-    // Render wall dimensions (keep original logic for now, or update to use segments if needed)
-    // For dimensions, we probably still want the full wall length, so using this.walls is fine.
-    this.walls.forEach((wall) => {
-      this.renderWallDimension(ctx, wall);
+    // Render all segments - Pass 2: Strokes (Merged)
+    // This draws the outlines, skipping internal joints to look merged
+    segments.forEach((segment) => {
+      if (segment.isHole) return;
+      const isSelected = segment.wallId === this.selectedWallId;
+      const isHovered = this.hoveredWallId === segment.wallId;
+      this.renderSegmentStroke(ctx, segment, segmentMap, isSelected, isHovered);
     });
+
+    this.resetOpacity(ctx);
+
+    // Render aligned exterior dimensions
+    this.renderAlignedExteriorDimensions(ctx);
 
     // Render preview wall
     if (this.previewWall) {
@@ -200,7 +222,10 @@ export class WallLayer extends BaseLayer {
       this.renderAngleGuide(ctx, this.angleGuide.from, this.angleGuide.angle);
     }
 
-    this.resetOpacity(ctx);
+    // If offscreen canvas was not used, reset opacity here
+    if (!this.offscreenCtx) {
+      this.resetOpacity(ctx);
+    }
   }
 
   /**
@@ -291,69 +316,19 @@ export class WallLayer extends BaseLayer {
     return segments;
   }
 
-  private renderSegment(
+  private renderSegmentFill(
     ctx: CanvasRenderingContext2D,
     segment: RenderSegment,
     segmentMap: Map<string, RenderSegment[]>,
-    isHovered: boolean,
-    isSelected: boolean
+    isSelected: boolean,
+    isHovered: boolean
   ): void {
-    if (segment.isHole) return;
-
     const start = Vector2.from(segment.start);
     const end = Vector2.from(segment.end);
 
     // Calculate corners at start and end using segment connectivity
     const startCorners = this.calculateJointCorners(segment.start, start, end, segment, segmentMap);
     const endCorners = this.calculateJointCorners(segment.end, end, start, segment, segmentMap);
-
-    // startCorners returns { left, right } relative to the direction AWAY from the joint
-    // For segment start: direction is Start->End. 
-    // But calculateJointCorners expects 'dir' to be OUT of the joint.
-    // So for Start point: dir is Start->End.
-    // For End point: dir is End->Start.
-
-    // Construct the polygon
-    // We need to map 'left' and 'right' correctly.
-    // Let's define 'left' as being on the left side when looking from Start to End.
-
-    // At Start point (looking Start->End):
-    // startCorners.left is on the left.
-    // startCorners.right is on the right.
-
-    // At End point (looking End->Start):
-    // endCorners.left is on the left (relative to End->Start), which is RIGHT relative to Start->End.
-    // endCorners.right is on the right (relative to End->Start), which is LEFT relative to Start->End.
-
-    // Let's visualize:
-    // Start -> End direction. Normal is to the Left (standard 2D geometry often uses CCW).
-    // In our WallLayer, normal was (-dir.y, dir.x).
-    // If dir = (1, 0) [Right], normal = (0, 1) [Down]. Wait, canvas Y is down.
-    // So (1,0) -> (-0, 1) is +Y (Down). That is "Right" in screen coordinates if Y is down?
-    // Let's stick to "Left" and "Right" relative to the wall vector.
-
-    // WallLayer original: normal = (-dir.y, dir.x).
-    // If dir=(1,0), normal=(0,1).
-    // start + normal = (0,1). This is "Below" the line.
-    // start - normal = (0,-1). This is "Above" the line.
-    // If we walk (0,0) to (1,0), (0,1) is on our Right.
-    // So 'normal' points to the Right.
-
-    // My calculateJointCorners will return 'left' and 'right' relative to the given direction.
-    // For Start Node: dir = Start->End. 'left' is Left of vector, 'right' is Right of vector.
-    // For End Node: dir = End->Start. 'left' is Left of vector, 'right' is Right of vector.
-
-    // Polygon order (CCW or CW):
-    // Start.Left -> End.Right (which is on the same physical side as Start.Left) -> End.Left -> Start.Right -> Close.
-
-    // Wait, if End.Left is Left of End->Start, that means it's Right of Start->End.
-    // So:
-    // 1. Start.Left
-    // 2. End.Right (Left of Start->End)
-    // 3. End.Left (Right of Start->End)
-    // 4. Start.Right
-
-    // Let's verify with calculateJointCorners implementation.
 
     const poly = [
       startCorners.left,
@@ -368,19 +343,13 @@ export class WallLayer extends BaseLayer {
     let color: string;
     const themeColorRaw = getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim();
     const themeColor = themeColorRaw || '#3FAEA7';
-    const hexToRgba = (hex: string, alpha: number) => {
-      const r = parseInt(hex.slice(1, 3), 16);
-      const g = parseInt(hex.slice(3, 5), 16);
-      const b = parseInt(hex.slice(5, 7), 16);
-      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    };
 
     if (isSelected) {
       color = themeColor;
     } else if (isHovered) {
-      color = hexToRgba(themeColor, 0.5);
+      color = themeColor;
     } else {
-      color = '#505050';
+      color = this.config.wallColor;
     }
 
     ctx.beginPath();
@@ -393,51 +362,109 @@ export class WallLayer extends BaseLayer {
     // Render based on style
     switch (this.renderStyle) {
       case 'wireframe':
-        // Only outline, no fill
-        // Use selection/hover color for stroke
-        ctx.strokeStyle = isSelected || isHovered ? color : this.config.wallColor;
-        ctx.lineWidth = isSelected || isHovered ? 2 : 1;
-        ctx.stroke();
+        // No fill for wireframe
         break;
 
       case 'hidden-line':
-        // Fill with light color + outline (semi-transparent to see floor)
+        // Fill with light color
         const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
         ctx.fillStyle = isDarkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)';
         ctx.fill();
-        // Use selection/hover color for stroke
-        ctx.strokeStyle = isSelected || isHovered ? color : this.config.wallColor;
-        ctx.lineWidth = isSelected || isHovered ? 2.5 : 1.5;
-        ctx.stroke();
         break;
 
       case 'realistic':
-        // Gradient fill for realistic effect (semi-transparent to see floor)
-        ctx.globalAlpha = 0.7; // 70% opacity to see floor beneath
+        // Gradient fill
+        ctx.globalAlpha = 1.0;
         const centerX = (poly[0].x + poly[1].x + poly[2].x + poly[3].x) / 4;
         const centerY = (poly[0].y + poly[1].y + poly[2].y + poly[3].y) / 4;
         const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, this.config.wallThickness / 2);
-        // Use selection/hover color for gradient - always use hex format for realistic mode
         const baseColor = isSelected ? themeColor : (isHovered ? themeColor : this.config.wallColor);
         gradient.addColorStop(0, baseColor);
         gradient.addColorStop(1, this.darkenColor(baseColor, 0.3));
         ctx.fillStyle = gradient;
         ctx.fill();
-        // Subtle outline
-        ctx.strokeStyle = this.darkenColor(baseColor, 0.5);
-        ctx.lineWidth = isSelected || isHovered ? 1 : 0.5;
-        ctx.stroke();
-        ctx.globalAlpha = 1.0; // Reset opacity
         break;
 
       case 'solid':
       default:
-        // Standard solid fill (semi-transparent to see floor)
-        ctx.globalAlpha = 0.6; // 60% opacity to see floor beneath
+        // Standard solid fill
         ctx.fillStyle = color;
         ctx.fill();
-        ctx.globalAlpha = 1.0; // Reset opacity
         break;
+    }
+  }
+
+  private renderSegmentStroke(
+    ctx: CanvasRenderingContext2D,
+    segment: RenderSegment,
+    segmentMap: Map<string, RenderSegment[]>,
+    isSelected: boolean,
+    isHovered: boolean
+  ): void {
+    const start = Vector2.from(segment.start);
+    const end = Vector2.from(segment.end);
+
+    // Calculate corners
+    const startCorners = this.calculateJointCorners(segment.start, start, end, segment, segmentMap);
+    const endCorners = this.calculateJointCorners(segment.end, end, start, segment, segmentMap);
+
+    // Determine stroke color and width
+    let strokeColor: string;
+    let lineWidth: number;
+
+    const themeColorRaw = getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim();
+    const themeColor = themeColorRaw || '#3FAEA7';
+
+    if (isSelected || isHovered) {
+      strokeColor = themeColor;
+      lineWidth = 2;
+    } else {
+      // Default stroke color
+      strokeColor = this.darkenColor(this.config.wallColor, 0.5); // Darker outline
+      lineWidth = 1;
+    }
+
+    // Override for specific styles
+    if (this.renderStyle === 'wireframe') {
+      strokeColor = isSelected || isHovered ? themeColor : this.config.wallColor;
+    }
+
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = lineWidth;
+    ctx.lineCap = 'round'; // Smooth joints
+    ctx.lineJoin = 'round';
+
+    // Draw "Left" side (Start.Left -> End.Right)
+    ctx.beginPath();
+    ctx.moveTo(startCorners.left.x, startCorners.left.y);
+    ctx.lineTo(endCorners.right.x, endCorners.right.y);
+    ctx.stroke();
+
+    // Draw "Right" side (Start.Right -> End.Left)
+    ctx.beginPath();
+    ctx.moveTo(startCorners.right.x, startCorners.right.y);
+    ctx.lineTo(endCorners.left.x, endCorners.left.y);
+    ctx.stroke();
+
+    // Draw Caps if dead end
+    // Check connectivity count
+    const startCount = segmentMap.get(segment.start.id)?.length || 0;
+    const endCount = segmentMap.get(segment.end.id)?.length || 0;
+
+    // Start Cap
+    if (startCount <= 1) {
+      ctx.beginPath();
+      ctx.moveTo(startCorners.left.x, startCorners.left.y);
+      ctx.lineTo(startCorners.right.x, startCorners.right.y);
+      ctx.stroke();
+    }
+
+    // End Cap
+    if (endCount <= 1) {
+      ctx.beginPath();
+      ctx.moveTo(endCorners.left.x, endCorners.left.y);
+      ctx.lineTo(endCorners.right.x, endCorners.right.y);
+      ctx.stroke();
     }
   }
 
@@ -662,9 +689,9 @@ export class WallLayer extends BaseLayer {
     const p3 = e.subtract(normal.multiply(halfThickness));
     const p4 = s.subtract(normal.multiply(halfThickness));
 
-    // Use dark gray with semi-transparency to match existing walls
-    ctx.globalAlpha = 0.6;
-    ctx.fillStyle = '#505050';
+    // Use dark gray with full opacity to match existing walls
+    ctx.globalAlpha = 1.0;
+    ctx.fillStyle = this.config.wallColor;
 
     ctx.beginPath();
     ctx.moveTo(p1.x, p1.y);
@@ -708,198 +735,234 @@ export class WallLayer extends BaseLayer {
   }
 
   /**
-   * Render wall dimension label in CAD style with extension lines and arrows
-   * Dimensions are ALWAYS placed OUTSIDE the room space
+   * Render aligned exterior dimensions
+   * Groups exterior walls by direction and aligns all dimension lines on the same axis
    */
-  private renderWallDimension(ctx: CanvasRenderingContext2D, wall: Wall): void {
+  private renderAlignedExteriorDimensions(ctx: CanvasRenderingContext2D): void {
     if (!this.camera) return;
 
-    const startPoint = this.points.get(wall.startPointId);
-    const endPoint = this.points.get(wall.endPointId);
+    // Get bounding box of all points
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
 
-    if (!startPoint || !endPoint) return;
+    this.points.forEach(point => {
+      minX = Math.min(minX, point.x);
+      maxX = Math.max(maxX, point.x);
+      minY = Math.min(minY, point.y);
+      maxY = Math.max(maxY, point.y);
+    });
 
-    const dx = endPoint.x - startPoint.x;
-    const dy = endPoint.y - startPoint.y;
-    const distanceMm = Math.sqrt(dx * dx + dy * dy);
-    const angle = Math.atan2(dy, dx);
+    if (minX === Infinity) return;
 
-    // CAD-style configuration
-    const wallHalfThickness = this.config.wallThickness / 2; // 50mm (half of 100mm)
-    const extensionGap = 100; // 100mm gap from wall surface
-    const offsetDistanceMm = 600; // 600mm offset for dimension line from wall surface
-    const extensionOverhang = 100; // Extension line extends 100mm beyond dimension line
+    // Configuration
+    const wallHalfThickness = this.config.wallThickness / 2;
+    const baseOffset = wallHalfThickness + 150;
+    const extensionLength = 400;
+    const textOffset = 200;
 
-    // Calculate perpendicular offset direction
-    // Find which room this wall belongs to and place dimension OUTSIDE the room
-    let perpX = -Math.sin(angle); // Default: left side
-    let perpY = Math.cos(angle);
-
-    // Check if this is an interior wall (shared by multiple rooms)
-    // If so, we don't render the dimension as per user request (redundant with room interior dimensions)
-    const containingRooms = this.rooms.filter(room => room.walls.includes(wall.id));
-    if (containingRooms.length > 1) {
-      return;
+    // Collect exterior walls with their dimension direction
+    interface ExteriorWallInfo {
+      wall: Wall;
+      startPoint: Point;
+      endPoint: Point;
+      dimDirection: 'up' | 'down' | 'left' | 'right';
     }
 
-    const parentRoom = containingRooms[0];
+    const exteriorWalls: ExteriorWallInfo[] = [];
 
-    if (parentRoom && parentRoom.points.length > 0) {
-      // Calculate room centroid
-      let centerX = 0;
-      let centerY = 0;
-      parentRoom.points.forEach(pointId => {
-        const point = this.points.get(pointId);
-        if (point) {
-          centerX += point.x;
-          centerY += point.y;
-        }
-      });
-      centerX /= parentRoom.points.length;
-      centerY /= parentRoom.points.length;
+    this.walls.forEach(wall => {
+      const startPoint = this.points.get(wall.startPointId);
+      const endPoint = this.points.get(wall.endPointId);
+      if (!startPoint || !endPoint) return;
 
-      // Calculate wall midpoint
+      // Check if interior wall (both sides have different rooms)
       const wallMidX = (startPoint.x + endPoint.x) / 2;
       const wallMidY = (startPoint.y + endPoint.y) / 2;
+      const angle = Math.atan2(endPoint.y - startPoint.y, endPoint.x - startPoint.x);
+      const testOffset = this.config.wallThickness + 50;
 
-      // Vector from room center to wall midpoint
-      const toWallX = wallMidX - centerX;
-      const toWallY = wallMidY - centerY;
-
-      // Two possible perpendicular directions
       const perp1X = -Math.sin(angle);
       const perp1Y = Math.cos(angle);
       const perp2X = Math.sin(angle);
       const perp2Y = -Math.cos(angle);
 
-      // Choose the direction that points AWAY from room center
-      // Dot product with toWall vector: positive means same direction (away from center)
-      const dot1 = perp1X * toWallX + perp1Y * toWallY;
-      const dot2 = perp2X * toWallX + perp2Y * toWallY;
+      const testPoint1 = { x: wallMidX + perp1X * testOffset, y: wallMidY + perp1Y * testOffset };
+      const testPoint2 = { x: wallMidX + perp2X * testOffset, y: wallMidY + perp2Y * testOffset };
 
-      if (dot2 > dot1) {
-        perpX = perp2X;
-        perpY = perp2Y;
+      const roomOnSide1 = this.rooms.find(room => this.isPointInRoom(testPoint1, room));
+      const roomOnSide2 = this.rooms.find(room => this.isPointInRoom(testPoint2, room));
+
+      // Skip interior walls (both sides have different rooms)
+      if (roomOnSide1 && roomOnSide2 && roomOnSide1.id !== roomOnSide2.id) {
+        return;
       }
-    }
 
-    // Start extension lines from wall inner edge (center - half thickness on inside)
-    // perpX/perpY points OUTWARD, so we need to go INWARD (opposite direction) by wallHalfThickness
-    const innerEdgeOffset = -wallHalfThickness + extensionGap;
-    const ext1StartX = startPoint.x + perpX * innerEdgeOffset;
-    const ext1StartY = startPoint.y + perpY * innerEdgeOffset;
-    const ext2StartX = endPoint.x + perpX * innerEdgeOffset;
-    const ext2StartY = endPoint.y + perpY * innerEdgeOffset;
+      // Determine dimension direction (which side is outside)
+      const dx = endPoint.x - startPoint.x;
+      const dy = endPoint.y - startPoint.y;
+      const isHorizontal = Math.abs(dx) > Math.abs(dy);
 
-    // Extension line end points (beyond dimension line) - from inner edge
-    const totalExtension = -wallHalfThickness + extensionGap + offsetDistanceMm + extensionOverhang;
-    const ext1EndX = startPoint.x + perpX * totalExtension;
-    const ext1EndY = startPoint.y + perpY * totalExtension;
-    const ext2EndX = endPoint.x + perpX * totalExtension;
-    const ext2EndY = endPoint.y + perpY * totalExtension;
+      let dimDirection: 'up' | 'down' | 'left' | 'right';
 
-    // Dimension line points (offset from inner edge)
-    const dimOffset = -wallHalfThickness + extensionGap + offsetDistanceMm;
-    const dim1X = startPoint.x + perpX * dimOffset;
-    const dim1Y = startPoint.y + perpY * dimOffset;
-    const dim2X = endPoint.x + perpX * dimOffset;
-    const dim2Y = endPoint.y + perpY * dimOffset;
+      if (isHorizontal) {
+        // Horizontal wall - dimension goes up or down
+        // Place dimension on the side that's outside (no room)
+        if (!roomOnSide1 && roomOnSide2) {
+          // Side 1 is outside
+          dimDirection = perp1Y < 0 ? 'up' : 'down';
+        } else if (roomOnSide1 && !roomOnSide2) {
+          // Side 2 is outside
+          dimDirection = perp2Y < 0 ? 'up' : 'down';
+        } else {
+          // Neither side has a room, use default based on position
+          const avgY = (startPoint.y + endPoint.y) / 2;
+          dimDirection = avgY < (minY + maxY) / 2 ? 'up' : 'down';
+        }
+      } else {
+        // Vertical wall - dimension goes left or right
+        if (!roomOnSide1 && roomOnSide2) {
+          dimDirection = perp1X < 0 ? 'left' : 'right';
+        } else if (roomOnSide1 && !roomOnSide2) {
+          dimDirection = perp2X < 0 ? 'left' : 'right';
+        } else {
+          const avgX = (startPoint.x + endPoint.x) / 2;
+          dimDirection = avgX < (minX + maxX) / 2 ? 'left' : 'right';
+        }
+      }
 
-    // Convert to screen space
-    const ext1Start = this.camera.worldToScreen(ext1StartX, ext1StartY);
-    const ext1End = this.camera.worldToScreen(ext1EndX, ext1EndY);
-    const ext2Start = this.camera.worldToScreen(ext2StartX, ext2StartY);
-    const ext2End = this.camera.worldToScreen(ext2EndX, ext2EndY);
-    const dim1 = this.camera.worldToScreen(dim1X, dim1Y);
-    const dim2 = this.camera.worldToScreen(dim2X, dim2Y);
+      exteriorWalls.push({ wall, startPoint, endPoint, dimDirection });
+    });
 
-    // Midpoint for label
-    const labelX = (dim1.x + dim2.x) / 2;
-    const labelY = (dim1.y + dim2.y) / 2;
+    // Calculate aligned dimension line positions (furthest from center)
+    const dimLinePositions = {
+      up: minY - baseOffset - extensionLength,
+      down: maxY + baseOffset + extensionLength,
+      left: minX - baseOffset - extensionLength,
+      right: maxX + baseOffset + extensionLength,
+    };
+
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+    const dimColor = isDarkMode ? '#90CAF9' : '#000000';
+    const textColor = isDarkMode ? '#E0E0E0' : '#000000';
 
     ctx.save();
     this.camera.applyScreenTransform(ctx);
 
-    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
-    const dimColor = isDarkMode ? '#90CAF9' : '#666666';
-    const textColor = isDarkMode ? '#E0E0E0' : '#333333';
+    // Render each exterior wall dimension
+    exteriorWalls.forEach(({ startPoint, endPoint, dimDirection }) => {
+      const dx = endPoint.x - startPoint.x;
+      const dy = endPoint.y - startPoint.y;
+      const distanceMm = Math.sqrt(dx * dx + dy * dy);
 
-    // Draw extension lines (thin, solid) - CAD style
-    ctx.strokeStyle = dimColor;
-    ctx.lineWidth = 0.5;
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1.0;
+      let ext1Start, ext1End, ext2Start, ext2End, dim1, dim2, textPos;
 
-    ctx.beginPath();
-    ctx.moveTo(ext1Start.x, ext1Start.y);
-    ctx.lineTo(ext1End.x, ext1End.y);
-    ctx.stroke();
+      if (dimDirection === 'up') {
+        const dimY = dimLinePositions.up;
+        ext1Start = this.camera!.worldToScreen(startPoint.x, startPoint.y - wallHalfThickness - 50);
+        ext1End = this.camera!.worldToScreen(startPoint.x, dimY);
+        ext2Start = this.camera!.worldToScreen(endPoint.x, endPoint.y - wallHalfThickness - 50);
+        ext2End = this.camera!.worldToScreen(endPoint.x, dimY);
+        dim1 = this.camera!.worldToScreen(startPoint.x, dimY);
+        dim2 = this.camera!.worldToScreen(endPoint.x, dimY);
+        textPos = this.camera!.worldToScreen((startPoint.x + endPoint.x) / 2, dimY - textOffset);
+      } else if (dimDirection === 'down') {
+        const dimY = dimLinePositions.down;
+        ext1Start = this.camera!.worldToScreen(startPoint.x, startPoint.y + wallHalfThickness + 50);
+        ext1End = this.camera!.worldToScreen(startPoint.x, dimY);
+        ext2Start = this.camera!.worldToScreen(endPoint.x, endPoint.y + wallHalfThickness + 50);
+        ext2End = this.camera!.worldToScreen(endPoint.x, dimY);
+        dim1 = this.camera!.worldToScreen(startPoint.x, dimY);
+        dim2 = this.camera!.worldToScreen(endPoint.x, dimY);
+        textPos = this.camera!.worldToScreen((startPoint.x + endPoint.x) / 2, dimY + textOffset);
+      } else if (dimDirection === 'left') {
+        const dimX = dimLinePositions.left;
+        ext1Start = this.camera!.worldToScreen(startPoint.x - wallHalfThickness - 50, startPoint.y);
+        ext1End = this.camera!.worldToScreen(dimX, startPoint.y);
+        ext2Start = this.camera!.worldToScreen(endPoint.x - wallHalfThickness - 50, endPoint.y);
+        ext2End = this.camera!.worldToScreen(dimX, endPoint.y);
+        dim1 = this.camera!.worldToScreen(dimX, startPoint.y);
+        dim2 = this.camera!.worldToScreen(dimX, endPoint.y);
+        textPos = this.camera!.worldToScreen(dimX - textOffset, (startPoint.y + endPoint.y) / 2);
+      } else {
+        const dimX = dimLinePositions.right;
+        ext1Start = this.camera!.worldToScreen(startPoint.x + wallHalfThickness + 50, startPoint.y);
+        ext1End = this.camera!.worldToScreen(dimX, startPoint.y);
+        ext2Start = this.camera!.worldToScreen(endPoint.x + wallHalfThickness + 50, endPoint.y);
+        ext2End = this.camera!.worldToScreen(dimX, endPoint.y);
+        dim1 = this.camera!.worldToScreen(dimX, startPoint.y);
+        dim2 = this.camera!.worldToScreen(dimX, endPoint.y);
+        textPos = this.camera!.worldToScreen(dimX + textOffset, (startPoint.y + endPoint.y) / 2);
+      }
 
-    ctx.beginPath();
-    ctx.moveTo(ext2Start.x, ext2Start.y);
-    ctx.lineTo(ext2End.x, ext2End.y);
-    ctx.stroke();
+      // Draw extension lines
+      ctx.strokeStyle = dimColor;
+      ctx.lineWidth = 0.5;
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1.0;
 
-    // Draw dimension line (thin, solid)
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(dim1.x, dim1.y);
-    ctx.lineTo(dim2.x, dim2.y);
-    ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(ext1Start.x, ext1Start.y);
+      ctx.lineTo(ext1End.x, ext1End.y);
+      ctx.stroke();
 
-    // Draw slashes at dimension line endpoints - CAD style
-    const slashSize = 8;
-    const dimLineAngle = Math.atan2(dim2.y - dim1.y, dim2.x - dim1.x);
-    const slashAngle = Math.PI / 4; // 45 degrees
+      ctx.beginPath();
+      ctx.moveTo(ext2Start.x, ext2Start.y);
+      ctx.lineTo(ext2End.x, ext2End.y);
+      ctx.stroke();
 
-    ctx.lineWidth = 1.5;
+      // Draw dimension line
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(dim1.x, dim1.y);
+      ctx.lineTo(dim2.x, dim2.y);
+      ctx.stroke();
 
-    // Slash at start (diagonal line)
-    ctx.beginPath();
-    ctx.moveTo(
-      dim1.x - slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
-      dim1.y - slashSize * Math.sin(dimLineAngle + slashAngle) / 2
-    );
-    ctx.lineTo(
-      dim1.x + slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
-      dim1.y + slashSize * Math.sin(dimLineAngle + slashAngle) / 2
-    );
-    ctx.stroke();
+      // Draw slashes
+      const slashSize = 8;
+      const dimLineAngle = Math.atan2(dim2.y - dim1.y, dim2.x - dim1.x);
+      const slashAngle = Math.PI / 4;
 
-    // Slash at end (diagonal line)
-    ctx.beginPath();
-    ctx.moveTo(
-      dim2.x - slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
-      dim2.y - slashSize * Math.sin(dimLineAngle + slashAngle) / 2
-    );
-    ctx.lineTo(
-      dim2.x + slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
-      dim2.y + slashSize * Math.sin(dimLineAngle + slashAngle) / 2
-    );
-    ctx.stroke();
+      ctx.lineWidth = 1.5;
 
-    // Draw dimension text - rotated to align with dimension line
-    const label = `${distanceMm.toFixed(0)}mm`;
-    ctx.font = '12px system-ui';
+      ctx.beginPath();
+      ctx.moveTo(
+        dim1.x - slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
+        dim1.y - slashSize * Math.sin(dimLineAngle + slashAngle) / 2
+      );
+      ctx.lineTo(
+        dim1.x + slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
+        dim1.y + slashSize * Math.sin(dimLineAngle + slashAngle) / 2
+      );
+      ctx.stroke();
 
-    ctx.save();
-    ctx.translate(labelX, labelY);
+      ctx.beginPath();
+      ctx.moveTo(
+        dim2.x - slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
+        dim2.y - slashSize * Math.sin(dimLineAngle + slashAngle) / 2
+      );
+      ctx.lineTo(
+        dim2.x + slashSize * Math.cos(dimLineAngle + slashAngle) / 2,
+        dim2.y + slashSize * Math.sin(dimLineAngle + slashAngle) / 2
+      );
+      ctx.stroke();
 
-    // Rotate text to align with dimension line
-    // Keep text readable (not upside down)
-    let textAngle = dimLineAngle;
-    if (textAngle > Math.PI / 2 || textAngle <= -Math.PI / 2) {
-      textAngle += Math.PI;
-    }
-    ctx.rotate(textAngle);
+      // Draw text
+      const label = `${distanceMm.toFixed(0)}mm`;
+      ctx.font = '12px system-ui';
+      ctx.fillStyle = textColor;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
 
-    // Draw text without background
-    ctx.fillStyle = textColor;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText(label, 0, -4);
+      ctx.save();
+      ctx.translate(textPos.x, textPos.y);
 
-    ctx.restore();
+      if (dimDirection === 'left' || dimDirection === 'right') {
+        ctx.rotate(-Math.PI / 2);
+      }
+
+      ctx.fillText(label, 0, 0);
+      ctx.restore();
+    });
 
     ctx.restore();
   }
@@ -920,6 +983,40 @@ export class WallLayer extends BaseLayer {
       }
     }
     return null;
+  }
+
+  /**
+   * Check if a point is inside a room using ray casting algorithm
+   */
+  private isPointInRoom(point: { x: number; y: number }, room: Room): boolean {
+    const roomPoints: { x: number; y: number }[] = [];
+    for (const pointId of room.points) {
+      const p = this.points.get(pointId);
+      if (p) {
+        roomPoints.push({ x: p.x, y: p.y });
+      }
+    }
+
+    if (roomPoints.length < 3) return false;
+
+    // Ray casting algorithm
+    let inside = false;
+    const x = point.x;
+    const y = point.y;
+    const n = roomPoints.length;
+
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      const xi = roomPoints[i].x;
+      const yi = roomPoints[i].y;
+      const xj = roomPoints[j].x;
+      const yj = roomPoints[j].y;
+
+      if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+        inside = !inside;
+      }
+    }
+
+    return inside;
   }
 
 }

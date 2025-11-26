@@ -10,6 +10,12 @@ export interface SnapResult {
   snapPoint?: Point;
 }
 
+export interface SnapGuide {
+  origin: Vector2;
+  angle: number; // in degrees
+  type: 'extension' | 'perpendicular';
+}
+
 export interface SnapConfig {
   enabled: boolean;
   pointSnapEnabled: boolean;
@@ -641,5 +647,52 @@ export class SnapService {
     }
 
     return null;
+  }
+
+
+  /**
+   * Snap to custom guides (e.g., wall extensions)
+   */
+  public snapToGuides(position: Vector2, guides: SnapGuide[]): SnapResult | null {
+    if (!this.config.enabled || guides.length === 0) return null;
+
+    let bestSnap: SnapResult | null = null;
+    let minDistance = this.config.pointSnapThreshold; // Use same threshold as point snap
+
+    for (const guide of guides) {
+      // Convert angle to radians
+      const rad = (guide.angle * Math.PI) / 180;
+      const dir = new Vector2(Math.cos(rad), Math.sin(rad));
+
+      // Vector from guide origin to current position
+      const toPos = position.subtract(guide.origin);
+
+      // Project onto guide direction
+      // t is distance along the line from origin
+      const t = toPos.dot(dir);
+
+      // Closest point on the line
+      const closest = guide.origin.add(dir.multiply(t));
+
+      // Distance from position to line
+      const distance = position.distanceTo(closest);
+
+      if (distance < minDistance) {
+        minDistance = distance;
+
+        // Emit guide event
+        eventBus.emit(FloorEvents.ANGLE_GUIDE_UPDATED, {
+          from: { id: 'custom-guide', x: guide.origin.x, y: guide.origin.y },
+          angle: guide.angle,
+        });
+
+        bestSnap = {
+          position: closest,
+          snappedTo: 'angle',
+        };
+      }
+    }
+
+    return bestSnap;
   }
 }

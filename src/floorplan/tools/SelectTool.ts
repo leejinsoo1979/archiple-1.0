@@ -5,6 +5,7 @@ import type { Wall } from '../../core/types/Wall';
 import type { Door } from '../../core/types/Door';
 import { SceneManager } from '../../core/engine/SceneManager';
 import { SnapService } from '../services/SnapService';
+import type { SnapGuide } from '../services/SnapService';
 import { eventBus } from '../../core/events/EventBus';
 import { FloorEvents } from '../../core/events/FloorEvents';
 
@@ -227,9 +228,62 @@ export class SelectTool extends BaseTool {
       const otherPoints = allPoints.filter((p) => p.id !== this.selectedPoint!.id);
       this.snapService.setPoints(otherPoints);
 
-      // Snap position
-      const snapResult = this.snapService.snap(position);
-      const snappedPos = snapResult.position;
+      // Calculate guides from connected walls
+      const guides: SnapGuide[] = [];
+      const connectedWallIds = this.selectedPoint.connectedWalls || [];
+      const allWalls = this.sceneManager.objectManager.getAllWalls();
+
+      connectedWallIds.forEach(wallId => {
+        const wall = allWalls.find(w => w.id === wallId);
+        if (wall) {
+          // Find the OTHER endpoint of this wall (the one NOT being dragged)
+          const otherPointId = wall.startPointId === this.selectedPoint!.id ? wall.endPointId : wall.startPointId;
+          const otherPoint = allPoints.find(p => p.id === otherPointId);
+
+          if (otherPoint) {
+            const otherVec = new Vector2(otherPoint.x, otherPoint.y);
+
+            // Calculate wall angle
+            // Direction from Other -> Selected (current wall direction)
+            // But we want to extend from Other.
+            const dx = this.selectedPoint!.x - otherPoint.x;
+            const dy = this.selectedPoint!.y - otherPoint.y;
+            const angleRad = Math.atan2(dy, dx);
+            const angleDeg = (angleRad * 180) / Math.PI;
+
+            // 1. Extension Guide (keep wall straight)
+            guides.push({
+              origin: otherVec,
+              angle: angleDeg,
+              type: 'extension'
+            });
+
+            // 2. Perpendicular Guide (90 degrees)
+            guides.push({
+              origin: otherVec,
+              angle: angleDeg + 90,
+              type: 'perpendicular'
+            });
+            guides.push({
+              origin: otherVec,
+              angle: angleDeg - 90,
+              type: 'perpendicular'
+            });
+          }
+        }
+      });
+
+      // Try snapping to guides first
+      let snappedPos = position;
+      const guideSnap = this.snapService.snapToGuides(position, guides);
+
+      if (guideSnap) {
+        snappedPos = guideSnap.position;
+      } else {
+        // Fallback to normal snap
+        const snapResult = this.snapService.snap(position);
+        snappedPos = snapResult.position;
+      }
 
       // Update point using SceneManager's updatePoint method
       this.sceneManager.objectManager.updatePoint(this.selectedPoint.id, {
@@ -283,13 +337,31 @@ export class SelectTool extends BaseTool {
     }
   }
 
-  handleMouseUp(_position: Vector2, event: MouseEvent): void {
+  handleMouseUp(position: Vector2, event: MouseEvent): void {
     if (!this.isDragging || event.button !== 0) return;
 
     // Finalize move
     this.isDragging = false;
 
     if (this.selectedPoint) {
+      // Check for nearby point to merge with
+      const allPoints = this.sceneManager.objectManager.getAllPoints();
+      const otherPoints = allPoints.filter((p) => p.id !== this.selectedPoint!.id);
+      const nearbyPoint = this.findPointNear(position, otherPoints);
+
+      if (nearbyPoint) {
+        // Merge the dragged point into the nearby point
+        const merged = this.sceneManager.objectManager.mergePoints(
+          this.selectedPoint.id,
+          nearbyPoint.id
+        );
+        if (merged) {
+          console.log('[SelectTool] Points merged:', this.selectedPoint.id, '->', nearbyPoint.id);
+          this.selectedPoint = null;
+          return;
+        }
+      }
+
       // Emit final update event for point
       eventBus.emit(FloorEvents.POINT_UPDATED, {
         point: this.selectedPoint,

@@ -12,6 +12,7 @@ export interface RoomLayerConfig {
   showLabels?: boolean;
   labelFont?: string;
   labelColor?: string;
+  showAngles?: boolean;
   wallThickness?: number; // Wall thickness for floor inset calculation
 }
 
@@ -31,6 +32,9 @@ export class RoomLayer extends BaseLayer {
   private hoveredRoomId: string | null = null;
   private renderStyle: 'wireframe' | 'hidden-line' | 'solid' | 'realistic' = 'solid';
 
+  // Track rendered corners to prevent duplicates
+  private renderedCorners: { x: number; y: number }[] = [];
+
   private config: Required<RoomLayerConfig>;
   private woodPattern: CanvasPattern | null = null;
 
@@ -47,6 +51,7 @@ export class RoomLayer extends BaseLayer {
       showLabels: config?.showLabels ?? true,
       labelFont: config?.labelFont || 'bold 180px Arial',
       labelColor: config?.labelColor || '#2c3e50',
+      showAngles: config?.showAngles ?? true,
       wallThickness: config?.wallThickness || 100, // 100mm default wall thickness
     };
 
@@ -64,9 +69,17 @@ export class RoomLayer extends BaseLayer {
         // At initialScale 0.2 (1mm = 0.2px), texture should be scaled to match
         // Assuming texture represents ~1000mm x 1000mm real wood planks
         const scale = 1.0; // Use full texture size for realistic scale
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        // Rotate 90 degrees for horizontal grain
+        // Swap width/height for rotated canvas
+        canvas.width = img.height * scale;
+        canvas.height = img.width * scale;
+
+        // Rotate around center
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(-Math.PI / 2); // -90 degrees
+        ctx.drawImage(img, -img.width * scale / 2, -img.height * scale / 2, img.width * scale, img.height * scale);
+
         this.woodPattern = ctx.createPattern(canvas, 'repeat');
       }
     };
@@ -100,21 +113,34 @@ export class RoomLayer extends BaseLayer {
   render(ctx: CanvasRenderingContext2D): void {
     if (!this.visible) return;
 
-    // Clear dimension labels before rendering
+    // Clear dimension labels and room label hitboxes before rendering
     this.dimensionLabels = [];
+    this.labelHitboxes = [];
+
+    // Clear rendered corners set for this frame
+    this.renderedCorners = [];
 
     this.applyOpacity(ctx);
 
+    // First pass: Render all room fills
     this.rooms.forEach((room) => {
       const isSelected = this.selectedRoomIds.has(room.id);
       const isHovered = room.id === this.hoveredRoomId;
-      this.renderRoom(ctx, room, isSelected, isHovered);
+      this.renderRoomFill(ctx, room, isSelected, isHovered);
+    });
+
+    // Second pass: Render all room annotations (labels, angles, dimensions)
+    // This ensures text is always on top of fills
+    this.rooms.forEach((room) => {
+      const isSelected = this.selectedRoomIds.has(room.id);
+      const isHovered = room.id === this.hoveredRoomId;
+      this.renderRoomAnnotations(ctx, room, isSelected, isHovered);
     });
 
     this.resetOpacity(ctx);
   }
 
-  private renderRoom(
+  private renderRoomFill(
     ctx: CanvasRenderingContext2D,
     room: Room,
     isSelected: boolean,
@@ -130,10 +156,7 @@ export class RoomLayer extends BaseLayer {
     const insetDistance = this.config.wallThickness / 2;
     const floorPoints = this.insetPolygon(roomPoints, insetDistance);
 
-    if (floorPoints.length < 3) {
-      // Fallback to original if inset fails
-      return;
-    }
+    if (floorPoints.length < 3) return;
 
     // Determine fill style based on render mode
     let fillStyle: string | CanvasPattern = this.config.fillColor;
@@ -194,11 +217,35 @@ export class RoomLayer extends BaseLayer {
     ctx.stroke();
 
     ctx.restore();
+  }
+
+  private renderRoomAnnotations(
+    ctx: CanvasRenderingContext2D,
+    room: Room,
+    _isSelected: boolean,
+    _isHovered: boolean
+  ): void {
+    const roomPoints = room.points
+      .map((pointId) => this.points.get(pointId))
+      .filter((p): p is Point => p !== undefined);
+
+    if (roomPoints.length < 3) return;
+
+    // Room points are at wall centerline - inset by half wall thickness to get inner edge
+    const insetDistance = this.config.wallThickness / 2;
+    const floorPoints = this.insetPolygon(roomPoints, insetDistance);
+
+    if (floorPoints.length < 3) return;
 
     // Draw label
     if (this.config.showLabels) {
       this.renderLabel(ctx, room, roomPoints, floorPoints);
       this.renderWallDimensions(ctx, floorPoints, room.id);
+    }
+
+    // Draw corner angles
+    if (this.config.showAngles) {
+      this.renderCornerAngles(ctx, floorPoints, roomPoints);
     }
   }
 
@@ -213,6 +260,16 @@ export class RoomLayer extends BaseLayer {
     p1: Point;
     p2: Point;
     isCW: boolean;
+  }> = [];
+
+  // Store room label hitboxes for click detection
+  private labelHitboxes: Array<{
+    roomId: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    text: string;
   }> = [];
 
   private renderWallDimensions(ctx: CanvasRenderingContext2D, points: Point[], roomId: string): void {
@@ -314,7 +371,7 @@ export class RoomLayer extends BaseLayer {
       ctx.strokeText(text, 0, 0);
 
       // Fill
-      ctx.fillStyle = '#555';
+      ctx.fillStyle = '#000000';
       ctx.fillText(text, 0, 0);
 
       ctx.restore();
@@ -323,7 +380,7 @@ export class RoomLayer extends BaseLayer {
     ctx.restore();
   }
 
-  private renderLabel(ctx: CanvasRenderingContext2D, room: Room, roomPoints: Point[], floorPoints: Point[]): void {
+  private renderLabel(ctx: CanvasRenderingContext2D, room: Room, _roomPoints: Point[], floorPoints: Point[]): void {
     // Use bounding box center (where diagonals cross) for accurate center positioning
     const center = this.calculateBoundingBoxCenter(floorPoints);
 
@@ -347,6 +404,20 @@ export class RoomLayer extends BaseLayer {
 
       ctx.fillStyle = this.config.labelColor;
       ctx.fillText(room.name, center.x, center.y);
+
+      // Store hitbox for room name
+      const metrics = ctx.measureText(room.name);
+      // Height approximation
+      const textHeight = fontSize;
+
+      this.labelHitboxes.push({
+        roomId: room.id,
+        x: center.x,
+        y: center.y,
+        width: metrics.width,
+        height: textHeight,
+        text: room.name
+      });
     }
 
     // Calculate actual floor area from inset polygon (floorPoints)
@@ -369,15 +440,140 @@ export class RoomLayer extends BaseLayer {
     ctx.restore();
   }
 
-  private calculateCentroid(points: Point[]): { x: number; y: number } {
-    const sum = points.reduce(
-      (acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }),
-      { x: 0, y: 0 }
-    );
-    return {
-      x: sum.x / points.length,
-      y: sum.y / points.length,
-    };
+  /**
+   * Render corner angles at each vertex of the room (inside the room)
+   */
+  private renderCornerAngles(ctx: CanvasRenderingContext2D, points: Point[], originalPoints: Point[]): void {
+    if (points.length < 3 || points.length !== originalPoints.length) return;
+
+    // Calculate responsive sizes
+    const roomSize = this.calculateRoomMinDimension(points);
+    const fontSize = Math.max(30, Math.min(80, roomSize * 0.025));
+    const textDistance = Math.max(80, Math.min(200, roomSize * 0.06));
+    const strokeWidth = Math.max(1.5, fontSize * 0.06);
+
+    ctx.save();
+
+    for (let i = 0; i < points.length; i++) {
+      const curr = points[i];
+      const original = originalPoints[i];
+
+      // Skip if point is at centerline (inside wall)
+      // This happens if insetPolygon failed or wall thickness is 0
+      // We only want to draw angles at the actual floor corners
+      const distToOriginal = Math.sqrt(Math.pow(curr.x - original.x, 2) + Math.pow(curr.y - original.y, 2));
+      if (distToOriginal < 10) continue;
+
+      const prev = points[(i - 1 + points.length) % points.length];
+      const next = points[(i + 1) % points.length];
+
+      // Deduplicate corners based on position (distance check)
+      // Use 50mm threshold to handle mismatches
+      const isDuplicate = this.renderedCorners.some(p => {
+        const dx = p.x - curr.x;
+        const dy = p.y - curr.y;
+        return dx * dx + dy * dy < 2500; // 50^2
+      });
+
+      if (isDuplicate) continue;
+      this.renderedCorners.push({ x: curr.x, y: curr.y });
+
+      // Calculate vectors from current point to neighbors (outward direction)
+      const v1x = prev.x - curr.x;
+      const v1y = prev.y - curr.y;
+      const v2x = next.x - curr.x;
+      const v2y = next.y - curr.y;
+
+      // Calculate angle using dot product
+      const dot = v1x * v2x + v1y * v2y;
+      const len1 = Math.sqrt(v1x * v1x + v1y * v1y);
+      const len2 = Math.sqrt(v2x * v2x + v2y * v2y);
+
+      if (len1 === 0 || len2 === 0) continue;
+
+      const cosAngle = Math.max(-1, Math.min(1, dot / (len1 * len2)));
+      const angleRad = Math.acos(cosAngle);
+      const angleDeg = Math.round(angleRad * (180 / Math.PI));
+
+      // Draw angle indicator inside the corner
+      const arcRadius = textDistance * 0.6;
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = strokeWidth;
+
+      if (angleDeg === 90) {
+        // Draw right angle symbol (small square)
+        const squareSize = arcRadius;
+        const dir1X = v1x / len1;
+        const dir1Y = v1y / len1;
+        const dir2X = v2x / len2;
+        const dir2Y = v2y / len2;
+
+        // Corner points for the right angle square
+        const p1X = curr.x + dir1X * squareSize;
+        const p1Y = curr.y + dir1Y * squareSize;
+        const p2X = curr.x + dir1X * squareSize + dir2X * squareSize;
+        const p2Y = curr.y + dir1Y * squareSize + dir2Y * squareSize;
+        const p3X = curr.x + dir2X * squareSize;
+        const p3Y = curr.y + dir2Y * squareSize;
+
+        ctx.beginPath();
+        ctx.moveTo(p1X, p1Y);
+        ctx.lineTo(p2X, p2Y);
+        ctx.lineTo(p3X, p3Y);
+        ctx.stroke();
+      } else {
+        // Draw arc for non-right angles
+        const angle1 = Math.atan2(v1y, v1x);
+        const angle2 = Math.atan2(v2y, v2x);
+
+        // Always draw the shortest arc (matching the dot product angle <= 180)
+        // Calculate difference and normalize to -PI to PI
+        let diff = angle2 - angle1;
+        while (diff <= -Math.PI) diff += 2 * Math.PI;
+        while (diff > Math.PI) diff -= 2 * Math.PI;
+
+        // If diff is positive, we want to go CW (increasing) to get there in shortest path
+        // If diff is negative, we want to go CCW (decreasing)
+        // ctx.arc anticlockwise param: true = CCW, false = CW
+        const anticlockwise = diff < 0;
+
+        ctx.beginPath();
+        ctx.arc(curr.x, curr.y, arcRadius, angle1, angle2, anticlockwise);
+        ctx.stroke();
+      }
+
+      // Skip straight lines (180 degrees)
+      if (angleDeg > 179) continue;
+
+      // Calculate position for angle text (inside the room, along bisector)
+      const bisectorX = (v1x / len1 + v2x / len2);
+      const bisectorY = (v1y / len1 + v2y / len2);
+      const bisectorLen = Math.sqrt(bisectorX * bisectorX + bisectorY * bisectorY);
+
+      if (bisectorLen < 0.001) continue;
+
+      // Position text inside the room along the bisector
+      const dist = textDistance + fontSize * 0.6;
+      const textX = curr.x + (bisectorX / bisectorLen) * dist;
+      const textY = curr.y + (bisectorY / bisectorLen) * dist;
+
+      // Draw angle text (no background, just text with outline)
+      const text = `${angleDeg}°`;
+      ctx.font = `bold ${fontSize}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // Draw white outline for visibility
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = strokeWidth * 3;
+      ctx.strokeText(text, textX, textY);
+
+      // Draw text
+      ctx.fillStyle = '#000000';
+      ctx.fillText(text, textX, textY);
+    }
+
+    ctx.restore();
   }
 
   /**
@@ -570,6 +766,34 @@ export class RoomLayer extends BaseLayer {
       }
     }
 
+    return null;
+  }
+
+  /**
+   * Check if a point (world coordinates) is on a room label
+   */
+  getLabelAtPoint(worldX: number, worldY: number): { roomId: string; text: string; x: number; y: number } | null {
+    const padding = 50; // 50mm padding
+
+    for (const label of this.labelHitboxes) {
+      // Hitbox is centered at label.x, label.y
+      const halfWidth = label.width / 2 + padding;
+      const halfHeight = label.height / 2 + padding;
+
+      if (
+        worldX >= label.x - halfWidth &&
+        worldX <= label.x + halfWidth &&
+        worldY >= label.y - halfHeight &&
+        worldY <= label.y + halfHeight
+      ) {
+        return {
+          roomId: label.roomId,
+          text: label.text,
+          x: label.x,
+          y: label.y
+        };
+      }
+    }
     return null;
   }
 }
