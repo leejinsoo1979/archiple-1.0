@@ -859,15 +859,6 @@ export class WallLayer extends BaseLayer {
       exteriorWalls.push({ wall, startPoint, endPoint, dimDirection });
     });
 
-    // Debug log
-    console.log('[ExteriorDim] Total walls:', this.walls.length, 'Exterior walls:', exteriorWalls.length);
-    console.log('[ExteriorDim] By direction:', {
-      up: exteriorWalls.filter(w => w.dimDirection === 'up').length,
-      down: exteriorWalls.filter(w => w.dimDirection === 'down').length,
-      left: exteriorWalls.filter(w => w.dimDirection === 'left').length,
-      right: exteriorWalls.filter(w => w.dimDirection === 'right').length,
-    });
-
     // Calculate aligned dimension line positions (furthest from center)
     const dimLinePositions = {
       up: minY - baseOffset - extensionLength,
@@ -999,12 +990,7 @@ export class WallLayer extends BaseLayer {
       ctx.stroke();
 
       // Draw text - ensure valid distance
-      if (!Number.isFinite(distanceMm) || distanceMm < 1) {
-        console.log('[ExteriorDim] Skipping invalid distance:', distanceMm, dimDirection);
-        return;
-      }
-
-      console.log('[ExteriorDim] Drawing:', dimDirection, Math.round(distanceMm) + 'mm', 'at', textPos);
+      if (!Number.isFinite(distanceMm) || distanceMm < 1) return;
 
       const label = `${Math.round(distanceMm)}mm`;
 
@@ -1025,7 +1011,12 @@ export class WallLayer extends BaseLayer {
       // Draw background for better visibility
       const textMetrics = ctx.measureText(label);
       const padding = 4;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+
+      // Use theme-aware background color
+      // Dark mode: Dark background with high opacity to hide grid lines behind text
+      // Light mode: White background with high opacity
+      ctx.fillStyle = isDarkMode ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)';
+
       ctx.fillRect(
         -textMetrics.width / 2 - padding,
         -8,

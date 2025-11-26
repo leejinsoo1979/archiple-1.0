@@ -467,76 +467,8 @@ export class SelectTool extends BaseTool {
       eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
       eventBus.emit(FloorEvents.MULTI_WALL_PREVIEW_CLEARED, {});
 
-      // Check if wall actually moved (not just clicked)
-      const movedDistance = this.originalWallStartPoint
-        ? Math.sqrt(
-            Math.pow(this.wallDragGhostStart.x - this.originalWallStartPoint.x, 2) +
-            Math.pow(this.wallDragGhostStart.y - this.originalWallStartPoint.y, 2)
-          )
-        : 0;
-
-      if (movedDistance > 10) { // Only apply changes if moved more than 10mm
-        const originalStartPointId = this.selectedWall.startPointId;
-        const originalEndPointId = this.selectedWall.endPointId;
-
-        // Strategy:
-        // 1. Create new points at ghost positions
-        // 2. Change the main wall's endpoints to use new points
-        // 3. Change connected walls' shared endpoints to use new points
-        // 4. Original points (if still needed by other walls) stay in place
-
-        // Create new points at ghost positions
-        const newStartPoint = this.sceneManager.objectManager.addPoint({
-          id: '',
-          x: this.wallDragGhostStart.x,
-          y: this.wallDragGhostStart.y,
-        });
-        const newEndPoint = this.sceneManager.objectManager.addPoint({
-          id: '',
-          x: this.wallDragGhostEnd.x,
-          y: this.wallDragGhostEnd.y,
-        });
-
-        // Map from original point ID to new point ID
-        const pointMapping: { [originalId: string]: string } = {
-          [originalStartPointId]: newStartPoint.id,
-          [originalEndPointId]: newEndPoint.id,
-        };
-
-        // Change the main wall's endpoints to use new points
-        this.sceneManager.objectManager.changeWallEndpoint(this.selectedWall.id, 'start', newStartPoint.id);
-        this.sceneManager.objectManager.changeWallEndpoint(this.selectedWall.id, 'end', newEndPoint.id);
-
-        // Update connected walls - only change their shared endpoint
-        for (const connInfo of this.connectedWallsInfo) {
-          const newPointId = pointMapping[connInfo.sharedPointId];
-          if (newPointId) {
-            // Determine if the shared point is the start or end of the connected wall
-            const isStartShared = connInfo.wall.startPointId === connInfo.sharedPointId;
-            const endpoint = isStartShared ? 'start' : 'end';
-
-            // Change only the shared endpoint, leaving the other end fixed
-            this.sceneManager.objectManager.changeWallEndpoint(connInfo.wall.id, endpoint, newPointId);
-          }
-        }
-
-        // Clean up orphaned original points (if no other walls use them)
-        const allWalls = this.sceneManager.objectManager.getAllWalls();
-
-        const isStartPointStillUsed = allWalls.some(w =>
-          w.startPointId === originalStartPointId || w.endPointId === originalStartPointId
-        );
-        if (!isStartPointStillUsed) {
-          this.sceneManager.objectManager.removePoint(originalStartPointId);
-        }
-
-        const isEndPointStillUsed = allWalls.some(w =>
-          w.startPointId === originalEndPointId || w.endPointId === originalEndPointId
-        );
-        if (!isEndPointStillUsed) {
-          this.sceneManager.objectManager.removePoint(originalEndPointId);
-        }
-      }
+      // Wall drag disabled for now - use point dragging instead
+      // TODO: Implement proper wall drag with connected wall stretching
 
       // Reset ghost state
       this.wallDragGhostStart = null;
