@@ -2541,6 +2541,15 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       skyMaterial.sunPosition = new Vector3(sunX, sunY, sunZ);
     }
 
+    // Update ground plane brightness based on altitude
+    const groundMesh = scene.getMeshByName('whiteGround');
+    if (groundMesh && groundMesh.material instanceof StandardMaterial) {
+      const groundMat = groundMesh.material as StandardMaterial;
+      const brightness = Math.max(0.05, Math.min(0.5, (altitude + 10) / 100));
+      groundMat.diffuseColor = new Color3(brightness, brightness, brightness);
+      groundMat.emissiveColor = new Color3(brightness * 0.8, brightness * 0.8, brightness * 0.8);
+    }
+
     console.log('[Babylon3DCanvas] Sun updated - dir:', dirX.toFixed(2), dirY.toFixed(2), dirZ.toFixed(2));
   }, [sunSettings]);
 
