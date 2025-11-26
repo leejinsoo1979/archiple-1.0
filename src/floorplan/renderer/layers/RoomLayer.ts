@@ -381,8 +381,8 @@ export class RoomLayer extends BaseLayer {
   }
 
   private renderLabel(ctx: CanvasRenderingContext2D, room: Room, _roomPoints: Point[], floorPoints: Point[]): void {
-    // Use bounding box center (where diagonals cross) for accurate center positioning
-    const center = this.calculateBoundingBoxCenter(floorPoints);
+    // Use polygon centroid for accurate center positioning in any shape
+    const center = this.calculatePolygonCentroid(floorPoints);
 
     // Calculate responsive font size based on room size
     const roomSize = this.calculateRoomMinDimension(floorPoints);
@@ -576,28 +576,6 @@ export class RoomLayer extends BaseLayer {
     ctx.restore();
   }
 
-  /**
-   * Calculate the center of the bounding box (where diagonals cross)
-   */
-  private calculateBoundingBoxCenter(points: Point[]): { x: number; y: number } {
-    if (points.length === 0) return { x: 0, y: 0 };
-
-    let minX = Infinity, maxX = -Infinity;
-    let minY = Infinity, maxY = -Infinity;
-
-    for (const p of points) {
-      minX = Math.min(minX, p.x);
-      maxX = Math.max(maxX, p.x);
-      minY = Math.min(minY, p.y);
-      maxY = Math.max(maxY, p.y);
-    }
-
-    return {
-      x: (minX + maxX) / 2,
-      y: (minY + maxY) / 2,
-    };
-  }
-
   private calculatePolygonArea(points: Point[]): number {
     if (points.length < 3) return 0;
     let area = 0;
@@ -607,6 +585,52 @@ export class RoomLayer extends BaseLayer {
       area -= points[j].x * points[i].y;
     }
     return area / 2;
+  }
+
+  /**
+   * Calculate the centroid (geometric center) of a polygon
+   * This is the true center point where the polygon would balance
+   */
+  private calculatePolygonCentroid(points: Point[]): { x: number; y: number } {
+    if (points.length === 0) return { x: 0, y: 0 };
+    if (points.length === 1) return { x: points[0].x, y: points[0].y };
+    if (points.length === 2) {
+      return {
+        x: (points[0].x + points[1].x) / 2,
+        y: (points[0].y + points[1].y) / 2
+      };
+    }
+
+    // Calculate signed area
+    let signedArea = 0;
+    let cx = 0;
+    let cy = 0;
+
+    for (let i = 0; i < points.length; i++) {
+      const j = (i + 1) % points.length;
+      const cross = points[i].x * points[j].y - points[j].x * points[i].y;
+      signedArea += cross;
+      cx += (points[i].x + points[j].x) * cross;
+      cy += (points[i].y + points[j].y) * cross;
+    }
+
+    signedArea /= 2;
+
+    // Avoid division by zero for degenerate polygons
+    if (Math.abs(signedArea) < 0.001) {
+      // Fallback to average of points
+      let sumX = 0, sumY = 0;
+      for (const p of points) {
+        sumX += p.x;
+        sumY += p.y;
+      }
+      return { x: sumX / points.length, y: sumY / points.length };
+    }
+
+    cx /= (6 * signedArea);
+    cy /= (6 * signedArea);
+
+    return { x: cx, y: cy };
   }
 
   /**

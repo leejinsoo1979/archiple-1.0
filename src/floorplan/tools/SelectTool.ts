@@ -711,8 +711,6 @@ export class SelectTool extends BaseTool {
       w => w.startPointId === this.selectedPoint!.id || w.endPointId === this.selectedPoint!.id
     );
 
-    console.log('[SelectTool] Point:', this.selectedPoint.id.slice(0, 8), 'Connected walls:', connectedWalls.length);
-
     for (const wall of connectedWalls) {
       // Find the OTHER endpoint of this wall
       const otherPointId = wall.startPointId === this.selectedPoint.id ? wall.endPointId : wall.startPointId;

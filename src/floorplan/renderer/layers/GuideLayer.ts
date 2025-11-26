@@ -428,16 +428,41 @@ export class GuideLayer extends BaseLayer {
     ctx: CanvasRenderingContext2D,
     guide: { x: number; fromY: number; toY: number }
   ): void {
+    if (!this.camera) return;
+
     ctx.save();
 
-    // Emissive effect
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = '#e74c3c';
+    // Theme-aware colors
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+    const guideColor = isDarkMode ? '#64B5F6' : '#2196F3'; // Blue theme color
+    const glowColor = isDarkMode ? '#64B5F6' : '#2196F3';
 
-    // Draw vertical guide line (수직 가이드)
-    ctx.strokeStyle = '#e74c3c'; // 빨간색으로 명확하게 표시
-    ctx.lineWidth = 1; // Crisp 1px line
-    ctx.setLineDash([10, 5]);
+    // Get zoom level to adjust line width for consistent screen appearance
+    const zoom = this.camera.getZoom();
+    const screenLineWidth = 2 / zoom;
+    const glowLineWidth = 6 / zoom;
+    const dashLength = 15 / zoom;
+    const gapLength = 8 / zoom;
+
+    // Draw glow layer (wider, blurred line underneath)
+    ctx.strokeStyle = glowColor;
+    ctx.lineWidth = glowLineWidth;
+    ctx.globalAlpha = 0.4;
+    ctx.shadowBlur = 25 / zoom;
+    ctx.shadowColor = glowColor;
+    ctx.setLineDash([dashLength, gapLength]);
+
+    ctx.beginPath();
+    ctx.moveTo(guide.x, guide.fromY);
+    ctx.lineTo(guide.x, guide.toY);
+    ctx.stroke();
+
+    // Draw main line on top
+    ctx.globalAlpha = 1.0;
+    ctx.strokeStyle = guideColor;
+    ctx.lineWidth = screenLineWidth;
+    ctx.shadowBlur = 15 / zoom;
+    ctx.shadowColor = glowColor;
 
     ctx.beginPath();
     ctx.moveTo(guide.x, guide.fromY);
@@ -451,16 +476,41 @@ export class GuideLayer extends BaseLayer {
     ctx: CanvasRenderingContext2D,
     guide: { y: number; fromX: number; toX: number }
   ): void {
+    if (!this.camera) return;
+
     ctx.save();
 
-    // Emissive effect
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = '#e74c3c';
+    // Theme-aware colors
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+    const guideColor = isDarkMode ? '#64B5F6' : '#2196F3'; // Blue theme color
+    const glowColor = isDarkMode ? '#64B5F6' : '#2196F3';
 
-    // Draw horizontal guide line (수평 가이드)
-    ctx.strokeStyle = '#e74c3c'; // 빨간색으로 명확하게 표시
-    ctx.lineWidth = 1; // Crisp 1px line
-    ctx.setLineDash([10, 5]);
+    // Get zoom level to adjust line width for consistent screen appearance
+    const zoom = this.camera.getZoom();
+    const screenLineWidth = 2 / zoom;
+    const glowLineWidth = 6 / zoom;
+    const dashLength = 15 / zoom;
+    const gapLength = 8 / zoom;
+
+    // Draw glow layer (wider, blurred line underneath)
+    ctx.strokeStyle = glowColor;
+    ctx.lineWidth = glowLineWidth;
+    ctx.globalAlpha = 0.4;
+    ctx.shadowBlur = 25 / zoom;
+    ctx.shadowColor = glowColor;
+    ctx.setLineDash([dashLength, gapLength]);
+
+    ctx.beginPath();
+    ctx.moveTo(guide.fromX, guide.y);
+    ctx.lineTo(guide.toX, guide.y);
+    ctx.stroke();
+
+    // Draw main line on top
+    ctx.globalAlpha = 1.0;
+    ctx.strokeStyle = guideColor;
+    ctx.lineWidth = screenLineWidth;
+    ctx.shadowBlur = 15 / zoom;
+    ctx.shadowColor = glowColor;
 
     ctx.beginPath();
     ctx.moveTo(guide.fromX, guide.y);
