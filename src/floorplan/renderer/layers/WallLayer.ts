@@ -819,64 +819,42 @@ export class WallLayer extends BaseLayer {
         return;
       }
 
-      // Determine dimension direction based on wall POSITION relative to building bounds
-      // This ensures walls on top edge show top dimensions, walls on side show side dimensions
+      // Simple approach:
+      // 1. Wall ORIENTATION determines dimension type (horizontal wall → X dimension, vertical wall → Y dimension)
+      // 2. Exterior side determines where to show it (up/down for horizontal, left/right for vertical)
       const dx = endPoint.x - startPoint.x;
       const dy = endPoint.y - startPoint.y;
-      const wallMinY = Math.min(startPoint.y, endPoint.y);
-      const wallMaxY = Math.max(startPoint.y, endPoint.y);
-      const wallMinX = Math.min(startPoint.x, endPoint.x);
-      const wallMaxX = Math.max(startPoint.x, endPoint.x);
+      const isHorizontal = Math.abs(dx) > Math.abs(dy);
 
-      // Check wall position relative to building bounds
-      const tolerance = this.config.wallThickness * 2;
-      const isOnTopEdge = wallMinY <= minY + tolerance;
-      const isOnBottomEdge = wallMaxY >= maxY - tolerance;
-      const isOnLeftEdge = wallMinX <= minX + tolerance;
-      const isOnRightEdge = wallMaxX >= maxX - tolerance;
-
-      // Determine exterior side based on room detection
-      let exteriorSide: 'top' | 'bottom' | 'left' | 'right' | null = null;
-
-      if (!roomOnSide1 && roomOnSide2) {
-        // Side 1 is exterior
-        if (perp1Y < -0.5) exteriorSide = 'top';
-        else if (perp1Y > 0.5) exteriorSide = 'bottom';
-        else if (perp1X < -0.5) exteriorSide = 'left';
-        else if (perp1X > 0.5) exteriorSide = 'right';
-      } else if (roomOnSide1 && !roomOnSide2) {
-        // Side 2 is exterior
-        if (perp2Y < -0.5) exteriorSide = 'top';
-        else if (perp2Y > 0.5) exteriorSide = 'bottom';
-        else if (perp2X < -0.5) exteriorSide = 'left';
-        else if (perp2X > 0.5) exteriorSide = 'right';
-      } else {
-        // Neither side has room - use position to determine exterior
-        if (isOnTopEdge) exteriorSide = 'top';
-        else if (isOnBottomEdge) exteriorSide = 'bottom';
-        else if (isOnLeftEdge) exteriorSide = 'left';
-        else if (isOnRightEdge) exteriorSide = 'right';
-      }
-
-      // Map exterior side to dimension direction and check if this wall contributes meaningful dimension
       let dimDirection: 'up' | 'down' | 'left' | 'right';
-      let projectedDist: number;
 
-      if (exteriorSide === 'top' || exteriorSide === 'bottom') {
-        // Top/bottom exterior walls show horizontal (X) dimension
-        dimDirection = exteriorSide === 'top' ? 'up' : 'down';
-        projectedDist = Math.abs(dx);
-      } else if (exteriorSide === 'left' || exteriorSide === 'right') {
-        // Left/right exterior walls show vertical (Y) dimension
-        dimDirection = exteriorSide === 'left' ? 'left' : 'right';
-        projectedDist = Math.abs(dy);
+      if (isHorizontal) {
+        // Horizontal wall → show X dimension above or below
+        // Determine which side is exterior
+        if (!roomOnSide1 && roomOnSide2) {
+          // Side 1 is exterior - check if it's above or below the wall
+          dimDirection = perp1Y < 0 ? 'up' : 'down';
+        } else if (roomOnSide1 && !roomOnSide2) {
+          // Side 2 is exterior
+          dimDirection = perp2Y < 0 ? 'up' : 'down';
+        } else {
+          // Neither or both sides have room - use wall position
+          dimDirection = wallMidY < (minY + maxY) / 2 ? 'up' : 'down';
+        }
+        // Skip if X projection is too small
+        if (Math.abs(dx) < 50) return;
       } else {
-        // Skip walls that aren't clearly on an edge
-        return;
+        // Vertical wall → show Y dimension left or right
+        if (!roomOnSide1 && roomOnSide2) {
+          dimDirection = perp1X < 0 ? 'left' : 'right';
+        } else if (roomOnSide1 && !roomOnSide2) {
+          dimDirection = perp2X < 0 ? 'left' : 'right';
+        } else {
+          dimDirection = wallMidX < (minX + maxX) / 2 ? 'left' : 'right';
+        }
+        // Skip if Y projection is too small
+        if (Math.abs(dy) < 50) return;
       }
-
-      // Skip walls with very small projected distance
-      if (projectedDist < 50) return;
 
       exteriorWalls.push({ wall, startPoint, endPoint, dimDirection });
     });

@@ -382,12 +382,50 @@ export class SelectTool extends BaseTool {
         this.originalWallEndPoint.y + moveY
       );
 
-      // Emit single wall ghost preview
+      // Emit single wall ghost preview (main wall)
       eventBus.emit(FloorEvents.WALL_PREVIEW_UPDATED, {
         start: { x: this.wallDragGhostStart.x, y: this.wallDragGhostStart.y },
         end: { x: this.wallDragGhostEnd.x, y: this.wallDragGhostEnd.y },
         thickness: this.selectedWall.thickness,
       });
+
+      // Build multi-wall preview for connected walls (L/U shape)
+      // Connected walls stretch from new shared position to their fixed other end
+      if (this.connectedWallsInfo.length > 0) {
+        const multiWallPreviews: Array<{ start: Point; end: Point }> = [];
+
+        for (const connInfo of this.connectedWallsInfo) {
+          // Determine new position for the shared endpoint
+          let newSharedPos: Vector2;
+          if (connInfo.sharedPointId === this.originalWallStartPoint!.id) {
+            newSharedPos = this.wallDragGhostStart;
+          } else {
+            newSharedPos = this.wallDragGhostEnd;
+          }
+
+          // The other endpoint stays at its original position
+          const fixedEnd = connInfo.originalOtherPoint;
+
+          // Determine which is start/end based on original wall orientation
+          const isStartShared = connInfo.wall.startPointId === connInfo.sharedPointId;
+
+          if (isStartShared) {
+            multiWallPreviews.push({
+              start: { x: newSharedPos.x, y: newSharedPos.y } as Point,
+              end: { x: fixedEnd.x, y: fixedEnd.y } as Point,
+            });
+          } else {
+            multiWallPreviews.push({
+              start: { x: fixedEnd.x, y: fixedEnd.y } as Point,
+              end: { x: newSharedPos.x, y: newSharedPos.y } as Point,
+            });
+          }
+        }
+
+        eventBus.emit(FloorEvents.MULTI_WALL_PREVIEW_UPDATED, {
+          walls: multiWallPreviews,
+        });
+      }
     }
   }
 
@@ -438,18 +476,16 @@ export class SelectTool extends BaseTool {
         : 0;
 
       if (movedDistance > 10) { // Only apply changes if moved more than 10mm
-        const wallThickness = this.selectedWall.thickness;
-        const wallHeight = this.selectedWall.height;
-        const wallId = this.selectedWall.id;
+        const originalStartPointId = this.selectedWall.startPointId;
+        const originalEndPointId = this.selectedWall.endPointId;
 
-        console.log('[SelectTool] Wall drag - removing wall:', wallId);
-        console.log('[SelectTool] Ghost start:', this.wallDragGhostStart.x, this.wallDragGhostStart.y);
-        console.log('[SelectTool] Ghost end:', this.wallDragGhostEnd.x, this.wallDragGhostEnd.y);
+        // Strategy:
+        // 1. Create new points at ghost positions
+        // 2. Change the main wall's endpoints to use new points
+        // 3. Change connected walls' shared endpoints to use new points
+        // 4. Original points (if still needed by other walls) stay in place
 
-        // Delete the main wall only
-        this.sceneManager.objectManager.removeWall(wallId);
-
-        // Create NEW points at ghost positions
+        // Create new points at ghost positions
         const newStartPoint = this.sceneManager.objectManager.addPoint({
           id: '',
           x: this.wallDragGhostStart.x,
@@ -461,21 +497,45 @@ export class SelectTool extends BaseTool {
           y: this.wallDragGhostEnd.y,
         });
 
-        console.log('[SelectTool] New start point:', newStartPoint.id);
-        console.log('[SelectTool] New end point:', newEndPoint.id);
+        // Map from original point ID to new point ID
+        const pointMapping: { [originalId: string]: string } = {
+          [originalStartPointId]: newStartPoint.id,
+          [originalEndPointId]: newEndPoint.id,
+        };
 
-        // Create new wall at new positions (disconnected from original structure)
-        this.sceneManager.objectManager.addWall({
-          id: '',
-          startPointId: newStartPoint.id,
-          endPointId: newEndPoint.id,
-          thickness: wallThickness,
-          height: wallHeight,
-        });
+        // Change the main wall's endpoints to use new points
+        this.sceneManager.objectManager.changeWallEndpoint(this.selectedWall.id, 'start', newStartPoint.id);
+        this.sceneManager.objectManager.changeWallEndpoint(this.selectedWall.id, 'end', newEndPoint.id);
 
-        console.log('[SelectTool] New wall created');
+        // Update connected walls - only change their shared endpoint
+        for (const connInfo of this.connectedWallsInfo) {
+          const newPointId = pointMapping[connInfo.sharedPointId];
+          if (newPointId) {
+            // Determine if the shared point is the start or end of the connected wall
+            const isStartShared = connInfo.wall.startPointId === connInfo.sharedPointId;
+            const endpoint = isStartShared ? 'start' : 'end';
 
-        // DON'T touch connected walls - they stay connected to original points
+            // Change only the shared endpoint, leaving the other end fixed
+            this.sceneManager.objectManager.changeWallEndpoint(connInfo.wall.id, endpoint, newPointId);
+          }
+        }
+
+        // Clean up orphaned original points (if no other walls use them)
+        const allWalls = this.sceneManager.objectManager.getAllWalls();
+
+        const isStartPointStillUsed = allWalls.some(w =>
+          w.startPointId === originalStartPointId || w.endPointId === originalStartPointId
+        );
+        if (!isStartPointStillUsed) {
+          this.sceneManager.objectManager.removePoint(originalStartPointId);
+        }
+
+        const isEndPointStillUsed = allWalls.some(w =>
+          w.startPointId === originalEndPointId || w.endPointId === originalEndPointId
+        );
+        if (!isEndPointStillUsed) {
+          this.sceneManager.objectManager.removePoint(originalEndPointId);
+        }
       }
 
       // Reset ghost state
