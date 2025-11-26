@@ -19,6 +19,7 @@ export class SceneManager {
 
   private currentTool: ToolType = ToolType.SELECT;
   private config: EditorConfig;
+  private _isWallDragging: boolean = false; // Flag to prevent cleanup during wall drag
 
   private constructor(config: EditorConfig) {
     this.config = config;
@@ -86,6 +87,17 @@ export class SceneManager {
 
   isSnapEnabled(): boolean {
     return this.config.snapEnabled;
+  }
+
+  /**
+   * Wall dragging state - prevents cleanup during drag
+   */
+  setWallDragging(isDragging: boolean): void {
+    this._isWallDragging = isDragging;
+  }
+
+  isWallDragging(): boolean {
+    return this._isWallDragging;
   }
 
   /**

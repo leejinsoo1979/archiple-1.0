@@ -241,6 +241,29 @@ export class BlueprintObjectManager {
     }
   }
 
+  /**
+   * Change a wall's start or end corner to a new corner
+   * This detaches the wall from the old corner and attaches to the new one
+   */
+  changeWallEndpoint(wallId: string, endpoint: 'start' | 'end', newCornerId: string): boolean {
+    const wall = this.floorplan.getWalls().find(w => w.id === wallId);
+    const newCorner = this.floorplan.getCorners().find(c => c.id === newCornerId);
+
+    if (!wall || !newCorner) {
+      console.error('[BlueprintObjectManager] changeWallEndpoint failed: wall or corner not found');
+      return false;
+    }
+
+    if (endpoint === 'start') {
+      wall.setStart(newCorner);
+    } else {
+      wall.setEnd(newCorner);
+    }
+
+    console.log('[BlueprintObjectManager] Changed wall', wallId, endpoint, 'to corner', newCornerId);
+    return true;
+  }
+
   removeWall(id: string): void {
     const wall = this.floorplan.getWalls().find(w => w.id === id);
     if (wall) {

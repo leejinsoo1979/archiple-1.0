@@ -219,35 +219,33 @@ export class RoomLayer extends BaseLayer {
     ctx.globalAlpha = 1.0;
 
     if (isSelected) {
-      // Multi-layer illumination effect for selected room border
+      // Archisketch-style selection effect
       ctx.strokeStyle = themeColor;
 
-      // Layer 1: Outer glow (large, soft)
+      // Layer 1: Outer glow (soft, wide)
       ctx.shadowColor = themeColor;
-      ctx.shadowBlur = 40;
-      ctx.lineWidth = 3;
-      ctx.globalAlpha = 0.4;
+      ctx.shadowBlur = 25;
+      ctx.lineWidth = 8;
+      ctx.globalAlpha = 0.3;
+      ctx.setLineDash([]);
       ctx.stroke();
 
       // Layer 2: Middle glow
-      ctx.shadowBlur = 20;
-      ctx.lineWidth = 4;
-      ctx.globalAlpha = 0.6;
-      ctx.stroke();
-
-      // Layer 3: Inner glow
-      ctx.shadowBlur = 10;
-      ctx.lineWidth = 3;
-      ctx.globalAlpha = 0.8;
-      ctx.stroke();
-
-      // Layer 4: Core line (bright, sharp)
-      ctx.shadowBlur = 5;
+      ctx.shadowBlur = 15;
       ctx.lineWidth = 5;
-      ctx.globalAlpha = 1.0;
+      ctx.globalAlpha = 0.5;
       ctx.stroke();
 
+      // Layer 3: Dashed border line (like Archisketch)
+      ctx.shadowBlur = 8;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 1.0;
+      ctx.setLineDash([12, 6]); // Dashed pattern
+      ctx.stroke();
+
+      // Reset
       ctx.shadowBlur = 0;
+      ctx.setLineDash([]);
     } else {
       ctx.strokeStyle = this.config.strokeColor;
       ctx.lineWidth = this.renderStyle === 'wireframe' ? 1.5 : this.config.strokeWidth;

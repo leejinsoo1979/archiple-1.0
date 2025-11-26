@@ -117,6 +117,9 @@ export class SelectTool extends BaseTool {
       this.dragStartPos = position.clone();
       this.wallPointsDetached = false; // Reset detach flag for new wall drag
 
+      // Set wall dragging flag to prevent cleanup during drag
+      this.sceneManager.setWallDragging(true);
+
       // Emit wall selection event
       eventBus.emit(FloorEvents.WALL_SELECTED, {
         wall: clickedWall,
@@ -302,11 +305,20 @@ export class SelectTool extends BaseTool {
       const allPoints = this.sceneManager.objectManager.getAllPoints();
       const allWalls = this.sceneManager.objectManager.getAllWalls();
 
+      // Re-fetch the latest wall data (in case it was updated)
+      const currentWall = allWalls.find((w) => w.id === this.selectedWall!.id);
+      if (currentWall) {
+        this.selectedWall = currentWall;
+      }
+
       // Get wall's start and end points
       let startPoint = allPoints.find((p) => p.id === this.selectedWall!.startPointId);
       let endPoint = allPoints.find((p) => p.id === this.selectedWall!.endPointId);
 
-      if (!startPoint || !endPoint) return;
+      if (!startPoint || !endPoint) {
+        console.error('[SelectTool] Wall points not found:', this.selectedWall!.startPointId, this.selectedWall!.endPointId);
+        return;
+      }
 
       // First drag - detach shared points so only this wall moves
       // Connected walls will stretch instead of moving together
@@ -325,118 +337,119 @@ export class SelectTool extends BaseTool {
             (w.startPointId === endPoint!.id || w.endPointId === endPoint!.id)
         );
 
-        // If any point is shared, we need to recreate the wall with new points
-        if (startConnectedWalls.length > 0 || endConnectedWalls.length > 0) {
-          // Save wall properties
-          const oldWallId = this.selectedWall.id;
-          const wallThickness = this.selectedWall.thickness;
-          const wallHeight = this.selectedWall.height;
+        console.log('[SelectTool] Wall drag - startConnected:', startConnectedWalls.length, 'endConnected:', endConnectedWalls.length);
 
-          // Create new points for shared endpoints
+        // If any point is shared, create new points and change wall endpoints
+        if (startConnectedWalls.length > 0 || endConnectedWalls.length > 0) {
+          // Get Blueprint wall to change endpoints directly
           let newStartPointId = startPoint.id;
           let newEndPointId = endPoint.id;
 
-          // Add offset (100mm) to prevent cleanup from merging points back (merge tolerance is 50mm)
+          // Create new point for start if shared
           if (startConnectedWalls.length > 0) {
             const newStartPoint: Point = {
               id: uuidv4(),
-              x: startPoint.x + 100,
+              x: startPoint.x,
               y: startPoint.y,
             };
+            // Use forceAddPoint to create at exact same location
             const addedStartPoint = this.sceneManager.objectManager.forceAddPoint(newStartPoint);
             newStartPointId = addedStartPoint.id;
-            console.log('[SelectTool] Created new start point:', addedStartPoint.id, 'at', newStartPoint.x, newStartPoint.y);
+
+            // Change wall's start endpoint to new point
+            this.sceneManager.objectManager.changeWallEndpoint(this.selectedWall.id, 'start', newStartPointId);
+            console.log('[SelectTool] Detached start point, new:', newStartPointId);
           }
 
-          // Add offset (100mm) to prevent cleanup from merging points back (merge tolerance is 50mm)
+          // Create new point for end if shared
           if (endConnectedWalls.length > 0) {
             const newEndPoint: Point = {
               id: uuidv4(),
-              x: endPoint.x + 100,
+              x: endPoint.x,
               y: endPoint.y,
             };
             const addedEndPoint = this.sceneManager.objectManager.forceAddPoint(newEndPoint);
             newEndPointId = addedEndPoint.id;
-            console.log('[SelectTool] Created new end point:', addedEndPoint.id, 'at', newEndPoint.x, newEndPoint.y);
+
+            // Change wall's end endpoint to new point
+            this.sceneManager.objectManager.changeWallEndpoint(this.selectedWall.id, 'end', newEndPointId);
+            console.log('[SelectTool] Detached end point, new:', newEndPointId);
           }
 
-          // Remove the old wall
-          this.sceneManager.objectManager.removeWall(oldWallId);
-          console.log('[SelectTool] Removed old wall:', oldWallId);
-
-          // Create new wall with new points
-          const newWall: Wall = {
-            id: uuidv4(),
+          // Update selectedWall reference with new point IDs
+          this.selectedWall = {
+            ...this.selectedWall,
             startPointId: newStartPointId,
             endPointId: newEndPointId,
-            thickness: wallThickness,
-            height: wallHeight,
           };
-          this.sceneManager.objectManager.addWall(newWall);
-          console.log('[SelectTool] Created new wall:', newWall.id);
-
-          // Update selection to new wall
-          this.selectedWall = newWall;
-
-          // Update startPoint and endPoint references
-          const updatedPoints = this.sceneManager.objectManager.getAllPoints();
-          startPoint = updatedPoints.find((p) => p.id === newStartPointId)!;
-          endPoint = updatedPoints.find((p) => p.id === newEndPointId)!;
-
-          console.log('[SelectTool] After detach - startPoint:', startPoint, 'endPoint:', endPoint);
-
-          // Skip movement on the frame where we detach (let user see the detachment first)
-          this.wallPointsDetached = true;
-          this.dragStartPos = position.clone();
-          return;
         }
 
         this.wallPointsDetached = true;
       }
 
-      // Re-fetch points in case they were updated
-      const currentPoints = this.sceneManager.objectManager.getAllPoints();
-      const currentStart = currentPoints.find((p) => p.id === this.selectedWall!.startPointId);
-      const currentEnd = currentPoints.find((p) => p.id === this.selectedWall!.endPointId);
+      // Get current points (may have been updated by detachment)
+      const currentStart = allPoints.find((p) => p.id === this.selectedWall!.startPointId);
+      const currentEnd = allPoints.find((p) => p.id === this.selectedWall!.endPointId);
 
       if (!currentStart || !currentEnd) {
-        console.error('[SelectTool] Could not find wall points:', this.selectedWall!.startPointId, this.selectedWall!.endPointId);
+        // Re-fetch all points after detachment
+        const updatedPoints = this.sceneManager.objectManager.getAllPoints();
+        const refreshedStart = updatedPoints.find((p) => p.id === this.selectedWall!.startPointId);
+        const refreshedEnd = updatedPoints.find((p) => p.id === this.selectedWall!.endPointId);
+
+        if (!refreshedStart || !refreshedEnd) {
+          console.error('[SelectTool] Could not find wall points after refresh:', this.selectedWall!.startPointId, this.selectedWall!.endPointId);
+          return;
+        }
+
+        // Continue with refreshed points
+        this.moveWallPoints(refreshedStart, refreshedEnd, position);
         return;
       }
 
-      // Calculate wall direction vector
-      const wallVec = new Vector2(currentEnd.x - currentStart.x, currentEnd.y - currentStart.y);
-      const wallLength = wallVec.length();
-      if (wallLength < 0.001) return; // Zero-length wall
-
-      const wallDir = wallVec.normalize();
-
-      // Calculate drag delta
-      const dragDelta = new Vector2(position.x - this.dragStartPos.x, position.y - this.dragStartPos.y);
-
-      // Project drag delta onto wall perpendicular direction (normal)
-      // This allows moving the wall sideways but not along its length
-      const wallNormal = new Vector2(-wallDir.y, wallDir.x);
-      const perpDist = dragDelta.dot(wallNormal);
-
-      // Calculate the perpendicular offset
-      const offsetX = wallNormal.x * perpDist;
-      const offsetY = wallNormal.y * perpDist;
-
-      // Move only this wall's endpoints (now detached from other walls)
-      this.sceneManager.objectManager.updatePoint(currentStart.id, {
-        x: currentStart.x + offsetX,
-        y: currentStart.y + offsetY,
-      });
-
-      this.sceneManager.objectManager.updatePoint(currentEnd.id, {
-        x: currentEnd.x + offsetX,
-        y: currentEnd.y + offsetY,
-      });
-
-      // Update drag start position for next frame
-      this.dragStartPos = position.clone();
+      // Move wall points
+      this.moveWallPoints(currentStart, currentEnd, position);
     }
+  }
+
+  /**
+   * Helper method to move wall endpoints perpendicular to wall direction
+   */
+  private moveWallPoints(startPoint: Point, endPoint: Point, position: Vector2): void {
+    if (!this.dragStartPos) return;
+
+    // Calculate wall direction vector
+    const wallVec = new Vector2(endPoint.x - startPoint.x, endPoint.y - startPoint.y);
+    const wallLength = wallVec.length();
+    if (wallLength < 0.001) return; // Zero-length wall
+
+    const wallDir = wallVec.normalize();
+
+    // Calculate drag delta
+    const dragDelta = new Vector2(position.x - this.dragStartPos.x, position.y - this.dragStartPos.y);
+
+    // Project drag delta onto wall perpendicular direction (normal)
+    // This allows moving the wall sideways but not along its length
+    const wallNormal = new Vector2(-wallDir.y, wallDir.x);
+    const perpDist = dragDelta.dot(wallNormal);
+
+    // Calculate the perpendicular offset
+    const offsetX = wallNormal.x * perpDist;
+    const offsetY = wallNormal.y * perpDist;
+
+    // Move only this wall's endpoints (now detached from other walls)
+    this.sceneManager.objectManager.updatePoint(startPoint.id, {
+      x: startPoint.x + offsetX,
+      y: startPoint.y + offsetY,
+    });
+
+    this.sceneManager.objectManager.updatePoint(endPoint.id, {
+      x: endPoint.x + offsetX,
+      y: endPoint.y + offsetY,
+    });
+
+    // Update drag start position for next frame
+    this.dragStartPos = position.clone();
   }
 
   handleMouseUp(position: Vector2, event: MouseEvent): void {
@@ -477,6 +490,9 @@ export class SelectTool extends BaseTool {
         point: this.selectedPoint,
       });
     } else if (this.selectedWall) {
+      // Clear wall dragging flag
+      this.sceneManager.setWallDragging(false);
+
       const allPoints = this.sceneManager.objectManager.getAllPoints();
       const startPoint = allPoints.find((p) => p.id === this.selectedWall!.startPointId);
       const endPoint = allPoints.find((p) => p.id === this.selectedWall!.endPointId);
@@ -492,6 +508,9 @@ export class SelectTool extends BaseTool {
           point: endPoint,
         });
       }
+
+      // Reset wallPointsDetached for next drag
+      this.wallPointsDetached = false;
     }
 
     // Keep selection but stop dragging

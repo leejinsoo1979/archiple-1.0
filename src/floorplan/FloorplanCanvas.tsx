@@ -428,9 +428,12 @@ const FloorplanCanvas = ({
         }
 
         // Clean up duplicate points and walls before room detection
-        const cleanup = sceneManager.objectManager.cleanupDuplicates();
-        if (cleanup.points > 0 || cleanup.walls > 0) {
-          console.log('[FloorplanCanvas] Cleaned up', cleanup.points, 'duplicate points,', cleanup.walls, 'duplicate walls');
+        // Skip cleanup during wall dragging to prevent merging detached points
+        if (!sceneManager.isWallDragging()) {
+          const cleanup = sceneManager.objectManager.cleanupDuplicates();
+          if (cleanup.points > 0 || cleanup.walls > 0) {
+            console.log('[FloorplanCanvas] Cleaned up', cleanup.points, 'duplicate points,', cleanup.walls, 'duplicate walls');
+          }
         }
 
         // Re-detect rooms after wall split
@@ -653,12 +656,15 @@ const FloorplanCanvas = ({
       }
 
       // Clean up any duplicate points and walls before room detection
-      const cleanup = sceneManager.objectManager.cleanupDuplicates();
-      if (cleanup.points > 0 || cleanup.walls > 0) {
-        console.log('[FloorplanCanvas] Cleaned up', cleanup.points, 'duplicate points,', cleanup.walls, 'duplicate walls');
-        // Refresh walls and points after cleanup
-        walls = sceneManager.objectManager.getAllWalls();
-        points = sceneManager.objectManager.getAllPoints();
+      // Skip cleanup during wall dragging to prevent merging detached points
+      if (!sceneManager.isWallDragging()) {
+        const cleanup = sceneManager.objectManager.cleanupDuplicates();
+        if (cleanup.points > 0 || cleanup.walls > 0) {
+          console.log('[FloorplanCanvas] Cleaned up', cleanup.points, 'duplicate points,', cleanup.walls, 'duplicate walls');
+          // Refresh walls and points after cleanup
+          walls = sceneManager.objectManager.getAllWalls();
+          points = sceneManager.objectManager.getAllPoints();
+        }
       }
 
       // Step 2: Detect rooms using split walls and all points (including intersection points)
