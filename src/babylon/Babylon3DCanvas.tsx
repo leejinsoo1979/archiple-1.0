@@ -53,6 +53,7 @@ import type { Point } from '../core/types/Point';
 import type { Light, LightType } from '../core/types/Light';
 import { createDefaultLight } from '../core/types/Light';
 import { WallSplitService } from '../floorplan/services/WallSplitService';
+import * as WallManager from './wallManager';
 
 // Make earcut available globally for Babylon.js polygon operations
 if (typeof window !== 'undefined') {
@@ -638,34 +639,56 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     console.log('[Babylon3DCanvas] Initializing Babylon.js...');
 
     const initScene = () => {
-      // Create engine with high-performance GPU preference
+      // Create engine with standard quality settings
       const engine = new Engine(canvas, true, {
         preserveDrawingBuffer: true,
         stencil: true,
-        powerPreference: 'high-performance', // Request dedicated GPU if available
+        antialias: true,
+        powerPreference: 'high-performance',
       });
       engineRef.current = engine;
 
       console.log('[Babylon3DCanvas] WebGL Info:', {
         renderer: engine.isWebGPU ? 'WebGPU' : 'WebGL',
         version: engine.webGLVersion,
-        // GPU info (if available)
-        vendor: (canvas.getContext('webgl2') as any)?.getParameter((canvas.getContext('webgl2') as any)?.VENDOR),
-        renderer_name: (canvas.getContext('webgl2') as any)?.getParameter((canvas.getContext('webgl2') as any)?.RENDERER),
       });
 
-      // Create scene with advanced settings
+      // Create scene
       const scene = new Scene(engine);
-      // Remove clearColor to show skybox (skybox will provide background)
-      scene.clearColor = new Color3(0.5, 0.7, 1.0).toColor4(0); // Transparent - skybox shows through
+      scene.clearColor = new Color3(0.5, 0.7, 1.0).toColor4(0);
       scene.ambientColor = new Color3(0.3, 0.3, 0.3);
-      scene.collisionsEnabled = true; // Enable collisions for FPS mode
-      scene.gravity = new Vector3(0, 0, 0); // No gravity in FPS mode
+      scene.collisionsEnabled = true;
+      scene.gravity = new Vector3(0, 0, 0);
       sceneRef.current = scene;
 
-      // Enable glow layer for better visuals
+      // Glow layer for emissive materials
       const glowLayer = new GlowLayer('glow', scene);
       glowLayer.intensity = 0.3;
+
+      // High-quality rendering pipeline (Archidraw/Cuhome style)
+      const pipeline = new DefaultRenderingPipeline('defaultPipeline', true, scene, []);
+      pipeline.samples = 4; // 4x MSAA for smooth edges
+      pipeline.fxaaEnabled = false; // MSAA is enough
+
+      // Image processing for natural, bright look
+      pipeline.imageProcessingEnabled = true;
+      pipeline.imageProcessing.toneMappingEnabled = true;
+      pipeline.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
+      pipeline.imageProcessing.exposure = 1.2; // Slightly brighter
+      pipeline.imageProcessing.contrast = 1.1; // More vibrant
+      pipeline.imageProcessing.vignetteEnabled = false;
+
+      // Subtle bloom for natural light glow
+      pipeline.bloomEnabled = true;
+      pipeline.bloomThreshold = 0.9;
+      pipeline.bloomWeight = 0.15;
+      pipeline.bloomKernel = 64;
+      pipeline.bloomScale = 0.5;
+
+      pipeline.sharpenEnabled = false;
+      pipelineRef.current = pipeline;
+
+      console.log('[Babylon3DCanvas] High-quality rendering pipeline initialized');
 
       // Create ArcRotate camera (default 3D view)
       const arcCamera = new ArcRotateCamera(
@@ -739,7 +762,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       // Advanced lighting setup
       // 1. Ambient light
       const hemisphericLight = new HemisphericLight('hemiLight', new Vector3(0, 1, 0), scene);
-      hemisphericLight.intensity = 0.7;
+      hemisphericLight.intensity = 0.5; // Reduced from 0.7 for better contrast with sun light
       hemisphericLight.groundColor = new Color3(0.5, 0.5, 0.55);
 
       // 2. Main directional light (sun) with shadows
@@ -747,41 +770,30 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       const altitude = sunSettings?.altitude ?? 45;
       const intensity = sunSettings?.intensity ?? 1.5;
 
-      // Convert azimuth/altitude to 3D position (in mm)
-      const radius = 50; // 50m
+      // Calculate sun direction from azimuth/altitude
       const azimuthRad = (azimuth * Math.PI) / 180;
       const altitudeRad = (altitude * Math.PI) / 180;
 
-      const x = radius * Math.cos(altitudeRad) * Math.sin(azimuthRad);
-      const y = radius * Math.sin(altitudeRad);
-      const z = radius * Math.cos(altitudeRad) * Math.cos(azimuthRad);
+      // Light direction = opposite of sun position (pointing DOWN toward scene)
+      const dirX = -Math.cos(altitudeRad) * Math.sin(azimuthRad);
+      const dirY = -Math.sin(altitudeRad);
+      const dirZ = -Math.cos(altitudeRad) * Math.cos(azimuthRad);
 
-      const sunLight = new DirectionalLight('sunLight', new Vector3(-1, -2, -1), scene);
-      sunLight.position = new Vector3(x, y, z);
+      // DirectionalLight: first param is DIRECTION, not position
+      const sunLight = new DirectionalLight('sunLight', new Vector3(dirX, dirY, dirZ), scene);
       sunLight.intensity = intensity;
-      sunLight.diffuse = new Color3(1, 1, 1);
+      sunLight.diffuse = new Color3(1, 0.98, 0.95); // Warm sunlight
       sunLight.specular = new Color3(1, 1, 1);
       sunLightRef.current = sunLight;
 
-      // Shadow generator with soft, natural shadows
+      // Shadow generator - simple and reliable
       const shadowGenerator = new ShadowGenerator(2048, sunLight);
+      shadowGenerator.useBlurExponentialShadowMap = true;
+      shadowGenerator.blurKernel = 64;
+      shadowGenerator.darkness = 0.3;
+      shadowGenerator.bias = 0.00001;
 
-      // Use PCF (Percentage Closer Filtering) for softer, more natural shadows
-      shadowGenerator.usePercentageCloserFiltering = true;
-      shadowGenerator.filteringQuality = ShadowGenerator.QUALITY_HIGH;
-
-      // Alternative: Use Contact Hardening Shadows for realistic distance-based softness
-      // shadowGenerator.useContactHardeningShadow = true;
-      // shadowGenerator.contactHardeningLightSizeUVRatio = 0.05;
-
-      // Shadow appearance
-      shadowGenerator.darkness = 0.4; // Lighter shadows (0 = no shadow, 1 = pitch black)
-      shadowGenerator.bias = 0.001; // Reduce shadow acne
-      shadowGenerator.normalBias = 0.02; // Further reduce artifacts
-
-      // Soften shadow edges
-      shadowGenerator.blurScale = 2; // Blur scale for soft edges
-      shadowGenerator.blurBoxOffset = 1; // Additional blur offset
+      console.log('[Babylon3DCanvas] Sun light created - direction:', dirX.toFixed(2), dirY.toFixed(2), dirZ.toFixed(2));
 
       // Create infinite grid floor
       const createInfiniteGrid = () => {
@@ -796,24 +808,24 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         // Create GridMaterial with realistic settings
         const gridMaterial = new GridMaterial('gridMaterial', scene);
 
-        // Grid appearance - natural look
-        gridMaterial.mainColor = new Color3(1, 1, 1); // White background
-        gridMaterial.lineColor = new Color3(0.4, 0.4, 0.4); // Dark gray lines
+        // Grid appearance - pure white floor
+        gridMaterial.mainColor = new Color3(1, 1, 1); // Pure white background
+        gridMaterial.lineColor = new Color3(0.75, 0.75, 0.75); // Light gray lines
 
         // Grid spacing - 1 unit = 1 meter
         gridMaterial.gridRatio = 1.0; // 1m grid cells
         gridMaterial.majorUnitFrequency = 10; // Major line every 10 cells (10m)
-        gridMaterial.minorUnitVisibility = 0.3; // Minor lines at 30% opacity
+        gridMaterial.minorUnitVisibility = 0.4; // Minor lines at 40% opacity
 
-        // Fade out with distance
-        gridMaterial.opacity = 0.95; // Overall opacity
+        // Full opacity for clean white look
+        gridMaterial.opacity = 1.0;
         gridMaterial.gridOffset = new Vector3(0, 0, 0);
 
         // Apply material
         gridPlane.material = gridMaterial;
 
-        // Enable shadow receiving
-        gridPlane.receiveShadows = true;
+        // Disable shadow receiving for cleaner white appearance
+        gridPlane.receiveShadows = false;
 
         // Disable collisions (don't interfere with character movement)
         gridPlane.checkCollisions = false;
@@ -1003,6 +1015,11 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       gizmoManagerRef.current = gizmoManager;
 
       engine.runRenderLoop(() => {
+        // Update wall visibility based on camera angle (isometric cutaway)
+        const activeCamera = scene.activeCamera;
+        if (activeCamera instanceof ArcRotateCamera) {
+          WallManager.updateWallVisibility(activeCamera);
+        }
         scene.render();
       });
 
@@ -1029,6 +1046,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         console.log('[Babylon3DCanvas] Cleaning up...');
         window.removeEventListener('resize', handleResize);
         document.removeEventListener('fullscreenchange', handleFullscreenChange);
+        WallManager.dispose();
         scene.dispose();
         engine.dispose();
       };
@@ -1653,8 +1671,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     const wallMaterial = new PBRMaterial('wallMat_2d', scene);
     wallMaterial.albedoColor = new Color3(0.96, 0.96, 0.94);
     wallMaterial.metallic = 0.0;
-    wallMaterial.roughness = 0.6;
-    wallMaterial.environmentIntensity = 0.7;
+    wallMaterial.roughness = 0.5; // Slightly smoother for premium feel
+    wallMaterial.environmentIntensity = 0.8; // More reflection from environment
 
     // Create floor material with real wood texture
     const floorMaterial = new PBRMaterial('floorMat_2d', scene);
@@ -1949,6 +1967,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     } // End of USE_CSG_WALLS else block
 
     console.log('[Babylon3DCanvas] Created', walls.length, '3D walls in', USE_CSG_WALLS ? 'CSG' : 'Miter', 'mode,', wallMeshesRef.current.length, 'wall meshes for snap detection');
+
+    // Initialize wall manager for isometric cutaway feature
+    WallManager.initWalls(scene);
 
     // Create floors for each room - ONLY inside walls (polygon shape)
     const { rooms } = floorplanData;
@@ -2452,32 +2473,29 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     if (!sunLight || !sunSettings || !scene) return;
 
     const { azimuth, altitude, intensity } = sunSettings;
-
-    // Convert azimuth/altitude to 3D position
-    const radius = 50;
     const azimuthRad = (azimuth * Math.PI) / 180;
     const altitudeRad = (altitude * Math.PI) / 180;
 
-    const x = radius * Math.cos(altitudeRad) * Math.sin(azimuthRad);
-    const y = radius * Math.sin(altitudeRad);
-    const z = radius * Math.cos(altitudeRad) * Math.cos(azimuthRad);
+    // Update light DIRECTION (not position) - pointing DOWN toward scene
+    const dirX = -Math.cos(altitudeRad) * Math.sin(azimuthRad);
+    const dirY = -Math.sin(altitudeRad);
+    const dirZ = -Math.cos(altitudeRad) * Math.cos(azimuthRad);
 
-    sunLight.position.set(x, y, z);
+    sunLight.direction = new Vector3(dirX, dirY, dirZ);
     sunLight.intensity = intensity;
 
-    // Update skybox sun position with Vector3 for realistic appearance
+    // Update skybox sun position
     const skybox = scene.getMeshByName('skybox');
     if (skybox && skybox.material instanceof SkyMaterial) {
       const skyMaterial = skybox.material as SkyMaterial;
-
-      // Convert azimuth/altitude to Vector3 (matching createSkybox logic)
+      // Skybox uses sun POSITION (opposite of direction)
       const sunX = Math.cos(altitudeRad) * Math.sin(azimuthRad);
       const sunY = Math.sin(altitudeRad);
       const sunZ = Math.cos(altitudeRad) * Math.cos(azimuthRad);
-
       skyMaterial.sunPosition = new Vector3(sunX, sunY, sunZ);
-      console.log('[Babylon3DCanvas] Skybox updated - sunPosition:', sunX.toFixed(2), sunY.toFixed(2), sunZ.toFixed(2));
     }
+
+    console.log('[Babylon3DCanvas] Sun updated - dir:', dirX.toFixed(2), dirY.toFixed(2), dirZ.toFixed(2));
   }, [sunSettings]);
 
   // Switch camera and controls based on view mode and play mode
@@ -3034,9 +3052,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           pipelineAny.ssaoEnabled = true;
         }
         if (pipelineAny.ssao2) {
-          pipelineAny.ssao2.radius = 1.0; // Subtle ambient occlusion
-          pipelineAny.ssao2.totalStrength = 1.5; // Moderate strength
-          pipelineAny.ssao2.base = 0.2; // Minimum ambient occlusion
+          pipelineAny.ssao2.radius = 1.5; // Larger radius for soft shadows
+          pipelineAny.ssao2.totalStrength = 1.8; // Strong but natural
+          pipelineAny.ssao2.base = 0.1; // Deep crevices
           pipelineAny.ssao2.samples = 64; // Maximum samples for smoothness
           pipelineAny.ssao2.textureSamples = 8; // High multi-sampling
           pipelineAny.ssao2.expensiveBlur = true;
@@ -3045,9 +3063,14 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           pipelineAny.ssao2.bilateralTolerance = 0.00001; // Minimal tolerance for sharp edges
         }
 
-        // Disable SSR (still causes artifacts)
+        // Enable SSR for realistic reflections (carefully tuned)
         if (pipelineAny.screenSpaceReflectionsEnabled !== undefined) {
-          pipelineAny.screenSpaceReflectionsEnabled = false;
+          pipelineAny.screenSpaceReflectionsEnabled = true;
+          if (pipelineAny.screenSpaceReflections) {
+            pipelineAny.screenSpaceReflections.step = 1; // High precision
+            pipelineAny.screenSpaceReflections.strength = 1.2; // Visible reflections
+            pipelineAny.screenSpaceReflections.roughnessFactor = 0.2; // Glossy reflections
+          }
         }
 
         // Enable subtle Bloom for realistic bright areas
@@ -3095,11 +3118,12 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         if (skybox && skybox.material instanceof SkyMaterial) {
           // Create procedural environment from skybox for reflections
           const hdrTexture = CubeTexture.CreateFromPrefilteredData(
-            'https://assets.babylonjs.com/environments/environmentSpecular.env',
+            'https://assets.babylonjs.com/environments/studio.env',
             scene
           );
           scene.environmentTexture = hdrTexture;
-          console.log('[Babylon3DCanvas] ✅ HDR environment texture loaded for PBR reflections');
+          scene.environmentTexture.level = 1.2; // Boost brightness
+          console.log('[Babylon3DCanvas] ✅ Studio HDR environment texture loaded for PBR reflections');
         }
       }
 
@@ -3113,11 +3137,11 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       if (sunLight) {
         const shadowGen = sunLight.getShadowGenerator() as ShadowGenerator | null;
         if (shadowGen) {
-          shadowGen.mapSize = 8192; // Ultra quality 8K shadows (from 4096)
+          shadowGen.mapSize = 8192; // Ultra quality 8K shadows
           shadowGen.filteringQuality = ShadowGenerator.QUALITY_HIGH;
-          shadowGen.contactHardeningLightSizeUVRatio = 0.025; // Softer contact shadows
-          shadowGen.darkness = 0.35; // Subtle shadow darkness
-          shadowGen.blurKernel = 128; // Maximum blur for ultra-soft shadows
+          shadowGen.contactHardeningLightSizeUVRatio = 0.05; // Realistic penumbra
+          shadowGen.darkness = 0.5; // Balanced shadow darkness
+          shadowGen.blurKernel = 64; // Moderate blur for sharpness
           console.log('[Babylon3DCanvas] ✅ Shadow quality upgraded to 8192x8192 ultra quality');
         }
       }

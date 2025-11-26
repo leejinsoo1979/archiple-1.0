@@ -5,8 +5,11 @@ import Babylon3DCanvas, { type Babylon3DCanvasRef } from '../babylon/Babylon3DCa
 import styles from './EditorPage.module.css';
 import { ToolType } from '../core/types/EditorState';
 // import { createTestRoom } from '../floorplan/blueprint/BlueprintToBabylonAdapter';
-import { RxCursorArrow } from 'react-icons/rx';
 import { PiCubeTransparentLight } from 'react-icons/pi';
+import { HiOutlineColorSwatch } from 'react-icons/hi';
+import { MdAutoAwesome } from 'react-icons/md';
+import { BiCabinet } from 'react-icons/bi';
+import { LiaPencilRulerSolid } from 'react-icons/lia';
 import { eventBus } from '../core/events/EventBus';
 import { EditorEvents } from '../core/events/EditorEvents';
 import type { Light, LightType } from '../core/types/Light';
@@ -31,13 +34,40 @@ const EditorPage = () => {
   const [floorplanData, setFloorplanData] = useState<any>(null);
   const [sunPanelOpen, setSunPanelOpen] = useState(false);
   const [sunSettings, setSunSettings] = useState({
-    intensity: 1.5,
-    azimuth: 45, // 방위각 0-360도
-    altitude: 45, // 고도 0-90도
+    month: 6, // 1-12월
+    hour: 14, // 0-24시
+    intensity: 1.5, // 강도
+    azimuth: 180, // 방위각 0-360도
   });
+
+  // 월/시간 기반으로 태양 고도(altitude) 계산 (서울 위도 37.5° 기준)
+  const calculateSunAltitude = (month: number, hour: number): number => {
+    // 태양 적위 (declination) - 월에 따라 변화
+    const dayOfYear = (month - 1) * 30 + 15; // 월 중순 기준
+    const declination = 23.45 * Math.sin((360 / 365) * (dayOfYear - 81) * (Math.PI / 180));
+
+    // 서울 위도
+    const latitude = 37.5;
+
+    // 시간각 (hour angle) - 정오(12시)가 0도
+    const hourAngle = (hour - 12) * 15; // 1시간 = 15도
+
+    // 태양 고도 계산
+    const latRad = latitude * (Math.PI / 180);
+    const decRad = declination * (Math.PI / 180);
+    const haRad = hourAngle * (Math.PI / 180);
+
+    const sinAltitude = Math.sin(latRad) * Math.sin(decRad) +
+                        Math.cos(latRad) * Math.cos(decRad) * Math.cos(haRad);
+
+    const altitude = Math.asin(sinAltitude) * (180 / Math.PI);
+
+    // 0-90도 범위로 제한 (음수는 해가 진 상태)
+    return Math.max(0, Math.min(90, altitude));
+  };
   const [playMode, setPlayMode] = useState(false); // FPS mode toggle
   const [showCharacter, setShowCharacter] = useState(false); // Character toggle
-  const [photoRealisticMode, setPhotoRealisticMode] = useState(false); // Photo-realistic rendering
+  const [photoRealisticMode, setPhotoRealisticMode] = useState(true); // Photo-realistic rendering
   const [exportModalOpen, setExportModalOpen] = useState(false); // Export modal toggle
   const [aiRenderModalOpen, setAiRenderModalOpen] = useState(false); // New AI Render Modal toggle
   const [capturedImage, setCapturedImage] = useState<string | null>(null); // Captured 3D view for AI
@@ -1963,9 +1993,43 @@ ARTISTIC APPROACH:
                     <button onClick={() => setSunPanelOpen(false)} className={styles.closeBtn}>×</button>
                   </div>
                   <div className={styles.dropdownBody}>
+                    {/* Month */}
+                    <div className={styles.controlGroup}>
+                      <label>월 (Month)</label>
+                      <div className={styles.controlInput}>
+                        <input
+                          type="range"
+                          min="1"
+                          max="12"
+                          step="1"
+                          value={sunSettings.month}
+                          onChange={(e) => setSunSettings({ ...sunSettings, month: parseInt(e.target.value) })}
+                          className={styles.rangeSlider}
+                        />
+                        <span className={styles.valueDisplay}>{sunSettings.month}월</span>
+                      </div>
+                    </div>
+
+                    {/* Hour */}
+                    <div className={styles.controlGroup}>
+                      <label>시간 (Hour)</label>
+                      <div className={styles.controlInput}>
+                        <input
+                          type="range"
+                          min="5"
+                          max="20"
+                          step="1"
+                          value={sunSettings.hour}
+                          onChange={(e) => setSunSettings({ ...sunSettings, hour: parseInt(e.target.value) })}
+                          className={styles.rangeSlider}
+                        />
+                        <span className={styles.valueDisplay}>{sunSettings.hour}시</span>
+                      </div>
+                    </div>
+
                     {/* Intensity */}
                     <div className={styles.controlGroup}>
-                      <label>Intensity</label>
+                      <label>강도 (Intensity)</label>
                       <div className={styles.controlInput}>
                         <input
                           type="range"
@@ -1982,7 +2046,7 @@ ARTISTIC APPROACH:
 
                     {/* Azimuth */}
                     <div className={styles.controlGroup}>
-                      <label>Azimuth</label>
+                      <label>방위각 (Azimuth)</label>
                       <div className={styles.controlInput}>
                         <input
                           type="range"
@@ -1990,27 +2054,20 @@ ARTISTIC APPROACH:
                           max="360"
                           step="1"
                           value={sunSettings.azimuth}
-                          onChange={(e) => setSunSettings({ ...sunSettings, azimuth: parseFloat(e.target.value) })}
+                          onChange={(e) => setSunSettings({ ...sunSettings, azimuth: parseInt(e.target.value) })}
                           className={styles.rangeSlider}
                         />
                         <span className={styles.valueDisplay}>{sunSettings.azimuth}°</span>
                       </div>
                     </div>
 
-                    {/* Altitude */}
-                    <div className={styles.controlGroup}>
-                      <label>Altitude</label>
+                    {/* Calculated Altitude (read-only) */}
+                    <div className={styles.controlGroup} style={{ opacity: 0.7 }}>
+                      <label>고도 (Altitude)</label>
                       <div className={styles.controlInput}>
-                        <input
-                          type="range"
-                          min="0"
-                          max="90"
-                          step="1"
-                          value={sunSettings.altitude}
-                          onChange={(e) => setSunSettings({ ...sunSettings, altitude: parseFloat(e.target.value) })}
-                          className={styles.rangeSlider}
-                        />
-                        <span className={styles.valueDisplay}>{sunSettings.altitude}°</span>
+                        <span className={styles.valueDisplay} style={{ marginLeft: 'auto' }}>
+                          {calculateSunAltitude(sunSettings.month, sunSettings.hour).toFixed(1)}° (자동 계산)
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -2836,47 +2893,49 @@ ARTISTIC APPROACH:
         {!playMode && (
           <div className={styles.leftSidebar}>
             <div className={styles.sidebarButtons}>
+              {/* Create Room */}
               <button className={styles.sidebarBtn}>
                 <div className={styles.icon}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <rect x="3" y="3" width="7" height="7" />
-                    <rect x="14" y="3" width="7" height="7" />
-                    <rect x="3" y="14" width="7" height="7" />
-                    <rect x="14" y="14" width="7" height="7" />
-                  </svg>
+                  <LiaPencilRulerSolid size={24} />
                 </div>
                 <span>Create<br />Room</span>
               </button>
 
+              {/* Asset Library */}
               <button className={styles.sidebarBtn}>
                 <div className={styles.icon}>
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <circle cx="12" cy="12" r="3" />
-                    <path d="M12 1v6m0 6v6M1 12h6m6 0h6" />
+                    <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                   </svg>
                 </div>
-                <span>Customize</span>
+                <span>Asset<br />Library</span>
               </button>
 
+              {/* Material */}
               <button className={styles.sidebarBtn}>
                 <div className={styles.icon}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <rect x="3" y="3" width="18" height="18" />
-                    <path d="M3 9h18M9 9v12" />
-                  </svg>
+                  <HiOutlineColorSwatch size={24} />
                 </div>
-                <span>Model<br />Library</span>
+                <span>Material</span>
               </button>
 
+              {/* Kitchen & Cabinet */}
               <button className={styles.sidebarBtn}>
                 <div className={styles.icon}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M3 12l9-9 9 9M5 10v11h4v-6h6v6h4V10" />
-                  </svg>
+                  <BiCabinet size={24} />
                 </div>
-                <span>Mode</span>
+                <span>Kitchen &<br />Cabinet</span>
               </button>
 
+              {/* A.I Layout */}
+              <button className={styles.sidebarBtn}>
+                <div className={styles.icon}>
+                  <MdAutoAwesome size={24} />
+                </div>
+                <span>A.I<br />Layout</span>
+              </button>
+
+              {/* My Page */}
               <button className={styles.sidebarBtn}>
                 <div className={styles.icon}>
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -2884,7 +2943,7 @@ ARTISTIC APPROACH:
                     <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
                   </svg>
                 </div>
-                <span>My</span>
+                <span>My<br />Page</span>
               </button>
             </div>
 
@@ -3010,14 +3069,6 @@ ARTISTIC APPROACH:
             <div className={styles.toolSection}>
               <h4>Walls</h4>
               <div className={styles.toolGrid}>
-                <button
-                  className={`${styles.toolBtn} ${activeTool === ToolType.SELECT ? styles.toolBtnActive : ''}`}
-                  title="Select and Move Points"
-                  onClick={() => setActiveTool(ToolType.SELECT)}
-                >
-                  <RxCursorArrow size={32} />
-                  <span>Select</span>
-                </button>
                 <button
                   className={`${styles.toolBtn} ${activeTool === ToolType.WALL ? styles.toolBtnActive : ''}`}
                   title="Draw Staight Walls"
@@ -3261,7 +3312,10 @@ ARTISTIC APPROACH:
               ref={babylon3DCanvasRef}
               floorplanData={floorplanData}
               visible={playMode || viewMode === '3D'}
-              sunSettings={sunSettings}
+              sunSettings={{
+                ...sunSettings,
+                altitude: calculateSunAltitude(sunSettings.month, sunSettings.hour)
+              }}
               playMode={playMode}
               showCharacter={showCharacter}
               glbModelFile={glbModelFile}
@@ -3322,7 +3376,10 @@ ARTISTIC APPROACH:
             <Babylon3DCanvas
               floorplanData={floorplanData}
               visible={true}
-              sunSettings={sunSettings}
+              sunSettings={{
+                ...sunSettings,
+                altitude: calculateSunAltitude(sunSettings.month, sunSettings.hour)
+              }}
               playMode={false}
               showCharacter={false}
               glbModelFile={null}
