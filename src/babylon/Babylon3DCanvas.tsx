@@ -811,18 +811,18 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         // Create GridMaterial with realistic settings
         const gridMaterial = new GridMaterial('gridMaterial', scene);
 
-        // Grid appearance - pure white floor
-        gridMaterial.mainColor = new Color3(1, 1, 1); // Pure white background
-        gridMaterial.lineColor = new Color3(0.75, 0.75, 0.75); // Light gray lines
+        // Grid appearance - transparent background with visible lines
+        gridMaterial.mainColor = new Color3(1, 1, 1); // Background color (mostly transparent)
+        gridMaterial.lineColor = new Color3(0.6, 0.6, 0.6); // Gray lines
         gridMaterial.backFaceCulling = true; // Only render front face (now facing down after flip)
 
         // Grid spacing - 1 unit = 1 meter
         gridMaterial.gridRatio = 1.0; // 1m grid cells
         gridMaterial.majorUnitFrequency = 10; // Major line every 10 cells (10m)
-        gridMaterial.minorUnitVisibility = 0.4; // Minor lines at 40% opacity
+        gridMaterial.minorUnitVisibility = 0.5; // Minor lines at 50% opacity
 
-        // Full opacity for clean white look
-        gridMaterial.opacity = 1.0;
+        // Transparent background - only grid lines visible
+        gridMaterial.opacity = 0.3;
         gridMaterial.gridOffset = new Vector3(0, 0, 0);
 
         // Apply material

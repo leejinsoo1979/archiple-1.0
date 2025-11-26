@@ -2,9 +2,10 @@
  * WallManager - Isometric Cutaway Wall System
  *
  * Automatically hides/fades walls based on camera angle in isometric mode.
- * - Front-facing wall (closest to camera): hidden
- * - Second closest wall: semi-transparent (alpha = 0.4)
- * - Other walls: fully visible
+ * Walls that FACE the camera (blocking interior view) are hidden to reveal inside.
+ * - Wall most directly facing camera: hidden (alpha = 0)
+ * - Second most facing wall: semi-transparent (alpha = 0.4)
+ * - Back-facing walls: fully visible (alpha = 1)
  */
 
 import {
@@ -32,7 +33,6 @@ type WallVisibilityMode = 'auto' | 'show-all' | 'hide-front';
 const ISOMETRIC_PITCH_MIN = 25 * (Math.PI / 180);
 const ISOMETRIC_PITCH_MAX = 60 * (Math.PI / 180);
 const FADE_DURATION = 200;
-const FADED_ALPHA = 0.4;
 const HIDDEN_ALPHA = 0;
 const VISIBLE_ALPHA = 1;
 
@@ -162,17 +162,6 @@ export class WallManager {
     return pitch >= ISOMETRIC_PITCH_MIN && pitch <= ISOMETRIC_PITCH_MAX;
   }
 
-  private getCameraForwardXZ(camera: ArcRotateCamera): Vector3 {
-    const direction = camera.target.subtract(camera.position);
-    direction.y = 0;
-    direction.normalize();
-    return direction;
-  }
-
-  private calculateWallFacing(wallInfo: WallInfo, cameraForward: Vector3): number {
-    return Vector3.Dot(wallInfo.normal, cameraForward);
-  }
-
   /**
    * Update wall visibility based on camera
    */
@@ -203,37 +192,44 @@ export class WallManager {
   }
 
   private applyFrontWallHiding(camera: ArcRotateCamera): void {
-    const cameraForward = this.getCameraForwardXZ(camera);
+    const cameraPos = camera.position.clone();
+    cameraPos.y = 0; // XZ plane only
 
-    const wallFacings: { index: number; facing: number }[] = this.walls.map((wall, index) => ({
-      index,
-      facing: this.calculateWallFacing(wall, cameraForward),
-    }));
-
-    wallFacings.sort((a, b) => b.facing - a.facing);
-
-    const frontWallIndex = wallFacings.length > 0 && wallFacings[0].facing > 0
-      ? wallFacings[0].index
-      : -1;
-    const secondWallIndex = wallFacings.length > 1 && wallFacings[1].facing > 0.3
-      ? wallFacings[1].index
-      : -1;
+    // For each wall, check if camera is on the "front" side of the wall
+    // Front side = the side the normal points to
+    // If camera is on front side, the wall blocks the view into the room
+    const wallsToHide: number[] = [];
 
     this.walls.forEach((wall, index) => {
-      if (index === frontWallIndex && frontWallIndex !== this.hiddenWallIndex) {
-        this.setMaterialAlpha(wall.mesh, HIDDEN_ALPHA);
-      } else if (index === secondWallIndex && secondWallIndex !== this.fadedWallIndex) {
-        this.setMaterialAlpha(wall.mesh, FADED_ALPHA);
-      } else if (index !== frontWallIndex && index !== secondWallIndex) {
-        const currentAlpha = this.getMaterialAlpha(wall.mesh);
-        if (currentAlpha < VISIBLE_ALPHA) {
-          this.setMaterialAlpha(wall.mesh, VISIBLE_ALPHA);
-        }
+      const wallCenter = wall.center.clone();
+      wallCenter.y = 0;
+
+      // Vector from wall center to camera
+      const toCamera = cameraPos.subtract(wallCenter);
+      toCamera.normalize();
+
+      // If dot product > 0, camera is on the side the normal points to (front side)
+      // This means the wall is between camera and room interior - should hide
+      const dot = Vector3.Dot(wall.normal, toCamera);
+
+      if (dot > 0.1) { // Small threshold to avoid edge cases
+        wallsToHide.push(index);
       }
     });
 
-    this.hiddenWallIndex = frontWallIndex;
-    this.fadedWallIndex = secondWallIndex;
+    this.walls.forEach((wall, index) => {
+      const shouldHide = wallsToHide.includes(index);
+      const currentAlpha = this.getMaterialAlpha(wall.mesh);
+
+      if (shouldHide && currentAlpha > HIDDEN_ALPHA) {
+        this.setMaterialAlpha(wall.mesh, HIDDEN_ALPHA);
+      } else if (!shouldHide && currentAlpha < VISIBLE_ALPHA) {
+        this.setMaterialAlpha(wall.mesh, VISIBLE_ALPHA);
+      }
+    });
+
+    this.hiddenWallIndex = wallsToHide[0] ?? -1;
+    this.fadedWallIndex = -1;
   }
 
   private restoreAllWalls(): void {
