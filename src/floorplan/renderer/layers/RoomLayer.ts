@@ -265,10 +265,13 @@ export class RoomLayer extends BaseLayer {
       // Reset
       ctx.shadowBlur = 0;
     } else if (isSelected && this.renderStyle === 'wireframe') {
-      // Simple highlight in wireframe mode
+      // Wireframe mode: only highlight the border with theme color
       ctx.strokeStyle = themeColor;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 4;
+      ctx.shadowColor = themeColor;
+      ctx.shadowBlur = 10;
       ctx.stroke();
+      ctx.shadowBlur = 0;
     } else {
       // Normal room stroke - white in dark mode for wireframe
       const strokeColor = (this.renderStyle === 'wireframe' && isDarkModeRoom)
