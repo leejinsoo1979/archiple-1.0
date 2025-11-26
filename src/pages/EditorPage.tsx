@@ -3217,6 +3217,8 @@ ARTISTIC APPROACH:
               onRulerLabelClick={handleRulerLabelClick}
               draggingRulerPoint={draggingRulerPoint}
               scannedWalls={scannedWalls}
+              onRoomSelect={setSelectedRoom}
+              selectedRoomId={selectedRoom?.id ?? null}
             />
           </div>
 
@@ -3638,6 +3640,28 @@ ARTISTIC APPROACH:
               viewMode={viewMode}
               previewContainerId={viewMode === '2D' ? 'preview-3d-container' : 'preview-2d-container'}
             />
+
+            {/* Selected Room Info */}
+            {selectedRoom && (
+              <div className={styles.settingsSection} style={{ backgroundColor: 'var(--theme-color-light, rgba(63, 174, 167, 0.1))', borderLeft: '3px solid var(--theme-color, #3FAEA7)' }}>
+                <h4>🏠 Selected Room</h4>
+                <div className={styles.settingRow}>
+                  <label>Name</label>
+                  <span style={{ fontWeight: 'bold' }}>{selectedRoom.name || 'Unnamed'}</span>
+                </div>
+                <div className={styles.settingRow}>
+                  <label>Area</label>
+                  <span style={{ fontWeight: 'bold', color: 'var(--theme-color, #3FAEA7)' }}>{selectedRoom.area.toFixed(2)} m²</span>
+                </div>
+                <button
+                  className={styles.editBtn}
+                  onClick={() => setSelectedRoom(null)}
+                  style={{ marginTop: '8px' }}
+                >
+                  Deselect Room
+                </button>
+              </div>
+            )}
 
             {/* Basic Parameters */}
             <div className={styles.settingsSection}>
