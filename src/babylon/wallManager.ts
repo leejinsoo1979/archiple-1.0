@@ -60,8 +60,10 @@ export class WallManager {
     this.walls = [];
 
     const wallMeshes = this.scene.meshes.filter(mesh =>
-      mesh.name.startsWith('wall_') && mesh instanceof Mesh
+      (mesh.name.startsWith('wall_') || mesh.name.startsWith('wall_trimmed_')) && mesh instanceof Mesh
     ) as Mesh[];
+
+    console.log(`[WallManager] Found wall meshes:`, wallMeshes.map(m => m.name));
 
     wallMeshes.forEach(mesh => {
       const wallInfo: WallInfo = {
@@ -195,38 +197,33 @@ export class WallManager {
   }
 
   private applyFrontWallHiding(camera: ArcRotateCamera): void {
-    const cameraPos = camera.position.clone();
-    cameraPos.y = 0;
+    const camPos = camera.position;
+    const target = camera.target;
 
-    const target = camera.target.clone();
-    target.y = 0;
+    // 카메라에서 타겟 방향 (정규화)
+    const camToTargetX = target.x - camPos.x;
+    const camToTargetZ = target.z - camPos.z;
+    const camToTargetLen = Math.sqrt(camToTargetX ** 2 + camToTargetZ ** 2);
+    const camDirX = camToTargetX / camToTargetLen;
+    const camDirZ = camToTargetZ / camToTargetLen;
 
-    // Camera direction vector (from camera to target)
-    const camDir = target.subtract(cameraPos);
-    camDir.normalize();
+    this.walls.forEach((wall) => {
+      // 타겟(방 중심)에서 벽 중심으로의 방향
+      const targetToWallX = wall.center.x - target.x;
+      const targetToWallZ = wall.center.z - target.z;
+      const len = Math.sqrt(targetToWallX ** 2 + targetToWallZ ** 2);
 
-    const wallsToHide: number[] = [];
+      if (len < 0.01) return; // 벽이 정확히 중심에 있으면 스킵
 
-    this.walls.forEach((wall, index) => {
-      const wallCenter = wall.center.clone();
-      wallCenter.y = 0;
+      const wallDirX = targetToWallX / len;
+      const wallDirZ = targetToWallZ / len;
 
-      // Vector from target (room center) to wall
-      const targetToWall = wallCenter.subtract(target);
+      // 카메라 방향과 (타겟→벽) 방향의 내적
+      // 음수 = 벽이 카메라 쪽에 있음 (카메라와 타겟 사이) = 숨김
+      // 양수 = 벽이 카메라 반대쪽에 있음 (타겟 뒤) = 보임
+      const dot = camDirX * wallDirX + camDirZ * wallDirZ;
 
-      // Check if wall is on the camera side of the target
-      // If dot product of (target->wall) and (camera direction) is negative,
-      // the wall is between camera and target
-      const dotCamSide = Vector3.Dot(targetToWall, camDir);
-
-      // Wall is on camera side if dot < 0 (wall is in opposite direction of where camera looks from target)
-      if (dotCamSide < 0) {
-        wallsToHide.push(index);
-      }
-    });
-
-    this.walls.forEach((wall, index) => {
-      const shouldHide = wallsToHide.includes(index);
+      const shouldHide = dot < -0.3;
       const currentAlpha = this.getMaterialAlpha(wall.mesh);
 
       if (shouldHide && currentAlpha > HIDDEN_ALPHA) {
@@ -235,9 +232,6 @@ export class WallManager {
         this.setMaterialAlpha(wall.mesh, VISIBLE_ALPHA);
       }
     });
-
-    this.hiddenWallIndex = wallsToHide[0] ?? -1;
-    this.fadedWallIndex = -1;
   }
 
   private restoreAllWalls(): void {

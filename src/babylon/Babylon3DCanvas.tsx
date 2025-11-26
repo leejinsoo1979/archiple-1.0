@@ -53,7 +53,7 @@ import type { Point } from '../core/types/Point';
 import type { Light, LightType } from '../core/types/Light';
 import { createDefaultLight } from '../core/types/Light';
 import { WallSplitService } from '../floorplan/services/WallSplitService';
-import { WallManager } from './wallManager';
+import { AutoWallHider } from './AutoWallHider';
 
 // Make earcut available globally for Babylon.js polygon operations
 if (typeof window !== 'undefined') {
@@ -264,7 +264,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
   const gizmoManagerRef = useRef<GizmoManager | null>(null); // Store gizmo manager
   const selectedLightMeshRef = useRef<Mesh | null>(null); // Store selected light indicator mesh
   const infiniteGridRef = useRef<Mesh | null>(null); // Store infinite grid mesh
-  const wallManagerRef = useRef<WallManager | null>(null); // Wall cutaway manager
+  const planMetricsRef = useRef<PlanMetrics | null>(null); // Store plan metrics for cutaway logic
+  const autoWallHiderRef = useRef<AutoWallHider | null>(null); // Wall cutaway manager
 
   // Camera settings from Zustand store
   const cameraSettings = useCameraSettingsStore();
@@ -813,16 +814,16 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
         // Grid appearance - transparent background with visible lines
         gridMaterial.mainColor = new Color3(1, 1, 1); // Background color (mostly transparent)
-        gridMaterial.lineColor = new Color3(0.6, 0.6, 0.6); // Gray lines
+        gridMaterial.lineColor = new Color3(0.8, 0.8, 0.8); // Gray lines
         gridMaterial.backFaceCulling = true; // Only render front face (now facing down after flip)
 
         // Grid spacing - 1 unit = 1 meter
         gridMaterial.gridRatio = 1.0; // 1m grid cells
         gridMaterial.majorUnitFrequency = 10; // Major line every 10 cells (10m)
-        gridMaterial.minorUnitVisibility = 0.5; // Minor lines at 50% opacity
+        gridMaterial.minorUnitVisibility = 0.3; // Minor lines at 50% opacity
 
         // Transparent background - only grid lines visible
-        gridMaterial.opacity = 0.3;
+        gridMaterial.opacity = 0.1;
         gridMaterial.gridOffset = new Vector3(0, 0, 0);
 
         // Apply material
@@ -1019,10 +1020,10 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       gizmoManagerRef.current = gizmoManager;
 
       engine.runRenderLoop(() => {
-        // Update wall visibility based on camera angle (isometric cutaway)
+        // Update wall visibility based on camera angle (raycasting cutaway)
         const activeCamera = scene.activeCamera;
-        if (activeCamera instanceof ArcRotateCamera && wallManagerRef.current) {
-          wallManagerRef.current.updateWallVisibility(activeCamera);
+        if (activeCamera instanceof ArcRotateCamera && autoWallHiderRef.current) {
+          autoWallHiderRef.current.update(activeCamera);
         }
         scene.render();
       });
@@ -1050,9 +1051,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         console.log('[Babylon3DCanvas] Cleaning up...');
         window.removeEventListener('resize', handleResize);
         document.removeEventListener('fullscreenchange', handleFullscreenChange);
-        if (wallManagerRef.current) {
-          wallManagerRef.current.dispose();
-          wallManagerRef.current = null;
+        if (autoWallHiderRef.current) {
+          autoWallHiderRef.current.dispose();
+          autoWallHiderRef.current = null;
         }
         scene.dispose();
         engine.dispose();
@@ -1627,6 +1628,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     if (!walls || walls.length === 0) return;
 
     const planMetrics = computePlanMetrics(points);
+    planMetricsRef.current = planMetrics; // Store for cutaway logic
     const centerX = planMetrics?.centerX ?? 0;
     const centerZ = planMetrics?.centerZ ?? 0;
 
@@ -1888,6 +1890,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         // Finalize wall mesh (with or without doors/windows)
         wallMesh.receiveShadows = true;
         wallMesh.checkCollisions = true;
+        wallMesh.metadata = { type: 'wall', wallId: wall.id };
 
         // Ensure collision is properly set for CSG-generated meshes
         if (wallMesh.checkCollisions !== true) {
@@ -1975,8 +1978,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
     console.log('[Babylon3DCanvas] Created', walls.length, '3D walls in', USE_CSG_WALLS ? 'CSG' : 'Miter', 'mode,', wallMeshesRef.current.length, 'wall meshes for snap detection');
 
-    // Initialize wall manager for isometric cutaway feature
-    wallManagerRef.current = new WallManager(scene);
+    // Initialize auto wall hider for isometric cutaway feature (raycasting based)
+    autoWallHiderRef.current = new AutoWallHider(scene);
 
     // Create floors for each room - ONLY inside walls (polygon shape)
     const { rooms } = floorplanData;
@@ -2520,8 +2523,82 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     }
 
     if (!visible) {
-      console.log('[Babylon3DCanvas] Not visible, skipping');
       // Detach all controls when not visible
+      arcCamera.detachControl();
+      fpsCamera.detachControl();
+      return;
+    }
+
+    // Wall Cutaway Logic (Auto-hide walls blocking view)
+    const updateWallVisibility = () => {
+      if (!planMetricsRef.current || !wallMeshesRef.current.length) return;
+      if (scene.activeCamera !== arcCamera) {
+        // Reset visibility if not in ArcRotate mode
+        wallMeshesRef.current.forEach(mesh => {
+          mesh.isVisible = true;
+          // Restore children (doors/windows)
+          mesh.getChildMeshes().forEach(child => child.isVisible = true);
+        });
+        return;
+      }
+
+      // 1. Top-down view check: If camera is looking from above (beta < 0.6), show all walls
+      // beta = 0 is top, beta = PI/2 is horizontal
+      if (arcCamera.beta < 0.6) {
+        wallMeshesRef.current.forEach(mesh => {
+          mesh.isVisible = true;
+          mesh.getChildMeshes().forEach(child => child.isVisible = true);
+        });
+        return;
+      }
+
+      wallMeshesRef.current.forEach(wallMesh => {
+        const wallPos = wallMesh.position;
+        const cameraPos = arcCamera.position;
+
+        // Normalize positions for consistent dot product
+        const wallLen = Math.sqrt(wallPos.x * wallPos.x + wallPos.z * wallPos.z);
+        const camLen = Math.sqrt(cameraPos.x * cameraPos.x + cameraPos.z * cameraPos.z);
+
+        if (wallLen < 0.1 || camLen < 0.1) return; // Avoid division by zero
+
+        const dot = (wallPos.x * cameraPos.x + wallPos.z * cameraPos.z) / (wallLen * camLen);
+
+        // Logic: Hide if dot > threshold (same side)
+        // Threshold 0.3 means we hide walls within ~72 degrees of the camera direction
+        const shouldHide = dot > 0.3;
+
+        if (shouldHide) {
+          wallMesh.isVisible = false;
+          wallMesh.getChildMeshes().forEach(child => child.isVisible = false);
+        } else {
+          wallMesh.isVisible = true;
+          wallMesh.getChildMeshes().forEach(child => child.isVisible = true);
+        }
+      });
+    };
+
+    // Bind to camera update
+    const observer = scene.onBeforeRenderObservable.add(updateWallVisibility);
+
+    // Cleanup observer on effect re-run
+    return () => {
+      scene.onBeforeRenderObservable.remove(observer);
+    };
+  }, [visible, playMode, showCharacter, controlMode]); // Re-bind if mode changes
+
+  // Separate effect for camera control switching (to avoid conflict with the above return cleanup)
+  useEffect(() => {
+    const scene = sceneRef.current;
+    const canvas = canvasRef.current;
+    const arcCamera = arcCameraRef.current;
+    const fpsCamera = fpsCameraRef.current;
+    const thirdPersonCamera = thirdPersonCameraRef.current;
+    const character = characterRef.current;
+
+    if (!scene || !canvas || !arcCamera || !fpsCamera || !thirdPersonCamera || !character) return;
+
+    if (!visible) {
       arcCamera.detachControl();
       fpsCamera.detachControl();
       thirdPersonCamera.detachControl();
