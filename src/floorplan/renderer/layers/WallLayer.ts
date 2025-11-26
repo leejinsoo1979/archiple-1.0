@@ -344,12 +344,16 @@ export class WallLayer extends BaseLayer {
     const themeColorRaw = getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim();
     const themeColor = themeColorRaw || '#3FAEA7';
 
+    // Determine wall color based on dark mode
+    const isDarkModeWall = document.documentElement.getAttribute('data-theme') === 'dark';
+    const defaultWallColor = isDarkModeWall ? '#AAAAAA' : this.config.wallColor;
+
     if (isSelected) {
       color = themeColor;
     } else if (isHovered) {
       color = themeColor;
     } else {
-      color = this.config.wallColor;
+      color = defaultWallColor;
     }
 
     ctx.beginPath();
@@ -378,7 +382,7 @@ export class WallLayer extends BaseLayer {
         const centerX = (poly[0].x + poly[1].x + poly[2].x + poly[3].x) / 4;
         const centerY = (poly[0].y + poly[1].y + poly[2].y + poly[3].y) / 4;
         const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, this.config.wallThickness / 2);
-        const baseColor = isSelected ? themeColor : (isHovered ? themeColor : this.config.wallColor);
+        const baseColor = isSelected ? themeColor : (isHovered ? themeColor : defaultWallColor);
         gradient.addColorStop(0, baseColor);
         gradient.addColorStop(1, this.darkenColor(baseColor, 0.3));
         ctx.fillStyle = gradient;
@@ -414,19 +418,21 @@ export class WallLayer extends BaseLayer {
 
     const themeColorRaw = getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim();
     const themeColor = themeColorRaw || '#3FAEA7';
+    const isDarkModeStroke = document.documentElement.getAttribute('data-theme') === 'dark';
+    const defaultWallColorStroke = isDarkModeStroke ? '#AAAAAA' : this.config.wallColor;
 
     if (isSelected || isHovered) {
       strokeColor = themeColor;
       lineWidth = 2;
     } else {
       // Default stroke color
-      strokeColor = this.darkenColor(this.config.wallColor, 0.5); // Darker outline
+      strokeColor = this.darkenColor(defaultWallColorStroke, 0.5); // Darker outline
       lineWidth = 1;
     }
 
     // Override for specific styles
     if (this.renderStyle === 'wireframe') {
-      strokeColor = isSelected || isHovered ? themeColor : this.config.wallColor;
+      strokeColor = isSelected || isHovered ? themeColor : defaultWallColorStroke;
     }
 
     ctx.strokeStyle = strokeColor;
@@ -842,8 +848,8 @@ export class WallLayer extends BaseLayer {
     };
 
     const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
-    const dimColor = isDarkMode ? '#90CAF9' : '#000000';
-    const textColor = isDarkMode ? '#E0E0E0' : '#000000';
+    const dimColor = isDarkMode ? '#FFFFFF' : '#000000';
+    const textColor = isDarkMode ? '#FFFFFF' : '#000000';
 
     ctx.save();
     this.camera.applyScreenTransform(ctx);
