@@ -819,38 +819,64 @@ export class WallLayer extends BaseLayer {
         return;
       }
 
-      // Determine dimension direction (which side is outside)
+      // Determine dimension direction based on wall POSITION relative to building bounds
+      // This ensures walls on top edge show top dimensions, walls on side show side dimensions
       const dx = endPoint.x - startPoint.x;
       const dy = endPoint.y - startPoint.y;
-      const isHorizontal = Math.abs(dx) > Math.abs(dy);
+      const wallMinY = Math.min(startPoint.y, endPoint.y);
+      const wallMaxY = Math.max(startPoint.y, endPoint.y);
+      const wallMinX = Math.min(startPoint.x, endPoint.x);
+      const wallMaxX = Math.max(startPoint.x, endPoint.x);
 
-      let dimDirection: 'up' | 'down' | 'left' | 'right';
+      // Check wall position relative to building bounds
+      const tolerance = this.config.wallThickness * 2;
+      const isOnTopEdge = wallMinY <= minY + tolerance;
+      const isOnBottomEdge = wallMaxY >= maxY - tolerance;
+      const isOnLeftEdge = wallMinX <= minX + tolerance;
+      const isOnRightEdge = wallMaxX >= maxX - tolerance;
 
-      if (isHorizontal) {
-        // Horizontal wall - dimension goes up or down
-        // Place dimension on the side that's outside (no room)
-        if (!roomOnSide1 && roomOnSide2) {
-          // Side 1 is outside
-          dimDirection = perp1Y < 0 ? 'up' : 'down';
-        } else if (roomOnSide1 && !roomOnSide2) {
-          // Side 2 is outside
-          dimDirection = perp2Y < 0 ? 'up' : 'down';
-        } else {
-          // Neither side has a room, use default based on position
-          const avgY = (startPoint.y + endPoint.y) / 2;
-          dimDirection = avgY < (minY + maxY) / 2 ? 'up' : 'down';
-        }
+      // Determine exterior side based on room detection
+      let exteriorSide: 'top' | 'bottom' | 'left' | 'right' | null = null;
+
+      if (!roomOnSide1 && roomOnSide2) {
+        // Side 1 is exterior
+        if (perp1Y < -0.5) exteriorSide = 'top';
+        else if (perp1Y > 0.5) exteriorSide = 'bottom';
+        else if (perp1X < -0.5) exteriorSide = 'left';
+        else if (perp1X > 0.5) exteriorSide = 'right';
+      } else if (roomOnSide1 && !roomOnSide2) {
+        // Side 2 is exterior
+        if (perp2Y < -0.5) exteriorSide = 'top';
+        else if (perp2Y > 0.5) exteriorSide = 'bottom';
+        else if (perp2X < -0.5) exteriorSide = 'left';
+        else if (perp2X > 0.5) exteriorSide = 'right';
       } else {
-        // Vertical wall - dimension goes left or right
-        if (!roomOnSide1 && roomOnSide2) {
-          dimDirection = perp1X < 0 ? 'left' : 'right';
-        } else if (roomOnSide1 && !roomOnSide2) {
-          dimDirection = perp2X < 0 ? 'left' : 'right';
-        } else {
-          const avgX = (startPoint.x + endPoint.x) / 2;
-          dimDirection = avgX < (minX + maxX) / 2 ? 'left' : 'right';
-        }
+        // Neither side has room - use position to determine exterior
+        if (isOnTopEdge) exteriorSide = 'top';
+        else if (isOnBottomEdge) exteriorSide = 'bottom';
+        else if (isOnLeftEdge) exteriorSide = 'left';
+        else if (isOnRightEdge) exteriorSide = 'right';
       }
+
+      // Map exterior side to dimension direction and check if this wall contributes meaningful dimension
+      let dimDirection: 'up' | 'down' | 'left' | 'right';
+      let projectedDist: number;
+
+      if (exteriorSide === 'top' || exteriorSide === 'bottom') {
+        // Top/bottom exterior walls show horizontal (X) dimension
+        dimDirection = exteriorSide === 'top' ? 'up' : 'down';
+        projectedDist = Math.abs(dx);
+      } else if (exteriorSide === 'left' || exteriorSide === 'right') {
+        // Left/right exterior walls show vertical (Y) dimension
+        dimDirection = exteriorSide === 'left' ? 'left' : 'right';
+        projectedDist = Math.abs(dy);
+      } else {
+        // Skip walls that aren't clearly on an edge
+        return;
+      }
+
+      // Skip walls with very small projected distance
+      if (projectedDist < 50) return;
 
       exteriorWalls.push({ wall, startPoint, endPoint, dimDirection });
     });
@@ -884,17 +910,10 @@ export class WallLayer extends BaseLayer {
       const dx = endPoint.x - startPoint.x;
       const dy = endPoint.y - startPoint.y;
 
-      // Calculate projected distance based on dimension direction
-      const projectedDistance = (dimDirection === 'up' || dimDirection === 'down')
+      // Calculate projected distance for the dimension
+      const distanceMm = (dimDirection === 'up' || dimDirection === 'down')
         ? Math.abs(dx)
         : Math.abs(dy);
-
-      // Skip walls with very small projected distance (essentially diagonal walls)
-      // These don't contribute meaningful exterior dimensions in this direction
-      if (projectedDistance < 50) return;
-
-      // Use projected distance for the dimension
-      const distanceMm = projectedDistance;
 
       let ext1Start, ext1End, ext2Start, ext2End, dim1, dim2, textPos;
 
@@ -992,9 +1011,14 @@ export class WallLayer extends BaseLayer {
       );
       ctx.stroke();
 
-      // Draw text
-      const label = `${distanceMm.toFixed(0)}mm`;
-      ctx.font = '12px system-ui';
+      // Draw text - ensure valid distance
+      if (!Number.isFinite(distanceMm) || distanceMm < 1) return;
+
+      const label = `${Math.round(distanceMm)}mm`;
+
+      // Reset context state for text rendering
+      ctx.globalAlpha = 1.0;
+      ctx.font = 'bold 12px system-ui, -apple-system, sans-serif';
       ctx.fillStyle = textColor;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -1006,6 +1030,19 @@ export class WallLayer extends BaseLayer {
         ctx.rotate(-Math.PI / 2);
       }
 
+      // Draw background for better visibility
+      const textMetrics = ctx.measureText(label);
+      const padding = 4;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.fillRect(
+        -textMetrics.width / 2 - padding,
+        -8,
+        textMetrics.width + padding * 2,
+        16
+      );
+
+      // Draw text
+      ctx.fillStyle = textColor;
       ctx.fillText(label, 0, 0);
       ctx.restore();
     });
