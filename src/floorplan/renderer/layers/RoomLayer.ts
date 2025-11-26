@@ -172,7 +172,7 @@ export class RoomLayer extends BaseLayer {
     } else if (isSelected) {
       // Use theme color with transparency for selected room
       fillStyle = themeColor;
-      fillOpacity = 0.25;
+      fillOpacity = 0.12;
     } else {
       // Apply render style for normal rooms
       switch (this.renderStyle) {
@@ -222,26 +222,23 @@ export class RoomLayer extends BaseLayer {
       // Multi-layer illumination effect for selected room border
       // Layer 1: Outer glow (large, soft)
       ctx.shadowColor = themeColor;
-      ctx.shadowBlur = 30;
+      ctx.shadowBlur = 20;
       ctx.strokeStyle = themeColor;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1;
       ctx.globalAlpha = 0.3;
       ctx.stroke();
 
       // Layer 2: Middle glow
-      ctx.shadowBlur = 15;
-      ctx.lineWidth = 3;
+      ctx.shadowBlur = 10;
+      ctx.lineWidth = 2;
       ctx.globalAlpha = 0.5;
       ctx.stroke();
 
-      // Layer 3: Core line (bright, sharp)
-      ctx.shadowBlur = 8;
-      ctx.lineWidth = 4;
+      // Layer 3: Core line (bright, sharp, no blur)
+      ctx.shadowBlur = 0;
+      ctx.lineWidth = 2.5;
       ctx.globalAlpha = 1.0;
       ctx.stroke();
-
-      // Reset shadow
-      ctx.shadowBlur = 0;
     } else {
       ctx.strokeStyle = this.config.strokeColor;
       ctx.lineWidth = this.renderStyle === 'wireframe' ? 1.5 : this.config.strokeWidth;
