@@ -230,15 +230,6 @@ export class RoomDetectionService {
     return graph;
   }
 
-  private calculateCentroid(points: Point[]): Point {
-    let x = 0, y = 0;
-    for (const p of points) {
-      x += p.x;
-      y += p.y;
-    }
-    return { id: 'centroid', x: x / points.length, y: y / points.length };
-  }
-
   private isPointInPolygon(point: Point, polygon: Point[]): boolean {
     let inside = false;
     for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {

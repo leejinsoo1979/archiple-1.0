@@ -436,18 +436,18 @@ export class WallLayer extends BaseLayer {
 
     if (isSelected || isHovered) {
       strokeColor = themeColor;
-      lineWidth = 2.5;
+      lineWidth = 3.5;
     } else {
       // Default stroke color - white in dark mode
       strokeColor = isDarkModeStroke ? '#FFFFFF' : this.darkenColor(defaultWallColorStroke, 0.5);
-      lineWidth = 1.5;
+      lineWidth = 2.5;
     }
 
     // Override for specific styles
     if (this.renderStyle === 'wireframe') {
       // Use high contrast colors for wireframe mode
       strokeColor = isSelected || isHovered ? themeColor : (isDarkModeStroke ? '#FFFFFF' : '#000000');
-      lineWidth = 2; // Thicker lines for wireframe
+      lineWidth = 3; // Thicker lines for wireframe
     }
 
     ctx.strokeStyle = strokeColor;

@@ -763,12 +763,25 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       sunLight.specular = new Color3(1, 1, 1);
       sunLightRef.current = sunLight;
 
-      // Shadow generator with maximum quality
-      const shadowGenerator = new ShadowGenerator(4096, sunLight); // Increased from 2048 to 4096
-      shadowGenerator.useBlurExponentialShadowMap = true;
-      shadowGenerator.blurKernel = 64; // Increased from 32 to 64 for smoother shadows
-      shadowGenerator.darkness = 0.3;
+      // Shadow generator with soft, natural shadows
+      const shadowGenerator = new ShadowGenerator(2048, sunLight);
+
+      // Use PCF (Percentage Closer Filtering) for softer, more natural shadows
+      shadowGenerator.usePercentageCloserFiltering = true;
       shadowGenerator.filteringQuality = ShadowGenerator.QUALITY_HIGH;
+
+      // Alternative: Use Contact Hardening Shadows for realistic distance-based softness
+      // shadowGenerator.useContactHardeningShadow = true;
+      // shadowGenerator.contactHardeningLightSizeUVRatio = 0.05;
+
+      // Shadow appearance
+      shadowGenerator.darkness = 0.4; // Lighter shadows (0 = no shadow, 1 = pitch black)
+      shadowGenerator.bias = 0.001; // Reduce shadow acne
+      shadowGenerator.normalBias = 0.02; // Further reduce artifacts
+
+      // Soften shadow edges
+      shadowGenerator.blurScale = 2; // Blur scale for soft edges
+      shadowGenerator.blurBoxOffset = 1; // Additional blur offset
 
       // Create infinite grid floor
       const createInfiniteGrid = () => {
