@@ -382,46 +382,44 @@ export class SelectTool extends BaseTool {
         this.originalWallEndPoint.y + moveY
       );
 
-      // Emit main wall ghost preview event
-      eventBus.emit(FloorEvents.WALL_PREVIEW_UPDATED, {
-        start: { x: this.wallDragGhostStart.x, y: this.wallDragGhostStart.y },
-        end: { x: this.wallDragGhostEnd.x, y: this.wallDragGhostEnd.y },
-        thickness: this.selectedWall.thickness,
+      // Generate all ghost walls (main + connected = L/U shape)
+      const allGhosts: Array<{ start: Point; end: Point }> = [];
+
+      // Add main wall ghost
+      allGhosts.push({
+        start: { id: '', x: this.wallDragGhostStart.x, y: this.wallDragGhostStart.y },
+        end: { id: '', x: this.wallDragGhostEnd.x, y: this.wallDragGhostEnd.y }
       });
 
-      // Generate connected walls ghost (L/U shape)
-      if (this.connectedWallsInfo.length > 0) {
-        const connectedGhosts: Array<{ start: Point; end: Point }> = [];
+      // Add connected walls ghosts
+      for (const info of this.connectedWallsInfo) {
+        // The shared point moves with the main wall
+        const sharedPointIsStart = info.sharedPointId === this.selectedWall.startPointId;
+        const newSharedPoint = sharedPointIsStart ? this.wallDragGhostStart : this.wallDragGhostEnd;
 
-        for (const info of this.connectedWallsInfo) {
-          // The shared point moves with the main wall
-          const sharedPointIsStart = info.sharedPointId === this.selectedWall.startPointId;
-          const newSharedPoint = sharedPointIsStart ? this.wallDragGhostStart : this.wallDragGhostEnd;
+        // The other point stays at original position (wall extends/contracts)
+        const otherPoint = info.originalOtherPoint;
 
-          // The other point stays at original position (wall extends/contracts)
-          const otherPoint = info.originalOtherPoint;
+        // Determine which end is which for the connected wall
+        const isSharedAtStart = info.wall.startPointId === info.sharedPointId;
 
-          // Determine which end is which for the connected wall
-          const isSharedAtStart = info.wall.startPointId === info.sharedPointId;
-
-          if (isSharedAtStart) {
-            connectedGhosts.push({
-              start: { id: '', x: newSharedPoint.x, y: newSharedPoint.y },
-              end: { id: '', x: otherPoint.x, y: otherPoint.y }
-            });
-          } else {
-            connectedGhosts.push({
-              start: { id: '', x: otherPoint.x, y: otherPoint.y },
-              end: { id: '', x: newSharedPoint.x, y: newSharedPoint.y }
-            });
-          }
+        if (isSharedAtStart) {
+          allGhosts.push({
+            start: { id: '', x: newSharedPoint.x, y: newSharedPoint.y },
+            end: { id: '', x: otherPoint.x, y: otherPoint.y }
+          });
+        } else {
+          allGhosts.push({
+            start: { id: '', x: otherPoint.x, y: otherPoint.y },
+            end: { id: '', x: newSharedPoint.x, y: newSharedPoint.y }
+          });
         }
-
-        // Emit multi-wall preview event
-        eventBus.emit(FloorEvents.MULTI_WALL_PREVIEW_UPDATED, {
-          walls: connectedGhosts
-        });
       }
+
+      // Emit all ghosts as multi-wall preview
+      eventBus.emit(FloorEvents.MULTI_WALL_PREVIEW_UPDATED, {
+        walls: allGhosts
+      });
     }
   }
 
@@ -471,34 +469,17 @@ export class SelectTool extends BaseTool {
           )
         : 0;
 
-      if (movedDistance > 10) { // Only create new wall if moved more than 10mm
-        // Store wall properties before deletion
-        const wallThickness = this.selectedWall.thickness;
-        const wallHeight = this.selectedWall.height;
-        const wallId = this.selectedWall.id;
-
-        // Calculate movement delta
-        const moveX = this.wallDragGhostStart.x - this.originalWallStartPoint!.x;
-        const moveY = this.wallDragGhostStart.y - this.originalWallStartPoint!.y;
-
-        // Update main wall endpoints directly (move the shared points)
-        const startPoint = this.sceneManager.objectManager.getAllPoints().find(p => p.id === this.selectedWall!.startPointId);
-        const endPoint = this.sceneManager.objectManager.getAllPoints().find(p => p.id === this.selectedWall!.endPointId);
-
-        if (startPoint && endPoint) {
-          // Move both endpoints of the main wall
-          this.sceneManager.objectManager.updatePoint(startPoint.id, {
-            x: startPoint.x + moveX,
-            y: startPoint.y + moveY,
-          });
-          this.sceneManager.objectManager.updatePoint(endPoint.id, {
-            x: endPoint.x + moveX,
-            y: endPoint.y + moveY,
-          });
-        }
-
-        // Connected walls automatically stretch because they share the same points!
-        // No need to update them separately - they use the same point IDs
+      if (movedDistance > 10) { // Only apply changes if moved more than 10mm
+        // Simply move the two endpoints of the main wall
+        // Connected walls share these points, so they will automatically stretch!
+        this.sceneManager.objectManager.updatePoint(this.selectedWall.startPointId, {
+          x: this.wallDragGhostStart.x,
+          y: this.wallDragGhostStart.y,
+        });
+        this.sceneManager.objectManager.updatePoint(this.selectedWall.endPointId, {
+          x: this.wallDragGhostEnd.x,
+          y: this.wallDragGhostEnd.y,
+        });
       }
 
       // Reset ghost state

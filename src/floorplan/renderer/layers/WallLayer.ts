@@ -863,6 +863,15 @@ export class WallLayer extends BaseLayer {
       right: maxX + baseOffset + extensionLength,
     };
 
+    // Calculate extension line start positions (outermost wall position for each direction)
+    // All extension lines in the same direction should start from the same position
+    const extLineStarts = {
+      up: minY - wallHalfThickness - 50,      // Start from the topmost wall
+      down: maxY + wallHalfThickness + 50,    // Start from the bottommost wall
+      left: minX - wallHalfThickness - 50,    // Start from the leftmost wall
+      right: maxX + wallHalfThickness + 50,   // Start from the rightmost wall
+    };
+
     const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
     const dimColor = isDarkMode ? '#FFFFFF' : '#000000';
     const textColor = isDarkMode ? '#FFFFFF' : '#000000';
@@ -884,36 +893,40 @@ export class WallLayer extends BaseLayer {
 
       if (dimDirection === 'up') {
         const dimY = dimLinePositions.up;
-        ext1Start = this.camera!.worldToScreen(startPoint.x, startPoint.y - wallHalfThickness - 50);
+        const extStartY = extLineStarts.up; // All 'up' extensions start from same Y
+        ext1Start = this.camera!.worldToScreen(startPoint.x, extStartY);
         ext1End = this.camera!.worldToScreen(startPoint.x, dimY);
-        ext2Start = this.camera!.worldToScreen(endPoint.x, endPoint.y - wallHalfThickness - 50);
+        ext2Start = this.camera!.worldToScreen(endPoint.x, extStartY);
         ext2End = this.camera!.worldToScreen(endPoint.x, dimY);
         dim1 = this.camera!.worldToScreen(startPoint.x, dimY);
         dim2 = this.camera!.worldToScreen(endPoint.x, dimY);
         textPos = this.camera!.worldToScreen((startPoint.x + endPoint.x) / 2, dimY - textOffset);
       } else if (dimDirection === 'down') {
         const dimY = dimLinePositions.down;
-        ext1Start = this.camera!.worldToScreen(startPoint.x, startPoint.y + wallHalfThickness + 50);
+        const extStartY = extLineStarts.down; // All 'down' extensions start from same Y
+        ext1Start = this.camera!.worldToScreen(startPoint.x, extStartY);
         ext1End = this.camera!.worldToScreen(startPoint.x, dimY);
-        ext2Start = this.camera!.worldToScreen(endPoint.x, endPoint.y + wallHalfThickness + 50);
+        ext2Start = this.camera!.worldToScreen(endPoint.x, extStartY);
         ext2End = this.camera!.worldToScreen(endPoint.x, dimY);
         dim1 = this.camera!.worldToScreen(startPoint.x, dimY);
         dim2 = this.camera!.worldToScreen(endPoint.x, dimY);
         textPos = this.camera!.worldToScreen((startPoint.x + endPoint.x) / 2, dimY + textOffset);
       } else if (dimDirection === 'left') {
         const dimX = dimLinePositions.left;
-        ext1Start = this.camera!.worldToScreen(startPoint.x - wallHalfThickness - 50, startPoint.y);
+        const extStartX = extLineStarts.left; // All 'left' extensions start from same X
+        ext1Start = this.camera!.worldToScreen(extStartX, startPoint.y);
         ext1End = this.camera!.worldToScreen(dimX, startPoint.y);
-        ext2Start = this.camera!.worldToScreen(endPoint.x - wallHalfThickness - 50, endPoint.y);
+        ext2Start = this.camera!.worldToScreen(extStartX, endPoint.y);
         ext2End = this.camera!.worldToScreen(dimX, endPoint.y);
         dim1 = this.camera!.worldToScreen(dimX, startPoint.y);
         dim2 = this.camera!.worldToScreen(dimX, endPoint.y);
         textPos = this.camera!.worldToScreen(dimX - textOffset, (startPoint.y + endPoint.y) / 2);
       } else {
         const dimX = dimLinePositions.right;
-        ext1Start = this.camera!.worldToScreen(startPoint.x + wallHalfThickness + 50, startPoint.y);
+        const extStartX = extLineStarts.right; // All 'right' extensions start from same X
+        ext1Start = this.camera!.worldToScreen(extStartX, startPoint.y);
         ext1End = this.camera!.worldToScreen(dimX, startPoint.y);
-        ext2Start = this.camera!.worldToScreen(endPoint.x + wallHalfThickness + 50, endPoint.y);
+        ext2Start = this.camera!.worldToScreen(extStartX, endPoint.y);
         ext2End = this.camera!.worldToScreen(dimX, endPoint.y);
         dim1 = this.camera!.worldToScreen(dimX, startPoint.y);
         dim2 = this.camera!.worldToScreen(dimX, endPoint.y);
