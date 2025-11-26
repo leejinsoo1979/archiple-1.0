@@ -691,17 +691,18 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       pipeline.sharpenEnabled = false;
       pipelineRef.current = pipeline;
 
-      // SSAO2 for ambient occlusion (soft shadows in corners)
+      // SSAO2 for ambient occlusion (soft shadows in corners) - high quality
       const ssao = new SSAO2RenderingPipeline('ssao', scene, {
-        ssaoRatio: 0.5,
-        blurRatio: 1
+        ssaoRatio: 1.0,
+        blurRatio: 2
       });
-      ssao.radius = 2.0;
-      ssao.totalStrength = 1.5;
-      ssao.base = 0.5;
-      ssao.samples = 16;
-      ssao.maxZ = 100;
-      ssao.minZAspect = 0.5;
+      ssao.radius = 3.5;
+      ssao.totalStrength = 2.5;
+      ssao.base = 0.3;
+      ssao.samples = 32;
+      ssao.maxZ = 150;
+      ssao.minZAspect = 0.2;
+      ssao.expensiveBlur = true;
 
       console.log('[Babylon3DCanvas] High-quality rendering pipeline with SSAO initialized');
 
@@ -774,16 +775,18 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       // Set default camera
       scene.activeCamera = arcCamera;
 
-      // Advanced lighting setup
-      // 1. Ambient light
+      // Advanced lighting setup - soft, diffuse lighting like professional renders
+      // 1. Ambient light - reduced intensity to make sun shadows more visible
       const hemisphericLight = new HemisphericLight('hemiLight', new Vector3(0, 1, 0), scene);
-      hemisphericLight.intensity = 0.5; // Reduced from 0.7 for better contrast with sun light
-      hemisphericLight.groundColor = new Color3(0.5, 0.5, 0.55);
+      hemisphericLight.intensity = 0.4; // Reduced from 0.8 for better shadow contrast
+      hemisphericLight.diffuse = new Color3(1, 1, 1);
+      hemisphericLight.groundColor = new Color3(0.5, 0.5, 0.52); // Darker ground bounce
+      hemisphericLight.specular = new Color3(0.1, 0.1, 0.1);
 
       // 2. Main directional light (sun) with shadows
       const azimuth = sunSettings?.azimuth ?? 45;
       const altitude = sunSettings?.altitude ?? 45;
-      const intensity = sunSettings?.intensity ?? 1.5;
+      const intensity = sunSettings?.intensity ?? 2.5; // Increased for stronger shadows
 
       // Calculate sun direction from azimuth/altitude
       const azimuthRad = (azimuth * Math.PI) / 180;
@@ -803,13 +806,16 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
       // Shadow generator - high quality soft shadows
       const shadowGenerator = new ShadowGenerator(4096, sunLight);
-      shadowGenerator.usePercentageCloserFiltering = true;
-      shadowGenerator.filteringQuality = ShadowGenerator.QUALITY_HIGH;
-      shadowGenerator.darkness = 0.4;
-      shadowGenerator.bias = 0.001;
-      shadowGenerator.normalBias = 0.02;
-      shadowGenerator.contactHardeningLightSizeUVRatio = 0.05;
-      shadowGenerator.setDarkness(0.5);
+      shadowGenerator.useBlurExponentialShadowMap = true;
+      shadowGenerator.blurKernel = 128;
+      shadowGenerator.blurScale = 2;
+      shadowGenerator.useKernelBlur = true;
+      
+      shadowGenerator.bias = 0.00001;
+      shadowGenerator.normalBias = 0.01;
+      
+      // darkness: 0 = 완전한 검정 그림자, 1 = 그림자 없음
+      shadowGenerator.setDarkness(0.3); // 더 진한 그림자
 
       console.log('[Babylon3DCanvas] Sun light created - direction:', dirX.toFixed(2), dirY.toFixed(2), dirZ.toFixed(2));
 
@@ -3136,12 +3142,18 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         // Initially hide model below ground (will be placed on click)
         rootMesh.position.y = -1000;
 
-        // Make meshes pickable for future interaction
+        // Make meshes pickable and add shadow casters
+        const shadowGen = sunLightRef.current?.getShadowGenerator() as ShadowGenerator | null;
         meshes.forEach((mesh) => {
           mesh.isPickable = true;
+          mesh.receiveShadows = true;
+          // Add as shadow caster
+          if (shadowGen) {
+            shadowGen.addShadowCaster(mesh);
+          }
         });
 
-        console.log('[Babylon3DCanvas] GLB loaded. Click on floor to place.');
+        console.log('[Babylon3DCanvas] GLB loaded with shadow support. Click on floor to place.');
 
         // Add click handler for placement
         const handleCanvasClick = (event: PointerEvent) => {
