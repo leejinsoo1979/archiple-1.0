@@ -205,8 +205,9 @@ export class RoomLayer extends BaseLayer {
           fillOpacity = 1.0;
           break;
         case 'wireframe':
-          // No fill for wireframe mode
-          fillOpacity = 0;
+          // White fill for wireframe/CAD mode
+          fillStyle = '#FFFFFF';
+          fillOpacity = 1.0;
           break;
       }
     }
@@ -221,18 +222,16 @@ export class RoomLayer extends BaseLayer {
     }
     ctx.closePath();
 
-    // Fill (if not wireframe) - wireframe mode shows pure lines only
-    if (this.renderStyle !== 'wireframe') {
-      ctx.fillStyle = fillStyle;
-      ctx.globalAlpha = fillOpacity;
-      ctx.fill();
+    // Fill room
+    ctx.fillStyle = fillStyle;
+    ctx.globalAlpha = fillOpacity;
+    ctx.fill();
 
-      // Add dark overlay for selected room (Archisketch style)
-      if (isSelected) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-        ctx.globalAlpha = 1.0;
-        ctx.fill();
-      }
+    // Add dark overlay for selected room (Archisketch style) - not in wireframe
+    if (isSelected && this.renderStyle !== 'wireframe') {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.globalAlpha = 1.0;
+      ctx.fill();
     }
 
     // Stroke

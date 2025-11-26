@@ -8,16 +8,15 @@ import { SnapService } from '../services/SnapService';
 import type { SnapGuide } from '../services/SnapService';
 import { eventBus } from '../../core/events/EventBus';
 import { FloorEvents } from '../../core/events/FloorEvents';
-import { v4 as uuidv4 } from 'uuid';
 
 /**
  * SelectTool - Select and drag points or walls to adjust positions
  *
  * Features:
  * - Click on point to select and drag
- * - Click on wall to select and drag (moves both endpoints)
+ * - Click on wall to select and drag (ghost preview, then create new wall)
  * - Snap to vertical/horizontal alignment with other points
- * - Connected walls update automatically
+ * - Connected walls stretch automatically when wall is moved
  */
 export class SelectTool extends BaseTool {
   private sceneManager: SceneManager;
@@ -30,7 +29,12 @@ export class SelectTool extends BaseTool {
   private selectedDoorHandle: 'start' | 'end' | 'body' | null = null;
   private isDragging = false;
   private dragStartPos: Vector2 | null = null;
-  private wallDetachedPointIds: string[] = []; // New points created for wall detachment
+
+  // Wall drag ghost state - for preview before committing
+  private wallDragGhostStart: Vector2 | null = null;
+  private wallDragGhostEnd: Vector2 | null = null;
+  private originalWallStartPoint: Point | null = null;
+  private originalWallEndPoint: Point | null = null;
 
   // Hover state
   private hoveredPoint: Point | null = null;
@@ -38,7 +42,6 @@ export class SelectTool extends BaseTool {
 
   // Config
   private pointSelectRadius = 200; // 200mm selection radius (easier to click)
-
   private doorHandleRadius = 300; // 300mm radius for door handle selection
   private doorBodyRadius = 500; // 500mm radius for door body selection
 
@@ -65,7 +68,6 @@ export class SelectTool extends BaseTool {
 
     // Check for door first (before points)
     const clickedDoor = this.findDoorNear(position, allDoors, allWalls, allPoints);
-    console.log('[SelectTool] Door check:', clickedDoor ? `Found door ${clickedDoor.door.id} (${clickedDoor.handle})` : 'No door found');
 
     if (clickedDoor) {
       // Select door and start dragging
@@ -78,7 +80,6 @@ export class SelectTool extends BaseTool {
 
       // Emit door selection via SelectionManager
       this.sceneManager.selectionManager.select(clickedDoor.door.id);
-      console.log('[SelectTool] Door selected:', clickedDoor.door.id);
       return;
     }
 
@@ -101,33 +102,32 @@ export class SelectTool extends BaseTool {
       return;
     }
 
-
-
     // No point or door found - try to find wall near cursor
     const clickedWall = this.findWallNear(position, allWalls, allPoints);
-    console.log('[SelectTool] Wall check:', clickedWall ? `Found wall ${clickedWall.id}` : 'No wall found');
 
     if (clickedWall) {
-      // Select wall and start dragging
+      // Select wall and start ghost dragging
       this.selectedWall = clickedWall;
       this.selectedPoint = null;
       this.selectedDoor = null;
       this.selectedDoorHandle = null;
       this.isDragging = true;
       this.dragStartPos = position.clone();
-      this.wallDetachedPointIds = [];
 
-      // Set wall dragging flag to prevent cleanup during drag
-      this.sceneManager.setWallDragging(true);
-
-      // Detach wall from shared corners immediately
-      this.detachWallFromSharedCorners(clickedWall);
+      // Store original wall endpoints for ghost preview
+      const startPoint = allPoints.find(p => p.id === clickedWall.startPointId);
+      const endPoint = allPoints.find(p => p.id === clickedWall.endPointId);
+      if (startPoint && endPoint) {
+        this.originalWallStartPoint = { ...startPoint };
+        this.originalWallEndPoint = { ...endPoint };
+        this.wallDragGhostStart = new Vector2(startPoint.x, startPoint.y);
+        this.wallDragGhostEnd = new Vector2(endPoint.x, endPoint.y);
+      }
 
       // Emit wall selection event
       eventBus.emit(FloorEvents.WALL_SELECTED, {
         wall: clickedWall,
       });
-      console.log('[SelectTool] Wall selected:', clickedWall.id);
       return;
     }
 
@@ -135,7 +135,6 @@ export class SelectTool extends BaseTool {
     this.resetState();
     // Clear any door selection to hide FloatingOptionBar
     this.sceneManager.selectionManager.clearSelection();
-    console.log('[SelectTool] Clicked empty space, deselected all');
   }
 
   handleMouseMove(position: Vector2, _event: MouseEvent): void {
@@ -253,8 +252,6 @@ export class SelectTool extends BaseTool {
             const otherVec = new Vector2(otherPoint.x, otherPoint.y);
 
             // Calculate wall angle
-            // Direction from Other -> Selected (current wall direction)
-            // But we want to extend from Other.
             const dx = this.selectedPoint!.x - otherPoint.x;
             const dy = this.selectedPoint!.y - otherPoint.y;
             const angleRad = Math.atan2(dy, dx);
@@ -303,143 +300,43 @@ export class SelectTool extends BaseTool {
       // Check for orthogonal alignment of connected walls and show guides
       this.updateOrthogonalGuides(snappedPos, allPoints, allWalls);
     }
-    // Handle wall dragging
-    else if (this.selectedWall && this.dragStartPos) {
-      const allPoints = this.sceneManager.objectManager.getAllPoints();
-      const allWalls = this.sceneManager.objectManager.getAllWalls();
+    // Handle wall dragging - ghost preview mode
+    else if (this.selectedWall && this.dragStartPos && this.originalWallStartPoint && this.originalWallEndPoint) {
+      // Calculate wall direction for perpendicular movement
+      const wallVec = new Vector2(
+        this.originalWallEndPoint.x - this.originalWallStartPoint.x,
+        this.originalWallEndPoint.y - this.originalWallStartPoint.y
+      );
+      const wallLength = wallVec.length();
+      if (wallLength < 0.001) return;
 
-      // Re-fetch the latest wall data (in case it was updated)
-      const currentWall = allWalls.find((w) => w.id === this.selectedWall!.id);
-      if (currentWall) {
-        this.selectedWall = currentWall;
-      }
+      const wallDir = wallVec.normalize();
+      const wallNormal = new Vector2(-wallDir.y, wallDir.x);
 
-      // Get wall's start and end points
-      let startPoint = allPoints.find((p) => p.id === this.selectedWall!.startPointId);
-      let endPoint = allPoints.find((p) => p.id === this.selectedWall!.endPointId);
+      // Calculate drag delta projected onto wall normal (perpendicular movement)
+      const dragDelta = new Vector2(
+        position.x - this.dragStartPos.x,
+        position.y - this.dragStartPos.y
+      );
+      const perpDist = dragDelta.dot(wallNormal);
 
-      if (!startPoint || !endPoint) {
-        console.error('[SelectTool] Wall points not found:', this.selectedWall!.startPointId, this.selectedWall!.endPointId);
-        return;
-      }
+      // Update ghost positions
+      this.wallDragGhostStart = new Vector2(
+        this.originalWallStartPoint.x + wallNormal.x * perpDist,
+        this.originalWallStartPoint.y + wallNormal.y * perpDist
+      );
+      this.wallDragGhostEnd = new Vector2(
+        this.originalWallEndPoint.x + wallNormal.x * perpDist,
+        this.originalWallEndPoint.y + wallNormal.y * perpDist
+      );
 
-      // Move wall endpoints (may be detached new points)
-      this.moveWallPoints(startPoint, endPoint, position);
+      // Emit ghost preview event
+      eventBus.emit(FloorEvents.WALL_PREVIEW_UPDATED, {
+        start: { x: this.wallDragGhostStart.x, y: this.wallDragGhostStart.y },
+        end: { x: this.wallDragGhostEnd.x, y: this.wallDragGhostEnd.y },
+        thickness: this.selectedWall.thickness,
+      });
     }
-  }
-
-  /**
-   * Detach wall from shared corners by creating new points
-   * Original points stay in place, new points move with the wall
-   */
-  private detachWallFromSharedCorners(wall: Wall): void {
-    const allWalls = this.sceneManager.objectManager.getAllWalls();
-    const allPoints = this.sceneManager.objectManager.getAllPoints();
-
-    const startPoint = allPoints.find((p) => p.id === wall.startPointId);
-    const endPoint = allPoints.find((p) => p.id === wall.endPointId);
-
-    if (!startPoint || !endPoint) return;
-
-    // Check if start point is shared with other walls
-    const startConnectedWalls = allWalls.filter(
-      (w) =>
-        w.id !== wall.id &&
-        (w.startPointId === startPoint.id || w.endPointId === startPoint.id)
-    );
-
-    // Check if end point is shared with other walls
-    const endConnectedWalls = allWalls.filter(
-      (w) =>
-        w.id !== wall.id &&
-        (w.startPointId === endPoint.id || w.endPointId === endPoint.id)
-    );
-
-    console.log('[SelectTool] Detaching wall - startConnected:', startConnectedWalls.length, 'endConnected:', endConnectedWalls.length);
-
-    let newStartPointId = startPoint.id;
-    let newEndPointId = endPoint.id;
-
-    // Create new point for start if shared
-    if (startConnectedWalls.length > 0) {
-      const newStartPoint: Point = {
-        id: uuidv4(),
-        x: startPoint.x,
-        y: startPoint.y,
-      };
-      const addedStartPoint = this.sceneManager.objectManager.forceAddPoint(newStartPoint);
-      newStartPointId = addedStartPoint.id;
-      this.wallDetachedPointIds.push(newStartPointId);
-
-      // Change wall's start endpoint to new point
-      this.sceneManager.objectManager.changeWallEndpoint(wall.id, 'start', newStartPointId);
-      console.log('[SelectTool] Detached start point, new:', newStartPointId);
-    }
-
-    // Create new point for end if shared
-    if (endConnectedWalls.length > 0) {
-      const newEndPoint: Point = {
-        id: uuidv4(),
-        x: endPoint.x,
-        y: endPoint.y,
-      };
-      const addedEndPoint = this.sceneManager.objectManager.forceAddPoint(newEndPoint);
-      newEndPointId = addedEndPoint.id;
-      this.wallDetachedPointIds.push(newEndPointId);
-
-      // Change wall's end endpoint to new point
-      this.sceneManager.objectManager.changeWallEndpoint(wall.id, 'end', newEndPointId);
-      console.log('[SelectTool] Detached end point, new:', newEndPointId);
-    }
-
-    // Update selectedWall reference with new point IDs
-    if (newStartPointId !== startPoint.id || newEndPointId !== endPoint.id) {
-      this.selectedWall = {
-        ...wall,
-        startPointId: newStartPointId,
-        endPointId: newEndPointId,
-      };
-    }
-  }
-
-  /**
-   * Helper method to move wall endpoints perpendicular to wall direction
-   */
-  private moveWallPoints(startPoint: Point, endPoint: Point, position: Vector2): void {
-    if (!this.dragStartPos) return;
-
-    // Calculate wall direction vector
-    const wallVec = new Vector2(endPoint.x - startPoint.x, endPoint.y - startPoint.y);
-    const wallLength = wallVec.length();
-    if (wallLength < 0.001) return; // Zero-length wall
-
-    const wallDir = wallVec.normalize();
-
-    // Calculate drag delta
-    const dragDelta = new Vector2(position.x - this.dragStartPos.x, position.y - this.dragStartPos.y);
-
-    // Project drag delta onto wall perpendicular direction (normal)
-    // This allows moving the wall sideways but not along its length
-    const wallNormal = new Vector2(-wallDir.y, wallDir.x);
-    const perpDist = dragDelta.dot(wallNormal);
-
-    // Calculate the perpendicular offset
-    const offsetX = wallNormal.x * perpDist;
-    const offsetY = wallNormal.y * perpDist;
-
-    // Move only this wall's endpoints (now detached from other walls)
-    this.sceneManager.objectManager.updatePoint(startPoint.id, {
-      x: startPoint.x + offsetX,
-      y: startPoint.y + offsetY,
-    });
-
-    this.sceneManager.objectManager.updatePoint(endPoint.id, {
-      x: endPoint.x + offsetX,
-      y: endPoint.y + offsetY,
-    });
-
-    // Update drag start position for next frame
-    this.dragStartPos = position.clone();
   }
 
   handleMouseUp(position: Vector2, event: MouseEvent): void {
@@ -464,12 +361,8 @@ export class SelectTool extends BaseTool {
           nearbyPoint.id
         );
         if (merged) {
-          console.log('[SelectTool] Points merged:', this.selectedPoint.id, '->', nearbyPoint.id);
           // Additional cleanup to ensure no duplicate walls remain
-          const cleanup = this.sceneManager.objectManager.cleanupDuplicates();
-          if (cleanup.points > 0 || cleanup.walls > 0) {
-            console.log('[SelectTool] Cleanup after merge:', cleanup.points, 'points,', cleanup.walls, 'walls');
-          }
+          this.sceneManager.objectManager.cleanupDuplicates();
           this.selectedPoint = null;
           return;
         }
@@ -479,28 +372,55 @@ export class SelectTool extends BaseTool {
       eventBus.emit(FloorEvents.POINT_UPDATED, {
         point: this.selectedPoint,
       });
-    } else if (this.selectedWall) {
-      // Clear wall dragging flag to allow cleanup
-      this.sceneManager.setWallDragging(false);
+    } else if (this.selectedWall && this.wallDragGhostStart && this.wallDragGhostEnd) {
+      // Clear ghost preview
+      eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
 
-      const allPoints = this.sceneManager.objectManager.getAllPoints();
-      const startPoint = allPoints.find((p) => p.id === this.selectedWall!.startPointId);
-      const endPoint = allPoints.find((p) => p.id === this.selectedWall!.endPointId);
+      // Check if wall actually moved (not just clicked)
+      const movedDistance = this.originalWallStartPoint
+        ? Math.sqrt(
+            Math.pow(this.wallDragGhostStart.x - this.originalWallStartPoint.x, 2) +
+            Math.pow(this.wallDragGhostStart.y - this.originalWallStartPoint.y, 2)
+          )
+        : 0;
 
-      // Emit final update events for both points
-      if (startPoint) {
-        eventBus.emit(FloorEvents.POINT_UPDATED, {
-          point: startPoint,
+      if (movedDistance > 10) { // Only create new wall if moved more than 10mm
+        // Store wall properties before deletion
+        const wallThickness = this.selectedWall.thickness;
+        const wallHeight = this.selectedWall.height;
+        const wallId = this.selectedWall.id;
+
+        // Delete the original wall
+        this.sceneManager.objectManager.removeWall(wallId);
+
+        // Create new points at ghost positions
+        const newStartPoint = this.sceneManager.objectManager.addPoint({
+          id: '',
+          x: this.wallDragGhostStart.x,
+          y: this.wallDragGhostStart.y,
+        });
+
+        const newEndPoint = this.sceneManager.objectManager.addPoint({
+          id: '',
+          x: this.wallDragGhostEnd.x,
+          y: this.wallDragGhostEnd.y,
+        });
+
+        // Create new wall at ghost position
+        this.sceneManager.objectManager.addWall({
+          id: '',
+          startPointId: newStartPoint.id,
+          endPointId: newEndPoint.id,
+          thickness: wallThickness,
+          height: wallHeight,
         });
       }
-      if (endPoint) {
-        eventBus.emit(FloorEvents.POINT_UPDATED, {
-          point: endPoint,
-        });
-      }
 
-      // Reset detached point IDs
-      this.wallDetachedPointIds = [];
+      // Reset ghost state
+      this.wallDragGhostStart = null;
+      this.wallDragGhostEnd = null;
+      this.originalWallStartPoint = null;
+      this.originalWallEndPoint = null;
     }
 
     // Keep selection but stop dragging
@@ -575,7 +495,6 @@ export class SelectTool extends BaseTool {
       );
 
       // Check if inside wall thickness
-      // Strictly inside: distance <= wall.thickness / 2
       const threshold = wall.thickness / 2;
 
       if (distance <= threshold) {
@@ -600,8 +519,6 @@ export class SelectTool extends BaseTool {
     walls: Wall[],
     points: Point[]
   ): { door: Door; handle: 'start' | 'end' | 'body'; distance: number } | null {
-    console.log(`[SelectTool] Looking for door near ${position.x}, ${position.y}. Total doors: ${doors.length}`);
-
     let nearestDoor: Door | null = null;
     let nearestHandle: 'start' | 'end' | 'body' = 'body';
     let minDistance = this.doorHandleRadius;
@@ -609,17 +526,11 @@ export class SelectTool extends BaseTool {
     // First pass: check for handle clicks
     for (const door of doors) {
       const wall = walls.find(w => w.id === door.wallId);
-      if (!wall) {
-        console.log(`[SelectTool] Door ${door.id}: wall not found`);
-        continue;
-      }
+      if (!wall) continue;
 
       const startPoint = points.find(p => p.id === wall.startPointId);
       const endPoint = points.find(p => p.id === wall.endPointId);
-      if (!startPoint || !endPoint) {
-        console.log(`[SelectTool] Door ${door.id}: points not found`);
-        continue;
-      }
+      if (!startPoint || !endPoint) continue;
 
       // Calculate door center and endpoints
       const wallX = startPoint.x + (endPoint.x - startPoint.x) * door.position;
@@ -638,7 +549,6 @@ export class SelectTool extends BaseTool {
 
       // Check start handle
       const distToStart = position.distanceTo(openingStart);
-      console.log(`[SelectTool] Door ${door.id} start handle distance: ${distToStart.toFixed(0)}mm (threshold: ${this.doorHandleRadius}mm)`);
       if (distToStart < minDistance) {
         minDistance = distToStart;
         nearestDoor = door;
@@ -647,7 +557,6 @@ export class SelectTool extends BaseTool {
 
       // Check end handle
       const distToEnd = position.distanceTo(openingEnd);
-      console.log(`[SelectTool] Door ${door.id} end handle distance: ${distToEnd.toFixed(0)}mm`);
       if (distToEnd < minDistance) {
         minDistance = distToEnd;
         nearestDoor = door;
@@ -657,13 +566,11 @@ export class SelectTool extends BaseTool {
 
     // If handle found, return it
     if (nearestDoor) {
-      console.log(`[SelectTool] Found door handle: ${nearestDoor.id} (${nearestHandle}), distance: ${minDistance.toFixed(0)}mm`);
       return { door: nearestDoor, handle: nearestHandle, distance: minDistance };
     }
 
     // Second pass: check for door body clicks
     minDistance = this.doorBodyRadius;
-    console.log(`[SelectTool] No handle found, checking body (threshold: ${this.doorBodyRadius}mm)`);
 
     for (const door of doors) {
       const wall = walls.find(w => w.id === door.wallId);
@@ -680,7 +587,6 @@ export class SelectTool extends BaseTool {
 
       // Check distance to door center
       const dist = position.distanceTo(doorCenter);
-      console.log(`[SelectTool] Door ${door.id} body distance: ${dist.toFixed(0)}mm`);
       if (dist < minDistance) {
         minDistance = dist;
         nearestDoor = door;
@@ -689,11 +595,9 @@ export class SelectTool extends BaseTool {
     }
 
     if (nearestDoor) {
-      console.log(`[SelectTool] Found door body: ${nearestDoor.id}, distance: ${minDistance.toFixed(0)}mm`);
       return { door: nearestDoor, handle: nearestHandle, distance: minDistance };
     }
 
-    console.log('[SelectTool] No door found');
     return null;
   }
 
@@ -739,10 +643,15 @@ export class SelectTool extends BaseTool {
     this.dragStartPos = null;
     this.hoveredPoint = null;
     this.hoveredWall = null;
-    this.wallDetachedPointIds = [];
 
-    // Clear wall dragging flag
-    this.sceneManager.setWallDragging(false);
+    // Clear wall ghost state
+    this.wallDragGhostStart = null;
+    this.wallDragGhostEnd = null;
+    this.originalWallStartPoint = null;
+    this.originalWallEndPoint = null;
+
+    // Clear ghost preview
+    eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
 
     // Clear selection and hover events
     eventBus.emit(FloorEvents.POINT_SELECTION_CLEARED, {});
@@ -787,18 +696,12 @@ export class SelectTool extends BaseTool {
       angle = 180 - angle;
     }
 
-    // Choose cursor based on angle
-    // 0-22.5°: horizontal (ew-resize)
-    // 22.5-67.5°: diagonal (nwse-resize or nesw-resize)
-    // 67.5-90°: vertical (ns-resize)
-
     if (angle <= 22.5) {
       return 'ns-resize'; // Horizontal wall -> vertical drag
     } else if (angle >= 67.5) {
       return 'ew-resize'; // Vertical wall -> horizontal drag
     } else {
       // Diagonal wall
-      // Check if it's NW-SE or NE-SW direction
       const originalAngle = Math.atan2(dy, dx) * (180 / Math.PI);
       if ((originalAngle >= -45 && originalAngle < 45) || (originalAngle >= 135 || originalAngle < -135)) {
         return 'nwse-resize';
@@ -837,10 +740,8 @@ export class SelectTool extends BaseTool {
       // Check for vertical wall (x coordinates are nearly equal)
       if (dx <= ORTHOGONAL_THRESHOLD && !hasVerticalGuide) {
         hasVerticalGuide = true;
-        // Use the other point's x for the guide (more stable)
         const guideX = otherPoint.x;
 
-        // Extend guide across entire canvas (large range)
         eventBus.emit(FloorEvents.VERTICAL_GUIDE_UPDATED, {
           x: guideX,
           fromY: -1000000,
@@ -851,10 +752,8 @@ export class SelectTool extends BaseTool {
       // Check for horizontal wall (y coordinates are nearly equal)
       if (dy <= ORTHOGONAL_THRESHOLD && !hasHorizontalGuide) {
         hasHorizontalGuide = true;
-        // Use the other point's y for the guide (more stable)
         const guideY = otherPoint.y;
 
-        // Extend guide across entire canvas (large range)
         eventBus.emit(FloorEvents.HORIZONTAL_GUIDE_UPDATED, {
           y: guideY,
           fromX: -1000000,
