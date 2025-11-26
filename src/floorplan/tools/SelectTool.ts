@@ -290,6 +290,9 @@ export class SelectTool extends BaseTool {
         x: snappedPos.x,
         y: snappedPos.y,
       });
+
+      // Check for orthogonal alignment of connected walls and show guides
+      this.updateOrthogonalGuides(snappedPos, allPoints, allWalls);
     }
     // Handle wall dragging
     else if (this.selectedWall && this.dragStartPos) {
@@ -342,6 +345,9 @@ export class SelectTool extends BaseTool {
 
     // Finalize move
     this.isDragging = false;
+
+    // Clear orthogonal guides when dragging ends
+    this.clearOrthogonalGuides();
 
     if (this.selectedPoint) {
       // Check for nearby point to merge with
@@ -688,5 +694,83 @@ export class SelectTool extends BaseTool {
         return 'nesw-resize';
       }
     }
+  }
+
+  /**
+   * Check if connected walls are orthogonal (vertical/horizontal) and emit guide events
+   */
+  private updateOrthogonalGuides(currentPos: Vector2, allPoints: Point[], allWalls: Wall[]): void {
+    if (!this.selectedPoint) return;
+
+    const ORTHOGONAL_THRESHOLD = 5; // 5mm tolerance for orthogonal detection
+    let hasVerticalGuide = false;
+    let hasHorizontalGuide = false;
+
+    // Find walls connected to this point by checking wall endpoints directly
+    const connectedWalls = allWalls.filter(
+      w => w.startPointId === this.selectedPoint!.id || w.endPointId === this.selectedPoint!.id
+    );
+
+    console.log('[SelectTool] Point:', this.selectedPoint.id.slice(0, 8), 'Connected walls:', connectedWalls.length);
+
+    for (const wall of connectedWalls) {
+      // Find the OTHER endpoint of this wall
+      const otherPointId = wall.startPointId === this.selectedPoint.id ? wall.endPointId : wall.startPointId;
+      const otherPoint = allPoints.find(p => p.id === otherPointId);
+
+      if (!otherPoint) continue;
+
+      // Calculate difference
+      const dx = Math.abs(currentPos.x - otherPoint.x);
+      const dy = Math.abs(currentPos.y - otherPoint.y);
+
+      console.log('[SelectTool] Wall check - dx:', dx.toFixed(1), 'dy:', dy.toFixed(1));
+
+      // Check for vertical wall (x coordinates are nearly equal)
+      if (dx <= ORTHOGONAL_THRESHOLD && !hasVerticalGuide) {
+        hasVerticalGuide = true;
+        // Use the other point's x for the guide (more stable)
+        const guideX = otherPoint.x;
+
+        // Extend guide across entire canvas (large range)
+        eventBus.emit(FloorEvents.VERTICAL_GUIDE_UPDATED, {
+          x: guideX,
+          fromY: -1000000,
+          toY: 1000000
+        });
+        console.log('[SelectTool] VERTICAL guide at x:', guideX);
+      }
+
+      // Check for horizontal wall (y coordinates are nearly equal)
+      if (dy <= ORTHOGONAL_THRESHOLD && !hasHorizontalGuide) {
+        hasHorizontalGuide = true;
+        // Use the other point's y for the guide (more stable)
+        const guideY = otherPoint.y;
+
+        // Extend guide across entire canvas (large range)
+        eventBus.emit(FloorEvents.HORIZONTAL_GUIDE_UPDATED, {
+          y: guideY,
+          fromX: -1000000,
+          toX: 1000000
+        });
+        console.log('[SelectTool] HORIZONTAL guide at y:', guideY);
+      }
+    }
+
+    // Clear guides that are no longer valid
+    if (!hasVerticalGuide) {
+      eventBus.emit(FloorEvents.VERTICAL_GUIDE_CLEARED, {});
+    }
+    if (!hasHorizontalGuide) {
+      eventBus.emit(FloorEvents.HORIZONTAL_GUIDE_CLEARED, {});
+    }
+  }
+
+  /**
+   * Clear orthogonal guides when dragging ends
+   */
+  private clearOrthogonalGuides(): void {
+    eventBus.emit(FloorEvents.VERTICAL_GUIDE_CLEARED, {});
+    eventBus.emit(FloorEvents.HORIZONTAL_GUIDE_CLEARED, {});
   }
 }

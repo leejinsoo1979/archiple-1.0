@@ -242,42 +242,6 @@ export class GuideLayer extends BaseLayer {
     ctx.lineTo(endX, endY);
     ctx.stroke();
 
-    // Draw angle label
-    // Position label at a fixed screen distance from 'from' point, not world distance
-    // This ensures label is always visible regardless of zoom
-
-    // Convert 'from' to screen
-    const screenFrom = this.camera.worldToScreen(from.x, from.y);
-    const labelOffsetPx = 60; // 60px offset
-    const labelScreenX = screenFrom.x + Math.cos(radians) * labelOffsetPx;
-    const labelScreenY = screenFrom.y + Math.sin(radians) * labelOffsetPx;
-
-    // Reset transform to draw label in screen space
-    this.camera.applyScreenTransform(ctx);
-
-    ctx.fillStyle = this.config.angleGuideColor;
-    ctx.font = 'bold 14px system-ui';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    // Add background for better readability
-    const label = `${angle}°`;
-    const metrics = ctx.measureText(label);
-    const padding = 4;
-
-    // Check current theme for background color
-    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
-    ctx.fillStyle = isDarkMode ? 'rgba(45, 45, 45, 0.9)' : 'rgba(255, 255, 255, 0.8)';
-    ctx.fillRect(
-      labelScreenX - metrics.width / 2 - padding,
-      labelScreenY - 10,
-      metrics.width + padding * 2,
-      20
-    );
-
-    ctx.fillStyle = this.config.angleGuideColor;
-    ctx.fillText(label, labelScreenX, labelScreenY);
-
     ctx.restore();
   }
 
