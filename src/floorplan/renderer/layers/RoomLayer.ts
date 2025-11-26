@@ -50,7 +50,7 @@ export class RoomLayer extends BaseLayer {
       hoveredFillColor: config?.hoveredFillColor || '#e67e22',
       showLabels: config?.showLabels ?? true,
       labelFont: config?.labelFont || 'bold 180px Arial',
-      labelColor: config?.labelColor || '#2c3e50',
+      labelColor: config?.labelColor || '#444444',
       showAngles: config?.showAngles ?? true,
       wallThickness: config?.wallThickness || 100, // 100mm default wall thickness
     };
