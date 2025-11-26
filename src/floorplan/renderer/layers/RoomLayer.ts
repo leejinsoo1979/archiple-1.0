@@ -212,9 +212,25 @@ export class RoomLayer extends BaseLayer {
 
     // Stroke
     ctx.globalAlpha = 1.0;
-    ctx.strokeStyle = this.config.strokeColor;
-    ctx.lineWidth = this.renderStyle === 'wireframe' ? 1.5 : this.config.strokeWidth;
-    ctx.stroke();
+
+    if (isSelected) {
+      // Highlighted border for selected room
+      const themeColorRaw = getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim();
+      const themeColor = themeColorRaw || '#3FAEA7';
+      ctx.strokeStyle = themeColor;
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      // Add glow effect
+      ctx.shadowColor = themeColor;
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    } else {
+      ctx.strokeStyle = this.config.strokeColor;
+      ctx.lineWidth = this.renderStyle === 'wireframe' ? 1.5 : this.config.strokeWidth;
+      ctx.stroke();
+    }
 
     ctx.restore();
   }
@@ -791,6 +807,53 @@ export class RoomLayer extends BaseLayer {
     }
 
     return null;
+  }
+
+  /**
+   * Check if a point (world coordinates) is inside a room
+   * Returns room info if found, null otherwise
+   */
+  getRoomAtPoint(worldX: number, worldY: number): { room: Room; area: number } | null {
+    for (const room of this.rooms) {
+      const roomPoints = room.points
+        .map((pointId) => this.points.get(pointId))
+        .filter((p): p is Point => p !== undefined);
+
+      if (roomPoints.length < 3) continue;
+
+      // Check if point is inside the room polygon
+      if (this.isPointInPolygon(worldX, worldY, roomPoints)) {
+        // Calculate area
+        const insetDistance = this.config.wallThickness / 2;
+        const floorPoints = this.insetPolygon(roomPoints, insetDistance);
+        const areaMm2 = Math.abs(this.calculatePolygonArea(floorPoints));
+        const areaM2 = areaMm2 / 1000000;
+
+        return { room, area: areaM2 };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Check if a point is inside a polygon using ray casting
+   */
+  private isPointInPolygon(x: number, y: number, polygon: Point[]): boolean {
+    let inside = false;
+    const n = polygon.length;
+
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      const xi = polygon[i].x;
+      const yi = polygon[i].y;
+      const xj = polygon[j].x;
+      const yj = polygon[j].y;
+
+      if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+        inside = !inside;
+      }
+    }
+
+    return inside;
   }
 
   /**

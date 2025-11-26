@@ -75,6 +75,9 @@ const EditorPage = () => {
   const [displayStyle, setDisplayStyle] = useState<'material' | 'white' | 'sketch' | 'transparent'>('material');
   const [hiddenLineMode, setHiddenLineMode] = useState(false);
 
+  // Selected room state (for right panel info)
+  const [selectedRoom, setSelectedRoom] = useState<{ id: string; name: string; area: number } | null>(null);
+
   // Background image state
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
   const [imageScale, setImageScale] = useState(100); // 100mm per pixel default

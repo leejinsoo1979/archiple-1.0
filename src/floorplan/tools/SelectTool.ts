@@ -722,8 +722,6 @@ export class SelectTool extends BaseTool {
       const dx = Math.abs(currentPos.x - otherPoint.x);
       const dy = Math.abs(currentPos.y - otherPoint.y);
 
-      console.log('[SelectTool] Wall check - dx:', dx.toFixed(1), 'dy:', dy.toFixed(1));
-
       // Check for vertical wall (x coordinates are nearly equal)
       if (dx <= ORTHOGONAL_THRESHOLD && !hasVerticalGuide) {
         hasVerticalGuide = true;
@@ -736,7 +734,6 @@ export class SelectTool extends BaseTool {
           fromY: -1000000,
           toY: 1000000
         });
-        console.log('[SelectTool] VERTICAL guide at x:', guideX);
       }
 
       // Check for horizontal wall (y coordinates are nearly equal)
@@ -751,7 +748,6 @@ export class SelectTool extends BaseTool {
           fromX: -1000000,
           toX: 1000000
         });
-        console.log('[SelectTool] HORIZONTAL guide at y:', guideY);
       }
     }
 

@@ -61,6 +61,8 @@ interface FloorplanCanvasProps {
   onRulerLabelClick?: (screenX: number, screenY: number, currentDistanceMm: number) => void;
   draggingRulerPoint?: 'start' | 'end' | null;
   scannedWalls?: { points: any[]; walls: any[] } | null;
+  onRoomSelect?: (roomInfo: { id: string; name: string; area: number } | null) => void;
+  selectedRoomId?: string | null;
 }
 
 const FloorplanCanvas = ({
@@ -83,6 +85,8 @@ const FloorplanCanvas = ({
   onRulerLabelClick,
   draggingRulerPoint = null,
   scannedWalls = null,
+  onRoomSelect,
+  selectedRoomId = null,
 }: FloorplanCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -919,6 +923,19 @@ const FloorplanCanvas = ({
     }
   }, [showGrid]);
 
+  // Update selected room when selectedRoomId changes from parent
+  useEffect(() => {
+    const roomLayer = roomLayerRef.current;
+    if (roomLayer) {
+      roomLayer.setSelectedRooms(selectedRoomId ? [selectedRoomId] : []);
+      // Trigger re-render
+      const renderer = rendererRef.current;
+      if (renderer) {
+        renderer.render();
+      }
+    }
+  }, [selectedRoomId]);
+
   // Update background image layer when props change
   useEffect(() => {
     const backgroundLayer = backgroundLayerRef.current;
@@ -1180,6 +1197,31 @@ const FloorplanCanvas = ({
 
           return;
         }
+
+        // Check if clicked inside a room (for selection)
+        const roomHit = roomLayer.getRoomAtPoint(worldPos.x, worldPos.y);
+        if (roomHit && onRoomSelect) {
+          event.preventDefault();
+          event.stopPropagation();
+
+          // Select the room
+          roomLayer.setSelectedRooms([roomHit.room.id]);
+          onRoomSelect({
+            id: roomHit.room.id,
+            name: roomHit.room.name,
+            area: roomHit.area
+          });
+          return;
+        }
+      }
+
+      // If clicked outside any room, deselect
+      if (onRoomSelect) {
+        const roomLayer = roomLayerRef.current;
+        if (roomLayer) {
+          roomLayer.setSelectedRooms([]);
+        }
+        onRoomSelect(null);
       }
     };
 
@@ -1197,7 +1239,7 @@ const FloorplanCanvas = ({
       canvas.removeEventListener('contextmenu', handleContextMenu);
       canvas.removeEventListener('dblclick', handleDoubleClick, true);
     };
-  }, [rulerVisible, rulerStart, rulerEnd, onRulerDragStart, onRulerDrag, onRulerDragEnd, onRulerLabelClick, draggingRulerPoint]);
+  }, [rulerVisible, rulerStart, rulerEnd, onRulerDragStart, onRulerDrag, onRulerDragEnd, onRulerLabelClick, draggingRulerPoint, onRoomSelect]);
 
   // Handle mouse move for coordinate display
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {

@@ -424,49 +424,65 @@ export class GuideLayer extends BaseLayer {
     ctx.restore();
   }
 
+  private getThemeColor(): string {
+    // Get user's theme color from CSS variable or localStorage
+    const cssColor = getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim();
+    if (cssColor) return cssColor;
+
+    const storedColor = localStorage.getItem('themeColor');
+    if (storedColor) return storedColor;
+
+    return '#3fae7a'; // Default theme color
+  }
+
   private renderVerticalGuideLine(
     ctx: CanvasRenderingContext2D,
     guide: { x: number; fromY: number; toY: number }
   ): void {
     if (!this.camera) return;
 
+    const themeColor = this.getThemeColor();
+
+    // Convert to screen space for consistent pixel rendering
+    const screenStart = this.camera.worldToScreen(guide.x, guide.fromY);
+    const screenEnd = this.camera.worldToScreen(guide.x, guide.toY);
+
+    // Apply screen transform
     ctx.save();
+    this.camera.applyScreenTransform(ctx);
 
-    // Theme-aware colors
-    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
-    const guideColor = isDarkMode ? '#64B5F6' : '#2196F3'; // Blue theme color
-    const glowColor = isDarkMode ? '#64B5F6' : '#2196F3';
-
-    // Get zoom level to adjust line width for consistent screen appearance
-    const zoom = this.camera.getZoom();
-    const screenLineWidth = 2 / zoom;
-    const glowLineWidth = 6 / zoom;
-    const dashLength = 15 / zoom;
-    const gapLength = 8 / zoom;
-
-    // Draw glow layer (wider, blurred line underneath)
-    ctx.strokeStyle = glowColor;
-    ctx.lineWidth = glowLineWidth;
-    ctx.globalAlpha = 0.4;
-    ctx.shadowBlur = 25 / zoom;
-    ctx.shadowColor = glowColor;
-    ctx.setLineDash([dashLength, gapLength]);
+    // Layer 1: Outer glow (widest, most transparent)
+    ctx.strokeStyle = themeColor;
+    ctx.lineWidth = 6;
+    ctx.globalAlpha = 0.15;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = themeColor;
+    ctx.setLineDash([]);
 
     ctx.beginPath();
-    ctx.moveTo(guide.x, guide.fromY);
-    ctx.lineTo(guide.x, guide.toY);
+    ctx.moveTo(screenStart.x, screenStart.y);
+    ctx.lineTo(screenEnd.x, screenEnd.y);
     ctx.stroke();
 
-    // Draw main line on top
-    ctx.globalAlpha = 1.0;
-    ctx.strokeStyle = guideColor;
-    ctx.lineWidth = screenLineWidth;
-    ctx.shadowBlur = 15 / zoom;
-    ctx.shadowColor = glowColor;
+    // Layer 2: Middle glow
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.3;
+    ctx.shadowBlur = 10;
 
     ctx.beginPath();
-    ctx.moveTo(guide.x, guide.fromY);
-    ctx.lineTo(guide.x, guide.toY);
+    ctx.moveTo(screenStart.x, screenStart.y);
+    ctx.lineTo(screenEnd.x, screenEnd.y);
+    ctx.stroke();
+
+    // Layer 3: Core line (brightest)
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 1.0;
+    ctx.shadowBlur = 5;
+    ctx.setLineDash([10, 5]);
+
+    ctx.beginPath();
+    ctx.moveTo(screenStart.x, screenStart.y);
+    ctx.lineTo(screenEnd.x, screenEnd.y);
     ctx.stroke();
 
     ctx.restore();
@@ -478,43 +494,48 @@ export class GuideLayer extends BaseLayer {
   ): void {
     if (!this.camera) return;
 
+    const themeColor = this.getThemeColor();
+
+    // Convert to screen space for consistent pixel rendering
+    const screenStart = this.camera.worldToScreen(guide.fromX, guide.y);
+    const screenEnd = this.camera.worldToScreen(guide.toX, guide.y);
+
+    // Apply screen transform
     ctx.save();
+    this.camera.applyScreenTransform(ctx);
 
-    // Theme-aware colors
-    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
-    const guideColor = isDarkMode ? '#64B5F6' : '#2196F3'; // Blue theme color
-    const glowColor = isDarkMode ? '#64B5F6' : '#2196F3';
-
-    // Get zoom level to adjust line width for consistent screen appearance
-    const zoom = this.camera.getZoom();
-    const screenLineWidth = 2 / zoom;
-    const glowLineWidth = 6 / zoom;
-    const dashLength = 15 / zoom;
-    const gapLength = 8 / zoom;
-
-    // Draw glow layer (wider, blurred line underneath)
-    ctx.strokeStyle = glowColor;
-    ctx.lineWidth = glowLineWidth;
-    ctx.globalAlpha = 0.4;
-    ctx.shadowBlur = 25 / zoom;
-    ctx.shadowColor = glowColor;
-    ctx.setLineDash([dashLength, gapLength]);
+    // Layer 1: Outer glow (widest, most transparent)
+    ctx.strokeStyle = themeColor;
+    ctx.lineWidth = 6;
+    ctx.globalAlpha = 0.15;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = themeColor;
+    ctx.setLineDash([]);
 
     ctx.beginPath();
-    ctx.moveTo(guide.fromX, guide.y);
-    ctx.lineTo(guide.toX, guide.y);
+    ctx.moveTo(screenStart.x, screenStart.y);
+    ctx.lineTo(screenEnd.x, screenEnd.y);
     ctx.stroke();
 
-    // Draw main line on top
-    ctx.globalAlpha = 1.0;
-    ctx.strokeStyle = guideColor;
-    ctx.lineWidth = screenLineWidth;
-    ctx.shadowBlur = 15 / zoom;
-    ctx.shadowColor = glowColor;
+    // Layer 2: Middle glow
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.3;
+    ctx.shadowBlur = 10;
 
     ctx.beginPath();
-    ctx.moveTo(guide.fromX, guide.y);
-    ctx.lineTo(guide.toX, guide.y);
+    ctx.moveTo(screenStart.x, screenStart.y);
+    ctx.lineTo(screenEnd.x, screenEnd.y);
+    ctx.stroke();
+
+    // Layer 3: Core line (brightest)
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 1.0;
+    ctx.shadowBlur = 5;
+    ctx.setLineDash([10, 5]);
+
+    ctx.beginPath();
+    ctx.moveTo(screenStart.x, screenStart.y);
+    ctx.lineTo(screenEnd.x, screenEnd.y);
     ctx.stroke();
 
     ctx.restore();
