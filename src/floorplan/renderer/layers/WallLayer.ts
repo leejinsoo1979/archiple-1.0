@@ -883,11 +883,18 @@ export class WallLayer extends BaseLayer {
     exteriorWalls.forEach(({ startPoint, endPoint, dimDirection }) => {
       const dx = endPoint.x - startPoint.x;
       const dy = endPoint.y - startPoint.y;
-      // Use projected distance based on dimension direction
-      // Horizontal dimension (up/down) shows X distance, vertical (left/right) shows Y distance
-      const distanceMm = (dimDirection === 'up' || dimDirection === 'down')
+
+      // Calculate projected distance based on dimension direction
+      const projectedDistance = (dimDirection === 'up' || dimDirection === 'down')
         ? Math.abs(dx)
         : Math.abs(dy);
+
+      // Skip walls with very small projected distance (essentially diagonal walls)
+      // These don't contribute meaningful exterior dimensions in this direction
+      if (projectedDistance < 50) return;
+
+      // Use projected distance for the dimension
+      const distanceMm = projectedDistance;
 
       let ext1Start, ext1End, ext2Start, ext2End, dim1, dim2, textPos;
 
