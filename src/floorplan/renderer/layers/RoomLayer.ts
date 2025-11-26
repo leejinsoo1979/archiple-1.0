@@ -158,6 +158,10 @@ export class RoomLayer extends BaseLayer {
 
     if (floorPoints.length < 3) return;
 
+    // Get theme color for selection
+    const themeColorRaw = getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim();
+    const themeColor = themeColorRaw || '#3FAEA7';
+
     // Determine fill style based on render mode
     let fillStyle: string | CanvasPattern = this.config.fillColor;
     let fillOpacity = this.config.fillOpacity;
@@ -166,8 +170,9 @@ export class RoomLayer extends BaseLayer {
       fillStyle = this.config.hoveredFillColor;
       fillOpacity = 0.5;
     } else if (isSelected) {
-      fillStyle = this.config.selectedFillColor;
-      fillOpacity = 0.4;
+      // Use theme color with transparency for selected room
+      fillStyle = themeColor;
+      fillOpacity = 0.25;
     } else {
       // Apply render style for normal rooms
       switch (this.renderStyle) {
@@ -214,17 +219,28 @@ export class RoomLayer extends BaseLayer {
     ctx.globalAlpha = 1.0;
 
     if (isSelected) {
-      // Highlighted border for selected room
-      const themeColorRaw = getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim();
-      const themeColor = themeColorRaw || '#3FAEA7';
+      // Multi-layer illumination effect for selected room border
+      // Layer 1: Outer glow (large, soft)
+      ctx.shadowColor = themeColor;
+      ctx.shadowBlur = 30;
       ctx.strokeStyle = themeColor;
-      ctx.lineWidth = 4;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.3;
       ctx.stroke();
 
-      // Add glow effect
-      ctx.shadowColor = themeColor;
-      ctx.shadowBlur = 10;
+      // Layer 2: Middle glow
+      ctx.shadowBlur = 15;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.5;
       ctx.stroke();
+
+      // Layer 3: Core line (bright, sharp)
+      ctx.shadowBlur = 8;
+      ctx.lineWidth = 4;
+      ctx.globalAlpha = 1.0;
+      ctx.stroke();
+
+      // Reset shadow
       ctx.shadowBlur = 0;
     } else {
       ctx.strokeStyle = this.config.strokeColor;
@@ -484,11 +500,11 @@ export class RoomLayer extends BaseLayer {
       const next = points[(i + 1) % points.length];
 
       // Deduplicate corners based on position (distance check)
-      // Use 50mm threshold to handle mismatches
+      // Use 200mm threshold to handle rooms sharing corners
       const isDuplicate = this.renderedCorners.some(p => {
         const dx = p.x - curr.x;
         const dy = p.y - curr.y;
-        return dx * dx + dy * dy < 2500; // 50^2
+        return dx * dx + dy * dy < 40000; // 200^2
       });
 
       if (isDuplicate) continue;

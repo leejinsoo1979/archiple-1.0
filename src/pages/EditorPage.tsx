@@ -3644,7 +3644,7 @@ ARTISTIC APPROACH:
             {/* Selected Room Info */}
             {selectedRoom && (
               <div className={styles.settingsSection} style={{ backgroundColor: 'var(--theme-color-light, rgba(63, 174, 167, 0.1))', borderLeft: '3px solid var(--theme-color, #3FAEA7)' }}>
-                <h4>🏠 Selected Room</h4>
+                <h4>Selected Room</h4>
                 <div className={styles.settingRow}>
                   <label>Name</label>
                   <span style={{ fontWeight: 'bold' }}>{selectedRoom.name || 'Unnamed'}</span>
