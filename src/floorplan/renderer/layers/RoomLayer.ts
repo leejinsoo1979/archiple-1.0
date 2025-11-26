@@ -235,6 +235,13 @@ export class RoomLayer extends BaseLayer {
       ctx.fill();
     }
 
+    // Wireframe mode: fill with theme color when selected
+    if (isSelected && this.renderStyle === 'wireframe') {
+      ctx.fillStyle = themeColor;
+      ctx.globalAlpha = 0.3;
+      ctx.fill();
+    }
+
     // Stroke
     ctx.globalAlpha = 1.0;
     const isDarkModeRoom = document.documentElement.getAttribute('data-theme') === 'dark';
