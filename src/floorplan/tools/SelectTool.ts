@@ -325,38 +325,61 @@ export class SelectTool extends BaseTool {
             (w.startPointId === endPoint!.id || w.endPointId === endPoint!.id)
         );
 
-        // If start point is shared, create a new point for this wall
-        if (startConnectedWalls.length > 0) {
-          const newStartPoint: Point = {
-            id: uuidv4(),
-            x: startPoint.x,
-            y: startPoint.y,
-          };
-          // Use forceAddPoint to bypass overlap check
-          const addedStartPoint = this.sceneManager.objectManager.forceAddPoint(newStartPoint);
-          this.sceneManager.objectManager.updateWall(this.selectedWall.id, {
-            startPointId: addedStartPoint.id,
-          });
-          this.selectedWall.startPointId = addedStartPoint.id;
-          startPoint = addedStartPoint;
-          console.log('[SelectTool] Detached start point, new point:', addedStartPoint.id);
-        }
+        // If any point is shared, we need to recreate the wall with new points
+        if (startConnectedWalls.length > 0 || endConnectedWalls.length > 0) {
+          // Save wall properties
+          const oldWallId = this.selectedWall.id;
+          const wallThickness = this.selectedWall.thickness;
+          const wallHeight = this.selectedWall.height;
 
-        // If end point is shared, create a new point for this wall
-        if (endConnectedWalls.length > 0) {
-          const newEndPoint: Point = {
+          // Create new points for shared endpoints
+          let newStartPointId = startPoint.id;
+          let newEndPointId = endPoint.id;
+
+          if (startConnectedWalls.length > 0) {
+            const newStartPoint: Point = {
+              id: uuidv4(),
+              x: startPoint.x,
+              y: startPoint.y,
+            };
+            const addedStartPoint = this.sceneManager.objectManager.forceAddPoint(newStartPoint);
+            newStartPointId = addedStartPoint.id;
+            console.log('[SelectTool] Created new start point:', addedStartPoint.id);
+          }
+
+          if (endConnectedWalls.length > 0) {
+            const newEndPoint: Point = {
+              id: uuidv4(),
+              x: endPoint.x,
+              y: endPoint.y,
+            };
+            const addedEndPoint = this.sceneManager.objectManager.forceAddPoint(newEndPoint);
+            newEndPointId = addedEndPoint.id;
+            console.log('[SelectTool] Created new end point:', addedEndPoint.id);
+          }
+
+          // Remove the old wall
+          this.sceneManager.objectManager.removeWall(oldWallId);
+          console.log('[SelectTool] Removed old wall:', oldWallId);
+
+          // Create new wall with new points
+          const newWall: Wall = {
             id: uuidv4(),
-            x: endPoint.x,
-            y: endPoint.y,
+            startPointId: newStartPointId,
+            endPointId: newEndPointId,
+            thickness: wallThickness,
+            height: wallHeight,
           };
-          // Use forceAddPoint to bypass overlap check
-          const addedEndPoint = this.sceneManager.objectManager.forceAddPoint(newEndPoint);
-          this.sceneManager.objectManager.updateWall(this.selectedWall.id, {
-            endPointId: addedEndPoint.id,
-          });
-          this.selectedWall.endPointId = addedEndPoint.id;
-          endPoint = addedEndPoint;
-          console.log('[SelectTool] Detached end point, new point:', addedEndPoint.id);
+          this.sceneManager.objectManager.addWall(newWall);
+          console.log('[SelectTool] Created new wall:', newWall.id);
+
+          // Update selection to new wall
+          this.selectedWall = newWall;
+
+          // Update startPoint and endPoint references
+          const updatedPoints = this.sceneManager.objectManager.getAllPoints();
+          startPoint = updatedPoints.find((p) => p.id === newStartPointId)!;
+          endPoint = updatedPoints.find((p) => p.id === newEndPointId)!;
         }
 
         this.wallPointsDetached = true;
