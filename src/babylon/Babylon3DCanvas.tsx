@@ -845,8 +845,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
       infiniteGridRef.current = createInfiniteGrid();
 
-      // Create white ground plane visible from above
-      const createWhiteGround = () => {
+      // Create ground plane visible from above - color based on sun altitude
+      const createGroundPlane = () => {
         const groundPlane = MeshBuilder.CreateGround(
           'whiteGround',
           { width: 1000, height: 1000 },
@@ -854,11 +854,15 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         );
         groundPlane.position = new Vector3(0, -0.02, 0); // Slightly below grid
 
-        // Medium gray material
-        const groundMaterial = new StandardMaterial('whiteGroundMaterial', scene);
-        groundMaterial.diffuseColor = new Color3(0.5, 0.5, 0.5); // Medium gray
+        // Calculate brightness based on sun altitude (0-90 = day, negative = night)
+        const altitude = sunSettings?.altitude ?? 45;
+        // Normalize: -90 to 90 -> 0 to 1, with some minimum brightness
+        const brightness = Math.max(0.05, Math.min(0.5, (altitude + 10) / 100));
+
+        const groundMaterial = new StandardMaterial('groundMaterial', scene);
+        groundMaterial.diffuseColor = new Color3(brightness, brightness, brightness);
         groundMaterial.specularColor = new Color3(0, 0, 0); // No specular
-        groundMaterial.emissiveColor = new Color3(0.5, 0.5, 0.5); // Match diffuse
+        groundMaterial.emissiveColor = new Color3(brightness * 0.8, brightness * 0.8, brightness * 0.8);
         groundMaterial.backFaceCulling = true; // Only visible from above
 
         groundPlane.material = groundMaterial;
@@ -870,7 +874,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         return groundPlane;
       };
 
-      createWhiteGround();
+      createGroundPlane();
 
       // Create outdoor skybox with clouds
       const createSkybox = () => {
