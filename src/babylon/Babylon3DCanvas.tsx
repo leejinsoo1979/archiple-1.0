@@ -854,11 +854,11 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         );
         groundPlane.position = new Vector3(0, -0.02, 0); // Slightly below grid
 
-        // Light gray material
+        // Medium gray material
         const groundMaterial = new StandardMaterial('whiteGroundMaterial', scene);
-        groundMaterial.diffuseColor = new Color3(0.9, 0.9, 0.9); // Light gray
+        groundMaterial.diffuseColor = new Color3(0.5, 0.5, 0.5); // Medium gray
         groundMaterial.specularColor = new Color3(0, 0, 0); // No specular
-        groundMaterial.emissiveColor = new Color3(0.8, 0.8, 0.8); // Subtle emissive
+        groundMaterial.emissiveColor = new Color3(0.5, 0.5, 0.5); // Match diffuse
         groundMaterial.backFaceCulling = true; // Only visible from above
 
         groundPlane.material = groundMaterial;

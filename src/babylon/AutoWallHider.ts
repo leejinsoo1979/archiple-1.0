@@ -1,13 +1,12 @@
 /**
- * AutoWallHider - Raycasting 기반 벽 자동 숨김
+ * AutoWallHider - 카메라 위치 기반 벽 자동 숨김
  *
- * 카메라에서 타겟 영역으로 여러 레이를 쏴서 시야를 막는 모든 벽을 숨김
+ * 카메라가 방을 볼 때, 카메라와 방 중심 사이에 있는 벽만 숨김
  */
 
 import {
   Scene,
   ArcRotateCamera,
-  Ray,
   AbstractMesh,
   Vector3,
 } from '@babylonjs/core';
@@ -28,41 +27,43 @@ export class AutoWallHider {
     if (!this.enabled) return;
 
     const wallsToHide = new Set<AbstractMesh>();
-    const origin = camera.position;
-    const target = camera.target;
 
-    // 타겟 주변 그리드로 여러 레이를 쏨 (넓은 영역 커버)
-    const gridSize = 5; // 5x5 그리드
-    const spread = 2.0; // 타겟 주변 2미터 범위
+    // 카메라 위치 (XZ 평면)
+    const camX = camera.position.x;
+    const camZ = camera.position.z;
 
-    for (let i = 0; i < gridSize; i++) {
-      for (let j = 0; j < gridSize; j++) {
-        // 그리드 오프셋 계산
-        const offsetX = (i / (gridSize - 1) - 0.5) * spread * 2;
-        const offsetZ = (j / (gridSize - 1) - 0.5) * spread * 2;
+    // 타겟 위치 (방 중심)
+    const targetX = camera.target.x;
+    const targetZ = camera.target.z;
 
-        // 다양한 높이에서도 레이 쏨
-        for (const offsetY of [0, 0.5, 1.0, 1.5]) {
-          const targetPoint = new Vector3(
-            target.x + offsetX,
-            target.y + offsetY,
-            target.z + offsetZ
-          );
+    // 카메라 → 타겟 방향 벡터
+    const dirX = targetX - camX;
+    const dirZ = targetZ - camZ;
+    const dirLen = Math.sqrt(dirX * dirX + dirZ * dirZ);
+    const normDirX = dirX / dirLen;
+    const normDirZ = dirZ / dirLen;
 
-          const direction = targetPoint.subtract(origin);
-          const length = direction.length();
-          direction.normalize();
+    // 모든 벽 메시 가져오기
+    const wallMeshes = this.scene.meshes.filter(
+      (mesh) => mesh.metadata?.type === 'wall'
+    );
 
-          const ray = new Ray(origin, direction, length + 1); // 약간 더 길게
+    for (const wall of wallMeshes) {
+      const bounds = wall.getBoundingInfo().boundingBox;
+      const wallCenterX = (bounds.minimumWorld.x + bounds.maximumWorld.x) / 2;
+      const wallCenterZ = (bounds.minimumWorld.z + bounds.maximumWorld.z) / 2;
 
-          const hit = this.scene.pickWithRay(ray, (mesh) => {
-            return mesh.metadata?.type === 'wall';
-          });
+      // 카메라에서 벽 중심까지 벡터
+      const toWallX = wallCenterX - camX;
+      const toWallZ = wallCenterZ - camZ;
 
-          if (hit?.hit && hit.pickedMesh) {
-            wallsToHide.add(hit.pickedMesh);
-          }
-        }
+      // 벽까지의 투영 거리 (카메라 방향으로)
+      const projDist = toWallX * normDirX + toWallZ * normDirZ;
+
+      // 벽이 카메라 앞에 있고 (projDist > 0)
+      // 타겟보다 카메라에 가까우면 (projDist < dirLen) 숨김
+      if (projDist > 0 && projDist < dirLen * 0.9) {
+        wallsToHide.add(wall);
       }
     }
 
