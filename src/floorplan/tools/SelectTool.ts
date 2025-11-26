@@ -380,13 +380,30 @@ export class SelectTool extends BaseTool {
           const updatedPoints = this.sceneManager.objectManager.getAllPoints();
           startPoint = updatedPoints.find((p) => p.id === newStartPointId)!;
           endPoint = updatedPoints.find((p) => p.id === newEndPointId)!;
+
+          console.log('[SelectTool] After detach - startPoint:', startPoint, 'endPoint:', endPoint);
+
+          // Skip movement on the frame where we detach (let user see the detachment first)
+          this.wallPointsDetached = true;
+          this.dragStartPos = position.clone();
+          return;
         }
 
         this.wallPointsDetached = true;
       }
 
+      // Re-fetch points in case they were updated
+      const currentPoints = this.sceneManager.objectManager.getAllPoints();
+      const currentStart = currentPoints.find((p) => p.id === this.selectedWall!.startPointId);
+      const currentEnd = currentPoints.find((p) => p.id === this.selectedWall!.endPointId);
+
+      if (!currentStart || !currentEnd) {
+        console.error('[SelectTool] Could not find wall points:', this.selectedWall!.startPointId, this.selectedWall!.endPointId);
+        return;
+      }
+
       // Calculate wall direction vector
-      const wallVec = new Vector2(endPoint.x - startPoint.x, endPoint.y - startPoint.y);
+      const wallVec = new Vector2(currentEnd.x - currentStart.x, currentEnd.y - currentStart.y);
       const wallLength = wallVec.length();
       if (wallLength < 0.001) return; // Zero-length wall
 
@@ -405,14 +422,14 @@ export class SelectTool extends BaseTool {
       const offsetY = wallNormal.y * perpDist;
 
       // Move only this wall's endpoints (now detached from other walls)
-      this.sceneManager.objectManager.updatePoint(startPoint.id, {
-        x: startPoint.x + offsetX,
-        y: startPoint.y + offsetY,
+      this.sceneManager.objectManager.updatePoint(currentStart.id, {
+        x: currentStart.x + offsetX,
+        y: currentStart.y + offsetY,
       });
 
-      this.sceneManager.objectManager.updatePoint(endPoint.id, {
-        x: endPoint.x + offsetX,
-        y: endPoint.y + offsetY,
+      this.sceneManager.objectManager.updatePoint(currentEnd.id, {
+        x: currentEnd.x + offsetX,
+        y: currentEnd.y + offsetY,
       });
 
       // Update drag start position for next frame
