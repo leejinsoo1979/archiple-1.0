@@ -308,55 +308,75 @@ export class SelectTool extends BaseTool {
 
       if (!startPoint || !endPoint) return;
 
-      // First drag - detach shared points (create new points for this wall only)
-      // This makes the selected wall move independently while connected walls stretch
+      // First drag - detach T-junction points only
+      // T-junction: this wall's endpoint lies on another wall's middle (not at its endpoints)
+      // Corner connection (endpoint-to-endpoint): walls should move together
       if (!this.wallPointsDetached) {
-        // Check if start point is shared with other walls
-        const startConnectedWalls = allWalls.filter(
-          (w) =>
-            w.id !== this.selectedWall!.id &&
-            (w.startPointId === startPoint!.id || w.endPointId === startPoint!.id)
-        );
+        // Helper to check if a point is a T-junction (lies on middle of another wall)
+        const isTJunction = (point: Point): boolean => {
+          for (const w of allWalls) {
+            if (w.id === this.selectedWall!.id) continue;
 
-        // Check if end point is shared with other walls
-        const endConnectedWalls = allWalls.filter(
-          (w) =>
-            w.id !== this.selectedWall!.id &&
-            (w.startPointId === endPoint!.id || w.endPointId === endPoint!.id)
-        );
+            // Skip if point is at this wall's endpoints (that's a corner, not T-junction)
+            if (w.startPointId === point.id || w.endPointId === point.id) continue;
 
-        // If start point is shared, create a new point for this wall
-        if (startConnectedWalls.length > 0) {
+            // Check if point lies on this wall's middle
+            const wStart = allPoints.find((p) => p.id === w.startPointId);
+            const wEnd = allPoints.find((p) => p.id === w.endPointId);
+            if (!wStart || !wEnd) continue;
+
+            const wallVec = new Vector2(wEnd.x - wStart.x, wEnd.y - wStart.y);
+            const lenSq = wallVec.lengthSquared();
+            if (lenSq < 0.001) continue;
+
+            const pointVec = new Vector2(point.x - wStart.x, point.y - wStart.y);
+            const t = pointVec.dot(wallVec) / lenSq;
+
+            // Check if point is between endpoints (not at them)
+            if (t > 0.01 && t < 0.99) {
+              const projected = new Vector2(wStart.x + wallVec.x * t, wStart.y + wallVec.y * t);
+              const dist = Math.sqrt(
+                (point.x - projected.x) ** 2 + (point.y - projected.y) ** 2
+              );
+              // Within tolerance - this is a T-junction
+              if (dist < 100) {
+                return true;
+              }
+            }
+          }
+          return false;
+        };
+
+        // If start point is a T-junction, create a new point for this wall
+        if (isTJunction(startPoint)) {
           const newStartPoint: Point = {
             id: uuidv4(),
             x: startPoint.x,
             y: startPoint.y,
           };
           const addedStartPoint = this.sceneManager.objectManager.addPoint(newStartPoint);
-          // Update this wall to use the new point
           this.sceneManager.objectManager.updateWall(this.selectedWall.id, {
             startPointId: addedStartPoint.id,
           });
           this.selectedWall.startPointId = addedStartPoint.id;
           startPoint = addedStartPoint;
-          console.log('[SelectTool] Detached start point, new point:', addedStartPoint.id);
+          console.log('[SelectTool] Detached T-junction start point, new point:', addedStartPoint.id);
         }
 
-        // If end point is shared, create a new point for this wall
-        if (endConnectedWalls.length > 0) {
+        // If end point is a T-junction, create a new point for this wall
+        if (isTJunction(endPoint)) {
           const newEndPoint: Point = {
             id: uuidv4(),
             x: endPoint.x,
             y: endPoint.y,
           };
           const addedEndPoint = this.sceneManager.objectManager.addPoint(newEndPoint);
-          // Update this wall to use the new point
           this.sceneManager.objectManager.updateWall(this.selectedWall.id, {
             endPointId: addedEndPoint.id,
           });
           this.selectedWall.endPointId = addedEndPoint.id;
           endPoint = addedEndPoint;
-          console.log('[SelectTool] Detached end point, new point:', addedEndPoint.id);
+          console.log('[SelectTool] Detached T-junction end point, new point:', addedEndPoint.id);
         }
 
         this.wallPointsDetached = true;
