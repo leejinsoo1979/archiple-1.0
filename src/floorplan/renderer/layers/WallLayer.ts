@@ -852,7 +852,11 @@ export class WallLayer extends BaseLayer {
     exteriorWalls.forEach(({ startPoint, endPoint, dimDirection }) => {
       const dx = endPoint.x - startPoint.x;
       const dy = endPoint.y - startPoint.y;
-      const distanceMm = Math.sqrt(dx * dx + dy * dy);
+      // Use projected distance based on dimension direction
+      // Horizontal dimension (up/down) shows X distance, vertical (left/right) shows Y distance
+      const distanceMm = (dimDirection === 'up' || dimDirection === 'down')
+        ? Math.abs(dx)
+        : Math.abs(dy);
 
       let ext1Start, ext1End, ext2Start, ext2End, dim1, dim2, textPos;
 

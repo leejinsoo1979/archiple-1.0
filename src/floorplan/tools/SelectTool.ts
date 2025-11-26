@@ -336,26 +336,28 @@ export class SelectTool extends BaseTool {
           let newStartPointId = startPoint.id;
           let newEndPointId = endPoint.id;
 
+          // Add offset (100mm) to prevent cleanup from merging points back (merge tolerance is 50mm)
           if (startConnectedWalls.length > 0) {
             const newStartPoint: Point = {
               id: uuidv4(),
-              x: startPoint.x,
+              x: startPoint.x + 100,
               y: startPoint.y,
             };
             const addedStartPoint = this.sceneManager.objectManager.forceAddPoint(newStartPoint);
             newStartPointId = addedStartPoint.id;
-            console.log('[SelectTool] Created new start point:', addedStartPoint.id);
+            console.log('[SelectTool] Created new start point:', addedStartPoint.id, 'at', newStartPoint.x, newStartPoint.y);
           }
 
+          // Add offset (100mm) to prevent cleanup from merging points back (merge tolerance is 50mm)
           if (endConnectedWalls.length > 0) {
             const newEndPoint: Point = {
               id: uuidv4(),
-              x: endPoint.x,
+              x: endPoint.x + 100,
               y: endPoint.y,
             };
             const addedEndPoint = this.sceneManager.objectManager.forceAddPoint(newEndPoint);
             newEndPointId = addedEndPoint.id;
-            console.log('[SelectTool] Created new end point:', addedEndPoint.id);
+            console.log('[SelectTool] Created new end point:', addedEndPoint.id, 'at', newEndPoint.x, newEndPoint.y);
           }
 
           // Remove the old wall
