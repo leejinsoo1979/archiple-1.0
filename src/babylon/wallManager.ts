@@ -201,35 +201,27 @@ export class WallManager {
     const target = camera.target.clone();
     target.y = 0;
 
+    // Camera direction vector (from camera to target)
+    const camDir = target.subtract(cameraPos);
+    camDir.normalize();
+
     const wallsToHide: number[] = [];
 
     this.walls.forEach((wall, index) => {
       const wallCenter = wall.center.clone();
       wallCenter.y = 0;
 
-      // Check if wall is between camera and target
-      // Vector from camera to wall
-      const camToWall = wallCenter.subtract(cameraPos);
-      // Vector from camera to target
-      const camToTarget = target.subtract(cameraPos);
+      // Vector from target (room center) to wall
+      const targetToWall = wallCenter.subtract(target);
 
-      // Project wall position onto camera-target line
-      const camToTargetNorm = camToTarget.normalize();
-      const projectionLength = Vector3.Dot(camToWall, camToTargetNorm);
+      // Check if wall is on the camera side of the target
+      // If dot product of (target->wall) and (camera direction) is negative,
+      // the wall is between camera and target
+      const dotCamSide = Vector3.Dot(targetToWall, camDir);
 
-      // Wall is "in front" if projection is positive and less than distance to target
-      const distToTarget = camToTarget.length();
-
-      if (projectionLength > 0 && projectionLength < distToTarget * 1.5) {
-        // Wall is between camera and target area
-        // Now check if the wall is facing the camera (perpendicular check)
-        const normal = wall.normal;
-        const absDot = Math.abs(Vector3.Dot(camToTargetNorm, normal));
-
-        // If wall normal is roughly aligned with camera direction, wall blocks view
-        if (absDot > 0.3) {
-          wallsToHide.push(index);
-        }
+      // Wall is on camera side if dot < 0 (wall is in opposite direction of where camera looks from target)
+      if (dotCamSide < 0) {
+        wallsToHide.push(index);
       }
     });
 

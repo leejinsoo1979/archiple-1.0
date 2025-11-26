@@ -656,7 +656,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
       // Create scene
       const scene = new Scene(engine);
-      scene.clearColor = new Color4(0.95, 0.95, 0.95, 1); // Bright light gray background
+      scene.clearColor = new Color4(1, 1, 1, 1); // Pure white background
       scene.ambientColor = new Color3(0.3, 0.3, 0.3);
       scene.collisionsEnabled = true;
       scene.gravity = new Vector3(0, 0, 0);
