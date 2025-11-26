@@ -53,7 +53,7 @@ import type { Point } from '../core/types/Point';
 import type { Light, LightType } from '../core/types/Light';
 import { createDefaultLight } from '../core/types/Light';
 import { WallSplitService } from '../floorplan/services/WallSplitService';
-import * as WallManager from './wallManager';
+import { WallManager } from './wallManager';
 
 // Make earcut available globally for Babylon.js polygon operations
 if (typeof window !== 'undefined') {
@@ -264,6 +264,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
   const gizmoManagerRef = useRef<GizmoManager | null>(null); // Store gizmo manager
   const selectedLightMeshRef = useRef<Mesh | null>(null); // Store selected light indicator mesh
   const infiniteGridRef = useRef<Mesh | null>(null); // Store infinite grid mesh
+  const wallManagerRef = useRef<WallManager | null>(null); // Wall cutaway manager
 
   // Camera settings from Zustand store
   const cameraSettings = useCameraSettingsStore();
@@ -798,12 +799,14 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       // Create infinite grid floor
       const createInfiniteGrid = () => {
         // Create large ground plane (1000m x 1000m - fixed at origin)
+        // Use BACKSIDE so grid is only visible from below, not from above
         const gridPlane = MeshBuilder.CreateGround(
           'infiniteGrid',
           { width: 1000, height: 1000 },
           scene
         );
         gridPlane.position = new Vector3(0, -0.01, 0); // Fixed at origin, slightly below Y=0
+        gridPlane.rotation.x = Math.PI; // Flip 180 degrees so grid is visible from below, hidden from above
 
         // Create GridMaterial with realistic settings
         const gridMaterial = new GridMaterial('gridMaterial', scene);
@@ -811,6 +814,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         // Grid appearance - pure white floor
         gridMaterial.mainColor = new Color3(1, 1, 1); // Pure white background
         gridMaterial.lineColor = new Color3(0.75, 0.75, 0.75); // Light gray lines
+        gridMaterial.backFaceCulling = true; // Only render front face (now facing down after flip)
 
         // Grid spacing - 1 unit = 1 meter
         gridMaterial.gridRatio = 1.0; // 1m grid cells
@@ -1017,8 +1021,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       engine.runRenderLoop(() => {
         // Update wall visibility based on camera angle (isometric cutaway)
         const activeCamera = scene.activeCamera;
-        if (activeCamera instanceof ArcRotateCamera) {
-          WallManager.updateWallVisibility(activeCamera);
+        if (activeCamera instanceof ArcRotateCamera && wallManagerRef.current) {
+          wallManagerRef.current.updateWallVisibility(activeCamera);
         }
         scene.render();
       });
@@ -1046,7 +1050,10 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         console.log('[Babylon3DCanvas] Cleaning up...');
         window.removeEventListener('resize', handleResize);
         document.removeEventListener('fullscreenchange', handleFullscreenChange);
-        WallManager.dispose();
+        if (wallManagerRef.current) {
+          wallManagerRef.current.dispose();
+          wallManagerRef.current = null;
+        }
         scene.dispose();
         engine.dispose();
       };
@@ -1969,7 +1976,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     console.log('[Babylon3DCanvas] Created', walls.length, '3D walls in', USE_CSG_WALLS ? 'CSG' : 'Miter', 'mode,', wallMeshesRef.current.length, 'wall meshes for snap detection');
 
     // Initialize wall manager for isometric cutaway feature
-    WallManager.initWalls(scene);
+    wallManagerRef.current = new WallManager(scene);
 
     // Create floors for each room - ONLY inside walls (polygon shape)
     const { rooms } = floorplanData;
