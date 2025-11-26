@@ -425,14 +425,14 @@ export class WallLayer extends BaseLayer {
       strokeColor = themeColor;
       lineWidth = 2;
     } else {
-      // Default stroke color
-      strokeColor = this.darkenColor(defaultWallColorStroke, 0.5); // Darker outline
+      // Default stroke color - white in dark mode
+      strokeColor = isDarkModeStroke ? '#FFFFFF' : this.darkenColor(defaultWallColorStroke, 0.5);
       lineWidth = 1;
     }
 
     // Override for specific styles
     if (this.renderStyle === 'wireframe') {
-      strokeColor = isSelected || isHovered ? themeColor : defaultWallColorStroke;
+      strokeColor = isSelected || isHovered ? themeColor : (isDarkModeStroke ? '#FFFFFF' : defaultWallColorStroke);
     }
 
     ctx.strokeStyle = strokeColor;
