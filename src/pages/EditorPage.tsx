@@ -3201,7 +3201,7 @@ ARTISTIC APPROACH:
               activeTool={activeTool}
               onDataChange={setFloorplanData}
               backgroundImage={showBackgroundImage ? backgroundImage : null}
-              renderStyle={renderStyle}
+              renderStyle={hiddenLineMode ? 'wireframe' : renderStyle}
               showGrid={showGrid}
               imageScale={imageScale}
               imageOpacity={imageOpacity}

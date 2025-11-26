@@ -221,8 +221,8 @@ export class RoomLayer extends BaseLayer {
     }
     ctx.closePath();
 
-    // Fill (if not wireframe)
-    if (this.renderStyle !== 'wireframe' || isHovered || isSelected) {
+    // Fill (if not wireframe) - wireframe mode shows pure lines only
+    if (this.renderStyle !== 'wireframe') {
       ctx.fillStyle = fillStyle;
       ctx.globalAlpha = fillOpacity;
       ctx.fill();
@@ -237,9 +237,10 @@ export class RoomLayer extends BaseLayer {
 
     // Stroke
     ctx.globalAlpha = 1.0;
+    const isDarkModeRoom = document.documentElement.getAttribute('data-theme') === 'dark';
 
-    if (isSelected) {
-      // Archisketch-style illumination border effect
+    if (isSelected && this.renderStyle !== 'wireframe') {
+      // Archisketch-style illumination border effect (not in wireframe mode)
       ctx.strokeStyle = themeColor;
 
       // Layer 1: Outer glow (soft, wide)
@@ -263,8 +264,17 @@ export class RoomLayer extends BaseLayer {
 
       // Reset
       ctx.shadowBlur = 0;
+    } else if (isSelected && this.renderStyle === 'wireframe') {
+      // Simple highlight in wireframe mode
+      ctx.strokeStyle = themeColor;
+      ctx.lineWidth = 2;
+      ctx.stroke();
     } else {
-      ctx.strokeStyle = this.config.strokeColor;
+      // Normal room stroke - white in dark mode for wireframe
+      const strokeColor = (this.renderStyle === 'wireframe' && isDarkModeRoom)
+        ? '#FFFFFF'
+        : this.config.strokeColor;
+      ctx.strokeStyle = strokeColor;
       ctx.lineWidth = this.renderStyle === 'wireframe' ? 1.5 : this.config.strokeWidth;
       ctx.stroke();
     }

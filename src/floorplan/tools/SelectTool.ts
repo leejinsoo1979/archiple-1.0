@@ -337,10 +337,16 @@ export class SelectTool extends BaseTool {
     const allWalls = this.sceneManager.objectManager.getAllWalls();
     const allPoints = this.sceneManager.objectManager.getAllPoints();
 
+    console.log('[SelectTool] Detach - wall:', wall.id, 'start:', wall.startPointId, 'end:', wall.endPointId);
+    console.log('[SelectTool] Detach - total walls:', allWalls.length, 'total points:', allPoints.length);
+
     const startPoint = allPoints.find((p) => p.id === wall.startPointId);
     const endPoint = allPoints.find((p) => p.id === wall.endPointId);
 
-    if (!startPoint || !endPoint) return;
+    if (!startPoint || !endPoint) {
+      console.error('[SelectTool] Detach - points not found!', { startPoint, endPoint });
+      return;
+    }
 
     // Check if start point is shared with ANY other walls
     const startConnectedWalls = allWalls.filter(
@@ -357,40 +363,46 @@ export class SelectTool extends BaseTool {
     );
 
     console.log('[SelectTool] Detaching wall - startConnected:', startConnectedWalls.length, 'endConnected:', endConnectedWalls.length);
+    console.log('[SelectTool] Start connected walls:', startConnectedWalls.map(w => w.id));
+    console.log('[SelectTool] End connected walls:', endConnectedWalls.map(w => w.id));
 
     let newStartPointId = startPoint.id;
     let newEndPointId = endPoint.id;
 
     // Create new point for start if shared
     if (startConnectedWalls.length > 0) {
+      const newId = uuidv4();
       const newStartPoint: Point = {
-        id: uuidv4(),
+        id: newId,
         x: startPoint.x,
         y: startPoint.y,
       };
+      console.log('[SelectTool] Creating new start point:', newId, 'at', startPoint.x, startPoint.y);
       const addedStartPoint = this.sceneManager.objectManager.forceAddPoint(newStartPoint);
       newStartPointId = addedStartPoint.id;
       this.wallDetachedPointIds.push(newStartPointId);
 
       // Change wall's start endpoint to new point
-      this.sceneManager.objectManager.changeWallEndpoint(wall.id, 'start', newStartPointId);
-      console.log('[SelectTool] Detached start point, new:', newStartPointId);
+      const success = this.sceneManager.objectManager.changeWallEndpoint(wall.id, 'start', newStartPointId);
+      console.log('[SelectTool] changeWallEndpoint start result:', success);
     }
 
     // Create new point for end if shared
     if (endConnectedWalls.length > 0) {
+      const newId = uuidv4();
       const newEndPoint: Point = {
-        id: uuidv4(),
+        id: newId,
         x: endPoint.x,
         y: endPoint.y,
       };
+      console.log('[SelectTool] Creating new end point:', newId, 'at', endPoint.x, endPoint.y);
       const addedEndPoint = this.sceneManager.objectManager.forceAddPoint(newEndPoint);
       newEndPointId = addedEndPoint.id;
       this.wallDetachedPointIds.push(newEndPointId);
 
       // Change wall's end endpoint to new point
-      this.sceneManager.objectManager.changeWallEndpoint(wall.id, 'end', newEndPointId);
-      console.log('[SelectTool] Detached end point, new:', newEndPointId);
+      const success = this.sceneManager.objectManager.changeWallEndpoint(wall.id, 'end', newEndPointId);
+      console.log('[SelectTool] changeWallEndpoint end result:', success);
     }
 
     // Update selectedWall reference with new point IDs
@@ -400,6 +412,12 @@ export class SelectTool extends BaseTool {
         startPointId: newStartPointId,
         endPointId: newEndPointId,
       };
+      console.log('[SelectTool] Updated selectedWall with new points:', newStartPointId, newEndPointId);
+
+      // Verify the change took effect
+      const updatedWalls = this.sceneManager.objectManager.getAllWalls();
+      const updatedWall = updatedWalls.find(w => w.id === wall.id);
+      console.log('[SelectTool] Verified wall after change:', updatedWall);
     }
   }
 
