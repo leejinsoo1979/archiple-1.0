@@ -931,6 +931,40 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
       createSkybox();
 
+      // Create visible sun disk
+      const createSunDisk = () => {
+        const azimuth = sunSettings?.azimuth ?? 45;
+        const altitude = sunSettings?.altitude ?? 45;
+        const azimuthRad = (azimuth * Math.PI) / 180;
+        const altitudeRad = (altitude * Math.PI) / 180;
+
+        // Sun position far away in the sky
+        const distance = 400;
+        const sunX = distance * Math.cos(altitudeRad) * Math.sin(azimuthRad);
+        const sunY = distance * Math.sin(altitudeRad);
+        const sunZ = distance * Math.cos(altitudeRad) * Math.cos(azimuthRad);
+
+        const sunMesh = MeshBuilder.CreateSphere('sunDisk', { diameter: 30 }, scene);
+        sunMesh.position = new Vector3(sunX, sunY, sunZ);
+
+        // Glowing sun material
+        const sunMaterial = new StandardMaterial('sunMaterial', scene);
+        sunMaterial.emissiveColor = new Color3(1, 0.95, 0.8); // Warm yellow-white
+        sunMaterial.diffuseColor = new Color3(0, 0, 0);
+        sunMaterial.specularColor = new Color3(0, 0, 0);
+        sunMaterial.disableLighting = true;
+
+        sunMesh.material = sunMaterial;
+        sunMesh.isPickable = false;
+        sunMesh.renderingGroupId = 0;
+
+        console.log('[Babylon3DCanvas] Sun disk created at', sunX.toFixed(1), sunY.toFixed(1), sunZ.toFixed(1));
+
+        return sunMesh;
+      };
+
+      createSunDisk();
+
       // Create realistic human character
       const createCharacter = () => {
         const character = MeshBuilder.CreateBox('characterRoot', { size: 0.01 }, scene);
@@ -2539,6 +2573,18 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       const sunY = Math.sin(altitudeRad);
       const sunZ = Math.cos(altitudeRad) * Math.cos(azimuthRad);
       skyMaterial.sunPosition = new Vector3(sunX, sunY, sunZ);
+    }
+
+    // Update sun disk position
+    const sunDisk = scene.getMeshByName('sunDisk');
+    if (sunDisk) {
+      const distance = 400;
+      const sunX = distance * Math.cos(altitudeRad) * Math.sin(azimuthRad);
+      const sunY = distance * Math.sin(altitudeRad);
+      const sunZ = distance * Math.cos(altitudeRad) * Math.cos(azimuthRad);
+      sunDisk.position = new Vector3(sunX, sunY, sunZ);
+      // Hide sun when below horizon
+      sunDisk.isVisible = altitude > 0;
     }
 
     // Update ground plane brightness based on altitude
