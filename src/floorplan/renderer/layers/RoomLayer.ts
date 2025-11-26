@@ -170,9 +170,22 @@ export class RoomLayer extends BaseLayer {
       fillStyle = this.config.hoveredFillColor;
       fillOpacity = 0.5;
     } else if (isSelected) {
-      // Use theme color with transparency for selected room
-      fillStyle = themeColor;
-      fillOpacity = 0.5;
+      // Keep original floor style - dark overlay will be added separately
+      switch (this.renderStyle) {
+        case 'realistic':
+          if (this.woodPattern) {
+            fillStyle = this.woodPattern;
+            fillOpacity = 1.0;
+          }
+          break;
+        case 'solid':
+          fillStyle = this.config.fillColor;
+          fillOpacity = this.config.fillOpacity;
+          break;
+        default:
+          fillStyle = this.config.fillColor;
+          fillOpacity = this.config.fillOpacity;
+      }
     } else {
       // Apply render style for normal rooms
       switch (this.renderStyle) {
@@ -213,39 +226,43 @@ export class RoomLayer extends BaseLayer {
       ctx.fillStyle = fillStyle;
       ctx.globalAlpha = fillOpacity;
       ctx.fill();
+
+      // Add dark overlay for selected room (Archisketch style)
+      if (isSelected) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.globalAlpha = 1.0;
+        ctx.fill();
+      }
     }
 
     // Stroke
     ctx.globalAlpha = 1.0;
 
     if (isSelected) {
-      // Archisketch-style selection effect
+      // Archisketch-style illumination border effect
       ctx.strokeStyle = themeColor;
 
       // Layer 1: Outer glow (soft, wide)
       ctx.shadowColor = themeColor;
-      ctx.shadowBlur = 25;
-      ctx.lineWidth = 8;
-      ctx.globalAlpha = 0.3;
-      ctx.setLineDash([]);
+      ctx.shadowBlur = 30;
+      ctx.lineWidth = 6;
+      ctx.globalAlpha = 0.4;
       ctx.stroke();
 
       // Layer 2: Middle glow
       ctx.shadowBlur = 15;
-      ctx.lineWidth = 5;
-      ctx.globalAlpha = 0.5;
+      ctx.lineWidth = 4;
+      ctx.globalAlpha = 0.7;
       ctx.stroke();
 
-      // Layer 3: Dashed border line (like Archisketch)
+      // Layer 3: Core line (bright)
       ctx.shadowBlur = 8;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 2.5;
       ctx.globalAlpha = 1.0;
-      ctx.setLineDash([12, 6]); // Dashed pattern
       ctx.stroke();
 
       // Reset
       ctx.shadowBlur = 0;
-      ctx.setLineDash([]);
     } else {
       ctx.strokeStyle = this.config.strokeColor;
       ctx.lineWidth = this.renderStyle === 'wireframe' ? 1.5 : this.config.strokeWidth;
