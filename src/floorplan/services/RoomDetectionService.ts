@@ -76,8 +76,22 @@ export class RoomDetectionService {
       }
     }
 
-    console.log('[RoomDetection] Created', finalRooms.length, 'rooms');
-    return finalRooms;
+    // Final deduplication: remove rooms with identical point sets
+    const uniqueRooms: Room[] = [];
+    const seenPointSets = new Set<string>();
+
+    for (const room of finalRooms) {
+      const pointSetKey = [...room.points].sort().join(',');
+      if (!seenPointSets.has(pointSetKey)) {
+        seenPointSets.add(pointSetKey);
+        uniqueRooms.push(room);
+      } else {
+        console.log('[RoomDetection] Duplicate room removed:', room.id, 'points:', pointSetKey);
+      }
+    }
+
+    console.log('[RoomDetection] Created', uniqueRooms.length, 'rooms (removed', finalRooms.length - uniqueRooms.length, 'duplicates)');
+    return uniqueRooms;
   }
 
   /**
@@ -88,12 +102,48 @@ export class RoomDetectionService {
     const graph = new Map<string, Set<string>>();
     const pointMap = new Map(points.map(p => [p.id, p]));
 
-    // Helper to add edge
+    // First, build a mapping of duplicate points (points at same location)
+    // This ensures that points at the same location are treated as the same node
+    const MERGE_TOLERANCE = 50; // 50mm tolerance for considering points as same location
+    const pointIdMapping = new Map<string, string>(); // Maps duplicate point IDs to canonical ID
+
+    for (let i = 0; i < points.length; i++) {
+      const p1 = points[i];
+      if (pointIdMapping.has(p1.id)) continue; // Already mapped to another point
+
+      pointIdMapping.set(p1.id, p1.id); // Map to itself initially
+
+      for (let j = i + 1; j < points.length; j++) {
+        const p2 = points[j];
+        if (pointIdMapping.has(p2.id)) continue;
+
+        const dx = p1.x - p2.x;
+        const dy = p1.y - p2.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < MERGE_TOLERANCE) {
+          // Map p2 to p1's canonical ID
+          pointIdMapping.set(p2.id, p1.id);
+          console.log(`[RoomDetection] Merging duplicate point ${p2.id.slice(0, 8)} -> ${p1.id.slice(0, 8)} (dist=${dist.toFixed(1)}mm)`);
+        }
+      }
+    }
+
+    // Helper to get canonical point ID
+    const getCanonicalId = (id: string): string => {
+      return pointIdMapping.get(id) || id;
+    };
+
+    // Helper to add edge using canonical IDs
     const addEdge = (id1: string, id2: string) => {
-      if (!graph.has(id1)) graph.set(id1, new Set());
-      if (!graph.has(id2)) graph.set(id2, new Set());
-      graph.get(id1)!.add(id2);
-      graph.get(id2)!.add(id1);
+      const cid1 = getCanonicalId(id1);
+      const cid2 = getCanonicalId(id2);
+      if (cid1 === cid2) return; // Skip self-loops
+
+      if (!graph.has(cid1)) graph.set(cid1, new Set());
+      if (!graph.has(cid2)) graph.set(cid2, new Set());
+      graph.get(cid1)!.add(cid2);
+      graph.get(cid2)!.add(cid1);
     };
 
     let totalSplits = 0;

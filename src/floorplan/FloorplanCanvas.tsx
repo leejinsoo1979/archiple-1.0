@@ -435,16 +435,11 @@ const FloorplanCanvas = ({
         const updatedPoints = sceneManager.objectManager.getAllPoints();
         const newRooms = roomDetectionService.detectRooms(updatedWalls, updatedPoints);
 
-        // Clear old rooms and add new ones
-        const oldRooms = sceneManager.objectManager.getAllRooms();
-        for (const room of oldRooms) {
-          sceneManager.objectManager.removeRoom(room.id);
-        }
-        for (const room of newRooms) {
-          sceneManager.objectManager.addRoom(room);
-        }
+        // Batch update rooms (prevents flickering)
+        const oldRoomCount = sceneManager.objectManager.getAllRooms().length;
+        sceneManager.objectManager.setRooms(newRooms);
 
-        console.log('[FloorplanCanvas] Rooms updated:', oldRooms.length, '->', newRooms.length);
+        console.log('[FloorplanCanvas] Rooms updated:', oldRoomCount, '->', newRooms.length);
       }
 
       updateLayers();
@@ -665,13 +660,8 @@ const FloorplanCanvas = ({
       // Step 2: Detect rooms using split walls and all points (including intersection points)
       const rooms = roomDetectionService.detectRooms(walls, points);
 
-      // Step 3: Update rooms in ObjectManager
-      // Clear existing rooms
-      const existingRooms = sceneManager.objectManager.getAllRooms();
-      existingRooms.forEach(r => sceneManager.objectManager.removeRoom(r.id));
-
-      // Add new rooms
-      rooms.forEach(r => sceneManager.objectManager.addRoom(r));
+      // Step 3: Update rooms in ObjectManager (batch update to prevent flickering)
+      sceneManager.objectManager.setRooms(rooms);
 
       console.log(`[FloorplanCanvas] Detected ${rooms.length} rooms after wall splitting`);
 

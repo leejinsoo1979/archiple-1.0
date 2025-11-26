@@ -357,6 +357,11 @@ export class SelectTool extends BaseTool {
         );
         if (merged) {
           console.log('[SelectTool] Points merged:', this.selectedPoint.id, '->', nearbyPoint.id);
+          // Additional cleanup to ensure no duplicate walls remain
+          const cleanup = this.sceneManager.objectManager.cleanupDuplicates();
+          if (cleanup.points > 0 || cleanup.walls > 0) {
+            console.log('[SelectTool] Cleanup after merge:', cleanup.points, 'points,', cleanup.walls, 'walls');
+          }
           this.selectedPoint = null;
           return;
         }

@@ -254,6 +254,15 @@ export class BlueprintObjectManager {
     eventBus.emit(FloorEvents.ROOM_DETECTED, { room });
   }
 
+  /**
+   * Replace all rooms at once (batch update without intermediate events)
+   * This prevents flickering and incorrect intermediate states
+   */
+  setRooms(rooms: Room[]): void {
+    this.detectedRooms = [...rooms];
+    console.log('[BlueprintObjectManager] Set', rooms.length, 'rooms (batch update)');
+  }
+
   getRoom(id: string): Room | undefined {
     const rooms = this.getAllRooms();
     return rooms.find(r => r.id === id);

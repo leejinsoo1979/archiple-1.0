@@ -896,7 +896,7 @@ export class WallLayer extends BaseLayer {
 
       // Draw extension lines
       ctx.strokeStyle = dimColor;
-      ctx.lineWidth = 0.5;
+      ctx.lineWidth = 1;
       ctx.setLineDash([]);
       ctx.globalAlpha = 1.0;
 
