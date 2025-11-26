@@ -71,6 +71,15 @@ export class BlueprintObjectManager {
     }
   }
 
+  // Force add a new point even if one exists at the same location
+  // Used for detaching walls from shared corners
+  forceAddPoint(point: Point): Point {
+    console.log('[BlueprintObjectManager] forceAddPoint called:', point);
+    const corner = this.floorplan.newCorner(point.x, point.y, point.id);
+    console.log('[BlueprintObjectManager] Force created corner:', corner.id, 'at', corner.x, corner.y);
+    return { id: corner.id, x: corner.x, y: corner.y };
+  }
+
   getPoint(id: string): Point | undefined {
     const corner = this.floorplan.getCorners().find(c => c.id === id);
     if (!corner) return undefined;

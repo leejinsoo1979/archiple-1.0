@@ -1225,12 +1225,36 @@ const FloorplanCanvas = ({
       }
     };
 
+    // Single click to deselect room when clicking on empty space
+    const handleClick = (event: MouseEvent) => {
+      if (event.button !== 0) return; // Only left click
+
+      const rect = canvas.getBoundingClientRect();
+      const screenX = event.clientX - rect.left;
+      const screenY = event.clientY - rect.top;
+
+      const camera = renderer.getCamera();
+      const worldPos = camera.screenToWorld(screenX, screenY);
+
+      const roomLayer = roomLayerRef.current;
+      if (roomLayer && onRoomSelect) {
+        // Check if clicked inside a room
+        const roomHit = roomLayer.getRoomAtPoint(worldPos.x, worldPos.y);
+        if (!roomHit) {
+          // Clicked on empty space - deselect room
+          roomLayer.setSelectedRooms([]);
+          onRoomSelect(null);
+        }
+      }
+    };
+
     // Use capture phase to intercept middle/right-click before MouseController
     canvas.addEventListener('mousedown', handleMouseDown, true);
     canvas.addEventListener('mousemove', handleMouseMove, true);
     canvas.addEventListener('mouseup', handleMouseUp, true);
     canvas.addEventListener('contextmenu', handleContextMenu);
     canvas.addEventListener('dblclick', handleDoubleClick, true);
+    canvas.addEventListener('click', handleClick);
 
     return () => {
       canvas.removeEventListener('mousedown', handleMouseDown, true);
@@ -1238,6 +1262,7 @@ const FloorplanCanvas = ({
       canvas.removeEventListener('mouseup', handleMouseUp, true);
       canvas.removeEventListener('contextmenu', handleContextMenu);
       canvas.removeEventListener('dblclick', handleDoubleClick, true);
+      canvas.removeEventListener('click', handleClick);
     };
   }, [rulerVisible, rulerStart, rulerEnd, onRulerDragStart, onRulerDrag, onRulerDragEnd, onRulerLabelClick, draggingRulerPoint, onRoomSelect]);
 

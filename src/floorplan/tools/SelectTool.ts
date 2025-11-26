@@ -332,7 +332,8 @@ export class SelectTool extends BaseTool {
             x: startPoint.x,
             y: startPoint.y,
           };
-          const addedStartPoint = this.sceneManager.objectManager.addPoint(newStartPoint);
+          // Use forceAddPoint to bypass overlap check
+          const addedStartPoint = this.sceneManager.objectManager.forceAddPoint(newStartPoint);
           this.sceneManager.objectManager.updateWall(this.selectedWall.id, {
             startPointId: addedStartPoint.id,
           });
@@ -348,7 +349,8 @@ export class SelectTool extends BaseTool {
             x: endPoint.x,
             y: endPoint.y,
           };
-          const addedEndPoint = this.sceneManager.objectManager.addPoint(newEndPoint);
+          // Use forceAddPoint to bypass overlap check
+          const addedEndPoint = this.sceneManager.objectManager.forceAddPoint(newEndPoint);
           this.sceneManager.objectManager.updateWall(this.selectedWall.id, {
             endPointId: addedEndPoint.id,
           });
