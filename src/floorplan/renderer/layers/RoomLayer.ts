@@ -205,8 +205,9 @@ export class RoomLayer extends BaseLayer {
           fillOpacity = 1.0;
           break;
         case 'wireframe':
-          // White fill for wireframe/CAD mode
-          fillStyle = '#FFFFFF';
+          // CAD mode: white in light mode, dark in dark mode
+          const isDarkModeWireframe = document.documentElement.getAttribute('data-theme') === 'dark';
+          fillStyle = isDarkModeWireframe ? '#2A2A2A' : '#FFFFFF';
           fillOpacity = 1.0;
           break;
       }

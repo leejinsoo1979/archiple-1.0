@@ -50,6 +50,7 @@ export class WallLayer extends BaseLayer {
   private rooms: Room[] = [];
   private doors: Door[] = [];
   private previewWall: { start: Point; end: Point } | null = null;
+  private multiPreviewWalls: Array<{ start: Point; end: Point }> = [];
   private hoveredWallId: string | null = null;
   private selectedWallId: string | null = null;
   private camera: Camera2D | null = null;
@@ -116,6 +117,10 @@ export class WallLayer extends BaseLayer {
     } else {
       this.previewWall = null;
     }
+  }
+
+  setMultiPreviewWalls(walls: Array<{ start: Point; end: Point }> | null): void {
+    this.multiPreviewWalls = walls || [];
   }
 
   setHoveredWall(wallId: string | null): void {
@@ -215,6 +220,13 @@ export class WallLayer extends BaseLayer {
     // Render preview wall
     if (this.previewWall) {
       this.renderPreviewWall(ctx, this.previewWall.start, this.previewWall.end);
+    }
+
+    // Render multi-preview walls (for L/U shape wall dragging)
+    if (this.multiPreviewWalls.length > 0) {
+      this.multiPreviewWalls.forEach(wall => {
+        this.renderPreviewWall(ctx, wall.start, wall.end);
+      });
     }
 
     // Render angle guide

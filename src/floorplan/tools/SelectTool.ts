@@ -36,6 +36,15 @@ export class SelectTool extends BaseTool {
   private originalWallStartPoint: Point | null = null;
   private originalWallEndPoint: Point | null = null;
 
+  // Connected walls for L/U shape dragging
+  // Structure: { wall, sharedPointId, otherPointId, originalOtherPoint }
+  private connectedWallsInfo: Array<{
+    wall: Wall;
+    sharedPointId: string;
+    otherPointId: string;
+    originalOtherPoint: Point;
+  }> = [];
+
   // Hover state
   private hoveredPoint: Point | null = null;
   private hoveredWall: Wall | null = null;
@@ -122,6 +131,36 @@ export class SelectTool extends BaseTool {
         this.originalWallEndPoint = { ...endPoint };
         this.wallDragGhostStart = new Vector2(startPoint.x, startPoint.y);
         this.wallDragGhostEnd = new Vector2(endPoint.x, endPoint.y);
+
+        // Find connected walls at both endpoints
+        this.connectedWallsInfo = [];
+        const wallEndpoints = [
+          { pointId: clickedWall.startPointId, point: startPoint },
+          { pointId: clickedWall.endPointId, point: endPoint }
+        ];
+
+        for (const endpoint of wallEndpoints) {
+          // Find walls connected to this endpoint (excluding the selected wall)
+          const connectedWalls = allWalls.filter(w =>
+            w.id !== clickedWall.id &&
+            (w.startPointId === endpoint.pointId || w.endPointId === endpoint.pointId)
+          );
+
+          for (const connWall of connectedWalls) {
+            const isStartConnected = connWall.startPointId === endpoint.pointId;
+            const otherPointId = isStartConnected ? connWall.endPointId : connWall.startPointId;
+            const otherPoint = allPoints.find(p => p.id === otherPointId);
+
+            if (otherPoint) {
+              this.connectedWallsInfo.push({
+                wall: connWall,
+                sharedPointId: endpoint.pointId,
+                otherPointId: otherPointId,
+                originalOtherPoint: { ...otherPoint }
+              });
+            }
+          }
+        }
       }
 
       // Emit wall selection event
@@ -302,7 +341,7 @@ export class SelectTool extends BaseTool {
     }
     // Handle wall dragging - ghost preview mode
     else if (this.selectedWall && this.dragStartPos && this.originalWallStartPoint && this.originalWallEndPoint) {
-      // Calculate wall direction for perpendicular movement
+      // Calculate wall direction to determine movement axis
       const wallVec = new Vector2(
         this.originalWallEndPoint.x - this.originalWallStartPoint.x,
         this.originalWallEndPoint.y - this.originalWallStartPoint.y
@@ -310,32 +349,79 @@ export class SelectTool extends BaseTool {
       const wallLength = wallVec.length();
       if (wallLength < 0.001) return;
 
-      const wallDir = wallVec.normalize();
-      const wallNormal = new Vector2(-wallDir.y, wallDir.x);
+      // Determine if wall is more horizontal or vertical
+      const isHorizontal = Math.abs(wallVec.x) > Math.abs(wallVec.y);
 
-      // Calculate drag delta projected onto wall normal (perpendicular movement)
+      // Calculate drag delta - constrain to perpendicular axis (X or Y)
       const dragDelta = new Vector2(
         position.x - this.dragStartPos.x,
         position.y - this.dragStartPos.y
       );
-      const perpDist = dragDelta.dot(wallNormal);
 
-      // Update ghost positions
+      // Move only on the axis perpendicular to the wall
+      // Horizontal wall -> move Y only
+      // Vertical wall -> move X only
+      let moveX = 0;
+      let moveY = 0;
+
+      if (isHorizontal) {
+        // Wall is horizontal, move vertically (Y axis)
+        moveY = dragDelta.y;
+      } else {
+        // Wall is vertical, move horizontally (X axis)
+        moveX = dragDelta.x;
+      }
+
+      // Update main wall ghost positions
       this.wallDragGhostStart = new Vector2(
-        this.originalWallStartPoint.x + wallNormal.x * perpDist,
-        this.originalWallStartPoint.y + wallNormal.y * perpDist
+        this.originalWallStartPoint.x + moveX,
+        this.originalWallStartPoint.y + moveY
       );
       this.wallDragGhostEnd = new Vector2(
-        this.originalWallEndPoint.x + wallNormal.x * perpDist,
-        this.originalWallEndPoint.y + wallNormal.y * perpDist
+        this.originalWallEndPoint.x + moveX,
+        this.originalWallEndPoint.y + moveY
       );
 
-      // Emit ghost preview event
+      // Emit main wall ghost preview event
       eventBus.emit(FloorEvents.WALL_PREVIEW_UPDATED, {
         start: { x: this.wallDragGhostStart.x, y: this.wallDragGhostStart.y },
         end: { x: this.wallDragGhostEnd.x, y: this.wallDragGhostEnd.y },
         thickness: this.selectedWall.thickness,
       });
+
+      // Generate connected walls ghost (L/U shape)
+      if (this.connectedWallsInfo.length > 0) {
+        const connectedGhosts: Array<{ start: Point; end: Point }> = [];
+
+        for (const info of this.connectedWallsInfo) {
+          // The shared point moves with the main wall
+          const sharedPointIsStart = info.sharedPointId === this.selectedWall.startPointId;
+          const newSharedPoint = sharedPointIsStart ? this.wallDragGhostStart : this.wallDragGhostEnd;
+
+          // The other point stays at original position (wall extends/contracts)
+          const otherPoint = info.originalOtherPoint;
+
+          // Determine which end is which for the connected wall
+          const isSharedAtStart = info.wall.startPointId === info.sharedPointId;
+
+          if (isSharedAtStart) {
+            connectedGhosts.push({
+              start: { id: '', x: newSharedPoint.x, y: newSharedPoint.y },
+              end: { id: '', x: otherPoint.x, y: otherPoint.y }
+            });
+          } else {
+            connectedGhosts.push({
+              start: { id: '', x: otherPoint.x, y: otherPoint.y },
+              end: { id: '', x: newSharedPoint.x, y: newSharedPoint.y }
+            });
+          }
+        }
+
+        // Emit multi-wall preview event
+        eventBus.emit(FloorEvents.MULTI_WALL_PREVIEW_UPDATED, {
+          walls: connectedGhosts
+        });
+      }
     }
   }
 
@@ -373,8 +459,9 @@ export class SelectTool extends BaseTool {
         point: this.selectedPoint,
       });
     } else if (this.selectedWall && this.wallDragGhostStart && this.wallDragGhostEnd) {
-      // Clear ghost preview
+      // Clear ghost previews
       eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
+      eventBus.emit(FloorEvents.MULTI_WALL_PREVIEW_CLEARED, {});
 
       // Check if wall actually moved (not just clicked)
       const movedDistance = this.originalWallStartPoint
@@ -390,30 +477,28 @@ export class SelectTool extends BaseTool {
         const wallHeight = this.selectedWall.height;
         const wallId = this.selectedWall.id;
 
-        // Delete the original wall
-        this.sceneManager.objectManager.removeWall(wallId);
+        // Calculate movement delta
+        const moveX = this.wallDragGhostStart.x - this.originalWallStartPoint!.x;
+        const moveY = this.wallDragGhostStart.y - this.originalWallStartPoint!.y;
 
-        // Create new points at ghost positions
-        const newStartPoint = this.sceneManager.objectManager.addPoint({
-          id: '',
-          x: this.wallDragGhostStart.x,
-          y: this.wallDragGhostStart.y,
-        });
+        // Update main wall endpoints directly (move the shared points)
+        const startPoint = this.sceneManager.objectManager.getAllPoints().find(p => p.id === this.selectedWall!.startPointId);
+        const endPoint = this.sceneManager.objectManager.getAllPoints().find(p => p.id === this.selectedWall!.endPointId);
 
-        const newEndPoint = this.sceneManager.objectManager.addPoint({
-          id: '',
-          x: this.wallDragGhostEnd.x,
-          y: this.wallDragGhostEnd.y,
-        });
+        if (startPoint && endPoint) {
+          // Move both endpoints of the main wall
+          this.sceneManager.objectManager.updatePoint(startPoint.id, {
+            x: startPoint.x + moveX,
+            y: startPoint.y + moveY,
+          });
+          this.sceneManager.objectManager.updatePoint(endPoint.id, {
+            x: endPoint.x + moveX,
+            y: endPoint.y + moveY,
+          });
+        }
 
-        // Create new wall at ghost position
-        this.sceneManager.objectManager.addWall({
-          id: '',
-          startPointId: newStartPoint.id,
-          endPointId: newEndPoint.id,
-          thickness: wallThickness,
-          height: wallHeight,
-        });
+        // Connected walls automatically stretch because they share the same points!
+        // No need to update them separately - they use the same point IDs
       }
 
       // Reset ghost state
@@ -421,6 +506,7 @@ export class SelectTool extends BaseTool {
       this.wallDragGhostEnd = null;
       this.originalWallStartPoint = null;
       this.originalWallEndPoint = null;
+      this.connectedWallsInfo = [];
     }
 
     // Keep selection but stop dragging
@@ -649,9 +735,11 @@ export class SelectTool extends BaseTool {
     this.wallDragGhostEnd = null;
     this.originalWallStartPoint = null;
     this.originalWallEndPoint = null;
+    this.connectedWallsInfo = [];
 
-    // Clear ghost preview
+    // Clear ghost previews
     eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
+    eventBus.emit(FloorEvents.MULTI_WALL_PREVIEW_CLEARED, {});
 
     // Clear selection and hover events
     eventBus.emit(FloorEvents.POINT_SELECTION_CLEARED, {});

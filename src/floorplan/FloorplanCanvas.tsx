@@ -504,6 +504,15 @@ const FloorplanCanvas = ({
       wallLayer.setPreviewWall(null, null);
     });
 
+    // Multi-wall preview (for L/U shape wall dragging)
+    eventBus.on(FloorEvents.MULTI_WALL_PREVIEW_UPDATED, (data: any) => {
+      wallLayer.setMultiPreviewWalls(data.walls);
+    });
+
+    eventBus.on(FloorEvents.MULTI_WALL_PREVIEW_CLEARED, () => {
+      wallLayer.setMultiPreviewWalls(null);
+    });
+
     // Snap indicator
     eventBus.on(FloorEvents.SNAP_POINT_UPDATED, (data: any) => {
       pointLayer.setSnapPoint(data.point);

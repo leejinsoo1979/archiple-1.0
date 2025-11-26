@@ -24,6 +24,8 @@ export const FloorEvents = {
   WALL_HOVER_CLEARED: 'floor:wall:hover:cleared',
   WALL_PREVIEW_UPDATED: 'floor:wall:preview:updated',
   WALL_PREVIEW_CLEARED: 'floor:wall:preview:cleared',
+  MULTI_WALL_PREVIEW_UPDATED: 'floor:wall:multi:preview:updated',
+  MULTI_WALL_PREVIEW_CLEARED: 'floor:wall:multi:preview:cleared',
 
   // Snap events
   SNAP_POINT_UPDATED: 'floor:snap:point:updated',
