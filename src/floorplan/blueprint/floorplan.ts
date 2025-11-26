@@ -219,11 +219,15 @@ export class Floorplan {
 
   // Room detection
   update(): void {
+    console.log('[Floorplan] update() called, corners:', this.corners.length, 'walls:', this.walls.length);
+
     // Reset wall edges
     this.walls.forEach(wall => wall.resetFrontBack());
 
+    console.log('[Floorplan] Starting findRooms...');
     // Find rooms
     const roomCorners = this.findRooms(this.corners);
+    console.log('[Floorplan] findRooms done, found:', roomCorners.length, 'rooms');
     this.rooms = [];
     roomCorners.forEach(corners => {
       this.rooms.push(new Room(this, corners));
@@ -293,6 +297,8 @@ export class Floorplan {
     const findTightestCycle = (firstCorner: Corner, secondCorner: Corner): Corner[] => {
       const stack: { corner: Corner; previousCorners: Corner[] }[] = [];
       const visited: { [id: string]: boolean } = {};
+      const MAX_ITERATIONS = 10000; // Prevent infinite loops
+      let iterations = 0;
 
       let next: { corner: Corner; previousCorners: Corner[] } | undefined = {
         corner: secondCorner,
@@ -300,7 +306,8 @@ export class Floorplan {
       };
       visited[firstCorner.id] = true;
 
-      while (next) {
+      while (next && iterations < MAX_ITERATIONS) {
+        iterations++;
         const currentCorner = next.corner;
         visited[currentCorner.id] = true;
 
@@ -346,6 +353,10 @@ export class Floorplan {
         }
 
         next = stack.pop();
+      }
+
+      if (iterations >= MAX_ITERATIONS) {
+        console.warn('[Floorplan] findTightestCycle hit max iterations, possible infinite loop');
       }
 
       return [];

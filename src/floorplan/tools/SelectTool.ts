@@ -467,8 +467,24 @@ export class SelectTool extends BaseTool {
       eventBus.emit(FloorEvents.WALL_PREVIEW_CLEARED, {});
       eventBus.emit(FloorEvents.MULTI_WALL_PREVIEW_CLEARED, {});
 
-      // Wall drag disabled for now - use point dragging instead
-      // TODO: Implement proper wall drag with connected wall stretching
+      // Calculate how much the wall moved
+      const dx = this.wallDragGhostStart.x - this.originalWallStartPoint!.x;
+      const dy = this.wallDragGhostStart.y - this.originalWallStartPoint!.y;
+      const movedDistance = Math.sqrt(dx * dx + dy * dy);
+
+      if (movedDistance > 10) {
+        // Move BOTH endpoints of the main wall by the same delta
+        // This makes connected walls stretch automatically (their other end stays fixed)
+        this.sceneManager.objectManager.updatePoint(this.selectedWall.startPointId, {
+          x: this.wallDragGhostStart.x,
+          y: this.wallDragGhostStart.y,
+        });
+
+        this.sceneManager.objectManager.updatePoint(this.selectedWall.endPointId, {
+          x: this.wallDragGhostEnd.x,
+          y: this.wallDragGhostEnd.y,
+        });
+      }
 
       // Reset ghost state
       this.wallDragGhostStart = null;

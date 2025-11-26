@@ -47,7 +47,6 @@ interface RenderSegment {
 export class WallLayer extends BaseLayer {
   private walls: Wall[] = [];
   private points: Map<string, Point> = new Map();
-  private rooms: Room[] = [];
   private doors: Door[] = [];
   private previewWall: { start: Point; end: Point } | null = null;
   private multiPreviewWalls: Array<{ start: Point; end: Point }> = [];
@@ -103,8 +102,8 @@ export class WallLayer extends BaseLayer {
     points.forEach((p) => this.points.set(p.id, p));
   }
 
-  setRooms(rooms: Room[]): void {
-    this.rooms = rooms;
+  setRooms(_rooms: Room[]): void {
+    // Rooms stored by RoomLayer, this is for potential future wall-room relationship
   }
 
   setDoors(doors: Door[]): void {
@@ -792,71 +791,103 @@ export class WallLayer extends BaseLayer {
 
     const exteriorWalls: ExteriorWallInfo[] = [];
 
+    // Helper for ray casting to check if a wall is exposed
+    const rayIntersectsWall = (
+      start: { x: number; y: number },
+      dir: { x: number; y: number },
+      ignoreWallId: string
+    ): boolean => {
+      // Check against all walls
+      for (const wall of this.walls) {
+        if (wall.id === ignoreWallId) continue;
+
+        const p1 = this.points.get(wall.startPointId);
+        const p2 = this.points.get(wall.endPointId);
+        if (!p1 || !p2) continue;
+
+        // Wall segment
+        const x1 = p1.x, y1 = p1.y;
+        const x2 = p2.x, y2 = p2.y;
+
+        // Ray: start + t * dir
+        // Segment: p1 + u * (p2 - p1)
+
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+
+        // Cross product of ray dir and segment dir
+        const det = dir.x * dy - dir.y * dx;
+
+        if (Math.abs(det) < 0.0001) continue; // Parallel
+
+        const t = ((x1 - start.x) * dy - (y1 - start.y) * dx) / det;
+        const u = ((x1 - start.x) * dir.y - (y1 - start.y) * dir.x) / det;
+
+        // Check intersection
+        // t > 0.1 (ignore start point overlap and very close walls)
+        // 0 <= u <= 1 (segment intersection)
+        if (t > 0.1 && u >= -0.001 && u <= 1.001) {
+          return true; // Hit a wall
+        }
+      }
+      return false;
+    };
+
     this.walls.forEach(wall => {
       const startPoint = this.points.get(wall.startPointId);
       const endPoint = this.points.get(wall.endPointId);
       if (!startPoint || !endPoint) return;
 
-      // Check if interior wall (both sides have different rooms)
-      const wallMidX = (startPoint.x + endPoint.x) / 2;
-      const wallMidY = (startPoint.y + endPoint.y) / 2;
-      const angle = Math.atan2(endPoint.y - startPoint.y, endPoint.x - startPoint.x);
-      const testOffset = this.config.wallThickness + 50;
+      const wallMid = {
+        x: (startPoint.x + endPoint.x) / 2,
+        y: (startPoint.y + endPoint.y) / 2
+      };
 
-      const perp1X = -Math.sin(angle);
-      const perp1Y = Math.cos(angle);
-      const perp2X = Math.sin(angle);
-      const perp2Y = -Math.cos(angle);
-
-      const testPoint1 = { x: wallMidX + perp1X * testOffset, y: wallMidY + perp1Y * testOffset };
-      const testPoint2 = { x: wallMidX + perp2X * testOffset, y: wallMidY + perp2Y * testOffset };
-
-      const roomOnSide1 = this.rooms.find(room => this.isPointInRoom(testPoint1, room));
-      const roomOnSide2 = this.rooms.find(room => this.isPointInRoom(testPoint2, room));
-
-      // Skip interior walls (both sides have different rooms)
-      if (roomOnSide1 && roomOnSide2 && roomOnSide1.id !== roomOnSide2.id) {
-        return;
-      }
-
-      // Simple approach:
-      // 1. Wall ORIENTATION determines dimension type (horizontal wall → X dimension, vertical wall → Y dimension)
-      // 2. Exterior side determines where to show it (up/down for horizontal, left/right for vertical)
       const dx = endPoint.x - startPoint.x;
       const dy = endPoint.y - startPoint.y;
-      const isHorizontal = Math.abs(dx) > Math.abs(dy);
+      // Check Horizontal (X) projection
+      if (Math.abs(dx) > 50) {
+        // Horizontal wall → check Up and Down
+        const isExposedUp = !rayIntersectsWall(wallMid, { x: 0, y: -1 }, wall.id);
+        const isExposedDown = !rayIntersectsWall(wallMid, { x: 0, y: 1 }, wall.id);
 
-      let dimDirection: 'up' | 'down' | 'left' | 'right';
+        let dimDirection: 'up' | 'down' | null = null;
 
-      if (isHorizontal) {
-        // Horizontal wall → show X dimension above or below
-        // Determine which side is exterior
-        if (!roomOnSide1 && roomOnSide2) {
-          // Side 1 is exterior - check if it's above or below the wall
-          dimDirection = perp1Y < 0 ? 'up' : 'down';
-        } else if (roomOnSide1 && !roomOnSide2) {
-          // Side 2 is exterior
-          dimDirection = perp2Y < 0 ? 'up' : 'down';
-        } else {
-          // Neither or both sides have room - use wall position
-          dimDirection = wallMidY < (minY + maxY) / 2 ? 'up' : 'down';
+        if (isExposedUp && isExposedDown) {
+          // Exposed on both sides, pick based on position relative to center
+          dimDirection = wallMid.y < (minY + maxY) / 2 ? 'up' : 'down';
+        } else if (isExposedUp) {
+          dimDirection = 'up';
+        } else if (isExposedDown) {
+          dimDirection = 'down';
         }
-        // Skip if X projection is too small
-        if (Math.abs(dx) < 50) return;
-      } else {
-        // Vertical wall → show Y dimension left or right
-        if (!roomOnSide1 && roomOnSide2) {
-          dimDirection = perp1X < 0 ? 'left' : 'right';
-        } else if (roomOnSide1 && !roomOnSide2) {
-          dimDirection = perp2X < 0 ? 'left' : 'right';
-        } else {
-          dimDirection = wallMidX < (minX + maxX) / 2 ? 'left' : 'right';
+
+        if (dimDirection) {
+          exteriorWalls.push({ wall, startPoint, endPoint, dimDirection });
         }
-        // Skip if Y projection is too small
-        if (Math.abs(dy) < 50) return;
       }
 
-      exteriorWalls.push({ wall, startPoint, endPoint, dimDirection });
+      // Check Vertical (Y) projection
+      if (Math.abs(dy) > 50) {
+        // Vertical wall → check Left and Right
+        const isExposedLeft = !rayIntersectsWall(wallMid, { x: -1, y: 0 }, wall.id);
+        const isExposedRight = !rayIntersectsWall(wallMid, { x: 1, y: 0 }, wall.id);
+
+        let dimDirection: 'left' | 'right' | null = null;
+
+        if (isExposedLeft && isExposedRight) {
+          // Exposed on both sides, pick based on position relative to center
+          dimDirection = wallMid.x < (minX + maxX) / 2 ? 'left' : 'right';
+        } else if (isExposedLeft) {
+          dimDirection = 'left';
+        } else if (isExposedRight) {
+          dimDirection = 'right';
+        }
+
+        if (dimDirection) {
+          exteriorWalls.push({ wall, startPoint, endPoint, dimDirection });
+        }
+      }
     });
 
     // Calculate aligned dimension line positions (furthest from center)
@@ -1012,17 +1043,17 @@ export class WallLayer extends BaseLayer {
       const textMetrics = ctx.measureText(label);
       const padding = 4;
 
-      // Use theme-aware background color
-      // Dark mode: Dark background with high opacity to hide grid lines behind text
-      // Light mode: White background with high opacity
-      ctx.fillStyle = isDarkMode ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)';
-
-      ctx.fillRect(
-        -textMetrics.width / 2 - padding,
-        -8,
-        textMetrics.width + padding * 2,
-        16
-      );
+      // Only draw background in light mode
+      // In dark mode, we want the text to float on the grid without a box (mask)
+      if (!isDarkMode) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.fillRect(
+          -textMetrics.width / 2 - padding,
+          -8,
+          textMetrics.width + padding * 2,
+          16
+        );
+      }
 
       // Draw text
       ctx.fillStyle = textColor;
@@ -1051,39 +1082,7 @@ export class WallLayer extends BaseLayer {
     return null;
   }
 
-  /**
-   * Check if a point is inside a room using ray casting algorithm
-   */
-  private isPointInRoom(point: { x: number; y: number }, room: Room): boolean {
-    const roomPoints: { x: number; y: number }[] = [];
-    for (const pointId of room.points) {
-      const p = this.points.get(pointId);
-      if (p) {
-        roomPoints.push({ x: p.x, y: p.y });
-      }
-    }
 
-    if (roomPoints.length < 3) return false;
-
-    // Ray casting algorithm
-    let inside = false;
-    const x = point.x;
-    const y = point.y;
-    const n = roomPoints.length;
-
-    for (let i = 0, j = n - 1; i < n; j = i++) {
-      const xi = roomPoints[i].x;
-      const yi = roomPoints[i].y;
-      const xj = roomPoints[j].x;
-      const yj = roomPoints[j].y;
-
-      if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
-        inside = !inside;
-      }
-    }
-
-    return inside;
-  }
 
 }
 

@@ -54,18 +54,33 @@ export class RoomDetectionService {
       // Check if this room contains any already accepted room
       // Since we process smallest rooms first, if this room contains an existing room,
       // it must be a composite room (e.g. the outer loop of two adjacent rooms)
+      //
+      // Key insight: A composite room will contain ALL points of a smaller room inside it.
+      // Adjacent rooms only share SOME points (the wall endpoints), not all.
       let isComposite = false;
       const polygon = cyclePoints;
+      const cyclePointIds = new Set(cycle);
 
       for (const existingRoom of finalRooms) {
-        // Check if centroid of existing room is inside this polygon
-        // We need to reconstruct points for existing room to get centroid
         const existingPoints = existingRoom.points.map(id => pointMap.get(id)!);
-        const centroid = this.calculateCentroid(existingPoints);
 
-        if (this.isPointInPolygon(centroid, polygon)) {
+        // Count how many points of existingRoom are inside this cycle's polygon
+        let pointsInside = 0;
+        let pointsShared = 0;
+
+        for (const ep of existingPoints) {
+          if (cyclePointIds.has(ep.id)) {
+            pointsShared++;
+          } else if (this.isPointInPolygon(ep, polygon)) {
+            pointsInside++;
+          }
+        }
+
+        // If ALL non-shared points are inside, this is a composite room
+        const nonSharedPoints = existingRoom.points.length - pointsShared;
+        if (nonSharedPoints > 0 && pointsInside === nonSharedPoints) {
           isComposite = true;
-          console.log(`[RoomDetection] Cycle rejected: contains existing room ${existingRoom.id}`);
+          console.log(`[RoomDetection] Cycle rejected: contains existing room ${existingRoom.id.slice(0, 8)} (${pointsInside}/${nonSharedPoints} points inside)`);
           break;
         }
       }

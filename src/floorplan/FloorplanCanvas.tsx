@@ -352,12 +352,15 @@ const FloorplanCanvas = ({
       }
     });
     eventBus.on(FloorEvents.POINT_MOVED, () => {
-      console.log('[FloorplanCanvas] POINT_MOVED - updating layers directly');
+      console.log('[FloorplanCanvas] POINT_MOVED - re-detecting rooms and updating layers');
       const points = sceneManager.objectManager.getAllPoints();
       const walls = sceneManager.objectManager.getAllWalls();
-      const rooms = sceneManager.objectManager.getAllRooms();
 
-      console.log('[FloorplanCanvas] Got data:', points.length, 'points', walls.length, 'walls');
+      // Re-detect rooms when points move (geometry changed)
+      const rooms = roomDetectionService.detectRooms(walls, points);
+      sceneManager.objectManager.setRooms(rooms);
+
+      console.log('[FloorplanCanvas] Got data:', points.length, 'points', walls.length, 'walls', rooms.length, 'rooms');
 
       wallLayer.setWalls(walls);
       wallLayer.setPoints(points);
@@ -366,7 +369,7 @@ const FloorplanCanvas = ({
       roomLayer.setRooms(rooms);
       roomLayer.setPoints(points);
 
-      console.log('[FloorplanCanvas] Layers updated');
+      console.log('[FloorplanCanvas] Layers updated with fresh room detection');
     });
     eventBus.on(FloorEvents.POINT_UPDATED, () => {
       console.log('[FloorplanCanvas] POINT_UPDATED event received');
