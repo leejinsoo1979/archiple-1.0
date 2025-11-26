@@ -220,25 +220,34 @@ export class RoomLayer extends BaseLayer {
 
     if (isSelected) {
       // Multi-layer illumination effect for selected room border
+      ctx.strokeStyle = themeColor;
+
       // Layer 1: Outer glow (large, soft)
       ctx.shadowColor = themeColor;
-      ctx.shadowBlur = 20;
-      ctx.strokeStyle = themeColor;
-      ctx.lineWidth = 1;
-      ctx.globalAlpha = 0.3;
+      ctx.shadowBlur = 40;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.4;
       ctx.stroke();
 
       // Layer 2: Middle glow
-      ctx.shadowBlur = 10;
-      ctx.lineWidth = 2;
-      ctx.globalAlpha = 0.5;
+      ctx.shadowBlur = 20;
+      ctx.lineWidth = 4;
+      ctx.globalAlpha = 0.6;
       ctx.stroke();
 
-      // Layer 3: Core line (bright, sharp, no blur)
-      ctx.shadowBlur = 0;
+      // Layer 3: Inner glow
+      ctx.shadowBlur = 10;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.8;
+      ctx.stroke();
+
+      // Layer 4: Core line (bright, sharp)
+      ctx.shadowBlur = 5;
       ctx.lineWidth = 2;
       ctx.globalAlpha = 1.0;
       ctx.stroke();
+
+      ctx.shadowBlur = 0;
     } else {
       ctx.strokeStyle = this.config.strokeColor;
       ctx.lineWidth = this.renderStyle === 'wireframe' ? 1.5 : this.config.strokeWidth;
