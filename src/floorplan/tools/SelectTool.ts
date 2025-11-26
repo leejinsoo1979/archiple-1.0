@@ -329,31 +329,9 @@ export class SelectTool extends BaseTool {
   }
 
   /**
-   * Check if two walls are collinear (on the same axis/line)
-   */
-  private areWallsCollinear(wall1: Wall, wall2: Wall, allPoints: Point[]): boolean {
-    const w1Start = allPoints.find(p => p.id === wall1.startPointId);
-    const w1End = allPoints.find(p => p.id === wall1.endPointId);
-    const w2Start = allPoints.find(p => p.id === wall2.startPointId);
-    const w2End = allPoints.find(p => p.id === wall2.endPointId);
-
-    if (!w1Start || !w1End || !w2Start || !w2End) return false;
-
-    // Calculate wall directions
-    const dir1 = new Vector2(w1End.x - w1Start.x, w1End.y - w1Start.y).normalize();
-    const dir2 = new Vector2(w2End.x - w2Start.x, w2End.y - w2Start.y).normalize();
-
-    // Check if directions are parallel (dot product close to 1 or -1)
-    const dotProduct = Math.abs(dir1.dot(dir2));
-    const PARALLEL_THRESHOLD = 0.99; // ~8 degrees tolerance
-
-    return dotProduct > PARALLEL_THRESHOLD;
-  }
-
-  /**
-   * Detach wall from shared corners by creating new points
+   * Detach wall from ALL shared corners by creating new points
    * Original points stay in place, new points move with the wall
-   * BUT: Don't detach from collinear walls (same axis) - they should stretch together
+   * Connected walls (both perpendicular AND collinear) will stretch
    */
   private detachWallFromSharedCorners(wall: Wall): void {
     const allWalls = this.sceneManager.objectManager.getAllWalls();
@@ -364,28 +342,26 @@ export class SelectTool extends BaseTool {
 
     if (!startPoint || !endPoint) return;
 
-    // Check if start point is shared with other walls (excluding collinear walls)
+    // Check if start point is shared with ANY other walls
     const startConnectedWalls = allWalls.filter(
       (w) =>
         w.id !== wall.id &&
-        (w.startPointId === startPoint.id || w.endPointId === startPoint.id) &&
-        !this.areWallsCollinear(wall, w, allPoints) // Don't detach from collinear walls
+        (w.startPointId === startPoint.id || w.endPointId === startPoint.id)
     );
 
-    // Check if end point is shared with other walls (excluding collinear walls)
+    // Check if end point is shared with ANY other walls
     const endConnectedWalls = allWalls.filter(
       (w) =>
         w.id !== wall.id &&
-        (w.startPointId === endPoint.id || w.endPointId === endPoint.id) &&
-        !this.areWallsCollinear(wall, w, allPoints) // Don't detach from collinear walls
+        (w.startPointId === endPoint.id || w.endPointId === endPoint.id)
     );
 
-    console.log('[SelectTool] Detaching wall - startConnected (non-collinear):', startConnectedWalls.length, 'endConnected (non-collinear):', endConnectedWalls.length);
+    console.log('[SelectTool] Detaching wall - startConnected:', startConnectedWalls.length, 'endConnected:', endConnectedWalls.length);
 
     let newStartPointId = startPoint.id;
     let newEndPointId = endPoint.id;
 
-    // Create new point for start if shared with non-collinear walls
+    // Create new point for start if shared
     if (startConnectedWalls.length > 0) {
       const newStartPoint: Point = {
         id: uuidv4(),
@@ -401,7 +377,7 @@ export class SelectTool extends BaseTool {
       console.log('[SelectTool] Detached start point, new:', newStartPointId);
     }
 
-    // Create new point for end if shared with non-collinear walls
+    // Create new point for end if shared
     if (endConnectedWalls.length > 0) {
       const newEndPoint: Point = {
         id: uuidv4(),
