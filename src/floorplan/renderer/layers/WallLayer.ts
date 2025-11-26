@@ -859,6 +859,15 @@ export class WallLayer extends BaseLayer {
       exteriorWalls.push({ wall, startPoint, endPoint, dimDirection });
     });
 
+    // Debug log
+    console.log('[ExteriorDim] Total walls:', this.walls.length, 'Exterior walls:', exteriorWalls.length);
+    console.log('[ExteriorDim] By direction:', {
+      up: exteriorWalls.filter(w => w.dimDirection === 'up').length,
+      down: exteriorWalls.filter(w => w.dimDirection === 'down').length,
+      left: exteriorWalls.filter(w => w.dimDirection === 'left').length,
+      right: exteriorWalls.filter(w => w.dimDirection === 'right').length,
+    });
+
     // Calculate aligned dimension line positions (furthest from center)
     const dimLinePositions = {
       up: minY - baseOffset - extensionLength,
@@ -990,7 +999,12 @@ export class WallLayer extends BaseLayer {
       ctx.stroke();
 
       // Draw text - ensure valid distance
-      if (!Number.isFinite(distanceMm) || distanceMm < 1) return;
+      if (!Number.isFinite(distanceMm) || distanceMm < 1) {
+        console.log('[ExteriorDim] Skipping invalid distance:', distanceMm, dimDirection);
+        return;
+      }
+
+      console.log('[ExteriorDim] Drawing:', dimDirection, Math.round(distanceMm) + 'mm', 'at', textPos);
 
       const label = `${Math.round(distanceMm)}mm`;
 
