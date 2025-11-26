@@ -845,6 +845,33 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
       infiniteGridRef.current = createInfiniteGrid();
 
+      // Create white ground plane visible from above
+      const createWhiteGround = () => {
+        const groundPlane = MeshBuilder.CreateGround(
+          'whiteGround',
+          { width: 1000, height: 1000 },
+          scene
+        );
+        groundPlane.position = new Vector3(0, -0.02, 0); // Slightly below grid
+
+        // White material
+        const groundMaterial = new StandardMaterial('whiteGroundMaterial', scene);
+        groundMaterial.diffuseColor = new Color3(1, 1, 1); // Pure white
+        groundMaterial.specularColor = new Color3(0, 0, 0); // No specular
+        groundMaterial.emissiveColor = new Color3(0.95, 0.95, 0.95); // Slight emissive for brightness
+        groundMaterial.backFaceCulling = true; // Only visible from above
+
+        groundPlane.material = groundMaterial;
+        groundPlane.receiveShadows = false;
+        groundPlane.isPickable = false;
+        groundPlane.checkCollisions = false;
+        groundPlane.renderingGroupId = 0;
+
+        return groundPlane;
+      };
+
+      createWhiteGround();
+
       // Create outdoor skybox with clouds
       const createSkybox = () => {
         // Create large skybox (1000m cube)
@@ -1207,12 +1234,17 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     indices.push(2, 3, 9);
     indices.push(2, 9, 8);
 
-    // Front/Back Caps (Start/End) - usually hidden but good to have for completeness if exposed
-    // Start Cap: StartRight(3)->StartCenter(4)->StartLeft(0) -> Top...
-    // End Cap: EndLeft(1)->EndCenter(5)->EndRight(2) -> Top...
-    // For now, we skip caps as they are internal to joints usually.
-    // If we see gaps at the vertical ends of walls, we might need them.
-    // But the "gap" reported is horizontal (empty floor/ceiling intersection).
+    // Start Cap (세로 단면 - 벽 시작 부분) - 양면 렌더링
+    indices.push(0, 3, 9);
+    indices.push(0, 9, 6);
+    indices.push(3, 0, 6);
+    indices.push(3, 6, 9);
+
+    // End Cap (세로 단면 - 벽 끝 부분) - 양면 렌더링
+    indices.push(2, 1, 7);
+    indices.push(2, 7, 8);
+    indices.push(1, 2, 8);
+    indices.push(1, 8, 7);
 
     const vertexData = new VertexData();
     vertexData.positions = positions;
