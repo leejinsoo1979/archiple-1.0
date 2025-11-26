@@ -366,7 +366,9 @@ export class WallLayer extends BaseLayer {
     // Render based on style
     switch (this.renderStyle) {
       case 'wireframe':
-        // No fill for wireframe
+        // Opaque gray fill for wireframe/CAD style
+        ctx.fillStyle = '#888888';
+        ctx.fill();
         break;
 
       case 'hidden-line':

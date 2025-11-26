@@ -328,6 +328,120 @@ export class SelectTool extends BaseTool {
     }
   }
 
+  /**
+   * Detach wall from shared corners by creating new points
+   * Original points stay in place, new points move with the wall
+   */
+  private detachWallFromSharedCorners(wall: Wall): void {
+    const allWalls = this.sceneManager.objectManager.getAllWalls();
+    const allPoints = this.sceneManager.objectManager.getAllPoints();
+
+    const startPoint = allPoints.find((p) => p.id === wall.startPointId);
+    const endPoint = allPoints.find((p) => p.id === wall.endPointId);
+
+    if (!startPoint || !endPoint) return;
+
+    // Check if start point is shared with other walls
+    const startConnectedWalls = allWalls.filter(
+      (w) =>
+        w.id !== wall.id &&
+        (w.startPointId === startPoint.id || w.endPointId === startPoint.id)
+    );
+
+    // Check if end point is shared with other walls
+    const endConnectedWalls = allWalls.filter(
+      (w) =>
+        w.id !== wall.id &&
+        (w.startPointId === endPoint.id || w.endPointId === endPoint.id)
+    );
+
+    console.log('[SelectTool] Detaching wall - startConnected:', startConnectedWalls.length, 'endConnected:', endConnectedWalls.length);
+
+    let newStartPointId = startPoint.id;
+    let newEndPointId = endPoint.id;
+
+    // Create new point for start if shared
+    if (startConnectedWalls.length > 0) {
+      const newStartPoint: Point = {
+        id: uuidv4(),
+        x: startPoint.x,
+        y: startPoint.y,
+      };
+      const addedStartPoint = this.sceneManager.objectManager.forceAddPoint(newStartPoint);
+      newStartPointId = addedStartPoint.id;
+      this.wallDetachedPointIds.push(newStartPointId);
+
+      // Change wall's start endpoint to new point
+      this.sceneManager.objectManager.changeWallEndpoint(wall.id, 'start', newStartPointId);
+      console.log('[SelectTool] Detached start point, new:', newStartPointId);
+    }
+
+    // Create new point for end if shared
+    if (endConnectedWalls.length > 0) {
+      const newEndPoint: Point = {
+        id: uuidv4(),
+        x: endPoint.x,
+        y: endPoint.y,
+      };
+      const addedEndPoint = this.sceneManager.objectManager.forceAddPoint(newEndPoint);
+      newEndPointId = addedEndPoint.id;
+      this.wallDetachedPointIds.push(newEndPointId);
+
+      // Change wall's end endpoint to new point
+      this.sceneManager.objectManager.changeWallEndpoint(wall.id, 'end', newEndPointId);
+      console.log('[SelectTool] Detached end point, new:', newEndPointId);
+    }
+
+    // Update selectedWall reference with new point IDs
+    if (newStartPointId !== startPoint.id || newEndPointId !== endPoint.id) {
+      this.selectedWall = {
+        ...wall,
+        startPointId: newStartPointId,
+        endPointId: newEndPointId,
+      };
+    }
+  }
+
+  /**
+   * Helper method to move wall endpoints perpendicular to wall direction
+   */
+  private moveWallPoints(startPoint: Point, endPoint: Point, position: Vector2): void {
+    if (!this.dragStartPos) return;
+
+    // Calculate wall direction vector
+    const wallVec = new Vector2(endPoint.x - startPoint.x, endPoint.y - startPoint.y);
+    const wallLength = wallVec.length();
+    if (wallLength < 0.001) return; // Zero-length wall
+
+    const wallDir = wallVec.normalize();
+
+    // Calculate drag delta
+    const dragDelta = new Vector2(position.x - this.dragStartPos.x, position.y - this.dragStartPos.y);
+
+    // Project drag delta onto wall perpendicular direction (normal)
+    // This allows moving the wall sideways but not along its length
+    const wallNormal = new Vector2(-wallDir.y, wallDir.x);
+    const perpDist = dragDelta.dot(wallNormal);
+
+    // Calculate the perpendicular offset
+    const offsetX = wallNormal.x * perpDist;
+    const offsetY = wallNormal.y * perpDist;
+
+    // Move only this wall's endpoints (now detached from other walls)
+    this.sceneManager.objectManager.updatePoint(startPoint.id, {
+      x: startPoint.x + offsetX,
+      y: startPoint.y + offsetY,
+    });
+
+    this.sceneManager.objectManager.updatePoint(endPoint.id, {
+      x: endPoint.x + offsetX,
+      y: endPoint.y + offsetY,
+    });
+
+    // Update drag start position for next frame
+    this.dragStartPos = position.clone();
+  }
+
   handleMouseUp(position: Vector2, event: MouseEvent): void {
     if (!this.isDragging || event.button !== 0) return;
 
