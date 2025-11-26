@@ -77,7 +77,8 @@ export class WallManager {
   }
 
   /**
-   * Calculate wall normal from bounding box
+   * Calculate wall normal - perpendicular to the wall's long axis
+   * Wall is thin in one direction, that's the normal direction
    */
   private calculateWallNormal(mesh: Mesh): Vector3 {
     const boundingInfo = mesh.getBoundingInfo();
@@ -87,12 +88,14 @@ export class WallManager {
     const sizeX = max.x - min.x;
     const sizeZ = max.z - min.z;
 
+    // The thin dimension is the normal direction
+    // We return BOTH possible normals, will pick based on camera later
     if (sizeX < sizeZ) {
-      const centerX = (min.x + max.x) / 2;
-      return centerX > 0 ? new Vector3(1, 0, 0) : new Vector3(-1, 0, 0);
+      // Wall runs along Z axis, normal is X direction
+      return new Vector3(1, 0, 0);
     } else {
-      const centerZ = (min.z + max.z) / 2;
-      return centerZ > 0 ? new Vector3(0, 0, 1) : new Vector3(0, 0, -1);
+      // Wall runs along X axis, normal is Z direction
+      return new Vector3(0, 0, 1);
     }
   }
 
@@ -193,27 +196,40 @@ export class WallManager {
 
   private applyFrontWallHiding(camera: ArcRotateCamera): void {
     const cameraPos = camera.position.clone();
-    cameraPos.y = 0; // XZ plane only
+    cameraPos.y = 0;
 
-    // For each wall, check if camera is on the "front" side of the wall
-    // Front side = the side the normal points to
-    // If camera is on front side, the wall blocks the view into the room
+    const target = camera.target.clone();
+    target.y = 0;
+
     const wallsToHide: number[] = [];
 
     this.walls.forEach((wall, index) => {
       const wallCenter = wall.center.clone();
       wallCenter.y = 0;
 
-      // Vector from wall center to camera
-      const toCamera = cameraPos.subtract(wallCenter);
-      toCamera.normalize();
+      // Check if wall is between camera and target
+      // Vector from camera to wall
+      const camToWall = wallCenter.subtract(cameraPos);
+      // Vector from camera to target
+      const camToTarget = target.subtract(cameraPos);
 
-      // If dot product > 0, camera is on the side the normal points to (front side)
-      // This means the wall is between camera and room interior - should hide
-      const dot = Vector3.Dot(wall.normal, toCamera);
+      // Project wall position onto camera-target line
+      const camToTargetNorm = camToTarget.normalize();
+      const projectionLength = Vector3.Dot(camToWall, camToTargetNorm);
 
-      if (dot > 0.1) { // Small threshold to avoid edge cases
-        wallsToHide.push(index);
+      // Wall is "in front" if projection is positive and less than distance to target
+      const distToTarget = camToTarget.length();
+
+      if (projectionLength > 0 && projectionLength < distToTarget * 1.5) {
+        // Wall is between camera and target area
+        // Now check if the wall is facing the camera (perpendicular check)
+        const normal = wall.normal;
+        const absDot = Math.abs(Vector3.Dot(camToTargetNorm, normal));
+
+        // If wall normal is roughly aligned with camera direction, wall blocks view
+        if (absDot > 0.3) {
+          wallsToHide.push(index);
+        }
       }
     });
 
