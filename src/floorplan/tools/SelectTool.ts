@@ -8,6 +8,7 @@ import { SnapService } from '../services/SnapService';
 import type { SnapGuide } from '../services/SnapService';
 import { eventBus } from '../../core/events/EventBus';
 import { FloorEvents } from '../../core/events/FloorEvents';
+import { v4 as uuidv4 } from 'uuid';
 
 /**
  * SelectTool - Select and drag points or walls to adjust positions
@@ -29,6 +30,7 @@ export class SelectTool extends BaseTool {
   private selectedDoorHandle: 'start' | 'end' | 'body' | null = null;
   private isDragging = false;
   private dragStartPos: Vector2 | null = null;
+  private wallDetachedPointIds: string[] = []; // New points created for wall detachment
 
   // Hover state
   private hoveredPoint: Point | null = null;

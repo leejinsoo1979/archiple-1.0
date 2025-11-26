@@ -244,20 +244,20 @@ export class RoomLayer extends BaseLayer {
 
       // Layer 1: Outer glow (soft, wide)
       ctx.shadowColor = themeColor;
-      ctx.shadowBlur = 30;
-      ctx.lineWidth = 6;
-      ctx.globalAlpha = 0.4;
+      ctx.shadowBlur = 35;
+      ctx.lineWidth = 12;
+      ctx.globalAlpha = 0.3;
       ctx.stroke();
 
       // Layer 2: Middle glow
-      ctx.shadowBlur = 15;
-      ctx.lineWidth = 4;
-      ctx.globalAlpha = 0.7;
+      ctx.shadowBlur = 20;
+      ctx.lineWidth = 8;
+      ctx.globalAlpha = 0.6;
       ctx.stroke();
 
       // Layer 3: Core line (bright)
-      ctx.shadowBlur = 8;
-      ctx.lineWidth = 2.5;
+      ctx.shadowBlur = 10;
+      ctx.lineWidth = 5;
       ctx.globalAlpha = 1.0;
       ctx.stroke();
 
