@@ -34,7 +34,8 @@ import {
   Constants,
   CSG,
   Tools,
-  Matrix
+  Matrix,
+  SSAO2RenderingPipeline
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials/grid';
 import { SkyMaterial } from '@babylonjs/materials/sky';
@@ -690,7 +691,19 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       pipeline.sharpenEnabled = false;
       pipelineRef.current = pipeline;
 
-      console.log('[Babylon3DCanvas] High-quality rendering pipeline initialized');
+      // SSAO2 for ambient occlusion (soft shadows in corners)
+      const ssao = new SSAO2RenderingPipeline('ssao', scene, {
+        ssaoRatio: 0.5,
+        blurRatio: 1
+      });
+      ssao.radius = 2.0;
+      ssao.totalStrength = 1.5;
+      ssao.base = 0.5;
+      ssao.samples = 16;
+      ssao.maxZ = 100;
+      ssao.minZAspect = 0.5;
+
+      console.log('[Babylon3DCanvas] High-quality rendering pipeline with SSAO initialized');
 
       // Create ArcRotate camera (default 3D view)
       const arcCamera = new ArcRotateCamera(
@@ -788,12 +801,15 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       sunLight.specular = new Color3(1, 1, 1);
       sunLightRef.current = sunLight;
 
-      // Shadow generator - simple and reliable
-      const shadowGenerator = new ShadowGenerator(2048, sunLight);
-      shadowGenerator.useBlurExponentialShadowMap = true;
-      shadowGenerator.blurKernel = 64;
-      shadowGenerator.darkness = 0.3;
-      shadowGenerator.bias = 0.00001;
+      // Shadow generator - high quality soft shadows
+      const shadowGenerator = new ShadowGenerator(4096, sunLight);
+      shadowGenerator.usePercentageCloserFiltering = true;
+      shadowGenerator.filteringQuality = ShadowGenerator.QUALITY_HIGH;
+      shadowGenerator.darkness = 0.4;
+      shadowGenerator.bias = 0.001;
+      shadowGenerator.normalBias = 0.02;
+      shadowGenerator.contactHardeningLightSizeUVRatio = 0.05;
+      shadowGenerator.setDarkness(0.5);
 
       console.log('[Babylon3DCanvas] Sun light created - direction:', dirX.toFixed(2), dirY.toFixed(2), dirZ.toFixed(2));
 
