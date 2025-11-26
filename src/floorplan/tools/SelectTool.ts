@@ -115,6 +115,13 @@ export class SelectTool extends BaseTool {
       this.selectedDoorHandle = null;
       this.isDragging = true;
       this.dragStartPos = position.clone();
+      this.wallDetachedPointIds = [];
+
+      // Set wall dragging flag to prevent cleanup during drag
+      this.sceneManager.setWallDragging(true);
+
+      // Detach wall from shared corners immediately
+      this.detachWallFromSharedCorners(clickedWall);
 
       // Emit wall selection event
       eventBus.emit(FloorEvents.WALL_SELECTED, {
@@ -316,9 +323,82 @@ export class SelectTool extends BaseTool {
         return;
       }
 
-      // Simply move wall's endpoints - connected walls will naturally stretch
-      // No need to detach points, just move them
+      // Move wall endpoints (may be detached new points)
       this.moveWallPoints(startPoint, endPoint, position);
+    }
+  }
+
+  /**
+   * Detach wall from shared corners by creating new points
+   * Original points stay in place, new points move with the wall
+   */
+  private detachWallFromSharedCorners(wall: Wall): void {
+    const allWalls = this.sceneManager.objectManager.getAllWalls();
+    const allPoints = this.sceneManager.objectManager.getAllPoints();
+
+    const startPoint = allPoints.find((p) => p.id === wall.startPointId);
+    const endPoint = allPoints.find((p) => p.id === wall.endPointId);
+
+    if (!startPoint || !endPoint) return;
+
+    // Check if start point is shared with other walls
+    const startConnectedWalls = allWalls.filter(
+      (w) =>
+        w.id !== wall.id &&
+        (w.startPointId === startPoint.id || w.endPointId === startPoint.id)
+    );
+
+    // Check if end point is shared with other walls
+    const endConnectedWalls = allWalls.filter(
+      (w) =>
+        w.id !== wall.id &&
+        (w.startPointId === endPoint.id || w.endPointId === endPoint.id)
+    );
+
+    console.log('[SelectTool] Detaching wall - startConnected:', startConnectedWalls.length, 'endConnected:', endConnectedWalls.length);
+
+    let newStartPointId = startPoint.id;
+    let newEndPointId = endPoint.id;
+
+    // Create new point for start if shared
+    if (startConnectedWalls.length > 0) {
+      const newStartPoint: Point = {
+        id: uuidv4(),
+        x: startPoint.x,
+        y: startPoint.y,
+      };
+      const addedStartPoint = this.sceneManager.objectManager.forceAddPoint(newStartPoint);
+      newStartPointId = addedStartPoint.id;
+      this.wallDetachedPointIds.push(newStartPointId);
+
+      // Change wall's start endpoint to new point
+      this.sceneManager.objectManager.changeWallEndpoint(wall.id, 'start', newStartPointId);
+      console.log('[SelectTool] Detached start point, new:', newStartPointId);
+    }
+
+    // Create new point for end if shared
+    if (endConnectedWalls.length > 0) {
+      const newEndPoint: Point = {
+        id: uuidv4(),
+        x: endPoint.x,
+        y: endPoint.y,
+      };
+      const addedEndPoint = this.sceneManager.objectManager.forceAddPoint(newEndPoint);
+      newEndPointId = addedEndPoint.id;
+      this.wallDetachedPointIds.push(newEndPointId);
+
+      // Change wall's end endpoint to new point
+      this.sceneManager.objectManager.changeWallEndpoint(wall.id, 'end', newEndPointId);
+      console.log('[SelectTool] Detached end point, new:', newEndPointId);
+    }
+
+    // Update selectedWall reference with new point IDs
+    if (newStartPointId !== startPoint.id || newEndPointId !== endPoint.id) {
+      this.selectedWall = {
+        ...wall,
+        startPointId: newStartPointId,
+        endPointId: newEndPointId,
+      };
     }
   }
 
@@ -400,6 +480,9 @@ export class SelectTool extends BaseTool {
         point: this.selectedPoint,
       });
     } else if (this.selectedWall) {
+      // Clear wall dragging flag to allow cleanup
+      this.sceneManager.setWallDragging(false);
+
       const allPoints = this.sceneManager.objectManager.getAllPoints();
       const startPoint = allPoints.find((p) => p.id === this.selectedWall!.startPointId);
       const endPoint = allPoints.find((p) => p.id === this.selectedWall!.endPointId);
@@ -415,6 +498,9 @@ export class SelectTool extends BaseTool {
           point: endPoint,
         });
       }
+
+      // Reset detached point IDs
+      this.wallDetachedPointIds = [];
     }
 
     // Keep selection but stop dragging
@@ -653,6 +739,10 @@ export class SelectTool extends BaseTool {
     this.dragStartPos = null;
     this.hoveredPoint = null;
     this.hoveredWall = null;
+    this.wallDetachedPointIds = [];
+
+    // Clear wall dragging flag
+    this.sceneManager.setWallDragging(false);
 
     // Clear selection and hover events
     eventBus.emit(FloorEvents.POINT_SELECTION_CLEARED, {});
