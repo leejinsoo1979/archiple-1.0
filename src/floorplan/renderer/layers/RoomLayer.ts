@@ -172,7 +172,7 @@ export class RoomLayer extends BaseLayer {
     } else if (isSelected) {
       // Use theme color with transparency for selected room
       fillStyle = themeColor;
-      fillOpacity = 0.12;
+      fillOpacity = 0.35;
     } else {
       // Apply render style for normal rooms
       switch (this.renderStyle) {

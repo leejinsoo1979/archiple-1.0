@@ -629,6 +629,7 @@ export class SelectTool extends BaseTool {
     this.selectedDoorHandle = null;
     this.isDragging = false;
     this.dragStartPos = null;
+    this.wallPointsDetached = false;
     this.hoveredPoint = null;
     this.hoveredWall = null;
 
