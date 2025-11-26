@@ -236,7 +236,7 @@ export class RoomLayer extends BaseLayer {
 
       // Layer 3: Core line (bright, sharp, no blur)
       ctx.shadowBlur = 0;
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 2;
       ctx.globalAlpha = 1.0;
       ctx.stroke();
     } else {
