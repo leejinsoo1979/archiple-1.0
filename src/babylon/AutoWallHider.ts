@@ -1,7 +1,7 @@
 /**
  * AutoWallHider - Raycasting 기반 벽 자동 숨김
  *
- * 카메라에서 타겟으로 레이를 쏴서 벽에 맞으면 그 벽을 숨김
+ * 카메라에서 타겟 영역으로 여러 레이를 쏴서 시야를 막는 모든 벽을 숨김
  */
 
 import {
@@ -27,49 +27,42 @@ export class AutoWallHider {
   public update(camera: ArcRotateCamera): void {
     if (!this.enabled) return;
 
-    // 현재 프레임에서 숨겨야 할 벽들
     const wallsToHide = new Set<AbstractMesh>();
-
-    // 카메라에서 타겟으로의 레이
     const origin = camera.position;
-    const direction = camera.target.subtract(camera.position);
-    const length = direction.length();
-    direction.normalize();
+    const target = camera.target;
 
-    const ray = new Ray(origin, direction, length);
+    // 타겟 주변 그리드로 여러 레이를 쏨 (넓은 영역 커버)
+    const gridSize = 5; // 5x5 그리드
+    const spread = 2.0; // 타겟 주변 2미터 범위
 
-    // 메인 레이로 히트 체크
-    const hit = this.scene.pickWithRay(ray, (mesh) => {
-      return mesh.metadata?.type === 'wall';
-    });
+    for (let i = 0; i < gridSize; i++) {
+      for (let j = 0; j < gridSize; j++) {
+        // 그리드 오프셋 계산
+        const offsetX = (i / (gridSize - 1) - 0.5) * spread * 2;
+        const offsetZ = (j / (gridSize - 1) - 0.5) * spread * 2;
 
-    if (hit?.hit && hit.pickedMesh) {
-      wallsToHide.add(hit.pickedMesh);
-    }
+        // 다양한 높이에서도 레이 쏨
+        for (const offsetY of [0, 0.5, 1.0, 1.5]) {
+          const targetPoint = new Vector3(
+            target.x + offsetX,
+            target.y + offsetY,
+            target.z + offsetZ
+          );
 
-    // 추가: 여러 방향으로 레이를 쏴서 코너 벽도 감지
-    const offsets = [
-      new Vector3(0.5, 0, 0),
-      new Vector3(-0.5, 0, 0),
-      new Vector3(0, 0, 0.5),
-      new Vector3(0, 0, -0.5),
-      new Vector3(0, 0.5, 0),
-      new Vector3(0, -0.5, 0),
-    ];
+          const direction = targetPoint.subtract(origin);
+          const length = direction.length();
+          direction.normalize();
 
-    for (const offset of offsets) {
-      const targetWithOffset = camera.target.add(offset);
-      const dir = targetWithOffset.subtract(camera.position);
-      const len = dir.length();
-      dir.normalize();
+          const ray = new Ray(origin, direction, length + 1); // 약간 더 길게
 
-      const offsetRay = new Ray(camera.position, dir, len);
-      const offsetHit = this.scene.pickWithRay(offsetRay, (mesh) => {
-        return mesh.metadata?.type === 'wall';
-      });
+          const hit = this.scene.pickWithRay(ray, (mesh) => {
+            return mesh.metadata?.type === 'wall';
+          });
 
-      if (offsetHit?.hit && offsetHit.pickedMesh) {
-        wallsToHide.add(offsetHit.pickedMesh);
+          if (hit?.hit && hit.pickedMesh) {
+            wallsToHide.add(hit.pickedMesh);
+          }
+        }
       }
     }
 
@@ -77,7 +70,6 @@ export class AutoWallHider {
     for (const wall of this.hiddenWalls) {
       if (!wallsToHide.has(wall)) {
         wall.visibility = 1;
-        wall.setEnabled(true);
       }
     }
 
@@ -86,13 +78,9 @@ export class AutoWallHider {
       wall.visibility = 0;
     }
 
-    // 현재 숨긴 벽 목록 업데이트
     this.hiddenWalls = wallsToHide;
   }
 
-  /**
-   * 활성화/비활성화
-   */
   public setEnabled(enabled: boolean): void {
     this.enabled = enabled;
     if (!enabled) {
@@ -100,20 +88,13 @@ export class AutoWallHider {
     }
   }
 
-  /**
-   * 모든 벽 복원
-   */
   public restoreAllWalls(): void {
     for (const wall of this.hiddenWalls) {
       wall.visibility = 1;
-      wall.setEnabled(true);
     }
     this.hiddenWalls.clear();
   }
 
-  /**
-   * 정리
-   */
   public dispose(): void {
     this.restoreAllWalls();
   }
