@@ -407,9 +407,8 @@
   transform: translateX(-50%);
   width: 360px;
   background: linear-gradient(145deg,
-    rgba(26, 26, 28, 0.95) 0%,
-    rgba(18, 18, 20, 0.98) 100%
-  );
+      rgba(26, 26, 28, 0.95) 0%,
+      rgba(18, 18, 20, 0.98) 100%);
   backdrop-filter: blur(40px) saturate(180%);
   -webkit-backdrop-filter: blur(40px) saturate(180%);
   border-radius: 20px;
@@ -429,6 +428,7 @@
     transform: translateX(-50%) translateY(-20px) scale(0.9);
     filter: blur(10px);
   }
+
   100% {
     opacity: 1;
     transform: translateX(-50%) translateY(0) scale(1);
@@ -457,9 +457,8 @@
   justify-content: space-between;
   padding: 20px 24px;
   background: linear-gradient(to right,
-    rgba(63, 174, 122, 0.15),
-    rgba(45, 153, 103, 0.1)
-  );
+      rgba(63, 174, 122, 0.15),
+      rgba(45, 153, 103, 0.1));
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -532,9 +531,8 @@
   height: 6px;
   border-radius: 10px;
   background: linear-gradient(to right,
-    rgba(63, 174, 122, 0.2),
-    rgba(63, 174, 122, 0.4)
-  );
+      rgba(63, 174, 122, 0.2),
+      rgba(63, 174, 122, 0.4));
   outline: none;
   -webkit-appearance: none;
   cursor: pointer;
@@ -946,7 +944,7 @@
   left: 0;
   right: 0;
   height: 30%;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.2));
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.2));
 }
 
 .whitePreview {
@@ -969,7 +967,7 @@
   left: 20%;
   width: 60%;
   height: 60%;
-  border: 2px solid rgba(0,0,0,0.3);
+  border: 2px solid rgba(0, 0, 0, 0.3);
   border-radius: 4px;
 }
 
@@ -1070,11 +1068,11 @@
   transition: 0.3s;
 }
 
-.toggleSwitch input:checked + .toggleSlider {
+.toggleSwitch input:checked+.toggleSlider {
   background-color: var(--theme-color);
 }
 
-.toggleSwitch input:checked + .toggleSlider::before {
+.toggleSwitch input:checked+.toggleSlider::before {
   transform: translateX(20px);
 }
 
@@ -1112,6 +1110,7 @@
     opacity: 0;
     transform: translateX(-50%) translateY(-10px);
   }
+
   to {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
@@ -1220,6 +1219,7 @@
   from {
     transform: translateX(-100%);
   }
+
   to {
     transform: translateX(0);
   }
@@ -1391,4 +1391,127 @@
   font-weight: 600;
   color: var(--text-primary);
   font-family: 'Courier New', monospace;
+}
+
+
+/* ===== FULL PAGE LOADING SCREEN ===== */
+.loadingOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #111111;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.loadingContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+}
+
+.loadingLogo {
+  margin-bottom: 20px;
+  animation: logoPulse 2s infinite ease-in-out;
+}
+
+.loadingLogo img {
+  height: 80px;
+  width: auto;
+  display: block;
+}
+
+@keyframes logoPulse {
+  0% {
+    opacity: 0.8;
+    transform: scale(0.98);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+
+  100% {
+    opacity: 0.8;
+    transform: scale(0.98);
+  }
+}
+
+.loadingSpinner {
+  position: relative;
+  width: 100px;
+  height: 100px;
+}
+
+.loadingSpinner::before,
+.loadingSpinner::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+}
+
+.loadingSpinner::before {
+  width: 100%;
+  height: 100%;
+  border: 3px solid rgba(61, 188, 88, 0.1);
+}
+
+.loadingSpinner::after {
+  width: 100%;
+  height: 100%;
+  border: 3px solid transparent;
+  border-top-color: #3dbc58;
+  animation: loadingSpin 1s linear infinite;
+}
+
+@keyframes loadingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loadingProgressContainer {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.loadingProgressBar {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.loadingProgressFill {
+  height: 100%;
+  background: #3dbc58;
+  border-radius: 2px;
+  transition: width 0.3s ease-out;
+  box-shadow: 0 0 10px rgba(61, 188, 88, 0.5);
+}
+
+.loadingText {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+.loadingPercentage {
+  font-size: 14px;
+  font-weight: 600;
+  color: #3dbc58;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }

@@ -138,6 +138,10 @@ export class WallLayer extends BaseLayer {
     this.renderStyle = style;
   }
 
+  setWallThickness(thickness: number): void {
+    this.config.wallThickness = thickness;
+  }
+
   setAngleGuide(from: Point | null, angle: number | null): void {
     if (from && angle !== null) {
       this.angleGuide = { from, angle };

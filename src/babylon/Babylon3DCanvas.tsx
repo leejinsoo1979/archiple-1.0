@@ -35,7 +35,8 @@ import {
   CSG,
   Tools,
   Matrix,
-  SSAO2RenderingPipeline
+  SSAO2RenderingPipeline,
+  Animation
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials/grid';
 import { SkyMaterial } from '@babylonjs/materials/sky';
@@ -216,7 +217,6 @@ const findNearestWallSnap = (
 
   // Snap if within threshold
   if (nearestDistance <= SNAP_THRESHOLD) {
-    console.log('[Wall Snap] Snapped to wall at distance:', nearestDistance.toFixed(3), 'm');
     return nearestPoint;
   }
 
@@ -348,9 +348,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       if (!scene || !engine) {
         throw new Error('Scene or Engine not initialized');
       }
-
-      console.log(`[Babylon3DCanvas] Starting ULTRA-QUALITY rendering at ${width}x${height}...`);
-
       return new Promise((resolve, reject) => {
         try {
           const camera = scene.activeCamera;
@@ -365,9 +362,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           const originalShadowBlurKernel = shadowGen?.blurKernel || 64;
           const originalEnvIntensity = scene.environmentIntensity;
           const originalHardwareScaling = engine.getHardwareScalingLevel();
-
-          console.log('[Babylon3DCanvas] Saved original settings');
-
           // ===== STEP 2: Apply ULTRA-QUALITY settings =====
           // Force hardware scaling to 1.0 for maximum quality
           engine.setHardwareScalingLevel(1.0);
@@ -376,7 +370,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
             shadowGen.mapSize = 16384; // Ultra 16K shadow maps
             shadowGen.blurKernel = 256; // Maximum blur for ultra-soft shadows
             shadowGen.filteringQuality = ShadowGenerator.QUALITY_HIGH;
-            console.log('[Babylon3DCanvas] Shadow quality: 16K ultra-quality');
           }
 
           // Boost environment reflections
@@ -438,18 +431,12 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           scene.imageProcessingConfiguration.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
           scene.imageProcessingConfiguration.exposure = 1.0;
           scene.imageProcessingConfiguration.contrast = 1.05;
-
-          console.log('[Babylon3DCanvas] Ultra-quality rendering: Enhanced lighting + ACES tonemapping + 16K shadows');
-
           // Hide grid for clean render
           const gridMesh = infiniteGridRef.current;
           const originalGridVisibility = gridMesh?.isVisible;
           if (gridMesh) {
             gridMesh.isVisible = false;
           }
-
-          console.log('[Babylon3DCanvas] Creating RenderTargetTexture for true high-quality rendering...');
-
           // Create RenderTargetTexture with MSAA
           const renderTarget = new RenderTargetTexture(
             'ultraHighResRender',
@@ -493,12 +480,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
             return originalGetProjectionMatrix(force);
           };
 
-          console.log(`[Babylon3DCanvas] RenderTargetTexture created: ${width}x${height} with 8x MSAA (aspect: ${renderAspectRatio.toFixed(3)})`);
-
           // Render and capture
           renderTarget.onAfterRenderObservable.addOnce(() => {
-            console.log('[Babylon3DCanvas] Render completed, reading pixels...');
-
             // Read pixels directly from render target texture
             const internalTexture = renderTarget.getInternalTexture();
             if (!internalTexture) {
@@ -538,8 +521,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             gl.deleteFramebuffer(fb);
 
-            console.log(`[Babylon3DCanvas] Read ${pixels.length} bytes (${(pixels.length / 1024 / 1024).toFixed(2)} MB)`);
-
             // Create ImageData and flip Y
             const imageData = ctx.createImageData(width, height);
             const rowSize = width * 4;
@@ -551,9 +532,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
             }
 
             ctx.putImageData(imageData, 0, 0);
-
-            console.log('[Babylon3DCanvas] Image data written to canvas');
-
             // Convert to blob
             canvas.toBlob((blob) => {
               if (!blob) {
@@ -561,8 +539,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
                 reject(new Error('Failed to create blob'));
                 return;
               }
-
-              console.log(`[Babylon3DCanvas] ULTRA-QUALITY render completed (${width}x${height}, ${(blob.size / 1024 / 1024).toFixed(2)} MB)`);
 
               // ===== STEP 3: Restore original settings =====
               engine.setHardwareScalingLevel(originalHardwareScaling);
@@ -573,7 +549,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
               if (shadowGen) {
                 shadowGen.mapSize = originalShadowMapSize;
                 shadowGen.blurKernel = originalShadowBlurKernel;
-                console.log('[Babylon3DCanvas] Shadow settings restored');
               }
 
               scene.environmentIntensity = originalEnvIntensity;
@@ -605,9 +580,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
               originalMaterialMetallic.forEach((metallic, mat) => {
                 mat.metallic = metallic;
               });
-
-              console.log('[Babylon3DCanvas] All settings restored');
-
               // Clean up
               renderTarget.dispose();
 
@@ -635,12 +607,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
     // Prevent double initialization
     if (engineRef.current || sceneRef.current) {
-      console.log('[Babylon3DCanvas] Already initialized, skipping...');
       return;
     }
-
-    console.log('[Babylon3DCanvas] Initializing Babylon.js...');
-
     const initScene = () => {
       // Create engine with standard quality settings
       const engine = new Engine(canvas, true, {
@@ -650,12 +618,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         powerPreference: 'high-performance',
       });
       engineRef.current = engine;
-
-      console.log('[Babylon3DCanvas] WebGL Info:', {
-        renderer: engine.isWebGPU ? 'WebGPU' : 'WebGL',
-        version: engine.webGLVersion,
-      });
-
       // Create scene
       const scene = new Scene(engine);
       scene.clearColor = new Color4(1, 1, 1, 1); // Pure white background
@@ -703,9 +665,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       ssao.maxZ = 150;
       ssao.minZAspect = 0.2;
       ssao.expensiveBlur = true;
-
-      console.log('[Babylon3DCanvas] High-quality rendering pipeline with SSAO initialized');
-
       // Create ArcRotate camera (default 3D view)
       const arcCamera = new ArcRotateCamera(
         'arcCamera',
@@ -720,12 +679,54 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       arcCamera.upperRadiusLimit = 50;
       arcCamera.upperBetaLimit = Math.PI / 2.05;
       arcCamera.wheelPrecision = 50; // Finer zoom control (higher = slower zoom)
-      arcCamera.panningSensibility = 200;
-      arcCamera.inertia = 0.9;
-      arcCamera.angularSensibilityX = 1000;
-      arcCamera.angularSensibilityY = 1000;
+      arcCamera.panningSensibility = 500; // Higher = slower panning
+      arcCamera.inertia = 0.7; // Smooth rotation
+      arcCamera.angularSensibilityX = 500; // Balanced rotation speed
+      arcCamera.angularSensibilityY = 500;
       arcCamera.zoomToMouseLocation = true; // Enable zoom to mouse pointer
       arcCameraRef.current = arcCamera;
+
+      // Expose camera control globally for Gizmo
+      if (typeof window !== 'undefined') {
+        (window as any).__setCameraRotation = (alpha: number, beta: number) => {
+          if (!scene || !arcCamera) return;
+
+          // Animate camera rotation
+          const framerate = 60;
+          const speed = 60; // Speed of animation
+
+          // Create animation for Alpha (horizontal)
+          const animAlpha = new Animation(
+            "animAlpha",
+            "alpha",
+            framerate,
+            Animation.ANIMATIONTYPE_FLOAT,
+            Animation.ANIMATIONLOOPMODE_CONSTANT
+          );
+
+          const keysAlpha = [];
+          keysAlpha.push({ frame: 0, value: arcCamera.alpha });
+          keysAlpha.push({ frame: speed, value: alpha });
+          animAlpha.setKeys(keysAlpha);
+
+          // Create animation for Beta (vertical)
+          const animBeta = new Animation(
+            "animBeta",
+            "beta",
+            framerate,
+            Animation.ANIMATIONTYPE_FLOAT,
+            Animation.ANIMATIONLOOPMODE_CONSTANT
+          );
+
+          const keysBeta = [];
+          keysBeta.push({ frame: 0, value: arcCamera.beta });
+          keysBeta.push({ frame: speed, value: beta });
+          animBeta.setKeys(keysBeta);
+
+          // Start animation
+          scene.beginDirectAnimation(arcCamera, [animAlpha, animBeta], 0, speed, false);
+        };
+      }
 
       // Create FPS camera (first-person view)
       const fpsCamera = new UniversalCamera(
@@ -748,15 +749,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       fpsCamera.checkCollisions = true;
       fpsCamera.applyGravity = false;
       fpsCamera.ellipsoid = new Vector3(0.2, 0.85, 0.2); // Collision ellipsoid (radius in meters)
-
-      console.log('[Babylon3DCanvas] FPS Camera created with keys:', {
-        keysUp: fpsCamera.keysUp,
-        keysDown: fpsCamera.keysDown,
-        keysLeft: fpsCamera.keysLeft,
-        keysRight: fpsCamera.keysRight,
-        speed: fpsCamera.speed
-      });
-
       fpsCameraRef.current = fpsCamera;
 
       // Create 3rd Person Follow Camera
@@ -804,20 +796,18 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       sunLight.specular = new Color3(1, 1, 1);
       sunLightRef.current = sunLight;
 
-      // Shadow generator - high quality soft shadows
-      const shadowGenerator = new ShadowGenerator(4096, sunLight);
+      // Shadow generator - balanced quality/performance
+      const shadowGenerator = new ShadowGenerator(2048, sunLight);
       shadowGenerator.useBlurExponentialShadowMap = true;
-      shadowGenerator.blurKernel = 128;
+      shadowGenerator.blurKernel = 64;
       shadowGenerator.blurScale = 2;
       shadowGenerator.useKernelBlur = true;
-      
+
       shadowGenerator.bias = 0.00001;
       shadowGenerator.normalBias = 0.01;
-      
-      // darkness: 0 = 완전한 검정 그림자, 1 = 그림자 없음
-      shadowGenerator.setDarkness(0.3); // 더 진한 그림자
 
-      console.log('[Babylon3DCanvas] Sun light created - direction:', dirX.toFixed(2), dirY.toFixed(2), dirZ.toFixed(2));
+      // darkness: 0 = 완전한 검정 그림자, 1 = 그림자 없음
+      shadowGenerator.setDarkness(0.3);
 
       // Create infinite grid floor
       const createInfiniteGrid = () => {
@@ -859,9 +849,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
         // Lower render priority so it renders below everything else
         gridPlane.renderingGroupId = 0;
-
-        console.log('[Babylon3DCanvas] Infinite grid floor created at origin');
-
         return gridPlane;
       };
 
@@ -945,9 +932,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         // Disable interactions
         skybox.isPickable = false;
         skybox.checkCollisions = false;
-
-        console.log('[Babylon3DCanvas] Outdoor skybox created with clouds');
-
         return skybox;
       };
 
@@ -979,8 +963,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         sunMesh.material = sunMaterial;
         sunMesh.isPickable = false;
         sunMesh.renderingGroupId = 0;
-
-        console.log('[Babylon3DCanvas] Sun disk created at', sunX.toFixed(1), sunY.toFixed(1), sunZ.toFixed(1));
 
         return sunMesh;
       };
@@ -1081,7 +1063,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         character.ellipsoid = new Vector3(0.3, totalHeight / 2, 0.3);
 
         characterRef.current = character;
-        console.log('[Babylon3DCanvas] Created realistic human character (height: 1.74m)');
 
         return character;
       };
@@ -1106,19 +1087,40 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
       gizmoManagerRef.current = gizmoManager;
 
+      // Track previous camera angles for gizmo update optimization
+      let prevAlpha = 0;
+      let prevBeta = 0;
+      let gizmoUpdateCounter = 0;
+
       engine.runRenderLoop(() => {
         // Update wall visibility based on camera angle (raycasting cutaway)
         const activeCamera = scene.activeCamera;
         if (activeCamera instanceof ArcRotateCamera && autoWallHiderRef.current) {
           autoWallHiderRef.current.update(activeCamera);
         }
+
+        // Update camera gizmo (throttled to every 3 frames for performance)
+        gizmoUpdateCounter++;
+        if (gizmoUpdateCounter >= 3 && arcCamera) {
+          gizmoUpdateCounter = 0;
+          const alpha = arcCamera.alpha;
+          const beta = arcCamera.beta;
+          // Only update if camera moved significantly (0.01 radians = ~0.5 degrees)
+          if (Math.abs(alpha - prevAlpha) > 0.01 || Math.abs(beta - prevBeta) > 0.01) {
+            prevAlpha = alpha;
+            prevBeta = beta;
+            if (typeof window !== 'undefined' && (window as any).__updateCameraGizmo) {
+              (window as any).__updateCameraGizmo(alpha, beta);
+            }
+          }
+        }
+
         scene.render();
       });
 
       // Handle resize
       const handleResize = () => {
         engine.resize();
-        console.log('[Babylon3DCanvas] Resized:', canvas.width, 'x', canvas.height);
       };
       window.addEventListener('resize', handleResize);
 
@@ -1126,16 +1128,11 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       const handleFullscreenChange = () => {
         setTimeout(() => {
           engine.resize();
-          console.log('[Babylon3DCanvas] Fullscreen changed, resized:', canvas.width, 'x', canvas.height);
         }, 100);
       };
       document.addEventListener('fullscreenchange', handleFullscreenChange);
-
-      console.log('[Babylon3DCanvas] Initialized successfully');
-
       // Cleanup
       return () => {
-        console.log('[Babylon3DCanvas] Cleaning up...');
         window.removeEventListener('resize', handleResize);
         document.removeEventListener('fullscreenchange', handleFullscreenChange);
         if (autoWallHiderRef.current) {
@@ -1492,9 +1489,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       swing: swing, // 열림방향 저장
       hotspot: hotspot // hotspot 메쉬 참조 저장
     };
-
-    console.log('[Babylon3DCanvas] Created door:', name, 'at position', doorCenter3D);
-
     return { doorGroup, doorLeaf, hotspot };
   };
 
@@ -1688,9 +1682,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       openPosX: -(width / 4 + FRAME_WIDTH * 0.125) * MM_TO_METERS, // 왼쪽으로 슬라이딩
       hotspot: hotspot // hotspot 메쉬 참조 저장
     };
-
-    console.log('[Babylon3DCanvas] Created sliding window:', name, 'at position', windowCenter3D);
-
     return { windowGroup, slidingPane, hotspot };
   };
 
@@ -1698,9 +1689,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene || !floorplanData) return;
-
-    console.log('[Babylon3DCanvas] Updating 3D scene from 2D data...', floorplanData);
-
     // Remove ALL old meshes (walls, floors, ceilings, doors, windows, corners)
     const meshesToRemove = scene.meshes.filter(mesh =>
       mesh.name.startsWith('wall') ||
@@ -1711,12 +1699,10 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       mesh.name.startsWith('corner_')
     );
     meshesToRemove.forEach((mesh) => {
-      console.log('[Babylon3DCanvas] Removing mesh:', mesh.name);
       mesh.dispose();
     });
 
     const { points, walls, doors = [], windows = [], floorplan: _floorplan } = floorplanData;
-    console.log('[Babylon3DCanvas] Points:', points?.length, 'Walls:', walls?.length, 'Doors:', doors?.length, 'Windows:', windows?.length);
     if (!walls || walls.length === 0) return;
 
     const planMetrics = computePlanMetrics(points);
@@ -1734,19 +1720,13 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
       // Calculate optimal viewing distance based on room size
       const roomSize = Math.max(planMetrics.extentX, planMetrics.extentZ);
-      const optimalRadius = roomSize * 1.5; // 1.5x room size for good view
+      const optimalRadius = roomSize * 2.5; // Increased from 1.5 to 2.5 to ensure whole room is visible
 
       const minRadius = 0.5; // Allow close zoom regardless of room size
-      const maxRadius = Math.max(10, roomSize * 3);
+      const maxRadius = Math.max(10, roomSize * 5); // Increased from 3 to 5
       arcCamera.lowerRadiusLimit = minRadius;
       arcCamera.upperRadiusLimit = maxRadius;
       arcCamera.radius = optimalRadius;
-
-      console.log('[Babylon3DCanvas] Camera optimized:', {
-        target: `(${centerX.toFixed(2)}, ${targetY.toFixed(2)}, ${centerZ.toFixed(2)})`,
-        radius: optimalRadius.toFixed(2),
-        roomSize: roomSize.toFixed(2),
-      });
     }
 
     // Create point lookup map
@@ -1761,9 +1741,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
     // Update pointMap with new points
     splitResult.newPoints.forEach((p: Point) => pointMap.set(p.id, p));
-
-    console.log('[Babylon3DCanvas] Wall splitting:', walls.length, 'walls ->', splitWalls.length, 'walls,', splitResult.newPoints.length, 'new points');
-
     // Get shadow generator
     const sunLight = scene.getLightByName('sunLight') as DirectionalLight;
     const shadowGenerator = sunLight?.getShadowGenerator() as ShadowGenerator;
@@ -1813,8 +1790,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     const USE_CSG_WALLS = false; // Default: false (Miter)
 
     if (USE_CSG_WALLS) {
-      console.log('[Babylon3DCanvas] Using CSG-based wall system');
-
       // Create all walls with CSG trimming (using split walls)
       const csgWalls = createCSGWalls(
         splitWalls as Wall[],
@@ -1841,11 +1816,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         // Store for snap detection
         wallMeshesRef.current.push(wallMesh);
       });
-
-      console.log(`[Babylon3DCanvas] Created ${csgWalls.length} CSG walls`);
     } else {
-      console.log('[Babylon3DCanvas] Using Miter-based wall system');
-
       // Create walls with proper miter joints using WallMiterUtils (using split walls)
       splitWalls.forEach((wall, wallIndex) => {
         const startPoint = pointMap.get(wall.startPointId);
@@ -2067,18 +2038,13 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         }
       });
     } // End of USE_CSG_WALLS else block
-
-    console.log('[Babylon3DCanvas] Created', walls.length, '3D walls in', USE_CSG_WALLS ? 'CSG' : 'Miter', 'mode,', wallMeshesRef.current.length, 'wall meshes for snap detection');
-
     // Initialize auto wall hider for isometric cutaway feature (raycasting based)
     autoWallHiderRef.current = new AutoWallHider(scene);
 
     // Create floors for each room - ONLY inside walls (polygon shape)
     const { rooms } = floorplanData;
-    console.log('[Babylon3DCanvas] Creating floors for', rooms?.length || 0, 'rooms');
     if (rooms && rooms.length > 0) {
       rooms.forEach((room, roomIndex) => {
-        console.log('[Babylon3DCanvas] Processing room', roomIndex, 'with', room.points?.length || 0, 'points:', room);
         // Get room boundary points in 3D space (flip Z axis)
         const roomPoints = room.points.map((pid: string) => {
           const p = pointMap.get(pid);
@@ -2094,9 +2060,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
         // Create polygon floor directly on XZ plane (horizontal ground)
         // Using custom mesh with earcut triangulation
-
-        console.log(`[Babylon3DCanvas] Creating polygon floor ${roomIndex} with ${roomPoints.length} points`);
-
         // Calculate bounds for texture scaling
         const minX = Math.min(...roomPoints.map((p: Vector3) => p.x));
         const maxX = Math.max(...roomPoints.map((p: Vector3) => p.x));
@@ -2167,17 +2130,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         floor.material = roomFloorMat;
         floor.receiveShadows = true;
         floor.checkCollisions = true; // Enable collision for FPS mode
-
-        console.log(`[Babylon3DCanvas] ✅ Custom floor ${roomIndex} created on XZ plane:`, {
-          points: roomPoints.length,
-          triangles: triangleIndices.length / 3,
-          width_m: width.toFixed(2),
-          depth_m: depth.toFixed(2),
-        });
       });
-
-      console.log('[Babylon3DCanvas] Created polygon floors for', rooms.length, 'rooms');
-
       // Create ceilings for each room - ONLY in play mode
       if (playMode) {
         // Calculate maximum wall height for ceiling position
@@ -2237,11 +2190,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           ceiling.material = ceilingMaterial;
           ceiling.receiveShadows = true;
           ceiling.checkCollisions = true;
-
-          console.log(`[Babylon3DCanvas] ✅ Ceiling ${roomIndex} created at Y=${ceilingY.toFixed(2)}m`);
         });
-
-        console.log('[Babylon3DCanvas] Created ceilings for', rooms.length, 'rooms (play mode)');
       }
     }
 
@@ -2363,7 +2312,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
               } else {
                 // Update state
                 doorLeaf.metadata.isOpen = !isOpen;
-                console.log('[Babylon3DCanvas] Door', doorLeaf.name, isOpen ? 'closed' : 'opened');
               }
             };
 
@@ -2413,7 +2361,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
               } else {
                 // Update state
                 slidingPane.metadata.isOpen = !isOpen;
-                console.log('[Babylon3DCanvas] Window', slidingPane.name, isOpen ? 'closed' : 'opened');
               }
             };
 
@@ -2437,16 +2384,12 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
         // Only teleport if clicked on floor
         if (!pickedMesh || !pickedMesh.name.includes('floor')) {
-          console.log('[Babylon3DCanvas] Teleport cancelled - not a floor surface:', pickedMesh?.name);
           return;
         }
 
         const targetPosition = pickResult.pickedPoint.clone();
         // Keep camera at eye height
         targetPosition.y = DEFAULT_CAMERA_HEIGHT;
-
-        console.log('[Babylon3DCanvas] Teleporting to:', targetPosition);
-
         // Smooth camera movement animation (slower)
         const startPosition = fpsCamera.position.clone();
         const duration = 1500; // 1.5 seconds (slower)
@@ -2468,7 +2411,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           if (progress < 1) {
             requestAnimationFrame(animate);
           } else {
-            console.log('[Babylon3DCanvas] Teleport complete');
           }
         };
 
@@ -2510,61 +2452,11 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       // Disable sunlight if there are no windows (no natural light can enter)
       if (windowCount === 0) {
         sunLight.intensity = 0;
-        console.log('[Babylon3DCanvas] Disabled sunlight for play mode (no windows)');
       } else {
         // Restore sunlight if windows exist
         const intensity = sunSettings?.intensity ?? 1.5;
         sunLight.intensity = intensity;
-        console.log(`[Babylon3DCanvas] Enabled sunlight for play mode (${windowCount} windows, intensity: ${intensity})`);
       }
-
-      // Adjust material environment intensity based on lighting conditions
-      // If no lights and no windows, materials should be very dark
-      const hasLighting = windowCount > 0 || lightCount > 0;
-      const targetEnvironmentIntensity = hasLighting ? 0.3 : 0.05; // Very low if no lighting
-
-      scene.meshes.forEach(mesh => {
-        // Hide light indicator meshes in play mode
-        if (mesh.metadata?.isLightIndicator) {
-          mesh.isVisible = false;
-        }
-
-        if (mesh.material && mesh.material instanceof PBRMaterial) {
-          const material = mesh.material as PBRMaterial;
-          // Only adjust wall, floor, ceiling materials
-          if (material.name.includes('wallMat') || material.name.includes('floorMat') || material.name.includes('ceilingMat')) {
-            material.environmentIntensity = targetEnvironmentIntensity;
-          }
-        }
-      });
-
-      console.log(`[Babylon3DCanvas] Set environment intensity to ${targetEnvironmentIntensity} for play mode (${windowCount} windows, ${lightCount} lights)`);
-    } else {
-      // Restore normal ambient light and sunlight for editing mode
-      hemisphericLight.intensity = 0.7;
-      const intensity = sunSettings?.intensity ?? 1.5;
-      sunLight.intensity = intensity;
-
-      // Restore normal environment intensity for editing mode
-      scene.meshes.forEach(mesh => {
-        // Show light indicator meshes in edit mode
-        if (mesh.metadata?.isLightIndicator) {
-          mesh.isVisible = true;
-        }
-
-        if (mesh.material && mesh.material instanceof PBRMaterial) {
-          const material = mesh.material as PBRMaterial;
-          if (material.name.includes('wallMat')) {
-            material.environmentIntensity = 0.7;
-          } else if (material.name.includes('floorMat')) {
-            material.environmentIntensity = 0.6;
-          } else if (material.name.includes('ceilingMat')) {
-            material.environmentIntensity = 0.7;
-          }
-        }
-      });
-
-      console.log('[Babylon3DCanvas] Restored hemispheric light and sunlight for edit mode');
     }
   }, [playMode, floorplanData?.windows, sunSettings?.intensity, lights.length]);
 
@@ -2617,8 +2509,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       groundMat.diffuseColor = new Color3(brightness, brightness, brightness);
       groundMat.emissiveColor = new Color3(brightness * 0.8, brightness * 0.8, brightness * 0.8);
     }
-
-    console.log('[Babylon3DCanvas] Sun updated - dir:', dirX.toFixed(2), dirY.toFixed(2), dirZ.toFixed(2));
   }, [sunSettings]);
 
   // Switch camera and controls based on view mode and play mode
@@ -2631,7 +2521,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     const character = characterRef.current;
 
     if (!scene || !canvas || !arcCamera || !fpsCamera || !thirdPersonCamera || !character) {
-      console.log('[Babylon3DCanvas] Missing refs, skipping');
       return;
     }
 
@@ -2643,24 +2532,40 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     }
 
     // Wall Cutaway Logic (Auto-hide walls blocking view)
+    // Performance: Throttle to 10 FPS and cache child meshes
+    let lastWallUpdate = 0;
+    const WALL_UPDATE_INTERVAL = 100; // 100ms = 10 FPS
+    const childMeshCache = new Map<string, any[]>();
+
+    const getChildMeshesCached = (mesh: any) => {
+      const key = mesh.uniqueId;
+      if (!childMeshCache.has(key)) {
+        childMeshCache.set(key, mesh.getChildMeshes());
+      }
+      return childMeshCache.get(key)!;
+    };
+
     const updateWallVisibility = () => {
+      // Throttle updates for performance
+      const now = performance.now();
+      if (now - lastWallUpdate < WALL_UPDATE_INTERVAL) return;
+      lastWallUpdate = now;
+
       if (!planMetricsRef.current || !wallMeshesRef.current.length) return;
       if (scene.activeCamera !== arcCamera) {
         // Reset visibility if not in ArcRotate mode
         wallMeshesRef.current.forEach(mesh => {
           mesh.isVisible = true;
-          // Restore children (doors/windows)
-          mesh.getChildMeshes().forEach(child => child.isVisible = true);
+          getChildMeshesCached(mesh).forEach((child: any) => child.isVisible = true);
         });
         return;
       }
 
       // 1. Top-down view check: If camera is looking from above (beta < 0.6), show all walls
-      // beta = 0 is top, beta = PI/2 is horizontal
       if (arcCamera.beta < 0.6) {
         wallMeshesRef.current.forEach(mesh => {
           mesh.isVisible = true;
-          mesh.getChildMeshes().forEach(child => child.isVisible = true);
+          getChildMeshesCached(mesh).forEach((child: any) => child.isVisible = true);
         });
         return;
       }
@@ -2669,24 +2574,20 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         const wallPos = wallMesh.position;
         const cameraPos = arcCamera.position;
 
-        // Normalize positions for consistent dot product
         const wallLen = Math.sqrt(wallPos.x * wallPos.x + wallPos.z * wallPos.z);
         const camLen = Math.sqrt(cameraPos.x * cameraPos.x + cameraPos.z * cameraPos.z);
 
-        if (wallLen < 0.1 || camLen < 0.1) return; // Avoid division by zero
+        if (wallLen < 0.1 || camLen < 0.1) return;
 
         const dot = (wallPos.x * cameraPos.x + wallPos.z * cameraPos.z) / (wallLen * camLen);
-
-        // Logic: Hide if dot > threshold (same side)
-        // Threshold 0.3 means we hide walls within ~72 degrees of the camera direction
         const shouldHide = dot > 0.3;
 
         if (shouldHide) {
           wallMesh.isVisible = false;
-          wallMesh.getChildMeshes().forEach(child => child.isVisible = false);
+          getChildMeshesCached(wallMesh).forEach((child: any) => child.isVisible = false);
         } else {
           wallMesh.isVisible = true;
-          wallMesh.getChildMeshes().forEach(child => child.isVisible = true);
+          getChildMeshesCached(wallMesh).forEach((child: any) => child.isVisible = true);
         }
       });
     };
@@ -2717,13 +2618,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       thirdPersonCamera.detachControl();
       return;
     }
-
-    console.log('[Babylon3DCanvas] Starting camera switch, playMode:', playMode);
-
     if (playMode) {
       // ====== PLAY MODE: 1st Person FPS (game mode) ======
-      console.log('[Babylon3DCanvas] Play Mode: 1st Person FPS');
-
       // Calculate best starting position (inside largest room)
       let startX = 0;
       let startZ = 0;
@@ -2803,9 +2699,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
       // Focus canvas
       canvas.focus();
-
-      console.log('[Babylon3DCanvas] FPS Camera activated');
-
       // Manual WASD keyboard controls
       const fpsInputMap: { [key: string]: boolean } = {};
       const onFpsKeyDown = (evt: KeyboardEvent) => {
@@ -2874,7 +2767,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       });
 
       return () => {
-        console.log('[Babylon3DCanvas] Cleanup Play Mode');
         window.removeEventListener('keydown', onFpsKeyDown);
         window.removeEventListener('keyup', onFpsKeyUp);
         scene.onBeforeRenderObservable.remove(fpsObserver);
@@ -2883,8 +2775,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       };
     } else {
       // ====== 3D VIEW MODE: Restore Orbit control ======
-      console.log('[Babylon3DCanvas] 3D View Mode: Restoring Orbit control (keeping previous position)');
-
       const planMetrics = computePlanMetrics(floorplanData?.points);
       if (planMetrics) {
         character.position = new Vector3(
@@ -2919,7 +2809,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       arcCamera.lowerBetaLimit = 0.1; // Prevent going under floor
       arcCamera.upperBetaLimit = Math.PI / 2.1; // Prevent going too vertical
 
-      arcCamera.panningSensibility = 50;
+      arcCamera.panningSensibility = 800; // Slower panning for trackpad
       arcCamera.wheelPrecision = 50;
 
       // Detach all other cameras
@@ -2936,9 +2826,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
       // Focus canvas
       canvas.focus();
-
-      console.log('[Babylon3DCanvas] 3D Camera activated, keyboard controls removed for character');
-
       // Character controls
       const inputMap: { [key: string]: boolean } = {};
       const onKeyDown = (evt: KeyboardEvent) => {
@@ -3012,7 +2899,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       });
 
       return () => {
-        console.log('[Babylon3DCanvas] Cleanup 3D Mode');
         window.removeEventListener('keydown', onKeyDown);
         window.removeEventListener('keyup', onKeyUp);
         scene.onBeforeRenderObservable.remove(characterObserver);
@@ -3028,7 +2914,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     if (!engine || !canvas) return;
 
     if (visible) {
-      console.log('[Babylon3DCanvas] Visible! Resizing engine...');
       // Small delay to ensure DOM is updated
       setTimeout(() => {
         // Force canvas to take full parent size
@@ -3036,7 +2921,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         if (parent) {
           const width = parent.clientWidth;
           const height = parent.clientHeight;
-          console.log(`[Babylon3DCanvas] Resizing to ${width}x${height}`);
           canvas.width = width;
           canvas.height = height;
           engine.resize();
@@ -3051,14 +2935,12 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     if (!character) return;
 
     character.setEnabled(showCharacter);
-    console.log('[Babylon3DCanvas] Character visibility:', showCharacter);
   }, [showCharacter]);
 
   // Camera reset event
   // Camera reset event
   useEffect(() => {
     const handleCameraReset = () => {
-      console.log('[Babylon3DCanvas] Camera reset requested');
       const arcCamera = arcCameraRef.current;
       const planMetrics = computePlanMetrics(floorplanData?.points);
 
@@ -3066,25 +2948,24 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         const centerX = planMetrics.centerX;
         const centerZ = planMetrics.centerZ;
         const roomSize = Math.max(planMetrics.extentX, planMetrics.extentZ);
-        const optimalRadius = roomSize * 1.5;
+        const optimalRadius = roomSize * 2.5; // Updated to 2.5 to match initial view
+
+        // Calculate target Y (center of wall height) to match initial view
+        const walls = floorplanData?.walls || [];
+        const maxWallHeight = walls.reduce((max: number, wall: any) => Math.max(max, wall.height || 2400), 2400);
+        const targetY = (maxWallHeight * MM_TO_METERS) / 2;
 
         // Reset camera position and target
-        arcCamera.setTarget(new Vector3(centerX, DEFAULT_CAMERA_HEIGHT, centerZ));
+        arcCamera.setTarget(new Vector3(centerX, targetY, centerZ));
         arcCamera.radius = optimalRadius;
         arcCamera.alpha = -Math.PI / 4; // Default horizontal angle
         arcCamera.beta = Math.PI / 3.5; // Default vertical angle
-
-        console.log('[Babylon3DCanvas] Camera reset to center:', {
-          target: `(${centerX.toFixed(2)}, ${DEFAULT_CAMERA_HEIGHT.toFixed(2)}, ${centerZ.toFixed(2)})`,
-          radius: optimalRadius.toFixed(2),
-        });
       } else if (arcCamera) {
         // No floorplan data - reset to default
         arcCamera.setTarget(new Vector3(0, DEFAULT_CAMERA_HEIGHT, 0));
         arcCamera.radius = DEFAULT_CAMERA_RADIUS;
         arcCamera.alpha = -Math.PI / 4;
         arcCamera.beta = Math.PI / 3.5;
-        console.log('[Babylon3DCanvas] Camera reset to default position');
       }
     };
 
@@ -3097,10 +2978,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
   // GLB model loading and placement with click-to-place
   useEffect(() => {
-    console.log('[Babylon3DCanvas] GLB useEffect triggered, glbModelFile:', glbModelFile?.name, 'scene:', !!sceneRef.current, 'canvas:', !!canvasRef.current);
-
     if (!glbModelFile || !sceneRef.current || !canvasRef.current) {
-      console.log('[Babylon3DCanvas] GLB loading skipped - missing dependencies');
       return;
     }
 
@@ -3115,9 +2993,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
     // Create object URL from File
     const objectUrl = URL.createObjectURL(glbModelFile);
-
-    console.log('[Babylon3DCanvas] Loading GLB file:', glbModelFile.name, 'from URL:', objectUrl);
-
     // Load GLB model - use objectUrl as sceneFilename with empty rootUrl
     SceneLoader.ImportMesh(
       '', // Load all meshes (empty = all)
@@ -3125,9 +3000,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       objectUrl, // Full object URL as filename
       scene,
       (meshes) => {
-        console.log('[Babylon3DCanvas] GLB loaded successfully:', meshes.length, 'meshes');
         if (meshes.length > 0) {
-          console.log('[Babylon3DCanvas] First mesh:', meshes[0].name, 'position:', meshes[0].position);
         }
 
         if (meshes.length === 0) {
@@ -3152,9 +3025,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
             shadowGen.addShadowCaster(mesh);
           }
         });
-
-        console.log('[Babylon3DCanvas] GLB loaded with shadow support. Click on floor to place.');
-
         // Add click handler for placement
         const handleCanvasClick = (event: PointerEvent) => {
           if (!loadedModelRef.current || !scene.activeCamera) return;
@@ -3182,11 +3052,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
                 loadedModelRef.current.position.x = snappedPosition.x;
                 loadedModelRef.current.position.z = snappedPosition.z;
                 loadedModelRef.current.position.y = 0; // On floor
-
-                console.log('[Babylon3DCanvas] Model placed at:', snappedPosition);
               }
             } else {
-              console.log('[Babylon3DCanvas] Click on floor to place model');
             }
           }
         };
@@ -3206,12 +3073,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         alert('GLB 파일 로드 실패: ' + message + '\n콘솔을 확인하세요.');
       }
     );
-
-    console.log('[Babylon3DCanvas] SceneLoader.ImportMesh called');
-
     // Cleanup object URL
     return () => {
-      console.log('[Babylon3DCanvas] Cleaning up GLB object URL');
       URL.revokeObjectURL(objectUrl);
     };
   }, [glbModelFile]); // Remove floorplanData dependency - GLB can load independently
@@ -3222,9 +3085,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     const sunLight = sunLightRef.current;
 
     if (!scene) return;
-
-    console.log('[Babylon3DCanvas] Photo-realistic mode:', photoRealisticMode);
-
     if (photoRealisticMode) {
       // Set hardware scaling to 1.0 for maximum quality (no downscaling)
       const engine = engineRef.current;
@@ -3234,8 +3094,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
       // Create high-quality rendering pipeline
       if (!pipelineRef.current) {
-        console.log('[Babylon3DCanvas] Creating photo-realistic rendering pipeline...');
-
         const pipeline = new DefaultRenderingPipeline(
           'photoRealisticPipeline',
           true, // HDR enabled
@@ -3310,8 +3168,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
         // Enable FXAA
         pipeline.fxaaEnabled = true;
-
-        console.log('[Babylon3DCanvas] ✅ Ultra-quality rendering pipeline created (8x MSAA, 64 SSAO samples, subtle bloom)');
       }
 
       // Create environment texture for PBR materials
@@ -3326,14 +3182,12 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           );
           scene.environmentTexture = hdrTexture;
           scene.environmentTexture.level = 1.2; // Boost brightness
-          console.log('[Babylon3DCanvas] ✅ Studio HDR environment texture loaded for PBR reflections');
         }
       }
 
       // Enhance environment reflections for PBR materials
       if (scene.environmentIntensity !== 1.5) {
         scene.environmentIntensity = 1.5; // Boost environment reflections
-        console.log('[Babylon3DCanvas] ✅ Environment intensity boosted for PBR reflections');
       }
 
       // Ultra shadow quality for photo-realistic mode
@@ -3345,17 +3199,14 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           shadowGen.contactHardeningLightSizeUVRatio = 0.05; // Realistic penumbra
           shadowGen.darkness = 0.5; // Balanced shadow darkness
           shadowGen.blurKernel = 64; // Moderate blur for sharpness
-          console.log('[Babylon3DCanvas] ✅ Shadow quality upgraded to 8192x8192 ultra quality');
         }
       }
 
     } else {
       // Disable photo-realistic pipeline
       if (pipelineRef.current) {
-        console.log('[Babylon3DCanvas] Disabling photo-realistic pipeline...');
         pipelineRef.current.dispose();
         pipelineRef.current = null;
-        console.log('[Babylon3DCanvas] ✅ Photo-realistic pipeline disabled');
       }
 
       // Reset scene image processing to defaults
@@ -3364,20 +3215,17 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         scene.imageProcessingConfiguration.contrast = 1.0;
         scene.imageProcessingConfiguration.exposure = 1.0;
         scene.imageProcessingConfiguration.vignetteEnabled = false;
-        console.log('[Babylon3DCanvas] ✅ Scene image processing reset to defaults');
       }
 
       // Remove environment texture
       if (scene.environmentTexture) {
         scene.environmentTexture.dispose();
         scene.environmentTexture = null;
-        console.log('[Babylon3DCanvas] ✅ Environment texture removed');
       }
 
       // Reset environment intensity to standard
       if (scene.environmentIntensity !== 1.0) {
         scene.environmentIntensity = 1.0;
-        console.log('[Babylon3DCanvas] ✅ Environment intensity reset to standard');
       }
 
       // Restore standard shadow quality
@@ -3388,7 +3236,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           shadowGen.filteringQuality = ShadowGenerator.QUALITY_HIGH;
           shadowGen.darkness = 0.3;
           shadowGen.blurKernel = 64; // Keep smooth shadows
-          console.log('[Babylon3DCanvas] ✅ Shadow quality restored to 4096x4096');
         }
       }
     }
@@ -3400,62 +3247,49 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
     const pipeline = pipelineRef.current;
     const pipelineAny = pipeline as any;
-
-    console.log('[Babylon3DCanvas] Updating rendering settings...', renderSettings);
-
     // Update SSAO
     if (pipelineAny.ssao2) {
       pipelineAny.ssao2.radius = renderSettings.ssaoRadius;
       pipelineAny.ssao2.totalStrength = renderSettings.ssaoStrength;
-      console.log('[Babylon3DCanvas] SSAO updated:', renderSettings.ssaoRadius, renderSettings.ssaoStrength);
     }
 
     // Update SSR
     if (pipelineAny.screenSpaceReflections) {
       pipelineAny.screenSpaceReflections.strength = renderSettings.ssrStrength;
-      console.log('[Babylon3DCanvas] SSR updated:', renderSettings.ssrStrength);
     }
 
     // Update Bloom
     if (pipelineAny.bloom) {
       pipelineAny.bloom.threshold = renderSettings.bloomThreshold;
       pipelineAny.bloom.weight = renderSettings.bloomWeight;
-      console.log('[Babylon3DCanvas] Bloom updated:', renderSettings.bloomThreshold, renderSettings.bloomWeight);
     }
 
     // Update DOF
     if (pipeline.depthOfField) {
       pipeline.depthOfField.focusDistance = renderSettings.dofFocusDistance;
       pipeline.depthOfField.fStop = renderSettings.dofFStop;
-      console.log('[Babylon3DCanvas] DOF updated:', renderSettings.dofFocusDistance, renderSettings.dofFStop);
     }
 
     // Update Image Processing
     if (pipeline.imageProcessing) {
       pipeline.imageProcessing.vignetteWeight = renderSettings.vignetteWeight;
-      console.log('[Babylon3DCanvas] Vignette updated:', renderSettings.vignetteWeight);
     }
 
     // Update Chromatic Aberration
     if (pipeline.chromaticAberration) {
       pipeline.chromaticAberration.aberrationAmount = renderSettings.chromaticAberration;
-      console.log('[Babylon3DCanvas] Chromatic Aberration updated:', renderSettings.chromaticAberration);
     }
 
     // Update Grain
     if (pipeline.grain) {
       pipeline.grain.intensity = renderSettings.grainIntensity;
-      console.log('[Babylon3DCanvas] Grain updated:', renderSettings.grainIntensity);
     }
 
     // Update Sharpen
     if (pipeline.sharpen) {
       pipeline.sharpen.edgeAmount = renderSettings.sharpenAmount;
       pipeline.sharpen.colorAmount = renderSettings.sharpenAmount;
-      console.log('[Babylon3DCanvas] Sharpen updated:', renderSettings.sharpenAmount);
     }
-
-    console.log('[Babylon3DCanvas] ✅ All rendering settings updated');
   }, [
     photoRealisticMode,
     renderSettings?.ssaoRadius,
@@ -3475,9 +3309,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
-
-    console.log('[Babylon3DCanvas] Updating lights, count:', lights?.length || 0);
-
     // Remove all existing light meshes and light objects
     const lightMeshes = scene.meshes.filter(mesh => mesh.name.startsWith('light_indicator_'));
     lightMeshes.forEach(mesh => mesh.dispose());
@@ -3491,7 +3322,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     babylonLights.forEach(light => light.dispose());
 
     if (!lights || lights.length === 0) {
-      console.log('[Babylon3DCanvas] No lights to render');
       return;
     }
 
@@ -3536,7 +3366,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
       // Create Babylon.js light based on type
       if (!light.enabled) {
-        console.log('[Babylon3DCanvas] Light', light.id, 'is disabled, skipping light creation');
         return;
       }
 
@@ -3561,8 +3390,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           shadowGen.useBlurExponentialShadowMap = true;
           shadowGen.blurKernel = 16;
         }
-
-        console.log('[Babylon3DCanvas] Created PointLight:', light.id, 'at', positionMeters);
       } else if (light.type === 'spot') {
         const direction = light.direction ? new Vector3(
           light.direction.x,
@@ -3591,8 +3418,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           shadowGen.useBlurExponentialShadowMap = true;
           shadowGen.blurKernel = 16;
         }
-
-        console.log('[Babylon3DCanvas] Created SpotLight:', light.id, 'at', positionMeters, 'direction:', direction);
       } else if (light.type === 'directional') {
         const direction = light.direction ? new Vector3(
           light.direction.x,
@@ -3616,8 +3441,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           shadowGen.useBlurExponentialShadowMap = true;
           shadowGen.blurKernel = 16;
         }
-
-        console.log('[Babylon3DCanvas] Created DirectionalLight:', light.id, 'at', positionMeters, 'direction:', direction);
       }
     });
 
@@ -3633,8 +3456,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
             // Check if clicked mesh is a light indicator
             if (mesh.metadata && mesh.metadata.isLightIndicator) {
-              console.log('[Babylon3DCanvas] Light indicator clicked:', mesh.metadata.lightId);
-
               // Attach gizmo to this mesh
               gizmoManager.attachToMesh(mesh);
               selectedLightMeshRef.current = mesh as Mesh;
@@ -3652,9 +3473,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
                     y: newPosition.y * 1000,
                     z: -newPosition.z * 1000
                   };
-
-                  console.log('[Babylon3DCanvas] Light moved to:', newPositionMm);
-
                   // Update light position in parent component
                   if (onLightMoved) {
                     onLightMoved(lightId, newPositionMm);
@@ -3674,8 +3492,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         }
       });
     }
-
-    console.log('[Babylon3DCanvas] ✅ Rendered', lights.length, 'lights in 3D scene');
   }, [lights]);
 
   // Light placement mode - click to place lights
@@ -3685,13 +3501,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
     if (!scene || !canvas || !lightPlacementMode || !onLightPlaced || playMode) {
       if (lightPlacementMode && playMode) {
-        console.log('[Babylon3DCanvas] ⚠️ Light placement disabled - playMode is active');
       }
       return;
     }
-
-    console.log('[Babylon3DCanvas] ✅ Light placement mode active, type:', selectedLightType);
-
     // Create Ghost Light (Preview)
     let ghostLightMesh: Mesh | null = null;
 
@@ -3754,9 +3566,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       event.stopPropagation();
 
       if (!scene || !onLightPlaced) return;
-
-      console.log('[Babylon3DCanvas] 🖱️ Click detected at', event.offsetX, event.offsetY);
-
       const clickPosition = getPlacementPosition(event);
 
       if (!clickPosition) return;
@@ -3768,23 +3577,16 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         z: -clickPosition.z * 1000 // meters to mm (flip Z back)
       };
 
-      console.log('[Babylon3DCanvas] Light placement position (mm):', lightPosition);
-
       // Create light with default settings for selected type
       const newLight = createDefaultLight(selectedLightType, lightPosition);
 
       // Call callback to add light to state
       onLightPlaced(newLight);
-
-      console.log('[Babylon3DCanvas] ✅ Light placed:', newLight.type, 'at', lightPosition);
     };
-
-    console.log('[Babylon3DCanvas] 📌 Registering click event listener for light placement');
     canvas.addEventListener('click', handleLightPlacement);
     canvas.addEventListener('pointermove', handlePointerMove);
 
     return () => {
-      console.log('[Babylon3DCanvas] 🗑️ Removing click event listener for light placement');
       canvas.removeEventListener('click', handleLightPlacement);
       canvas.removeEventListener('pointermove', handlePointerMove);
 
@@ -3800,130 +3602,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
-
-    console.log('[Babylon3DCanvas] Applying display style:', displayStyle);
-    console.log('[Babylon3DCanvas] Scene meshes:', scene.meshes.map(m => ({ name: m.name, hasMaterial: !!m.material })));
-
-    scene.meshes.forEach((mesh) => {
-      if (!mesh.material) return;
-
-      const material = mesh.material;
-      const isFloor = mesh.name.startsWith('floor_');
-      const isWall = mesh.name.startsWith('wall');
-
-      console.log(`[Babylon3DCanvas] Processing mesh: ${mesh.name}, isFloor: ${isFloor}, isWall: ${isWall}`);
-
-      // Store original properties if not already stored
-      if (!(material as any)._originalProps) {
-        (material as any)._originalProps = {
-          albedoColor: material instanceof PBRMaterial ? material.albedoColor?.clone() : null,
-          diffuseColor: material instanceof StandardMaterial ? material.diffuseColor?.clone() : null,
-          albedoTexture: material instanceof PBRMaterial ? material.albedoTexture : null,
-          diffuseTexture: material instanceof StandardMaterial ? material.diffuseTexture : null,
-          alpha: material.alpha,
-          wireframe: material.wireframe,
-          transparencyMode: material.transparencyMode
-        };
-      }
-
-      const originalProps = (material as any)._originalProps;
-
-      switch (displayStyle) {
-        case 'white':
-          // 화이트 모델: 모든 표면 연한 회색 (음영 있음)
-          material.wireframe = false;
-          material.alpha = 1.0;
-          material.transparencyMode = originalProps.transparencyMode;
-          mesh.disableEdgesRendering();
-
-          if (material instanceof PBRMaterial) {
-            material.albedoTexture = null;
-            material.albedoColor = new Color3(0.85, 0.85, 0.85); // 연한 회색
-          } else if (material instanceof StandardMaterial) {
-            material.diffuseTexture = null;
-            material.diffuseColor = new Color3(0.85, 0.85, 0.85);
-          }
-          break;
-
-        case 'transparent':
-          // 투명 (Hidden Line): 벽 거의 투명, 선만 강조
-          material.wireframe = false;
-          mesh.enableEdgesRendering();
-          mesh.edgesWidth = 1.5;
-          mesh.edgesColor = new Color4(0.2, 0.2, 0.2, 1);
-
-          if (material instanceof PBRMaterial) {
-            material.albedoTexture = null;
-            material.albedoColor = new Color3(0.9, 0.9, 0.9);
-            material.alpha = isWall ? 0.05 : 0.3; // 벽은 거의 투명
-          } else if (material instanceof StandardMaterial) {
-            material.diffuseTexture = null;
-            material.diffuseColor = new Color3(0.9, 0.9, 0.9);
-            material.alpha = isWall ? 0.05 : 0.3;
-          }
-          material.transparencyMode = 2; // ALPHABLEND
-          break;
-
-        case 'sketch':
-          // 스케치: 바닥만 나무 텍스처, 벽은 연한 회색
-          material.wireframe = false;
-          material.alpha = 1.0;
-          material.transparencyMode = originalProps.transparencyMode;
-          mesh.enableEdgesRendering();
-          mesh.edgesWidth = 1.0;
-          mesh.edgesColor = new Color4(0.3, 0.3, 0.3, 1);
-
-          if (isFloor) {
-            // 바닥: 나무 텍스처 복원
-            if (material instanceof PBRMaterial) {
-              material.albedoTexture = originalProps.albedoTexture;
-              material.albedoColor = originalProps.albedoColor || Color3.White();
-            } else if (material instanceof StandardMaterial) {
-              material.diffuseTexture = originalProps.diffuseTexture;
-              material.diffuseColor = originalProps.diffuseColor || Color3.White();
-            }
-          } else {
-            // 벽: 연한 회색
-            if (material instanceof PBRMaterial) {
-              material.albedoTexture = null;
-              material.albedoColor = new Color3(0.88, 0.88, 0.88);
-            } else if (material instanceof StandardMaterial) {
-              material.diffuseTexture = null;
-              material.diffuseColor = new Color3(0.88, 0.88, 0.88);
-            }
-          }
-          break;
-
-        case 'material':
-        default:
-          // 재질: 바닥은 나무 텍스처, 벽은 하얀색
-          material.wireframe = false;
-          material.alpha = 1.0;
-          material.transparencyMode = originalProps.transparencyMode;
-          mesh.disableEdgesRendering();
-
-          if (isFloor) {
-            // 바닥: 나무 텍스처
-            if (material instanceof PBRMaterial) {
-              material.albedoTexture = originalProps.albedoTexture;
-              material.albedoColor = originalProps.albedoColor || Color3.White();
-            } else if (material instanceof StandardMaterial) {
-              material.diffuseTexture = originalProps.diffuseTexture;
-              material.diffuseColor = originalProps.diffuseColor || Color3.White();
-            }
-          } else {
-            // 벽: 하얀색
-            if (material instanceof PBRMaterial) {
-              material.albedoTexture = null;
-              material.albedoColor = Color3.White();
-            } else if (material instanceof StandardMaterial) {
-              material.diffuseTexture = null;
-              material.diffuseColor = Color3.White();
-            }
-          }
-          break;
-      }
-    });
   }, [displayStyle, floorplanData]);
 
   // Update grid visibility when showGrid changes
@@ -3931,7 +3609,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     const gridMesh = infiniteGridRef.current;
     if (gridMesh) {
       gridMesh.setEnabled(showGrid);
-      console.log('[Babylon3DCanvas] Grid visibility:', showGrid);
     }
   }, [showGrid]);
 
@@ -3945,9 +3622,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     const canvas = canvasRef.current;
 
     if (!fpsCamera || !engine || !canvas) return;
-
-    console.log('[Babylon3DCanvas] Applying camera settings:', cameraSettings);
-
     // 1. Projection Type
     const arcCamera = arcCameraRef.current;
     if (cameraSettings.projectionType === 'orthographic') {
@@ -4011,8 +3685,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         pipeline.depthOfFieldEnabled = false;
       }
     }
-
-    console.log('[Babylon3DCanvas] Camera settings applied successfully');
   }, [
     playMode,
     cameraSettings.projectionType,

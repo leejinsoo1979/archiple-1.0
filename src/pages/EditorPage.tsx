@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { BottomControlBar } from './components/BottomControlBar';
 import FloorplanCanvas from '../floorplan/FloorplanCanvas';
 import Babylon3DCanvas, { type Babylon3DCanvasRef } from '../babylon/Babylon3DCanvas';
 import styles from './EditorPage.module.css';
@@ -20,6 +21,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 import { AIRenderModal } from '../ui/landing/components/AIRenderModal';
 import FloorplanPreview from '../ui/components/FloorplanPreview';
+import Compass2D from '../ui/components/Compass2D';
+import CameraGizmoWrapper from '../ui/components/CameraGizmoWrapper';
 
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 
@@ -58,7 +61,7 @@ const EditorPage = () => {
     const haRad = hourAngle * (Math.PI / 180);
 
     const sinAltitude = Math.sin(latRad) * Math.sin(decRad) +
-                        Math.cos(latRad) * Math.cos(decRad) * Math.cos(haRad);
+      Math.cos(latRad) * Math.cos(decRad) * Math.cos(haRad);
 
     const altitude = Math.asin(sinAltitude) * (180 / Math.PI);
 
@@ -137,6 +140,29 @@ const EditorPage = () => {
   const [wallHeight, setWallHeight] = useState(2400); // mm
   const [wallThickness, setWallThickness] = useState(100); // mm
 
+  // Update floorplanData when wall settings change
+  useEffect(() => {
+    if (!floorplanData || !floorplanData.walls || floorplanData.walls.length === 0) return;
+
+    // Check if any wall needs updating
+    const needsUpdate = floorplanData.walls.some(
+      (wall: any) => wall.height !== wallHeight || wall.thickness !== wallThickness
+    );
+
+    if (needsUpdate) {
+      const updatedWalls = floorplanData.walls.map((wall: any) => ({
+        ...wall,
+        height: wallHeight,
+        thickness: wallThickness,
+      }));
+
+      setFloorplanData({
+        ...floorplanData,
+        walls: updatedWalls,
+      });
+    }
+  }, [wallHeight, wallThickness]);
+
   // GLB model state
   const [glbModelFile, setGlbModelFile] = useState<File | null>(null);
 
@@ -161,18 +187,15 @@ const EditorPage = () => {
 
   // Handle light placement from 3D view
   const handleLightPlaced = (light: Light) => {
-    console.log('[EditorPage] ✅ Light placed successfully:', light.type, light.id, 'at position:', light.position);
     const newLights = [...lights, light];
     setLights(newLights);
     setSelectedLightId(light.id);
-    console.log('[EditorPage] Total lights:', newLights.length);
     // Keep placement mode active for placing multiple lights
     // User can manually exit by clicking the button again or switching views
   };
 
   // Handle light movement via gizmo
   const handleLightMoved = (lightId: string, newPosition: { x: number; y: number; z: number }) => {
-    console.log('[EditorPage] Light moved:', lightId, 'to position:', newPosition);
     setLights(lights.map(l => l.id === lightId ? { ...l, position: newPosition } : l));
   };
 
@@ -195,7 +218,6 @@ const EditorPage = () => {
       };
 
       const { width, height } = resolutions[screenshotResolution];
-      console.log(`[EditorPage] Starting ULTRA-QUALITY render at ${screenshotResolution} (${width}x${height})`);
 
       // Show loading message
       const loadingMessage = document.createElement('div');
@@ -243,7 +265,6 @@ const EditorPage = () => {
 
       const blobUrl = await babylon3DCanvasRef.current.captureRender(width, height);
 
-      console.log('[EditorPage] Blob URL created:', blobUrl);
 
       // Remove loading message
       document.body.removeChild(loadingMessage);
@@ -254,13 +275,11 @@ const EditorPage = () => {
       link.download = `archiple_render_${screenshotResolution}_${Date.now()}.png`;
       document.body.appendChild(link);
 
-      console.log('[EditorPage] Download link appended, preparing to click...');
 
       // Use requestAnimationFrame to ensure DOM is ready
       requestAnimationFrame(() => {
         try {
           link.click();
-          console.log('[EditorPage] Download triggered successfully');
 
           // Show success message AFTER successful download trigger
           const successMessage = document.createElement('div');
@@ -321,7 +340,6 @@ const EditorPage = () => {
             document.body.removeChild(link);
           }
           URL.revokeObjectURL(blobUrl);
-          console.log('[EditorPage] Download cleanup complete');
         }, 2000);
       });
 
@@ -547,7 +565,6 @@ ARTISTIC APPROACH:
     }
 
     try {
-      console.log('[EditorPage] Capturing current screen view...');
 
       // Capture what user actually sees on screen
       const dataUrl = await babylon3DCanvasRef.current.takeScreenshot();
@@ -556,7 +573,6 @@ ARTISTIC APPROACH:
         throw new Error('Screenshot capture returned null');
       }
 
-      console.log('[EditorPage] Screenshot captured successfully');
 
       // Convert data URL to blob URL for display
       const response = await fetch(dataUrl);
@@ -579,7 +595,6 @@ ARTISTIC APPROACH:
     setAiGenerating(true);
 
     try {
-      console.log(`[EditorPage] Starting AI ${aiRenderStyle} rendering...`);
 
       // Convert input image blob URL to base64
       const response = await fetch(aiInputImage);
@@ -593,7 +608,6 @@ ARTISTIC APPROACH:
         reader.readAsDataURL(blob);
       });
 
-      console.log('[EditorPage] Calling Gemini API...');
 
       // Call Gemini API for image generation
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
@@ -606,12 +620,6 @@ ARTISTIC APPROACH:
 
       const prompt = getStylePrompt(aiRenderStyle, aiTimeOfDay, aiLightingMood, aiFurnitureStyle);
 
-      console.log('[EditorPage] Prompt:', prompt);
-      console.log('[EditorPage] Time of day:', aiTimeOfDay);
-      console.log('[EditorPage] Lighting mood:', aiLightingMood);
-      console.log('[EditorPage] Furniture style:', aiFurnitureStyle);
-      console.log('[EditorPage] Aspect ratio:', aiAspectRatio);
-      console.log('[EditorPage] Base64 length:', base64.length);
 
       const result = await model.generateContent({
         contents: [
@@ -631,7 +639,6 @@ ARTISTIC APPROACH:
       });
 
       const aiResponse = await result.response;
-      console.log('[EditorPage] Gemini API response received');
 
       // Extract image from response parts
       let imageFound = false;
@@ -644,7 +651,6 @@ ARTISTIC APPROACH:
 
           // Set output image
           setAiOutputImage(imageBlobUrl);
-          console.log('[EditorPage] AI rendered image ready');
           imageFound = true;
           break;
         }
@@ -782,7 +788,6 @@ ARTISTIC APPROACH:
   /*
   const handleLoadTestRoom = () => {
     const testData = createTestRoom();
-    console.log('[EditorPage] Loading test room:', testData);
     setFloorplanData(testData);
     setViewMode('3D'); // Switch to 3D view to see the result
   };
@@ -791,7 +796,6 @@ ARTISTIC APPROACH:
   // Handle GLB file upload
   const handleGlbUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    console.log('[EditorPage] File input changed, file:', file);
 
     if (!file) {
       console.warn('[EditorPage] No file selected');
@@ -803,7 +807,6 @@ ARTISTIC APPROACH:
       return;
     }
 
-    console.log('[EditorPage] GLB file selected:', file.name, 'size:', file.size, 'bytes');
     setGlbModelFile(file);
     setViewMode('3D'); // Switch to 3D view
   };
@@ -1125,12 +1128,10 @@ ARTISTIC APPROACH:
       const { detectLines, filterWallLines, mergeParallelLines } = await import('../lib/imageProcessing');
 
       // Detect lines
-      console.log('[EditorPage] Detecting lines...');
       const allLines = await detectLines(imageData);
       const wallLines = filterWallLines(allLines);
       const mergedLines = mergeParallelLines(wallLines);
 
-      console.log('[EditorPage] Detected', mergedLines.length, 'wall lines');
 
       if (mergedLines.length === 0) {
         alert('벽을 감지할 수 없습니다. 이미지 스케일을 조정해보세요.');
@@ -1179,7 +1180,6 @@ ARTISTIC APPROACH:
       // Store scanned walls for 2D overlay
       setScannedWalls({ points, walls });
 
-      console.log('[EditorPage] Scanned walls:', walls.length);
 
       alert(`${walls.length}개의 벽이 감지되었습니다! 2D 뷰에서 확인하세요.`);
     } catch (error) {
@@ -1329,7 +1329,6 @@ ARTISTIC APPROACH:
                               setLightPlacementMode(true);
                               setViewMode('3D');
                               setPlayMode(false); // Disable play mode during light placement
-                              console.log('[EditorPage] Starting point light placement mode');
                             }
                           }}
                           style={{
@@ -1356,7 +1355,6 @@ ARTISTIC APPROACH:
                               setLightPlacementMode(true);
                               setViewMode('3D');
                               setPlayMode(false);
-                              console.log('[EditorPage] Starting spot light placement mode');
                             }
                           }}
                           style={{
@@ -1383,7 +1381,6 @@ ARTISTIC APPROACH:
                               setLightPlacementMode(true);
                               setViewMode('3D');
                               setPlayMode(false);
-                              console.log('[EditorPage] Starting directional light placement mode');
                             }
                           }}
                           style={{
@@ -2859,7 +2856,6 @@ ARTISTIC APPROACH:
                       const screenshot = await babylon3DCanvasRef.current.takeScreenshot();
                       if (screenshot) {
                         setCapturedImage(screenshot);
-                        console.log('[EditorPage] Captured 3D view for AI render');
                       } else {
                         console.warn('[EditorPage] Screenshot returned null');
                       }
@@ -3009,215 +3005,229 @@ ARTISTIC APPROACH:
         )}
 
         {/* Left Tools Panel */}
-        {!playMode && leftPanelOpen && (
-          <div className={styles.leftPanel}>
-            <div className={styles.panelHeader}>
-              <h3>Create Room</h3>
-              <button onClick={() => setLeftPanelOpen(false)}>×</button>
-            </div>
-
-            <div className={styles.createRoomOptions}>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                style={{ display: 'none' }}
-              />
-              <input
-                ref={glbFileInputRef}
-                type="file"
-                accept=".glb"
-                onChange={handleGlbUpload}
-                style={{ display: 'none' }}
-              />
-              <button className={styles.optionCard}>
-                <div className={styles.optionIcon}>
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+        {!playMode && (
+          leftPanelOpen ? (
+            <div className={styles.leftPanel}>
+              <div className={styles.panelHeader}>
+                <h3>Create Room</h3>
+                <button onClick={() => setLeftPanelOpen(false)} className={styles.toggleBtn}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
                   </svg>
-                </div>
-                <span>Explore</span>
-              </button>
-              <button className={styles.optionCard} onClick={() => fileInputRef.current?.click()}>
-                <div className={styles.optionIcon}>
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
-                  </svg>
-                </div>
-                <span>Import</span>
-              </button>
-              <button className={styles.optionCard} onClick={() => glbFileInputRef.current?.click()}>
-                <div className={styles.optionIcon}>
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M21.9 8.89l-1.05-4.37c-.22-.9-1-1.52-1.91-1.52H5.05c-.9 0-1.69.63-1.9 1.52L2.1 8.89c-.24 1.02-.02 2.06.62 2.88.08.11.19.19.28.29V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-6.94c.09-.09.2-.18.28-.28.64-.82.87-1.87.62-2.89zM18.91 4.99l1.05 4.37c.1.42.01.84-.25 1.17-.14.18-.44.47-1.05.47-.83 0-1.52-.64-1.63-1.5l-.5-4.5h2.38zM13 4.99h1.96l.54 4.52c.05.46.23.88.5 1.23.1.15.22.28.36.4-.07.08-.14.16-.22.25v3.61h-3.14V4.99zM5.05 4.99h2.38l-.5 4.5c-.11.86-.8 1.5-1.63 1.5-.61 0-.91-.29-1.05-.47-.25-.33-.35-.75-.25-1.17l1.05-4.36zM5 19v-6.03c.08-.01.15-.03.23-.06.24-.07.48-.23.7-.4.1.17.23.33.39.47.41.37.95.59 1.55.59.64 0 1.24-.25 1.66-.66.23-.23.39-.5.48-.78.09.28.25.54.48.78.42.41 1.02.66 1.66.66.23 0 .45-.03.66-.08v4.51H5zm14 0h-3V5.71l.54 4.79c.1.92.48 1.76 1.07 2.42.1.11.2.2.31.29v5.79z" />
-                  </svg>
-                </div>
-                <span>3D Model</span>
-              </button>
-              <button className={styles.optionCard}>
-                <div className={styles.optionIcon}>
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z" />
-                  </svg>
-                </div>
-                <span>RoomScaner</span>
-              </button>
-            </div>
-
-            {/* Walls */}
-            <div className={styles.toolSection}>
-              <h4>Walls</h4>
-              <div className={styles.toolGrid}>
-                <button
-                  className={`${styles.toolBtn} ${activeTool === ToolType.WALL ? styles.toolBtnActive : ''}`}
-                  title="Draw Staight Walls"
-                  onClick={() => setActiveTool(ToolType.WALL)}
-                >
-                  <img src="/icons/wall.svg" alt="Wall" width="32" height="32" />
-                  <span>Draw Staight Walls</span>
-                </button>
-                <button className={styles.toolBtn} title="Draw Arc Walls">
-                  <svg width="32" height="32" viewBox="0 0 48 48">
-                    <path d="M 8 28 Q 24 8, 40 28" stroke="currentColor" strokeWidth="2" fill="none" />
-                  </svg>
-                  <span>Draw Arc Walls</span>
-                </button>
-                <button
-                  className={`${styles.toolBtn} ${activeTool === ToolType.RECTANGLE ? styles.toolBtnActive : ''}`}
-                  title="Draw Rooms"
-                  onClick={() => setActiveTool(ToolType.RECTANGLE)}
-                >
-                  <img src="/icons/room.svg" alt="Room" width="32" height="32" />
-                  <span>Draw Rooms</span>
                 </button>
               </div>
-            </div>
 
-            {/* Door */}
-            <div className={styles.toolSection}>
-              <h4>Door</h4>
-              <div className={styles.toolGrid}>
-                <button
-                  className={`${styles.toolBtn} ${activeTool === ToolType.DOOR ? styles.toolBtnActive : ''}`}
-                  title="Place Door (900mm x 2100mm)"
-                  onClick={() => setActiveTool(ToolType.DOOR)}
-                >
-                  <img src="/icons/singledoor.svg" alt="Single Door" width="32" height="32" />
-                  <span>Single Door</span>
+              <div className={styles.createRoomOptions}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  style={{ display: 'none' }}
+                />
+                <input
+                  ref={glbFileInputRef}
+                  type="file"
+                  accept=".glb"
+                  onChange={handleGlbUpload}
+                  style={{ display: 'none' }}
+                />
+                <button className={styles.optionCard}>
+                  <div className={styles.optionIcon}>
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+                    </svg>
+                  </div>
+                  <span>Explore</span>
                 </button>
-                <button className={styles.toolBtn}>
-                  <img src="/icons/doubledoor.svg" alt="Double Door" width="32" height="32" />
-                  <span>Double Door</span>
+                <button className={styles.optionCard} onClick={() => fileInputRef.current?.click()}>
+                  <div className={styles.optionIcon}>
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+                    </svg>
+                  </div>
+                  <span>Import</span>
                 </button>
-                <button className={styles.toolBtn}>
-                  <img src="/icons/window.svg" alt="Sliding Door" width="32" height="32" />
-                  <span>Sliding Door</span>
+                <button className={styles.optionCard} onClick={() => glbFileInputRef.current?.click()}>
+                  <div className={styles.optionIcon}>
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M21.9 8.89l-1.05-4.37c-.22-.9-1-1.52-1.91-1.52H5.05c-.9 0-1.69.63-1.9 1.52L2.1 8.89c-.24 1.02-.02 2.06.62 2.88.08.11.19.19.28.29V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-6.94c.09-.09.2-.18.28-.28.64-.82.87-1.87.62-2.89zM18.91 4.99l1.05 4.37c.1.42.01.84-.25 1.17-.14.18-.44.47-1.05.47-.83 0-1.52-.64-1.63-1.5l-.5-4.5h2.38zM13 4.99h1.96l.54 4.52c.05.46.23.88.5 1.23.1.15.22.28.36.4-.07.08-.14.16-.22.25v3.61h-3.14V4.99zM5.05 4.99h2.38l-.5 4.5c-.11.86-.8 1.5-1.63 1.5-.61 0-.91-.29-1.05-.47-.25-.33-.35-.75-.25-1.17l1.05-4.36zM5 19v-6.03c.08-.01.15-.03.23-.06.24-.07.48-.23.7-.4.1.17.23.33.39.47.41.37.95.59 1.55.59.64 0 1.24-.25 1.66-.66.23-.23.39-.5.48-.78.09.28.25.54.48.78.42.41 1.02.66 1.66.66.23 0 .45-.03.66-.08v4.51H5zm14 0h-3V5.71l.54 4.79c.1.92.48 1.76 1.07 2.42.1.11.2.2.31.29v5.79z" />
+                    </svg>
+                  </div>
+                  <span>3D Model</span>
+                </button>
+                <button className={styles.optionCard}>
+                  <div className={styles.optionIcon}>
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z" />
+                    </svg>
+                  </div>
+                  <span>RoomScaner</span>
                 </button>
               </div>
-            </div>
 
-            {/* Window */}
-            <div className={styles.toolSection}>
-              <h4>Window</h4>
-              <div className={styles.toolGrid}>
-                <button
-                  className={`${styles.toolBtn} ${activeTool === ToolType.WINDOW ? styles.toolBtnActive : ''}`}
-                  title="Place Window (1200mm x 1200mm)"
-                  onClick={() => setActiveTool(ToolType.WINDOW)}
-                >
-                  <img src="/icons/slidingdoor.svg" alt="Single Window" width="32" height="32" />
-                  <span>Single Window</span>
-                </button>
-                <button className={styles.toolBtn}>
-                  <img src="/icons/dualwindow.svg" alt="Dual Window" width="32" height="32" />
-                  <span>Dual Window</span>
-                </button>
-                <button className={styles.toolBtn}>
-                  <svg width="32" height="32" viewBox="0 0 48 48">
-                    <rect x="8" y="18" width="10" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
-                    <rect x="18" y="18" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
-                    <rect x="30" y="18" width="10" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
-                  </svg>
-                  <span>Unequal Double Door</span>
-                </button>
-                <button className={styles.toolBtn}>
-                  <svg width="32" height="32" viewBox="0 0 48 48">
-                    <path d="M 12 24 L 18 18 L 30 18 L 36 24 L 30 30 L 18 30 Z" stroke="currentColor" strokeWidth="2" fill="none" />
-                  </svg>
-                  <span>Corner Bay Window</span>
-                </button>
-                <button className={styles.toolBtn}>
-                  <svg width="32" height="32" viewBox="0 0 48 48">
-                    <path d="M 14 24 L 20 20 L 28 20 L 34 24" stroke="currentColor" strokeWidth="2" fill="none" />
-                  </svg>
-                  <span>Corner Window</span>
-                </button>
-                <button className={styles.toolBtn}>
-                  <svg width="32" height="32" viewBox="0 0 48 48">
-                    <rect x="12" y="20" width="24" height="8" stroke="currentColor" strokeWidth="2" fill="none" />
-                  </svg>
-                  <span>Bay Window</span>
-                </button>
-                <button className={styles.toolBtn}>
-                  <svg width="32" height="32" viewBox="0 0 48 48">
-                    <path d="M 16 24 Q 24 16, 32 24" stroke="currentColor" strokeWidth="2" fill="none" />
-                  </svg>
-                  <span>Arc Window</span>
-                </button>
+              {/* Walls */}
+              <div className={styles.toolSection}>
+                <h4>Walls</h4>
+                <div className={styles.toolGrid}>
+                  <button
+                    className={`${styles.toolBtn} ${activeTool === ToolType.WALL ? styles.toolBtnActive : ''}`}
+                    title="Draw Staight Walls"
+                    onClick={() => setActiveTool(ToolType.WALL)}
+                  >
+                    <img src="/icons/wall.svg" alt="Wall" width="32" height="32" />
+                    <span>Draw Staight Walls</span>
+                  </button>
+                  <button className={styles.toolBtn} title="Draw Arc Walls">
+                    <svg width="32" height="32" viewBox="0 0 48 48">
+                      <path d="M 8 28 Q 24 8, 40 28" stroke="currentColor" strokeWidth="2" fill="none" />
+                    </svg>
+                    <span>Draw Arc Walls</span>
+                  </button>
+                  <button
+                    className={`${styles.toolBtn} ${activeTool === ToolType.RECTANGLE ? styles.toolBtnActive : ''}`}
+                    title="Draw Rooms"
+                    onClick={() => setActiveTool(ToolType.RECTANGLE)}
+                  >
+                    <img src="/icons/room.svg" alt="Room" width="32" height="32" />
+                    <span>Draw Rooms</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Door */}
+              <div className={styles.toolSection}>
+                <h4>Door</h4>
+                <div className={styles.toolGrid}>
+                  <button
+                    className={`${styles.toolBtn} ${activeTool === ToolType.DOOR ? styles.toolBtnActive : ''}`}
+                    title="Place Door (900mm x 2100mm)"
+                    onClick={() => setActiveTool(ToolType.DOOR)}
+                  >
+                    <img src="/icons/singledoor.svg" alt="Single Door" width="32" height="32" />
+                    <span>Single Door</span>
+                  </button>
+                  <button className={styles.toolBtn}>
+                    <img src="/icons/doubledoor.svg" alt="Double Door" width="32" height="32" />
+                    <span>Double Door</span>
+                  </button>
+                  <button className={styles.toolBtn}>
+                    <img src="/icons/window.svg" alt="Sliding Door" width="32" height="32" />
+                    <span>Sliding Door</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Window */}
+              <div className={styles.toolSection}>
+                <h4>Window</h4>
+                <div className={styles.toolGrid}>
+                  <button
+                    className={`${styles.toolBtn} ${activeTool === ToolType.WINDOW ? styles.toolBtnActive : ''}`}
+                    title="Place Window (1200mm x 1200mm)"
+                    onClick={() => setActiveTool(ToolType.WINDOW)}
+                  >
+                    <img src="/icons/slidingdoor.svg" alt="Single Window" width="32" height="32" />
+                    <span>Single Window</span>
+                  </button>
+                  <button className={styles.toolBtn}>
+                    <img src="/icons/dualwindow.svg" alt="Dual Window" width="32" height="32" />
+                    <span>Dual Window</span>
+                  </button>
+                  <button className={styles.toolBtn}>
+                    <svg width="32" height="32" viewBox="0 0 48 48">
+                      <rect x="8" y="18" width="10" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
+                      <rect x="18" y="18" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
+                      <rect x="30" y="18" width="10" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
+                    </svg>
+                    <span>Unequal Double Door</span>
+                  </button>
+                  <button className={styles.toolBtn}>
+                    <svg width="32" height="32" viewBox="0 0 48 48">
+                      <path d="M 12 24 L 18 18 L 30 18 L 36 24 L 30 30 L 18 30 Z" stroke="currentColor" strokeWidth="2" fill="none" />
+                    </svg>
+                    <span>Corner Bay Window</span>
+                  </button>
+                  <button className={styles.toolBtn}>
+                    <svg width="32" height="32" viewBox="0 0 48 48">
+                      <path d="M 14 24 L 20 20 L 28 20 L 34 24" stroke="currentColor" strokeWidth="2" fill="none" />
+                    </svg>
+                    <span>Corner Window</span>
+                  </button>
+                  <button className={styles.toolBtn}>
+                    <svg width="32" height="32" viewBox="0 0 48 48">
+                      <rect x="12" y="20" width="24" height="8" stroke="currentColor" strokeWidth="2" fill="none" />
+                    </svg>
+                    <span>Bay Window</span>
+                  </button>
+                  <button className={styles.toolBtn}>
+                    <svg width="32" height="32" viewBox="0 0 48 48">
+                      <path d="M 16 24 Q 24 16, 32 24" stroke="currentColor" strokeWidth="2" fill="none" />
+                    </svg>
+                    <span>Arc Window</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Structure */}
+              <div className={styles.toolSection}>
+                <h4>Structure</h4>
+                <div className={styles.toolGrid}>
+                  <button className={styles.toolBtn}>
+                    <svg width="32" height="32" viewBox="0 0 48 48">
+                      <path d="M 16 12 L 16 36 M 32 12 L 32 36" stroke="currentColor" strokeWidth="2" />
+                    </svg>
+                    <span>Door Opening</span>
+                  </button>
+                  <button className={styles.toolBtn}>
+                    <svg width="32" height="32" viewBox="0 0 48 48">
+                      <rect x="16" y="20" width="16" height="8" stroke="currentColor" strokeWidth="2" fill="none" />
+                    </svg>
+                    <span>Flue</span>
+                  </button>
+                  <button className={styles.toolBtn}>
+                    <svg width="32" height="32" viewBox="0 0 48 48">
+                      <rect x="12" y="20" width="24" height="3" fill="currentColor" />
+                    </svg>
+                    <span>Beam</span>
+                  </button>
+                  <button className={styles.toolBtn}>
+                    <svg width="32" height="32" viewBox="0 0 48 48">
+                      <rect x="16" y="16" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" />
+                    </svg>
+                    <span>Square</span>
+                  </button>
+                  <button className={styles.toolBtn}>
+                    <svg width="32" height="32" viewBox="0 0 48 48">
+                      <circle cx="24" cy="24" r="10" stroke="currentColor" strokeWidth="2" fill="none" />
+                    </svg>
+                    <span>Circle</span>
+                  </button>
+                  <button className={styles.toolBtn}>
+                    <svg width="32" height="32" viewBox="0 0 48 48">
+                      <rect x="14" y="14" width="20" height="20" stroke="currentColor" strokeWidth="2" fill="none" />
+                      <rect x="18" y="18" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
+                    </svg>
+                    <span>Frame</span>
+                  </button>
+                </div>
               </div>
             </div>
-
-            {/* Structure */}
-            <div className={styles.toolSection}>
-              <h4>Structure</h4>
-              <div className={styles.toolGrid}>
-                <button className={styles.toolBtn}>
-                  <svg width="32" height="32" viewBox="0 0 48 48">
-                    <path d="M 16 12 L 16 36 M 32 12 L 32 36" stroke="currentColor" strokeWidth="2" />
-                  </svg>
-                  <span>Door Opening</span>
-                </button>
-                <button className={styles.toolBtn}>
-                  <svg width="32" height="32" viewBox="0 0 48 48">
-                    <rect x="16" y="20" width="16" height="8" stroke="currentColor" strokeWidth="2" fill="none" />
-                  </svg>
-                  <span>Flue</span>
-                </button>
-                <button className={styles.toolBtn}>
-                  <svg width="32" height="32" viewBox="0 0 48 48">
-                    <rect x="12" y="20" width="24" height="3" fill="currentColor" />
-                  </svg>
-                  <span>Beam</span>
-                </button>
-                <button className={styles.toolBtn}>
-                  <svg width="32" height="32" viewBox="0 0 48 48">
-                    <rect x="16" y="16" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" />
-                  </svg>
-                  <span>Square</span>
-                </button>
-                <button className={styles.toolBtn}>
-                  <svg width="32" height="32" viewBox="0 0 48 48">
-                    <circle cx="24" cy="24" r="10" stroke="currentColor" strokeWidth="2" fill="none" />
-                  </svg>
-                  <span>Circle</span>
-                </button>
-                <button className={styles.toolBtn}>
-                  <svg width="32" height="32" viewBox="0 0 48 48">
-                    <rect x="14" y="14" width="20" height="20" stroke="currentColor" strokeWidth="2" fill="none" />
-                    <rect x="18" y="18" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
-                  </svg>
-                  <span>Frame</span>
-                </button>
-              </div>
+          ) : (
+            <div className={styles.leftPanelCollapsed} onClick={() => setLeftPanelOpen(true)} title="Expand Panel">
+              <button className={styles.toggleBtn}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+                </svg>
+              </button>
             </div>
-          </div>
+          )
         )}
 
         {/* Main Viewport */}
         <div className={styles.viewport}>
-          {/* View Mode Toggle (Top Right) */}
-          <div className={styles.viewModeToggle}>
+          {/* View Mode Toggle (Top Right) - Replaced by BottomControlBar */}
+          {/* <div className={styles.viewModeToggle}>
             <button
               className={`${styles.viewModeBtn} ${viewMode === '2D' ? styles.viewModeBtnActive : ''}`}
               onClick={() => {
@@ -3236,7 +3246,18 @@ ARTISTIC APPROACH:
             >
               3D
             </button>
-          </div>
+          </div> */}
+
+          <BottomControlBar
+            viewMode={viewMode}
+            onViewModeChange={(mode) => {
+              setViewMode(mode);
+              if (mode === '2D') setPlayMode(false);
+            }}
+            zoom={0.5} // Placeholder
+            themeColor={themeColor}
+            themeMode={themeMode}
+          />
 
           {/* 2D View - Main Viewport */}
           <div style={{
@@ -3270,6 +3291,12 @@ ARTISTIC APPROACH:
               scannedWalls={scannedWalls}
               onRoomSelect={setSelectedRoom}
               selectedRoomId={selectedRoom?.id ?? null}
+            />
+
+            {/* 2D Compass */}
+            <Compass2D
+              rotation={0}
+              themeColor={themeColor}
             />
           </div>
 
@@ -3329,6 +3356,9 @@ ARTISTIC APPROACH:
               displayStyle={displayStyle}
               showGrid={showGrid}
             />
+
+            {/* 3D Axis Gizmo (isolated component to prevent parent re-renders) */}
+            <CameraGizmoWrapper visible={!playMode} size={120} />
 
             {/* Light Placement Guide Overlay */}
             {lightPlacementMode && viewMode === '3D' && (
@@ -3685,88 +3715,102 @@ ARTISTIC APPROACH:
         </div>
 
         {/* Right Settings Panel */}
-        {!playMode && rightPanelOpen && (
-          <div className={styles.rightPanel}>
-            <div className={styles.panelHeader}>
-              <h3>Layer Settings</h3>
-              <button onClick={() => setRightPanelOpen(false)}>×</button>
-            </div>
-
-            {/* 3D Preview */}
-            <FloorplanPreview
-              viewMode={viewMode}
-              previewContainerId={viewMode === '2D' ? 'preview-3d-container' : 'preview-2d-container'}
-            />
-
-            {/* Selected Room Info */}
-            {selectedRoom && (
-              <div className={styles.settingsSection} style={{ backgroundColor: 'var(--theme-color-light, rgba(63, 174, 167, 0.1))', borderLeft: '3px solid var(--theme-color, #3FAEA7)' }}>
-                <h4>Selected Room</h4>
-                <div className={styles.settingRow}>
-                  <label>Name</label>
-                  <span style={{ fontWeight: 'bold' }}>{selectedRoom.name || 'Unnamed'}</span>
-                </div>
-                <div className={styles.settingRow}>
-                  <label>Area</label>
-                  <span style={{ fontWeight: 'bold', color: 'var(--theme-color, #3FAEA7)' }}>{selectedRoom.area.toFixed(2)} m²</span>
-                </div>
-                <button
-                  className={styles.editBtn}
-                  onClick={() => setSelectedRoom(null)}
-                  style={{ marginTop: '8px' }}
-                >
-                  Deselect Room
+        {!playMode && (
+          rightPanelOpen ? (
+            <div className={styles.rightPanel}>
+              <div className={styles.panelHeader}>
+                <h3>Layer Settings</h3>
+                <button onClick={() => setRightPanelOpen(false)} className={styles.toggleBtn}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+                  </svg>
                 </button>
               </div>
-            )}
 
-            {/* Basic Parameters */}
-            <div className={styles.settingsSection}>
-              <h4>Basic Parameters</h4>
-              <div className={styles.settingRow}>
-                <label>Total Building</label>
-                <input type="text" defaultValue="0.00 ㎡" readOnly />
+              {/* 3D Preview */}
+              <FloorplanPreview
+                viewMode={viewMode}
+                previewContainerId={viewMode === '2D' ? 'preview-3d-container' : 'preview-2d-container'}
+              />
+
+              {/* Selected Room Info */}
+              {selectedRoom && (
+                <div className={styles.settingsSection} style={{ backgroundColor: 'var(--theme-color-light, rgba(63, 174, 167, 0.1))', borderLeft: '3px solid var(--theme-color, #3FAEA7)' }}>
+                  <h4>Selected Room</h4>
+                  <div className={styles.settingRow}>
+                    <label>Name</label>
+                    <span style={{ fontWeight: 'bold' }}>{selectedRoom.name || 'Unnamed'}</span>
+                  </div>
+                  <div className={styles.settingRow}>
+                    <label>Area</label>
+                    <span style={{ fontWeight: 'bold', color: 'var(--theme-color, #3FAEA7)' }}>{selectedRoom.area.toFixed(2)} m²</span>
+                  </div>
+                  <button
+                    className={styles.editBtn}
+                    onClick={() => setSelectedRoom(null)}
+                    style={{ marginTop: '8px' }}
+                  >
+                    Deselect Room
+                  </button>
+                </div>
+              )}
+
+              {/* Basic Parameters */}
+              <div className={styles.settingsSection}>
+                <h4>Basic Parameters</h4>
+                <div className={styles.settingRow}>
+                  <label>Total Building</label>
+                  <input type="text" defaultValue="0.00 ㎡" readOnly />
+                </div>
+              </div>
+
+              {/* Wall Settings */}
+              <div className={styles.settingsSection}>
+                <h4>Wall Settings</h4>
+                <div className={styles.settingRow}>
+                  <label>Lock Walls</label>
+                  <input type="checkbox" />
+                </div>
+                <div className={styles.settingRow}>
+                  <label>Wall Height</label>
+                  <input
+                    type="number"
+                    value={wallHeight}
+                    onChange={(e) => setWallHeight(parseInt(e.target.value) || 2400)}
+                    style={{ width: '80px' }}
+                  /> mm
+                </div>
+                <div className={styles.settingRow}>
+                  <label>Wall Thickness</label>
+                  <input
+                    type="number"
+                    value={wallThickness}
+                    onChange={(e) => setWallThickness(parseInt(e.target.value) || 100)}
+                    style={{ width: '80px' }}
+                  /> mm
+                </div>
+                <button className={styles.deleteBtn}>Delete All Walls</button>
+              </div>
+
+              {/* Floor Setting */}
+              <div className={styles.settingsSection}>
+                <h4>Floor Setting</h4>
+                <div className={styles.settingRow}>
+                  <label>Floor Thickness</label>
+                  <input type="text" defaultValue="120 mm" />
+                </div>
+                <button className={styles.editBtn}>Edit Floor ›</button>
               </div>
             </div>
-
-            {/* Wall Settings */}
-            <div className={styles.settingsSection}>
-              <h4>Wall Settings</h4>
-              <div className={styles.settingRow}>
-                <label>Lock Walls</label>
-                <input type="checkbox" />
-              </div>
-              <div className={styles.settingRow}>
-                <label>Wall Height</label>
-                <input
-                  type="number"
-                  value={wallHeight}
-                  onChange={(e) => setWallHeight(parseInt(e.target.value) || 2400)}
-                  style={{ width: '80px' }}
-                /> mm
-              </div>
-              <div className={styles.settingRow}>
-                <label>Wall Thickness</label>
-                <input
-                  type="number"
-                  value={wallThickness}
-                  onChange={(e) => setWallThickness(parseInt(e.target.value) || 100)}
-                  style={{ width: '80px' }}
-                /> mm
-              </div>
-              <button className={styles.deleteBtn}>Delete All Walls</button>
+          ) : (
+            <div className={styles.rightPanelCollapsed} onClick={() => setRightPanelOpen(true)} title="Expand Panel">
+              <button className={styles.toggleBtn}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+                </svg>
+              </button>
             </div>
-
-            {/* Floor Setting */}
-            <div className={styles.settingsSection}>
-              <h4>Floor Setting</h4>
-              <div className={styles.settingRow}>
-                <label>Floor Thickness</label>
-                <input type="text" defaultValue="120 mm" />
-              </div>
-              <button className={styles.editBtn}>Edit Floor ›</button>
-            </div>
-          </div>
+          )
         )}
 
         {/* Render Style Panel */}
@@ -3944,7 +3988,7 @@ ARTISTIC APPROACH:
         themeColor={themeColor}
         initialImage={capturedImage}
       />
-    </div>
+    </div >
   );
 };
 

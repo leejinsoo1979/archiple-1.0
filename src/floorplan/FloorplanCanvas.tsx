@@ -155,7 +155,6 @@ const FloorplanCanvas = ({
     const container = containerRef.current;
     if (!canvas || !container) return;
 
-    console.log('[FloorplanCanvas] Initializing...');
 
     // 1. Initialize SceneManager
     // Units: mm (millimeters) - 모든 내부 좌표는 mm 단위
@@ -300,7 +299,6 @@ const FloorplanCanvas = ({
       const doors = sceneManager.objectManager.getAllDoors();
       const windows = sceneManager.objectManager.getAllWindows();
 
-      console.log('[FloorplanCanvas] updateLayers called:', points.length, 'points', walls.length, 'walls', doors.length, 'doors', windows.length, 'windows');
 
       // Update layer data
       wallLayer.setWalls(walls);
@@ -337,14 +335,12 @@ const FloorplanCanvas = ({
         const windows = sceneManager.objectManager.getAllWindows();
         const detectedRooms = sceneManager.objectManager.getAllRooms(); // Get detected rooms from RoomDetectionService
         const babylonData = convertFloorplanToBabylon(floorplan, doors, windows, detectedRooms);
-        console.log('[FloorplanCanvas] Sending blueprint data to Babylon with', detectedRooms.length, 'detected rooms');
         onDataChange(babylonData);
       }
     };
 
     // Listen to floorplan events
     eventBus.on(FloorEvents.POINT_ADDED, () => {
-      console.log('[FloorplanCanvas] POINT_ADDED event received');
       try {
         updateLayers();
       } catch (e) {
@@ -352,7 +348,6 @@ const FloorplanCanvas = ({
       }
     });
     eventBus.on(FloorEvents.POINT_MOVED, () => {
-      console.log('[FloorplanCanvas] POINT_MOVED - re-detecting rooms and updating layers');
       const points = sceneManager.objectManager.getAllPoints();
       const walls = sceneManager.objectManager.getAllWalls();
 
@@ -360,7 +355,6 @@ const FloorplanCanvas = ({
       const rooms = roomDetectionService.detectRooms(walls, points);
       sceneManager.objectManager.setRooms(rooms);
 
-      console.log('[FloorplanCanvas] Got data:', points.length, 'points', walls.length, 'walls', rooms.length, 'rooms');
 
       wallLayer.setWalls(walls);
       wallLayer.setPoints(points);
@@ -369,10 +363,8 @@ const FloorplanCanvas = ({
       roomLayer.setRooms(rooms);
       roomLayer.setPoints(points);
 
-      console.log('[FloorplanCanvas] Layers updated with fresh room detection');
     });
     eventBus.on(FloorEvents.POINT_UPDATED, () => {
-      console.log('[FloorplanCanvas] POINT_UPDATED event received');
       try {
         updateLayers();
       } catch (e) {
@@ -380,7 +372,6 @@ const FloorplanCanvas = ({
       }
     });
     eventBus.on(FloorEvents.DOOR_MODIFIED, () => {
-      console.log('[FloorplanCanvas] DOOR_MODIFIED event received');
       try {
         updateLayers();
       } catch (e) {
@@ -388,7 +379,6 @@ const FloorplanCanvas = ({
       }
     });
     eventBus.on(FloorEvents.WALL_ADDED, () => {
-      console.log('[FloorplanCanvas] WALL_ADDED event received - checking for wall splits and intersections');
 
       // Split walls at T-junctions and wall-wall intersections before updating layers
       const points = sceneManager.objectManager.getAllPoints();
@@ -397,7 +387,6 @@ const FloorplanCanvas = ({
       const splitResult = wallSplitService.splitWallsAtTJunctions(walls, points);
 
       if (splitResult.removedWallIds.length > 0 || splitResult.newPoints.length > 0) {
-        console.log('[FloorplanCanvas] Applying wall splits:', splitResult.removedWallIds.length, 'walls split into', splitResult.walls.length - walls.length + splitResult.removedWallIds.length, 'segments,', splitResult.newPoints.length, 'intersection points created');
 
         // Add new intersection points
         for (const point of splitResult.newPoints) {
@@ -435,12 +424,10 @@ const FloorplanCanvas = ({
         if (!sceneManager.isWallDragging()) {
           const cleanup = sceneManager.objectManager.cleanupDuplicates();
           if (cleanup.points > 0 || cleanup.walls > 0) {
-            console.log('[FloorplanCanvas] Cleaned up', cleanup.points, 'duplicate points,', cleanup.walls, 'duplicate walls');
           }
         }
 
         // Re-detect rooms after wall split
-        console.log('[FloorplanCanvas] Re-detecting rooms after wall split');
         const updatedWalls = sceneManager.objectManager.getAllWalls();
         const updatedPoints = sceneManager.objectManager.getAllPoints();
         const newRooms = roomDetectionService.detectRooms(updatedWalls, updatedPoints);
@@ -449,7 +436,6 @@ const FloorplanCanvas = ({
         const oldRoomCount = sceneManager.objectManager.getAllRooms().length;
         sceneManager.objectManager.setRooms(newRooms);
 
-        console.log('[FloorplanCanvas] Rooms updated:', oldRoomCount, '->', newRooms.length);
       }
 
       updateLayers();
@@ -458,10 +444,8 @@ const FloorplanCanvas = ({
 
     // Camera reset event
     eventBus.on(EditorEvents.CAMERA_RESET, () => {
-      console.log('[FloorplanCanvas] Camera reset requested');
       const camera = renderer.getCamera();
       camera.reset();
-      console.log('[FloorplanCanvas] Camera reset to center');
     });
 
     // Point selection/hover events
@@ -626,7 +610,6 @@ const FloorplanCanvas = ({
 
     // Wall added event - just update layers, NO automatic room detection
     eventBus.on(FloorEvents.WALL_ADDED, () => {
-      console.log('[FloorplanCanvas] Wall added, updating layers...');
       updateLayers();
     });
 
@@ -635,14 +618,12 @@ const FloorplanCanvas = ({
       let walls = sceneManager.objectManager.getAllWalls();
       let points = sceneManager.objectManager.getAllPoints();
 
-      console.log('[FloorplanCanvas] Starting room detection with wall splitting...');
 
       // Step 1: Split walls at T-junctions and wall-wall intersections
       const splitResult = wallSplitService.splitWallsAtTJunctions(walls, points);
 
       // Apply wall splits to SceneManager if any walls were split
       if (splitResult.removedWallIds.length > 0 || splitResult.newPoints.length > 0) {
-        console.log(`[FloorplanCanvas] Applying wall splits: removing ${splitResult.removedWallIds.length} walls, adding ${splitResult.walls.length - walls.length + splitResult.removedWallIds.length} new segments, creating ${splitResult.newPoints.length} intersection points`);
 
         // Add new intersection points
         splitResult.newPoints.forEach(point => {
@@ -672,7 +653,6 @@ const FloorplanCanvas = ({
       if (!sceneManager.isWallDragging()) {
         const cleanup = sceneManager.objectManager.cleanupDuplicates();
         if (cleanup.points > 0 || cleanup.walls > 0) {
-          console.log('[FloorplanCanvas] Cleaned up', cleanup.points, 'duplicate points,', cleanup.walls, 'duplicate walls');
           // Refresh walls and points after cleanup
           walls = sceneManager.objectManager.getAllWalls();
           points = sceneManager.objectManager.getAllPoints();
@@ -685,7 +665,6 @@ const FloorplanCanvas = ({
       // Step 3: Update rooms in ObjectManager (batch update to prevent flickering)
       sceneManager.objectManager.setRooms(rooms);
 
-      console.log(`[FloorplanCanvas] Detected ${rooms.length} rooms after wall splitting`);
 
       // Step 4: Update layers and sync to Babylon
       updateLayers();
@@ -744,7 +723,6 @@ const FloorplanCanvas = ({
     // Initial update
     updateLayers();
 
-    console.log('[FloorplanCanvas] Initialized successfully');
 
     // Store toolManager in ref for tool switching
     toolManagerRef.current = toolManager;
@@ -826,11 +804,9 @@ const FloorplanCanvas = ({
 
     // Cleanup
     return () => {
-      console.log('[FloorplanCanvas] Cleaning up...');
 
       // Add cleanup guard to prevent double cleanup
       if (isCleanedUpRef.current) {
-        console.log('[FloorplanCanvas] Already cleaned up, skipping...');
         return;
       }
 
@@ -875,7 +851,6 @@ const FloorplanCanvas = ({
         }
 
         isCleanedUpRef.current = true;
-        console.log('[FloorplanCanvas] Cleanup completed successfully');
       } catch (error) {
         console.error('[FloorplanCanvas] Cleanup error:', error);
       }
@@ -912,6 +887,42 @@ const FloorplanCanvas = ({
       if (rectangleTool && typeof rectangleTool.setWallThickness === 'function') {
         rectangleTool.setWallThickness(wallThickness);
         rectangleTool.setWallHeight(wallHeight);
+      }
+    }
+
+    // Also update all existing walls in the 2D canvas
+    const sceneManager = sceneManagerRef.current;
+    const renderer = rendererRef.current;
+    const wallLayer = wallLayerRef.current;
+
+    if (sceneManager) {
+      const walls = sceneManager.objectManager.getAllWalls();
+      let updated = false;
+
+      for (const wall of walls) {
+        if (wall.thickness !== wallThickness || wall.height !== wallHeight) {
+          sceneManager.objectManager.updateWall(wall.id, {
+            thickness: wallThickness,
+            height: wallHeight,
+          });
+          updated = true;
+        }
+      }
+
+      // Update WallLayer's config for visual rendering
+      if (wallLayer) {
+        wallLayer.setWallThickness(wallThickness);
+      }
+
+      // Update GuideLayer's wallThickness for preview rendering
+      const guideLayer = guideLayerRef.current;
+      if (guideLayer) {
+        guideLayer.setWallThickness(wallThickness);
+      }
+
+      // Trigger re-render
+      if (renderer) {
+        renderer.render();
       }
     }
   }, [wallHeight, wallThickness]);
@@ -999,7 +1010,6 @@ const FloorplanCanvas = ({
       const zoomDelta = event.deltaY > 0 ? -0.1 : 0.1;
       camera.zoomAt(mouseX, mouseY, zoomDelta);
 
-      console.log('[FloorplanCanvas] Camera zoom:', camera.getZoom().toFixed(2));
     };
 
     canvas.addEventListener('wheel', handleWheel, { passive: false });
@@ -1079,7 +1089,6 @@ const FloorplanCanvas = ({
         isPanningRef.current = true;
         lastPanPosRef.current = { x: event.clientX, y: event.clientY };
         canvas.style.cursor = 'grabbing';
-        console.log('[FloorplanCanvas] Started panning with button', event.button);
       }
     };
 
@@ -1129,7 +1138,6 @@ const FloorplanCanvas = ({
         isPanningRef.current = false;
         lastPanPosRef.current = null;
         canvas.style.cursor = 'default';
-        console.log('[FloorplanCanvas] Stopped panning');
       }
     };
 
@@ -1151,7 +1159,6 @@ const FloorplanCanvas = ({
         // Check room label for double-click editing (higher priority)
         const labelHit = roomLayer.getLabelAtPoint(worldPos.x, worldPos.y);
         if (labelHit) {
-          console.log('[FloorplanCanvas] Room label double-clicked:', labelHit);
           event.preventDefault();
           event.stopPropagation();
 
@@ -1576,7 +1583,6 @@ const FloorplanCanvas = ({
       const newX = p2.x + dirX * delta;
       const newY = p2.y + dirY * delta;
       objectManager.updatePoint(targetPoint.id, { x: newX, y: newY });
-      console.log('[FloorplanCanvas] Dimension changed:', currentLength, '→', newLengthMm, 'mm');
     }
 
     setEditingDimension(null);
@@ -1611,7 +1617,6 @@ const FloorplanCanvas = ({
     const room = sceneManagerRef.current.objectManager.getRoom(editingRoomName.roomId);
     if (room && newName !== room.name) {
       sceneManagerRef.current.objectManager.updateRoom(editingRoomName.roomId, { name: newName });
-      console.log('[FloorplanCanvas] Room name changed:', editingRoomName.currentName, '→', newName);
     }
 
     setEditingRoomName(null);

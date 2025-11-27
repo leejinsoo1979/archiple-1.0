@@ -1,83 +1,182 @@
 /**
- * AutoWallHider - 카메라 위치 기반 벽 자동 숨김
+ * AutoWallHider - Normal-based Auto Wall Transparency
  *
- * 원리: 카메라에서 방 중심을 볼 때, 카메라 쪽에 있는 벽만 숨김
- * 벽이 카메라와 타겟 사이에 있고, 카메라를 향하고 있으면 숨김
+ * Automatically hides walls facing the camera to show interior.
+ * Uses wall normal direction for clean "corner view" like Coohom.
+ *
+ * Wall meshes must have: mesh.metadata = { type: 'wall' }
  */
 
 import {
   Scene,
   ArcRotateCamera,
   AbstractMesh,
+  Vector3,
 } from '@babylonjs/core';
+
+export interface AutoWallHiderOptions {
+  /** Visibility when hidden (0 = invisible, 0.1 = ghost) */
+  hiddenVisibility?: number;
+  /** Visibility when visible */
+  visibleVisibility?: number;
+  /** Enable smooth fade transition */
+  smoothTransition?: boolean;
+  /** Fade speed (0-1, higher = faster) */
+  fadeSpeed?: number;
+  /** Additional rays for better coverage */
+  multiRay?: boolean;
+}
+
+const DEFAULT_OPTIONS: AutoWallHiderOptions = {
+  hiddenVisibility: 0,
+  visibleVisibility: 1,
+  smoothTransition: false,
+  fadeSpeed: 0.15,
+  multiRay: true,
+};
 
 export class AutoWallHider {
   private scene: Scene;
   private hiddenWalls: Set<AbstractMesh> = new Set();
   private enabled: boolean = true;
+  private options: AutoWallHiderOptions;
+  private wallVisibilityTargets: Map<AbstractMesh, number> = new Map();
 
-  constructor(scene: Scene) {
+  // Performance optimization: Cache wall meshes and throttle updates
+  private cachedWallMeshes: AbstractMesh[] = [];
+  private wallCacheTime: number = 0;
+  private lastUpdateTime: number = 0;
+  private readonly CACHE_DURATION = 2000; // Refresh wall cache every 2 seconds
+  private readonly UPDATE_INTERVAL = 100; // Only update every 100ms (10 FPS for wall hiding)
+
+  constructor(scene: Scene, options: AutoWallHiderOptions = {}) {
     this.scene = scene;
+    this.options = { ...DEFAULT_OPTIONS, ...options };
   }
 
   /**
-   * 카메라 기준으로 벽 숨김 업데이트
+   * Get wall meshes with caching for performance
+   */
+  private getWallMeshes(): AbstractMesh[] {
+    const now = performance.now();
+    if (now - this.wallCacheTime > this.CACHE_DURATION || this.cachedWallMeshes.length === 0) {
+      this.cachedWallMeshes = this.scene.meshes.filter(
+        (mesh) => mesh.metadata?.type === 'wall' && mesh.isEnabled()
+      );
+      this.wallCacheTime = now;
+    }
+    return this.cachedWallMeshes;
+  }
+
+  /**
+   * Invalidate wall cache (call when walls are added/removed)
+   */
+  public invalidateCache(): void {
+    this.wallCacheTime = 0;
+    this.cachedWallMeshes = [];
+  }
+
+  /**
+   * Update wall visibility based on camera position
+   * Uses wall normal direction - hides walls whose inside faces the camera
+   * This creates the clean "corner view" like professional interior design tools
    */
   public update(camera: ArcRotateCamera): void {
     if (!this.enabled) return;
 
+    // Throttle updates for performance
+    const now = performance.now();
+    if (now - this.lastUpdateTime < this.UPDATE_INTERVAL) return;
+    this.lastUpdateTime = now;
+
     const wallsToHide = new Set<AbstractMesh>();
+    const wallMeshes = this.getWallMeshes();
 
-    // 카메라 위치 (XZ 평면)
-    const camX = camera.position.x;
-    const camZ = camera.position.z;
+    if (wallMeshes.length === 0) return;
 
-    // 타겟 위치 (방 중심)
-    const targetX = camera.target.x;
-    const targetZ = camera.target.z;
+    const camPos = camera.position;
+    const roomCenter = camera.target; // Use camera target as room center
 
-    // 모든 벽 메시 가져오기
-    const wallMeshes = this.scene.meshes.filter(
-      (mesh) => mesh.metadata?.type === 'wall'
-    );
-
+    // For each wall, hide if it's BETWEEN camera and room center
     for (const wall of wallMeshes) {
       const bounds = wall.getBoundingInfo().boundingBox;
-      const wallCenterX = (bounds.minimumWorld.x + bounds.maximumWorld.x) / 2;
-      const wallCenterZ = (bounds.minimumWorld.z + bounds.maximumWorld.z) / 2;
+      const wallCenter = bounds.centerWorld;
 
-      // 핵심: 벽이 카메라와 같은 쪽에 있는지 확인
-      // 타겟에서 카메라 방향
-      const targetToCamX = camX - targetX;
-      const targetToCamZ = camZ - targetZ;
+      // Get wall dimensions to determine orientation
+      const size = bounds.maximumWorld.subtract(bounds.minimumWorld);
 
-      // 타겟에서 벽 방향
-      const targetToWallX = wallCenterX - targetX;
-      const targetToWallZ = wallCenterZ - targetZ;
+      // Determine wall orientation
+      const isXWall = size.x < size.z; // Thin in X = East/West wall
 
-      // 내적: 양수면 벽이 카메라와 같은 쪽에 있음 (숨겨야 함)
-      const dot = targetToCamX * targetToWallX + targetToCamZ * targetToWallZ;
+      if (isXWall) {
+        // East/West wall - check X position
+        const cameraOnPositiveSide = camPos.x > wallCenter.x;
+        const roomOnPositiveSide = roomCenter.x > wallCenter.x;
 
-      if (dot > 0) {
-        wallsToHide.add(wall);
+        // Hide if camera and room center are on OPPOSITE sides of wall
+        if (cameraOnPositiveSide !== roomOnPositiveSide) {
+          wallsToHide.add(wall);
+        }
+      } else {
+        // North/South wall - check Z position
+        const cameraOnPositiveSide = camPos.z > wallCenter.z;
+        const roomOnPositiveSide = roomCenter.z > wallCenter.z;
+
+        if (cameraOnPositiveSide !== roomOnPositiveSide) {
+          wallsToHide.add(wall);
+        }
       }
     }
 
-    // 이전에 숨겼지만 이제 숨길 필요 없는 벽 복원
-    for (const wall of this.hiddenWalls) {
-      if (!wallsToHide.has(wall)) {
-        wall.visibility = 1;
-      }
-    }
-
-    // 새로 숨겨야 할 벽 숨김
-    for (const wall of wallsToHide) {
-      wall.visibility = 0;
+    // Apply visibility changes
+    if (this.options.smoothTransition) {
+      this.applySmoothTransition(wallMeshes, wallsToHide);
+    } else {
+      this.applyInstantTransition(wallMeshes, wallsToHide);
     }
 
     this.hiddenWalls = wallsToHide;
   }
 
+  private applyInstantTransition(
+    allWalls: AbstractMesh[],
+    wallsToHide: Set<AbstractMesh>
+  ): void {
+    for (const wall of allWalls) {
+      if (wallsToHide.has(wall)) {
+        wall.visibility = this.options.hiddenVisibility!;
+      } else {
+        wall.visibility = this.options.visibleVisibility!;
+      }
+    }
+  }
+
+  private applySmoothTransition(
+    allWalls: AbstractMesh[],
+    wallsToHide: Set<AbstractMesh>
+  ): void {
+    const speed = this.options.fadeSpeed!;
+
+    for (const wall of allWalls) {
+      const targetVisibility = wallsToHide.has(wall)
+        ? this.options.hiddenVisibility!
+        : this.options.visibleVisibility!;
+
+      // Lerp towards target
+      const current = wall.visibility;
+      const diff = targetVisibility - current;
+
+      if (Math.abs(diff) > 0.01) {
+        wall.visibility = current + diff * speed;
+      } else {
+        wall.visibility = targetVisibility;
+      }
+    }
+  }
+
+  /**
+   * Enable or disable auto wall hiding
+   */
   public setEnabled(enabled: boolean): void {
     this.enabled = enabled;
     if (!enabled) {
@@ -85,14 +184,74 @@ export class AutoWallHider {
     }
   }
 
-  public restoreAllWalls(): void {
-    for (const wall of this.hiddenWalls) {
-      wall.visibility = 1;
-    }
-    this.hiddenWalls.clear();
+  public isEnabled(): boolean {
+    return this.enabled;
   }
 
+  /**
+   * Restore all walls to full visibility
+   */
+  public restoreAllWalls(): void {
+    const wallMeshes = this.scene.meshes.filter(
+      (mesh) => mesh.metadata?.type === 'wall'
+    );
+
+    for (const wall of wallMeshes) {
+      wall.visibility = this.options.visibleVisibility!;
+    }
+
+    this.hiddenWalls.clear();
+    this.wallVisibilityTargets.clear();
+  }
+
+  /**
+   * Update options at runtime
+   */
+  public setOptions(options: Partial<AutoWallHiderOptions>): void {
+    this.options = { ...this.options, ...options };
+  }
+
+  /**
+   * Get currently hidden walls
+   */
+  public getHiddenWalls(): AbstractMesh[] {
+    return Array.from(this.hiddenWalls);
+  }
+
+  /**
+   * Clean up
+   */
   public dispose(): void {
     this.restoreAllWalls();
   }
+}
+
+/**
+ * Helper: Tag a mesh as a wall for AutoWallHider
+ */
+export function tagAsWall(mesh: AbstractMesh, wallId?: string): void {
+  mesh.metadata = {
+    ...mesh.metadata,
+    type: 'wall',
+    wallId: wallId || mesh.name,
+  };
+  mesh.isPickable = true;
+}
+
+/**
+ * Helper: Create AutoWallHider with scene.onBeforeRenderObservable integration
+ */
+export function createAutoWallHider(
+  scene: Scene,
+  camera: ArcRotateCamera,
+  options?: AutoWallHiderOptions
+): AutoWallHider {
+  const hider = new AutoWallHider(scene, options);
+
+  // Register with render loop
+  scene.onBeforeRenderObservable.add(() => {
+    hider.update(camera);
+  });
+
+  return hider;
 }
