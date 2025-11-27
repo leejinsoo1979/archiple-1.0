@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import AxisGizmo3D from './AxisGizmo3D';
+import { useCameraSettingsStore } from '../../stores/cameraSettingsStore';
 
 interface CameraGizmoWrapperProps {
   visible: boolean;
@@ -13,12 +14,17 @@ interface CameraGizmoWrapperProps {
 const CameraGizmoWrapper = ({ visible, size = 100 }: CameraGizmoWrapperProps) => {
   const [cameraAlpha, setCameraAlpha] = useState(-Math.PI / 4);
   const [cameraBeta, setCameraBeta] = useState(Math.PI / 3.5);
+  const setStoreAlpha = useCameraSettingsStore((state) => state.setAlpha);
+  const setStoreBeta = useCameraSettingsStore((state) => state.setBeta);
 
   // This will be called by Babylon3DCanvas through a global event
   const handleCameraChange = useCallback((alpha: number, beta: number) => {
     setCameraAlpha(alpha);
     setCameraBeta(beta);
-  }, []);
+    // Also update the store for the camera settings panel
+    setStoreAlpha(alpha);
+    setStoreBeta(beta);
+  }, [setStoreAlpha, setStoreBeta]);
 
   // Expose the handler globally for Babylon3DCanvas to call
   // This avoids prop drilling through EditorPage

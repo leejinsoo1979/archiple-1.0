@@ -6,7 +6,7 @@ import Babylon3DCanvas, { type Babylon3DCanvasRef } from '../babylon/Babylon3DCa
 import styles from './EditorPage.module.css';
 import { ToolType } from '../core/types/EditorState';
 // import { createTestRoom } from '../floorplan/blueprint/BlueprintToBabylonAdapter';
-import { PiCubeTransparentLight } from 'react-icons/pi';
+// PiCubeTransparentLight removed - display style moved to BottomControlBar
 import { HiOutlineColorSwatch } from 'react-icons/hi';
 import { MdAutoAwesome } from 'react-icons/md';
 import { BiCabinet } from 'react-icons/bi';
@@ -29,6 +29,16 @@ type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 const EditorPage = () => {
   const navigate = useNavigate();
   const setModalOpen = useCameraSettingsStore((state) => state.setModalOpen);
+
+  // Camera settings from store
+  const cameraAlpha = useCameraSettingsStore((state) => state.alpha);
+  const cameraBeta = useCameraSettingsStore((state) => state.beta);
+  const cameraFov = useCameraSettingsStore((state) => state.horizontalFov);
+  const projectionType = useCameraSettingsStore((state) => state.projectionType);
+  const setCameraAlpha = useCameraSettingsStore((state) => state.setAlpha);
+  const setCameraBeta = useCameraSettingsStore((state) => state.setBeta);
+  const setCameraFov = useCameraSettingsStore((state) => state.setHorizontalFov);
+  const setProjectionType = useCameraSettingsStore((state) => state.setProjectionType);
   const [_activeCategory, _setActiveCategory] = useState<ToolCategory>('walls');
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
@@ -36,6 +46,7 @@ const EditorPage = () => {
   const [viewMode, setViewMode] = useState<'2D' | '3D'>('2D');
   const [floorplanData, setFloorplanData] = useState<any>(null);
   const [sunPanelOpen, setSunPanelOpen] = useState(false);
+  const [cameraPanelOpen, setCameraPanelOpen] = useState(false);
   const [sunSettings, setSunSettings] = useState({
     month: 6, // 1-12월
     hour: 14, // 0-24시
@@ -103,8 +114,7 @@ const EditorPage = () => {
     sharpenAmount: 0.5,
   });
 
-  // 3D View display options
-  const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
+  // 3D View display options (now in BottomControlBar)
   const [displayStyle, setDisplayStyle] = useState<'material' | 'white' | 'sketch' | 'transparent'>('material');
   const [hiddenLineMode, setHiddenLineMode] = useState(false);
 
@@ -717,21 +727,6 @@ ARTISTIC APPROACH:
     localStorage.setItem('themeColor', themeColor);
   }, [themeMode, themeColor]);
 
-  // Close view options dropdown when clicking outside
-  useEffect(() => {
-    if (!viewOptionsOpen) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest(`.${styles.viewOptionsWrapper}`)) {
-        setViewOptionsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [viewOptionsOpen]);
-
   // Close AI style menu when clicking outside
   useEffect(() => {
     if (!aiRenderPanelOpen) return;
@@ -1200,102 +1195,6 @@ ARTISTIC APPROACH:
         <div className={styles.headerCenter}>
           {/* Top Toolbar */}
           <div className={styles.topToolbar}>
-            <div className={styles.viewOptionsWrapper}>
-              <button
-                className={`${styles.topBtn} ${viewOptionsOpen ? styles.active : ''}`}
-                title="3D View"
-                onClick={() => setViewOptionsOpen(!viewOptionsOpen)}
-              >
-                <PiCubeTransparentLight size={20} />
-              </button>
-
-              {/* 3D View Options Dropdown */}
-              {viewOptionsOpen && (
-                <div className={styles.viewOptionsDropdown}>
-                  <div className={styles.dropdownSection}>
-                    <h4 className={styles.dropdownTitle}>디스플레이 스타일</h4>
-                    <div className={styles.displayStyleGrid}>
-                      <button
-                        className={`${styles.styleOption} ${displayStyle === 'material' ? styles.selected : ''}`}
-                        onClick={() => setDisplayStyle('material')}
-                      >
-                        <div className={styles.stylePreview}>
-                          <div className={styles.materialPreview}></div>
-                        </div>
-                        <span className={styles.styleLabel}>재질</span>
-                        <span className={styles.styleNumber}>⌘1</span>
-                      </button>
-                      <button
-                        className={`${styles.styleOption} ${displayStyle === 'white' ? styles.selected : ''}`}
-                        onClick={() => setDisplayStyle('white')}
-                      >
-                        <div className={styles.stylePreview}>
-                          <div className={styles.whitePreview}></div>
-                        </div>
-                        <span className={styles.styleLabel}>화이트 모델</span>
-                        <span className={styles.styleNumber}>⌘2</span>
-                      </button>
-                      <button
-                        className={`${styles.styleOption} ${displayStyle === 'sketch' ? styles.selected : ''}`}
-                        onClick={() => setDisplayStyle('sketch')}
-                      >
-                        <div className={styles.stylePreview}>
-                          <div className={styles.sketchPreview}></div>
-                        </div>
-                        <span className={styles.styleLabel}>스케치</span>
-                        <span className={styles.styleNumber}>⌘3</span>
-                      </button>
-                      <button
-                        className={`${styles.styleOption} ${displayStyle === 'transparent' ? styles.selected : ''}`}
-                        onClick={() => setDisplayStyle('transparent')}
-                      >
-                        <div className={styles.stylePreview}>
-                          <div className={styles.transparentPreview}></div>
-                        </div>
-                        <span className={styles.styleLabel}>투명</span>
-                        <span className={styles.styleNumber}>⌘4</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className={styles.dropdownDivider}></div>
-
-                  <div className={styles.dropdownSection}>
-                    <div className={styles.toggleRow}>
-                      <span className={styles.toggleLabel}>은선모드</span>
-                      <label className={styles.toggleSwitch}>
-                        <input
-                          type="checkbox"
-                          checked={hiddenLineMode}
-                          onChange={(e) => setHiddenLineMode(e.target.checked)}
-                        />
-                        <span className={styles.toggleSlider}></span>
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className={styles.dropdownDivider}></div>
-
-                  <div className={styles.dropdownSection}>
-                    <h4 className={styles.dropdownTitle}>그래픽 설정</h4>
-                    <div className={styles.graphicsButtons}>
-                      <button
-                        className={`${styles.graphicsBtn} ${photoRealisticMode ? styles.active : ''}`}
-                        onClick={() => setPhotoRealisticMode(true)}
-                      >
-                        효과 우선
-                      </button>
-                      <button
-                        className={`${styles.graphicsBtn} ${!photoRealisticMode ? styles.active : ''}`}
-                        onClick={() => setPhotoRealisticMode(false)}
-                      >
-                        성능 우선
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
             <div style={{ position: 'relative' }}>
               <button
                 className={`${styles.topBtn} ${lightPanelOpen ? styles.active : ''}`}
@@ -1972,105 +1871,6 @@ ARTISTIC APPROACH:
                 <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
               </svg>
             </button>
-            <div style={{ position: 'relative' }}>
-              <button
-                className={`${styles.topBtn} ${sunPanelOpen ? styles.active : ''}`}
-                title="Sun"
-                onClick={() => setSunPanelOpen(!sunPanelOpen)}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2v2.95zm-7.45-3.91l1.41 1.41 1.79-1.8-1.41-1.41-1.79 1.8z" />
-                </svg>
-              </button>
-
-              {sunPanelOpen && (
-                <div className={styles.sunDropdown}>
-                  <div className={styles.dropdownHeader}>
-                    <span>Sun Settings</span>
-                    <button onClick={() => setSunPanelOpen(false)} className={styles.closeBtn}>×</button>
-                  </div>
-                  <div className={styles.dropdownBody}>
-                    {/* Month */}
-                    <div className={styles.controlGroup}>
-                      <label>월 (Month)</label>
-                      <div className={styles.controlInput}>
-                        <input
-                          type="range"
-                          min="1"
-                          max="12"
-                          step="1"
-                          value={sunSettings.month}
-                          onChange={(e) => setSunSettings({ ...sunSettings, month: parseInt(e.target.value) })}
-                          className={styles.rangeSlider}
-                        />
-                        <span className={styles.valueDisplay}>{sunSettings.month}월</span>
-                      </div>
-                    </div>
-
-                    {/* Hour */}
-                    <div className={styles.controlGroup}>
-                      <label>시간 (Hour)</label>
-                      <div className={styles.controlInput}>
-                        <input
-                          type="range"
-                          min="5"
-                          max="20"
-                          step="1"
-                          value={sunSettings.hour}
-                          onChange={(e) => setSunSettings({ ...sunSettings, hour: parseInt(e.target.value) })}
-                          className={styles.rangeSlider}
-                        />
-                        <span className={styles.valueDisplay}>{sunSettings.hour}시</span>
-                      </div>
-                    </div>
-
-                    {/* Intensity */}
-                    <div className={styles.controlGroup}>
-                      <label>강도 (Intensity)</label>
-                      <div className={styles.controlInput}>
-                        <input
-                          type="range"
-                          min="0"
-                          max="3"
-                          step="0.1"
-                          value={sunSettings.intensity}
-                          onChange={(e) => setSunSettings({ ...sunSettings, intensity: parseFloat(e.target.value) })}
-                          className={styles.rangeSlider}
-                        />
-                        <span className={styles.valueDisplay}>{sunSettings.intensity.toFixed(1)}</span>
-                      </div>
-                    </div>
-
-                    {/* Azimuth */}
-                    <div className={styles.controlGroup}>
-                      <label>방위각 (Azimuth)</label>
-                      <div className={styles.controlInput}>
-                        <input
-                          type="range"
-                          min="0"
-                          max="360"
-                          step="1"
-                          value={sunSettings.azimuth}
-                          onChange={(e) => setSunSettings({ ...sunSettings, azimuth: parseInt(e.target.value) })}
-                          className={styles.rangeSlider}
-                        />
-                        <span className={styles.valueDisplay}>{sunSettings.azimuth}°</span>
-                      </div>
-                    </div>
-
-                    {/* Calculated Altitude (read-only) */}
-                    <div className={styles.controlGroup} style={{ opacity: 0.7 }}>
-                      <label>고도 (Altitude)</label>
-                      <div className={styles.controlInput}>
-                        <span className={styles.valueDisplay} style={{ marginLeft: 'auto' }}>
-                          {calculateSunAltitude(sunSettings.month, sunSettings.hour).toFixed(1)}° (자동 계산)
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
             <button className={styles.topBtn} title="Ambient">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z" />
@@ -2890,109 +2690,76 @@ ARTISTIC APPROACH:
           <div className={styles.leftSidebar}>
             <div className={styles.sidebarButtons}>
               {/* Create Room */}
-              <button className={styles.sidebarBtn}>
+              <button className={styles.sidebarBtn} title="Create Room">
                 <div className={styles.icon}>
                   <LiaPencilRulerSolid size={24} />
                 </div>
-                <span>Create<br />Room</span>
               </button>
 
               {/* Asset Library */}
-              <button className={styles.sidebarBtn}>
+              <button className={styles.sidebarBtn} title="Asset Library">
                 <div className={styles.icon}>
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                   </svg>
                 </div>
-                <span>Asset<br />Library</span>
               </button>
 
               {/* Material */}
-              <button className={styles.sidebarBtn}>
+              <button className={styles.sidebarBtn} title="Material">
                 <div className={styles.icon}>
                   <HiOutlineColorSwatch size={24} />
                 </div>
-                <span>Material</span>
+              </button>
+
+              {/* Lighting */}
+              <button
+                className={styles.sidebarBtn}
+                onClick={() => setLightPanelOpen(!lightPanelOpen)}
+                title="Lighting"
+              >
+                <div className={styles.icon}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M9 21h6M12 3a6 6 0 0 0-6 6c0 2.22 1.21 4.16 3 5.19V17a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-2.81c1.79-1.03 3-2.97 3-5.19a6 6 0 0 0-6-6z" />
+                  </svg>
+                </div>
               </button>
 
               {/* Kitchen & Cabinet */}
-              <button className={styles.sidebarBtn}>
+              <button className={styles.sidebarBtn} title="Kitchen & Cabinet">
                 <div className={styles.icon}>
                   <BiCabinet size={24} />
                 </div>
-                <span>Kitchen &<br />Cabinet</span>
               </button>
 
               {/* A.I Layout */}
-              <button className={styles.sidebarBtn}>
+              <button className={styles.sidebarBtn} title="A.I Layout">
                 <div className={styles.icon}>
                   <MdAutoAwesome size={24} />
                 </div>
-                <span>A.I<br />Layout</span>
               </button>
 
               {/* My Page */}
-              <button className={styles.sidebarBtn}>
+              <button className={styles.sidebarBtn} title="My Page">
                 <div className={styles.icon}>
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <circle cx="12" cy="8" r="4" />
                     <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
                   </svg>
                 </div>
-                <span>My<br />Page</span>
               </button>
             </div>
 
             <div className={styles.sidebarBottom}>
-              <button className={styles.sidebarBtn}>
-                <div className={styles.icon}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <circle cx="12" cy="12" r="1" />
-                  </svg>
-                </div>
-              </button>
-              <button className={styles.sidebarBtn}>
-                <div className={styles.icon}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z" />
-                  </svg>
-                </div>
-              </button>
-              <button className={styles.sidebarBtn}>
-                <div className={styles.icon}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
-                  </svg>
-                </div>
-              </button>
-              <button className={styles.sidebarBtn}>
-                <div className={styles.icon}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
-                  </svg>
-                </div>
-              </button>
-              <button className={styles.sidebarBtn} onClick={() => setRenderStyleOpen(!renderStyleOpen)}>
-                <div className={styles.icon}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9zM12 4.15L5 8.09v7.82l7 3.94 7-3.94V8.09l-7-3.94z" />
-                  </svg>
-                </div>
-              </button>
-              <button className={styles.sidebarBtn} onClick={() => setThemeSettingsOpen(!themeSettingsOpen)}>
+              {/* Settings */}
+              <button className={styles.sidebarBtn} onClick={() => setThemeSettingsOpen(!themeSettingsOpen)} title="설정">
                 <div className={styles.icon}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
                   </svg>
                 </div>
               </button>
-              <button className={styles.sidebarBtn}>
-                <div className={styles.icon}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                  </svg>
-                </div>
-              </button>
+              {/* Exit */}
               <button className={styles.sidebarBtn} onClick={() => navigate('/')} title="나가기">
                 <div className={styles.icon}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -3254,10 +3021,352 @@ ARTISTIC APPROACH:
               setViewMode(mode);
               if (mode === '2D') setPlayMode(false);
             }}
-            zoom={0.5} // Placeholder
+            zoom={(120 - cameraFov) / 90} // Convert FOV (30-120) to zoom (0-1): FOV 120 = zoom 0, FOV 30 = zoom 1
+            onZoomChange={(newZoom) => {
+              // Convert zoom (0-1) back to FOV (30-120)
+              const newFov = 120 - (newZoom * 90);
+              setCameraFov(newFov);
+              eventBus.emit(EditorEvents.CAMERA_FOV_CHANGED, { fov: newFov });
+            }}
             themeColor={themeColor}
             themeMode={themeMode}
+            onSunSettingsClick={() => setSunPanelOpen(!sunPanelOpen)}
+            sunPanelOpen={sunPanelOpen}
+            onCameraSettingsClick={() => setCameraPanelOpen(!cameraPanelOpen)}
+            cameraPanelOpen={cameraPanelOpen}
+            displayStyle={displayStyle}
+            onDisplayStyleChange={setDisplayStyle}
+            wireframeMode={hiddenLineMode}
+            onWireframeModeChange={setHiddenLineMode}
+            qualityFirst={photoRealisticMode}
+            onQualityFirstChange={setPhotoRealisticMode}
           />
+
+          {/* Sun Settings Panel - Bottom */}
+          {viewMode === '3D' && sunPanelOpen && (
+            <div
+              className={styles.sunPanelBottom}
+              data-theme={themeMode}
+              style={{ '--theme-color': themeColor } as React.CSSProperties}
+            >
+              <div className={styles.sunPanelHeader}>
+                <span>Sun Settings</span>
+                <button onClick={() => setSunPanelOpen(false)} className={styles.sunPanelCloseBtn}>×</button>
+              </div>
+              <div className={styles.sunPanelBody}>
+                {/* Month */}
+                <div className={styles.sunControlGroup}>
+                  <label>월 (Month)</label>
+                  <div className={styles.sunControlInput}>
+                    <input
+                      type="range"
+                      min="1"
+                      max="12"
+                      step="1"
+                      value={sunSettings.month}
+                      onChange={(e) => setSunSettings({ ...sunSettings, month: parseInt(e.target.value) })}
+                      className={styles.sunRangeSlider}
+                    />
+                    <span className={styles.sunValueDisplay}>{sunSettings.month}월</span>
+                  </div>
+                </div>
+
+                {/* Hour */}
+                <div className={styles.sunControlGroup}>
+                  <label>시간 (Time)</label>
+                  <div className={styles.sunControlInput}>
+                    <input
+                      type="range"
+                      min="5"
+                      max="20"
+                      step="0.5"
+                      value={sunSettings.hour}
+                      onChange={(e) => setSunSettings({ ...sunSettings, hour: parseFloat(e.target.value) })}
+                      className={styles.sunRangeSlider}
+                    />
+                    <span className={styles.sunValueDisplay}>
+                      {Math.floor(sunSettings.hour)}:{String(Math.round((sunSettings.hour % 1) * 60)).padStart(2, '0')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Intensity */}
+                <div className={styles.sunControlGroup}>
+                  <label>강도 (Intensity)</label>
+                  <div className={styles.sunControlInput}>
+                    <input
+                      type="range"
+                      min="0"
+                      max="3"
+                      step="0.1"
+                      value={sunSettings.intensity}
+                      onChange={(e) => setSunSettings({ ...sunSettings, intensity: parseFloat(e.target.value) })}
+                      className={styles.sunRangeSlider}
+                    />
+                    <span className={styles.sunValueDisplay}>{sunSettings.intensity.toFixed(1)}</span>
+                  </div>
+                </div>
+
+                {/* Azimuth */}
+                <div className={styles.sunControlGroup}>
+                  <label>방위각 (Azimuth)</label>
+                  <div className={styles.sunControlInput}>
+                    <input
+                      type="range"
+                      min="0"
+                      max="360"
+                      step="1"
+                      value={sunSettings.azimuth}
+                      onChange={(e) => setSunSettings({ ...sunSettings, azimuth: parseInt(e.target.value) })}
+                      className={styles.sunRangeSlider}
+                    />
+                    <span className={styles.sunValueDisplay}>{sunSettings.azimuth}°</span>
+                  </div>
+                </div>
+
+                {/* Altitude (Auto-calculated) */}
+                <div className={styles.sunControlGroup} style={{ opacity: 0.6 }}>
+                  <label>고도 (Altitude)</label>
+                  <div className={styles.sunControlInput}>
+                    <span className={styles.sunValueDisplay} style={{ marginLeft: 'auto', fontSize: '12px' }}>
+                      {calculateSunAltitude(sunSettings.month, sunSettings.hour).toFixed(1)}° (자동)
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Camera Settings Panel - Bottom */}
+          {viewMode === '3D' && cameraPanelOpen && (
+            <div
+              className={styles.cameraPanelBottom}
+              data-theme={themeMode}
+              style={{ '--theme-color': themeColor } as React.CSSProperties}
+            >
+              <div className={styles.cameraPanelHeader}>
+                <span>Camera Settings</span>
+                <button onClick={() => setCameraPanelOpen(false)} className={styles.cameraPanelCloseBtn}>×</button>
+              </div>
+              <div className={styles.cameraPanelBody}>
+                {/* Visual Angle Indicator + Sliders */}
+                <div className={styles.cameraMainContent}>
+                  {/* Left: Camera Altitude Visualization */}
+                  <div className={styles.cameraGizmoContainer}>
+                    <svg viewBox="0 0 180 200" className={styles.cameraGizmoSvg} preserveAspectRatio="none">
+                      {/* Background rectangle */}
+                      <rect x="0" y="0" width="180" height="200" fill="#d8d8d8" />
+
+                      {/* Calculate camera altitude arc parameters */}
+                      {(() => {
+                        // Use cameraBeta for the altitude angle
+                        const betaDegrees = cameraBeta * 180 / Math.PI;
+
+                        // Origin point (red dot)
+                        const originX = 10;
+                        const originY = 100;
+
+                        // Arc radius
+                        const radius = 70;
+
+                        // Axis line length
+                        const axisLength = 165;
+
+                        // Calculate arc endpoints based on cameraBeta
+                        // Beta goes from 0 (horizontal) to PI/2 (vertical up)
+                        const startAngle = 0; // 0° (horizontal right)
+                        const endAngle = cameraBeta; // Current camera altitude
+
+                        const x1 = originX + radius * Math.cos(startAngle);
+                        const y1 = originY - radius * Math.sin(startAngle);
+                        const x2 = originX + radius * Math.cos(endAngle);
+                        const y2 = originY - radius * Math.sin(endAngle);
+
+                        // Large arc flag - 0 for outward arc
+                        const largeArcFlag = 0;
+
+                        // Camera icon position (at the end of the arc)
+                        const cameraDistance = radius + 12;
+                        const cameraX = originX + cameraDistance * Math.cos(endAngle);
+                        const cameraY = originY - cameraDistance * Math.sin(endAngle);
+
+                        // Camera rotation angle
+                        const cameraRotation = (endAngle * 180 / Math.PI);
+
+                        return (
+                          <>
+                            {/* Axis lines */}
+                            {/* 90° line (vertical up) */}
+                            <line
+                              x1={originX}
+                              y1={originY}
+                              x2={originX}
+                              y2={originY - axisLength}
+                              stroke="#999999"
+                              strokeWidth="1.5"
+                            />
+                            {/* 0° line (horizontal right) */}
+                            <line
+                              x1={originX}
+                              y1={originY}
+                              x2={originX + axisLength}
+                              y2={originY}
+                              stroke="#999999"
+                              strokeWidth="1.5"
+                            />
+                            {/* -90° line (vertical down) */}
+                            <line
+                              x1={originX}
+                              y1={originY}
+                              x2={originX}
+                              y2={originY + axisLength}
+                              stroke="#999999"
+                              strokeWidth="1.5"
+                            />
+
+                            {/* Camera altitude Arc (filled) - outward arc */}
+                            <path
+                              d={`M ${originX} ${originY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 0 ${x2} ${y2} Z`}
+                              fill="var(--theme-color)"
+                              opacity="0.7"
+                            />
+
+                            {/* Origin point (red dot) */}
+                            <circle cx={originX} cy={originY} r="3" fill="#ff4444" />
+
+                            {/* Camera icon (video camera) - rotates with altitude */}
+                            <g transform={`translate(${cameraX}, ${cameraY}) rotate(${cameraRotation})`}>
+                              {/* Camera body (trapezoid shape) */}
+                              <path d="M -6,-4 L 2,-4 L 2,4 L -6,4 Z" fill="#666666" />
+                              {/* Camera lens (triangle pointing right) */}
+                              <path d="M 2,-2 L 6,0 L 2,2 Z" fill="#666666" />
+                              {/* Camera handle */}
+                              <rect x="-6" y="-6" width="3" height="2" fill="#666666" rx="0.5" />
+                            </g>
+                          </>
+                        );
+                      })()}
+
+                      {/* Degree labels */}
+                      <text x="10" y="20" textAnchor="start" fontSize="14" fill="#555555" fontWeight="600">90°</text>
+                      <text x="170" y="102" textAnchor="end" fontSize="14" fill="#555555" fontWeight="600">0°</text>
+                      <text x="10" y="185" textAnchor="start" fontSize="14" fill="#555555" fontWeight="600">-90°</text>
+
+                      {/* "최대" label at bottom right */}
+                      <text x="170" y="195" textAnchor="end" fontSize="12" fill="#888888">최대</text>
+                    </svg>
+                  </div>
+
+
+                  {/* Right: Sliders */}
+                  <div className={styles.cameraSlidersContainer}>
+                    {/* Camera Altitude (Beta) */}
+                    <div className={styles.cameraControlGroup}>
+                      <label>카메라 고도</label>
+                      <div className={styles.cameraControlInput}>
+                        <input
+                          type="range"
+                          min="0.01"
+                          max={Math.PI / 2 - 0.01}
+                          step="0.01"
+                          value={cameraBeta}
+                          onChange={(e) => {
+                            const newBeta = parseFloat(e.target.value);
+                            setCameraBeta(newBeta);
+                            // Update Babylon camera via global function
+                            if (typeof window !== 'undefined' && (window as any).__setCameraRotation) {
+                              (window as any).__setCameraRotation(cameraAlpha, newBeta);
+                            }
+                          }}
+                          className={styles.cameraRangeSlider}
+                        />
+                        <span className={styles.cameraValueDisplay}>
+                          {Math.round(cameraBeta * 180 / Math.PI)}°
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Azimuth (Alpha) */}
+                    <div className={styles.cameraControlGroup}>
+                      <label>방위각</label>
+                      <div className={styles.cameraControlInput}>
+                        <input
+                          type="range"
+                          min={-Math.PI}
+                          max={Math.PI}
+                          step="0.01"
+                          value={cameraAlpha}
+                          onChange={(e) => {
+                            const newAlpha = parseFloat(e.target.value);
+                            setCameraAlpha(newAlpha);
+                            // Update Babylon camera via global function
+                            if (typeof window !== 'undefined' && (window as any).__setCameraRotation) {
+                              (window as any).__setCameraRotation(newAlpha, cameraBeta);
+                            }
+                          }}
+                          className={styles.cameraRangeSlider}
+                        />
+                        <span className={styles.cameraValueDisplay}>
+                          {Math.round(cameraAlpha * 180 / Math.PI)}°
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* FOV */}
+                    <div className={styles.cameraControlGroup}>
+                      <label>시야각</label>
+                      <div className={styles.cameraControlInput}>
+                        <div className={styles.cameraFovLabels}>
+                          <span>최소</span>
+                          <span>기본</span>
+                          <span>최대</span>
+                        </div>
+                      </div>
+                      <div className={styles.cameraControlInput}>
+                        <input
+                          type="range"
+                          min="30"
+                          max="120"
+                          step="1"
+                          value={cameraFov}
+                          onChange={(e) => {
+                            const newFov = parseFloat(e.target.value);
+                            setCameraFov(newFov);
+                            // Update Babylon camera FOV via event bus
+                            eventBus.emit(EditorEvents.CAMERA_FOV_CHANGED, { fov: newFov });
+                          }}
+                          className={styles.cameraRangeSlider}
+                        />
+                        <span className={styles.cameraValueDisplay}>{cameraFov}°</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Projection Type Toggle */}
+                <div className={styles.cameraProjectionToggle}>
+                  <button
+                    className={`${styles.cameraProjectionBtn} ${projectionType === 'perspective' ? styles.active : ''}`}
+                    onClick={() => {
+                      setProjectionType('perspective');
+                      eventBus.emit(EditorEvents.CAMERA_PROJECTION_CHANGED, { type: 'perspective' });
+                    }}
+                  >
+                    원근
+                  </button>
+                  <button
+                    className={`${styles.cameraProjectionBtn} ${projectionType === 'orthographic' ? styles.active : ''}`}
+                    onClick={() => {
+                      setProjectionType('orthographic');
+                      eventBus.emit(EditorEvents.CAMERA_PROJECTION_CHANGED, { type: 'orthographic' });
+                    }}
+                  >
+                    직교
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 2D View - Main Viewport */}
           <div style={{
@@ -3715,273 +3824,279 @@ ARTISTIC APPROACH:
         </div>
 
         {/* Right Settings Panel */}
-        {!playMode && (
-          rightPanelOpen ? (
-            <div className={styles.rightPanel}>
-              <div className={styles.panelHeader}>
-                <h3>Layer Settings</h3>
-                <button onClick={() => setRightPanelOpen(false)} className={styles.toggleBtn}>
+        {
+          !playMode && (
+            rightPanelOpen ? (
+              <div className={styles.rightPanel}>
+                <div className={styles.panelHeader}>
+                  <h3>Layer Settings</h3>
+                  <button onClick={() => setRightPanelOpen(false)} className={styles.toggleBtn}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* 3D Preview */}
+                <FloorplanPreview
+                  viewMode={viewMode}
+                  previewContainerId={viewMode === '2D' ? 'preview-3d-container' : 'preview-2d-container'}
+                />
+
+                {/* Selected Room Info */}
+                {selectedRoom && (
+                  <div className={styles.settingsSection} style={{ backgroundColor: 'var(--theme-color-light, rgba(63, 174, 167, 0.1))', borderLeft: '3px solid var(--theme-color, #3FAEA7)' }}>
+                    <h4>Selected Room</h4>
+                    <div className={styles.settingRow}>
+                      <label>Name</label>
+                      <span style={{ fontWeight: 'bold' }}>{selectedRoom.name || 'Unnamed'}</span>
+                    </div>
+                    <div className={styles.settingRow}>
+                      <label>Area</label>
+                      <span style={{ fontWeight: 'bold', color: 'var(--theme-color, #3FAEA7)' }}>{selectedRoom.area.toFixed(2)} m²</span>
+                    </div>
+                    <button
+                      className={styles.editBtn}
+                      onClick={() => setSelectedRoom(null)}
+                      style={{ marginTop: '8px' }}
+                    >
+                      Deselect Room
+                    </button>
+                  </div>
+                )}
+
+                {/* Basic Parameters */}
+                <div className={styles.settingsSection}>
+                  <h4>Basic Parameters</h4>
+                  <div className={styles.settingRow}>
+                    <label>Total Building</label>
+                    <input type="text" defaultValue="0.00 ㎡" readOnly />
+                  </div>
+                </div>
+
+                {/* Wall Settings */}
+                <div className={styles.settingsSection}>
+                  <h4>Wall Settings</h4>
+                  <div className={styles.settingRow}>
+                    <label>Lock Walls</label>
+                    <input type="checkbox" />
+                  </div>
+                  <div className={styles.settingRow}>
+                    <label>Wall Height</label>
+                    <input
+                      type="number"
+                      value={wallHeight}
+                      onChange={(e) => setWallHeight(parseInt(e.target.value) || 2400)}
+                      style={{ width: '80px' }}
+                    /> mm
+                  </div>
+                  <div className={styles.settingRow}>
+                    <label>Wall Thickness</label>
+                    <input
+                      type="number"
+                      value={wallThickness}
+                      onChange={(e) => setWallThickness(parseInt(e.target.value) || 100)}
+                      style={{ width: '80px' }}
+                    /> mm
+                  </div>
+                  <button className={styles.deleteBtn}>Delete All Walls</button>
+                </div>
+
+                {/* Floor Setting */}
+                <div className={styles.settingsSection}>
+                  <h4>Floor Setting</h4>
+                  <div className={styles.settingRow}>
+                    <label>Floor Thickness</label>
+                    <input type="text" defaultValue="120 mm" />
+                  </div>
+                  <button className={styles.editBtn}>Edit Floor ›</button>
+                </div>
+              </div>
+            ) : (
+              <div className={styles.rightPanelCollapsed} onClick={() => setRightPanelOpen(true)} title="Expand Panel">
+                <button className={styles.toggleBtn}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+                    <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
                   </svg>
                 </button>
               </div>
-
-              {/* 3D Preview */}
-              <FloorplanPreview
-                viewMode={viewMode}
-                previewContainerId={viewMode === '2D' ? 'preview-3d-container' : 'preview-2d-container'}
-              />
-
-              {/* Selected Room Info */}
-              {selectedRoom && (
-                <div className={styles.settingsSection} style={{ backgroundColor: 'var(--theme-color-light, rgba(63, 174, 167, 0.1))', borderLeft: '3px solid var(--theme-color, #3FAEA7)' }}>
-                  <h4>Selected Room</h4>
-                  <div className={styles.settingRow}>
-                    <label>Name</label>
-                    <span style={{ fontWeight: 'bold' }}>{selectedRoom.name || 'Unnamed'}</span>
-                  </div>
-                  <div className={styles.settingRow}>
-                    <label>Area</label>
-                    <span style={{ fontWeight: 'bold', color: 'var(--theme-color, #3FAEA7)' }}>{selectedRoom.area.toFixed(2)} m²</span>
-                  </div>
-                  <button
-                    className={styles.editBtn}
-                    onClick={() => setSelectedRoom(null)}
-                    style={{ marginTop: '8px' }}
-                  >
-                    Deselect Room
-                  </button>
-                </div>
-              )}
-
-              {/* Basic Parameters */}
-              <div className={styles.settingsSection}>
-                <h4>Basic Parameters</h4>
-                <div className={styles.settingRow}>
-                  <label>Total Building</label>
-                  <input type="text" defaultValue="0.00 ㎡" readOnly />
-                </div>
-              </div>
-
-              {/* Wall Settings */}
-              <div className={styles.settingsSection}>
-                <h4>Wall Settings</h4>
-                <div className={styles.settingRow}>
-                  <label>Lock Walls</label>
-                  <input type="checkbox" />
-                </div>
-                <div className={styles.settingRow}>
-                  <label>Wall Height</label>
-                  <input
-                    type="number"
-                    value={wallHeight}
-                    onChange={(e) => setWallHeight(parseInt(e.target.value) || 2400)}
-                    style={{ width: '80px' }}
-                  /> mm
-                </div>
-                <div className={styles.settingRow}>
-                  <label>Wall Thickness</label>
-                  <input
-                    type="number"
-                    value={wallThickness}
-                    onChange={(e) => setWallThickness(parseInt(e.target.value) || 100)}
-                    style={{ width: '80px' }}
-                  /> mm
-                </div>
-                <button className={styles.deleteBtn}>Delete All Walls</button>
-              </div>
-
-              {/* Floor Setting */}
-              <div className={styles.settingsSection}>
-                <h4>Floor Setting</h4>
-                <div className={styles.settingRow}>
-                  <label>Floor Thickness</label>
-                  <input type="text" defaultValue="120 mm" />
-                </div>
-                <button className={styles.editBtn}>Edit Floor ›</button>
-              </div>
-            </div>
-          ) : (
-            <div className={styles.rightPanelCollapsed} onClick={() => setRightPanelOpen(true)} title="Expand Panel">
-              <button className={styles.toggleBtn}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
-                </svg>
-              </button>
-            </div>
+            )
           )
-        )}
+        }
 
         {/* Render Style Panel */}
-        {renderStyleOpen && (
-          <div className={styles.renderStylePanel}>
-            <div className={styles.panelHeader}>
-              <h3>Render Style</h3>
-              <button onClick={() => setRenderStyleOpen(false)} className={styles.closeBtn}>×</button>
+        {
+          renderStyleOpen && (
+            <div className={styles.renderStylePanel}>
+              <div className={styles.panelHeader}>
+                <h3>Render Style</h3>
+                <button onClick={() => setRenderStyleOpen(false)} className={styles.closeBtn}>×</button>
+              </div>
+
+              <div className={styles.panelContent}>
+                <div className={styles.styleOption}>
+                  <button
+                    className={`${styles.styleBtn} ${renderStyle === 'wireframe' ? styles.active : ''}`}
+                    onClick={() => setRenderStyle('wireframe')}
+                  >
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                      <line x1="12" y1="22.08" x2="12" y2="12" />
+                    </svg>
+                    <span>Wireframe</span>
+                  </button>
+                </div>
+
+                <div className={styles.styleOption}>
+                  <button
+                    className={`${styles.styleBtn} ${renderStyle === 'hidden-line' ? styles.active : ''}`}
+                    onClick={() => setRenderStyle('hidden-line')}
+                  >
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                      <polyline points="7.5 4.21 12 6.81 16.5 4.21" />
+                      <polyline points="7.5 19.79 12 17.19 16.5 19.79" />
+                      <line x1="3.27" y1="6.96" x2="12" y2="12.01" />
+                      <line x1="12" y1="12.01" x2="20.73" y2="6.96" />
+                    </svg>
+                    <span>Hidden Line</span>
+                  </button>
+                </div>
+
+                <div className={styles.styleOption}>
+                  <button
+                    className={`${styles.styleBtn} ${renderStyle === 'solid' ? styles.active : ''}`}
+                    onClick={() => setRenderStyle('solid')}
+                  >
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9z" />
+                    </svg>
+                    <span>Solid</span>
+                  </button>
+                </div>
+
+                <div className={styles.styleOption}>
+                  <button
+                    className={`${styles.styleBtn} ${renderStyle === 'realistic' ? styles.active : ''}`}
+                    onClick={() => setRenderStyle('realistic')}
+                  >
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                      <defs>
+                        <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" style={{ stopColor: 'currentColor', stopOpacity: 1 }} />
+                          <stop offset="100%" style={{ stopColor: 'currentColor', stopOpacity: 0.3 }} />
+                        </linearGradient>
+                      </defs>
+                      <path fill="url(#grad1)" d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9z" />
+                      <circle cx="8" cy="10" r="1" fill="currentColor" opacity="0.6" />
+                      <circle cx="16" cy="10" r="1" fill="currentColor" opacity="0.6" />
+                      <circle cx="12" cy="14" r="1" fill="currentColor" opacity="0.6" />
+                    </svg>
+                    <span>Realistic</span>
+                  </button>
+                </div>
+              </div>
             </div>
-
-            <div className={styles.panelContent}>
-              <div className={styles.styleOption}>
-                <button
-                  className={`${styles.styleBtn} ${renderStyle === 'wireframe' ? styles.active : ''}`}
-                  onClick={() => setRenderStyle('wireframe')}
-                >
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                    <line x1="12" y1="22.08" x2="12" y2="12" />
-                  </svg>
-                  <span>Wireframe</span>
-                </button>
-              </div>
-
-              <div className={styles.styleOption}>
-                <button
-                  className={`${styles.styleBtn} ${renderStyle === 'hidden-line' ? styles.active : ''}`}
-                  onClick={() => setRenderStyle('hidden-line')}
-                >
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                    <polyline points="7.5 4.21 12 6.81 16.5 4.21" />
-                    <polyline points="7.5 19.79 12 17.19 16.5 19.79" />
-                    <line x1="3.27" y1="6.96" x2="12" y2="12.01" />
-                    <line x1="12" y1="12.01" x2="20.73" y2="6.96" />
-                  </svg>
-                  <span>Hidden Line</span>
-                </button>
-              </div>
-
-              <div className={styles.styleOption}>
-                <button
-                  className={`${styles.styleBtn} ${renderStyle === 'solid' ? styles.active : ''}`}
-                  onClick={() => setRenderStyle('solid')}
-                >
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9z" />
-                  </svg>
-                  <span>Solid</span>
-                </button>
-              </div>
-
-              <div className={styles.styleOption}>
-                <button
-                  className={`${styles.styleBtn} ${renderStyle === 'realistic' ? styles.active : ''}`}
-                  onClick={() => setRenderStyle('realistic')}
-                >
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                    <defs>
-                      <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" style={{ stopColor: 'currentColor', stopOpacity: 1 }} />
-                        <stop offset="100%" style={{ stopColor: 'currentColor', stopOpacity: 0.3 }} />
-                      </linearGradient>
-                    </defs>
-                    <path fill="url(#grad1)" d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9z" />
-                    <circle cx="8" cy="10" r="1" fill="currentColor" opacity="0.6" />
-                    <circle cx="16" cy="10" r="1" fill="currentColor" opacity="0.6" />
-                    <circle cx="12" cy="14" r="1" fill="currentColor" opacity="0.6" />
-                  </svg>
-                  <span>Realistic</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+          )
+        }
 
         {/* Theme Settings Panel */}
-        {themeSettingsOpen && (
-          <div className={styles.themeSettingsPanel}>
-            <div className={styles.panelHeader}>
-              <h3>테마 설정</h3>
-              <button onClick={() => setThemeSettingsOpen(false)} className={styles.closeBtn}>×</button>
-            </div>
-
-            <div className={styles.panelContent}>
-              {/* Theme Mode Selection */}
-              <div className={styles.settingsSection}>
-                <h4>모드</h4>
-                <div className={styles.themeModeGrid}>
-                  <button
-                    className={`${styles.themeModeBtn} ${themeMode === 'light' ? styles.active : ''}`}
-                    onClick={() => setThemeMode('light')}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z" />
-                    </svg>
-                    <span>라이트</span>
-                  </button>
-                  <button
-                    className={`${styles.themeModeBtn} ${themeMode === 'dark' ? styles.active : ''}`}
-                    onClick={() => setThemeMode('dark')}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z" />
-                    </svg>
-                    <span>다크</span>
-                  </button>
-                </div>
+        {
+          themeSettingsOpen && (
+            <div className={styles.themeSettingsPanel}>
+              <div className={styles.panelHeader}>
+                <h3>테마 설정</h3>
+                <button onClick={() => setThemeSettingsOpen(false)} className={styles.closeBtn}>×</button>
               </div>
 
-              {/* Theme Color Selection */}
-              <div className={styles.settingsSection}>
-                <h4>테마 색상</h4>
-                <div className={styles.colorGrid}>
-                  {[
-                    { name: '그린', color: '#3fae7a' },
-                    { name: '블루', color: '#4a90e2' },
-                    { name: '퍼플', color: '#9b59b6' },
-                    { name: '오렌지', color: '#e67e22' },
-                    { name: '레드', color: '#e74c3c' },
-                    { name: '핑크', color: '#ec4899' },
-                    { name: '틸', color: '#14b8a6' },
-                    { name: '인디고', color: '#6366f1' },
-                  ].map(({ name, color }) => (
+              <div className={styles.panelContent}>
+                {/* Theme Mode Selection */}
+                <div className={styles.settingsSection}>
+                  <h4>모드</h4>
+                  <div className={styles.themeModeGrid}>
                     <button
-                      key={color}
-                      className={`${styles.colorBtn} ${themeColor === color ? styles.active : ''}`}
-                      style={{ backgroundColor: color }}
-                      onClick={() => setThemeColor(color)}
-                      title={name}
+                      className={`${styles.themeModeBtn} ${themeMode === 'light' ? styles.active : ''}`}
+                      onClick={() => setThemeMode('light')}
                     >
-                      {themeColor === color && (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-                          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-                        </svg>
-                      )}
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z" />
+                      </svg>
+                      <span>라이트</span>
                     </button>
-                  ))}
+                    <button
+                      className={`${styles.themeModeBtn} ${themeMode === 'dark' ? styles.active : ''}`}
+                      onClick={() => setThemeMode('dark')}
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z" />
+                      </svg>
+                      <span>다크</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              {/* Custom Color Picker */}
-              <div className={styles.settingsSection}>
-                <h4>커스텀 색상</h4>
-                <div className={styles.customColorRow}>
-                  <input
-                    type="color"
-                    value={themeColor}
-                    onChange={(e) => setThemeColor(e.target.value)}
-                    className={styles.colorPicker}
-                  />
-                  <span className={styles.colorValue}>{themeColor.toUpperCase()}</span>
+                {/* Theme Color Selection */}
+                <div className={styles.settingsSection}>
+                  <h4>테마 색상</h4>
+                  <div className={styles.colorGrid}>
+                    {[
+                      { name: '그린', color: '#3fae7a' },
+                      { name: '블루', color: '#4a90e2' },
+                      { name: '퍼플', color: '#9b59b6' },
+                      { name: '오렌지', color: '#e67e22' },
+                      { name: '레드', color: '#e74c3c' },
+                      { name: '핑크', color: '#ec4899' },
+                      { name: '틸', color: '#14b8a6' },
+                      { name: '인디고', color: '#6366f1' },
+                    ].map(({ name, color }) => (
+                      <button
+                        key={color}
+                        className={`${styles.colorBtn} ${themeColor === color ? styles.active : ''}`}
+                        style={{ backgroundColor: color }}
+                        onClick={() => setThemeColor(color)}
+                        title={name}
+                      >
+                        {themeColor === color && (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                          </svg>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Custom Color Picker */}
+                <div className={styles.settingsSection}>
+                  <h4>커스텀 색상</h4>
+                  <div className={styles.customColorRow}>
+                    <input
+                      type="color"
+                      value={themeColor}
+                      onChange={(e) => setThemeColor(e.target.value)}
+                      className={styles.colorPicker}
+                    />
+                    <span className={styles.colorValue}>{themeColor.toUpperCase()}</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          )
+        }
+      </div >
 
       {/* Camera Settings Modal */}
-      <CameraSettingsModal />
+      < CameraSettingsModal />
 
       {/* Export Modal */}
-      <ExportModal
+      < ExportModal
         isOpen={exportModalOpen}
         onClose={() => setExportModalOpen(false)}
         floorplanData={floorplanData}
       />
       {/* New AI Render Modal */}
-      <AIRenderModal
+      < AIRenderModal
         isOpen={aiRenderModalOpen}
         onClose={() => setAiRenderModalOpen(false)}
         themeMode={themeMode}

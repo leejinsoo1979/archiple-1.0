@@ -36,7 +36,8 @@ import {
   Tools,
   Matrix,
   SSAO2RenderingPipeline,
-  Animation
+  Animation,
+  Material
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials/grid';
 import { SkyMaterial } from '@babylonjs/materials/sky';
@@ -267,6 +268,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
   const infiniteGridRef = useRef<Mesh | null>(null); // Store infinite grid mesh
   const planMetricsRef = useRef<PlanMetrics | null>(null); // Store plan metrics for cutaway logic
   const autoWallHiderRef = useRef<AutoWallHider | null>(null); // Wall cutaway manager
+  const originalMaterialsRef = useRef<Map<string, Material | null>>(new Map()); // Store original materials for display style switching
+  const ssaoRef = useRef<SSAO2RenderingPipeline | null>(null); // Store SSAO pipeline for display style control
 
   // Camera settings from Zustand store
   const cameraSettings = useCameraSettingsStore();
@@ -661,6 +664,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       ssao.maxZ = 150;
       ssao.minZAspect = 0.2;
       ssao.expensiveBlur = true;
+      ssaoRef.current = ssao; // Store for display style control
       // Create ArcRotate camera (default 3D view)
       const arcCamera = new ArcRotateCamera(
         'arcCamera',
@@ -2972,6 +2976,46 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     };
   }, [floorplanData]);
 
+  // Camera FOV and Projection change handlers
+  useEffect(() => {
+    const handleFovChange = (data: { fov: number }) => {
+      const arcCamera = arcCameraRef.current;
+      if (arcCamera) {
+        // Convert horizontal FOV to vertical FOV (Babylon uses vertical FOV)
+        // Assuming 16:9 aspect ratio
+        const aspectRatio = 16 / 9;
+        const horizontalFovRad = (data.fov * Math.PI) / 180;
+        const verticalFovRad = 2 * Math.atan(Math.tan(horizontalFovRad / 2) / aspectRatio);
+        arcCamera.fov = verticalFovRad;
+      }
+    };
+
+    const handleProjectionChange = (data: { type: 'perspective' | 'orthographic' }) => {
+      const arcCamera = arcCameraRef.current;
+      if (arcCamera) {
+        if (data.type === 'orthographic') {
+          arcCamera.mode = 1; // ORTHOGRAPHIC
+          // Set orthographic properties based on current radius
+          const orthoSize = arcCamera.radius / 2;
+          arcCamera.orthoLeft = -orthoSize;
+          arcCamera.orthoRight = orthoSize;
+          arcCamera.orthoTop = orthoSize / (16/9);
+          arcCamera.orthoBottom = -orthoSize / (16/9);
+        } else {
+          arcCamera.mode = 0; // PERSPECTIVE
+        }
+      }
+    };
+
+    eventBus.on(EditorEvents.CAMERA_FOV_CHANGED, handleFovChange);
+    eventBus.on(EditorEvents.CAMERA_PROJECTION_CHANGED, handleProjectionChange);
+
+    return () => {
+      eventBus.off(EditorEvents.CAMERA_FOV_CHANGED, handleFovChange);
+      eventBus.off(EditorEvents.CAMERA_PROJECTION_CHANGED, handleProjectionChange);
+    };
+  }, []);
+
   // GLB model loading and placement with click-to-place
   useEffect(() => {
     if (!glbModelFile || !sceneRef.current || !canvasRef.current) {
@@ -3593,6 +3637,93 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
+
+    // Control SSAO based on display style
+    const ssao = ssaoRef.current;
+    if (ssao) {
+      if (displayStyle === 'white') {
+        // Disable SSAO for clean white model
+        ssao.totalStrength = 0;
+      } else {
+        // Re-enable SSAO for other styles
+        ssao.totalStrength = 2.5;
+      }
+    }
+
+    // Skip certain meshes (grid, skybox, ground, etc.)
+    const excludedNames = ['gridPlane', 'skyBox', 'groundPlane', 'infiniteGrid', 'sunDisk', 'hdrSkybox'];
+
+    scene.meshes.forEach((mesh) => {
+      // Skip excluded meshes
+      if (excludedNames.some(name => mesh.name.includes(name))) return;
+      if (!mesh.material) return;
+
+      const meshId = mesh.uniqueId.toString();
+
+      // Store original material if not already stored
+      if (!originalMaterialsRef.current.has(meshId)) {
+        originalMaterialsRef.current.set(meshId, mesh.material);
+      }
+
+      const originalMaterial = originalMaterialsRef.current.get(meshId);
+
+      switch (displayStyle) {
+        case 'material':
+          // Restore original material
+          if (originalMaterial) {
+            mesh.material = originalMaterial;
+            mesh.receiveShadows = true; // Restore shadows
+          }
+          break;
+
+        case 'white':
+          // White clay model - flat white with edge lines for contour visibility
+          const whiteMat = new StandardMaterial(`whiteMat_${meshId}`, scene);
+          whiteMat.diffuseColor = new Color3(1, 1, 1);
+          whiteMat.specularColor = new Color3(0, 0, 0); // No specular
+          whiteMat.emissiveColor = new Color3(0.95, 0.95, 0.95); // Self-illuminated for flat look
+          whiteMat.disableLighting = true; // Disable all lighting effects
+          mesh.material = whiteMat;
+          mesh.receiveShadows = false; // No shadows
+          // Enable edge rendering for contour visibility
+          mesh.enableEdgesRendering();
+          mesh.edgesWidth = 1.0;
+          mesh.edgesColor = new Color4(0.3, 0.3, 0.3, 1); // Dark gray edges
+          break;
+
+        case 'sketch':
+          // Cartoon/sketch style - light gray with edge highlight
+          const sketchMat = new StandardMaterial(`sketchMat_${meshId}`, scene);
+          sketchMat.diffuseColor = new Color3(0.9, 0.88, 0.85);
+          sketchMat.specularColor = new Color3(0, 0, 0);
+          sketchMat.emissiveColor = new Color3(0.1, 0.08, 0.06);
+          mesh.material = sketchMat;
+          // Enable edge rendering for sketch effect
+          mesh.enableEdgesRendering();
+          mesh.edgesWidth = 2.0;
+          mesh.edgesColor = new Color4(0.2, 0.2, 0.2, 1);
+          break;
+
+        case 'transparent':
+          // Transparent/X-ray style
+          const transparentMat = new StandardMaterial(`transparentMat_${meshId}`, scene);
+          transparentMat.diffuseColor = new Color3(0.7, 0.85, 1.0);
+          transparentMat.specularColor = new Color3(0.3, 0.3, 0.3);
+          transparentMat.alpha = 0.3;
+          transparentMat.backFaceCulling = false;
+          mesh.material = transparentMat;
+          // Enable edge rendering for wireframe effect
+          mesh.enableEdgesRendering();
+          mesh.edgesWidth = 1.5;
+          mesh.edgesColor = new Color4(0.3, 0.5, 0.8, 1);
+          break;
+      }
+
+      // Disable edge rendering only for material style (original)
+      if (displayStyle === 'material') {
+        mesh.disableEdgesRendering();
+      }
+    });
   }, [displayStyle, floorplanData]);
 
   // Update grid visibility when showGrid changes
