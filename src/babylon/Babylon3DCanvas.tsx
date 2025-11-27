@@ -643,12 +643,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       pipeline.imageProcessing.contrast = 1.1; // More vibrant
       pipeline.imageProcessing.vignetteEnabled = false;
 
-      // Subtle bloom for natural light glow
-      pipeline.bloomEnabled = true;
-      pipeline.bloomThreshold = 0.9;
-      pipeline.bloomWeight = 0.15;
-      pipeline.bloomKernel = 64;
-      pipeline.bloomScale = 0.5;
+      // Bloom disabled
+      pipeline.bloomEnabled = false;
 
       pipeline.sharpenEnabled = false;
       pipelineRef.current = pipeline;
@@ -3134,13 +3130,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           }
         }
 
-        // Enable subtle Bloom for realistic bright areas
-        pipeline.bloomEnabled = true;
-        if (pipelineAny.bloom) {
-          pipelineAny.bloom.threshold = 0.9; // Only very bright areas glow
-          pipelineAny.bloom.weight = 0.3; // Subtle glow
-          pipelineAny.bloom.kernel = 128; // Large kernel for smooth glow
-        }
+        // Bloom disabled
+        pipeline.bloomEnabled = false;
 
         // Disable DOF (causes blur)
         pipeline.depthOfFieldEnabled = false;
