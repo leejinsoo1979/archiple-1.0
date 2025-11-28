@@ -4952,8 +4952,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           </div>
         </div>
       )}
-      {/* Floor Editor Toolbar */}
-      {selectedFloor && !playMode && (
+      {/* Floor Editor Toolbar - only show if no ceiling selected */}
+      {selectedFloor && !selectedCeiling && !playMode && (
         <div
           style={{
             position: 'absolute',
@@ -5050,8 +5050,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           </div>
         </div>
       )}
-      {/* Ceiling Editor Toolbar */}
-      {selectedCeiling && !playMode && (
+      {/* Ceiling Editor Toolbar - only show if no floor selected */}
+      {selectedCeiling && !selectedFloor && !playMode && (
         <div
           style={{
             position: 'absolute',
