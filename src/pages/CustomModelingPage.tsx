@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LuRotate3D, LuPencilLine, LuArrowUpFromLine, LuSquareSquare, LuScaling } from 'react-icons/lu';
 import { BiMove } from 'react-icons/bi';
-import { FaTape } from 'react-icons/fa';
-import { FaRotate } from 'react-icons/fa6';
+import { FaTape, FaHandPaper } from 'react-icons/fa';
+import { GrRotateRight } from 'react-icons/gr';
 import styles from './CustomModelingPage.module.css';
 import {
   Engine,
@@ -847,7 +847,7 @@ const CustomModelingPage: React.FC = () => {
     { type: 'divider' },
     { id: 'move', icon: <BiMove size={18} />, title: 'Move (M)' },
     { id: 'pushpull', icon: <LuArrowUpFromLine size={18} />, title: 'Push/Pull (P)' },
-    { id: 'rotate', icon: <FaRotate size={18} />, title: 'Rotate (Q)' },
+    { id: 'rotate', icon: <GrRotateRight size={18} />, title: 'Rotate (Q)' },
     { id: 'scale', icon: <LuScaling size={18} />, title: 'Scale (S)' },
     { id: 'offset', icon: <LuSquareSquare size={18} />, title: 'Offset (F)' },
     { type: 'divider' },
@@ -856,7 +856,7 @@ const CustomModelingPage: React.FC = () => {
     { id: 'protractor', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M4 18A10 10 0 0120 18" stroke="currentColor" strokeWidth="1.5" fill="none"/><line x1="12" y1="18" x2="12" y2="8" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="18" r="2" fill="currentColor"/></svg>, title: 'Protractor' },
     { type: 'divider' },
     { id: 'orbit', icon: <LuRotate3D size={18} />, title: 'Orbit (O)' },
-    { id: 'pan', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M12 3V7M8 5V9M16 5V9M6 8V14M18 8V14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/><path d="M6 14C6 17 8 20 12 20C16 20 18 17 18 14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg>, title: 'Pan (H)' },
+    { id: 'pan', icon: <FaHandPaper size={18} />, title: 'Pan (H)' },
     { id: 'zoom', icon: <svg viewBox="0 0 24 24" fill="none"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="1.5"/><line x1="14" y1="14" x2="20" y2="20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/><line x1="10" y1="7" x2="10" y2="13" stroke="currentColor" strokeWidth="1.5"/><line x1="7" y1="10" x2="13" y2="10" stroke="currentColor" strokeWidth="1.5"/></svg>, title: 'Zoom (Z)' },
     { id: 'zoomExtents', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 1"/><path d="M4 8V4H8M16 4H20V8M20 16V20H16M8 20H4V16" stroke="currentColor" strokeWidth="1.5"/></svg>, title: 'Zoom Extents (Shift+Z)' },
     { type: 'divider' },
@@ -872,7 +872,6 @@ const CustomModelingPage: React.FC = () => {
           <div className={styles.logoWrapper}>
             <img src="/images/archiple_logo.png" alt="Archiple Studio" className={styles.headerLogo} />
           </div>
-          <span className={styles.pageTitle}>Custom Modeler</span>
         </div>
 
         <div className={styles.headerCenter}>
