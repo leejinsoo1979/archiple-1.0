@@ -2747,7 +2747,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
             }
           }
         } else {
-          // Clear overlay when not hovering
+          // Clear overlay when hovering on non-wall/floor mesh
           if (hoverOutlineRef.current) {
             if (highlightLayerRef.current) {
               highlightLayerRef.current.removeMesh(hoverOutlineRef.current);
@@ -2757,6 +2757,16 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           }
           lastHoverKeyRef.current = '';
         }
+      } else {
+        // Clear overlay when hovering on empty space (no mesh hit)
+        if (hoverOutlineRef.current) {
+          if (highlightLayerRef.current) {
+            highlightLayerRef.current.removeMesh(hoverOutlineRef.current);
+          }
+          hoverOutlineRef.current.dispose();
+          hoverOutlineRef.current = null;
+        }
+        lastHoverKeyRef.current = '';
       }
     };
 
