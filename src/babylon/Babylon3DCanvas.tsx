@@ -1,4 +1,4 @@
-import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from 'react';
 import { useCameraSettingsStore } from '../stores/cameraSettingsStore';
 import { horizontalFovToVertical } from './utils/cameraUtils';
 import {
@@ -6,6 +6,7 @@ import {
   Scene,
   ArcRotateCamera,
   UniversalCamera,
+  Vector2,
   Vector3,
   MeshBuilder,
   PolygonMeshBuilder,
@@ -21,6 +22,7 @@ import {
   ShadowGenerator,
   HemisphericLight,
   GlowLayer,
+  HighlightLayer,
   VertexData,
   Mesh,
   SceneLoader,
@@ -37,7 +39,8 @@ import {
   Matrix,
   SSAO2RenderingPipeline,
   Animation,
-  Material
+  Material,
+  VertexBuffer
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials/grid';
 import { SkyMaterial } from '@babylonjs/materials/sky';
@@ -368,7 +371,19 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
   const ssaoRef = useRef<SSAO2RenderingPipeline | null>(null); // Store SSAO pipeline for display style control
   const hoverOutlineRef = useRef<Mesh | null>(null); // Store hover outline mesh (tube)
   const lastHoverKeyRef = useRef<string>(''); // Track last hovered mesh+face to prevent flickering
-  const lastHoverTimeRef = useRef<number>(0); // Throttle hover outline updates
+  const highlightLayerRef = useRef<HighlightLayer | null>(null); // Highlight layer for hover effect
+  const lastHoveredMeshRef = useRef<Mesh | null>(null); // Track last hovered mesh
+  const selectedFloorOutlineRef = useRef<Mesh | null>(null); // Store selected floor outline mesh
+  const selectedFloorMeshRef = useRef<Mesh | null>(null); // Store selected floor mesh
+  const clickFaceOverlayRef = useRef<Mesh | null>(null); // Store click face overlay (for glow effect)
+
+  // Floor selection state
+  const [selectedFloor, setSelectedFloor] = useState<{
+    mesh: Mesh;
+    roomId: string;
+    roomName: string;
+    screenPosition: { x: number; y: number };
+  } | null>(null);
 
   // Camera settings from Zustand store
   const cameraSettings = useCameraSettingsStore();
@@ -734,6 +749,11 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       const glowLayer = new GlowLayer('glow', scene);
       glowLayer.intensity = 0.3;
 
+      // Highlight layer for hover effect
+      highlightLayerRef.current = new HighlightLayer('hoverHighlight', scene);
+      highlightLayerRef.current.outerGlow = true;
+      highlightLayerRef.current.innerGlow = false;
+
       // High-quality rendering pipeline (Archidraw/Cuhome style)
       const pipeline = new DefaultRenderingPipeline('defaultPipeline', true, scene, []);
       pipeline.samples = 4; // 4x MSAA for smooth edges
@@ -779,13 +799,89 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       arcCamera.lowerRadiusLimit = 0.001; // Allow ultra close zoom (1mm minimum distance)
       arcCamera.upperRadiusLimit = 50;
       arcCamera.upperBetaLimit = Math.PI / 2.05;
-      arcCamera.wheelPrecision = 50; // Finer zoom control (higher = slower zoom)
-      arcCamera.panningSensibility = 500; // Higher = slower panning
-      arcCamera.inertia = 0.7; // Smooth rotation
-      arcCamera.angularSensibilityX = 500; // Balanced rotation speed
-      arcCamera.angularSensibilityY = 500;
+      arcCamera.wheelPrecision = 1; // Maximum zoom speed
+      arcCamera.panningSensibility = 0.1; // Lower = faster panning
+      arcCamera.inertia = 0; // No inertia - immediate stop
+      arcCamera.panningInertia = 0; // No panning inertia
+      arcCamera.panningDistanceLimit = 1000; // Allow far panning
+      arcCamera.angularSensibilityX = 200; // Fast rotation (lower = faster)
+      arcCamera.angularSensibilityY = 200;
+      // Enable middle mouse button for panning as well
+      arcCamera._panningMouseButton = 2; // Right click for pan
       arcCamera.zoomToMouseLocation = true; // Enable zoom to mouse pointer
+      // Use wheelDeltaPercentage for direct zoom control (overrides wheelPrecision)
+      arcCamera.wheelDeltaPercentage = 0.05; // 5% zoom per scroll tick
       arcCameraRef.current = arcCamera;
+
+      // Custom 3D rotation cursor - two crossing ellipses with arrows
+      const rotateCursorActive = 'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48ZWxsaXBzZSBjeD0iMTIiIGN5PSIxMiIgcng9IjEwIiByeT0iNCIgdHJhbnNmb3JtPSJyb3RhdGUoOTAgMTIgMTIpIi8+PGVsbGlwc2UgY3g9IjEyIiBjeT0iMTIiIHJ4PSIxMCIgcnk9IjQiLz48cGF0aCBkPSJNNSA4bC0yIDIgMiAyIi8+PHBhdGggZD0iTTggMTlsMiAyIDItMiIvPjwvc3ZnPg==") 12 12, move';
+
+      // Track dragging state for cursor change
+      // Left click: rotate (rotation icon), Right click: pan (grab cursor)
+      let isDragging = false;
+      let dragButton = -1; // 0 = left (rotate), 2 = right (pan)
+      let lastPointerX = 0;
+      let lastPointerY = 0;
+
+      // Disable Babylon's default cursor management
+      scene.defaultCursor = 'default';
+      scene.hoverCursor = 'default';
+
+      scene.onPointerObservable.add((pointerInfo) => {
+        const evt = pointerInfo.event as PointerEvent;
+        switch (pointerInfo.type) {
+          case PointerEventTypes.POINTERDOWN:
+            isDragging = true;
+            dragButton = evt.button;
+            lastPointerX = evt.clientX;
+            lastPointerY = evt.clientY;
+            if (evt.button === 2) {
+              // Right click = pan
+              canvas.style.cursor = 'grabbing';
+            } else {
+              // Left click = rotate
+              canvas.style.cursor = rotateCursorActive;
+            }
+            break;
+          case PointerEventTypes.POINTERUP:
+            isDragging = false;
+            dragButton = -1;
+            canvas.style.cursor = 'default';
+            break;
+          case PointerEventTypes.POINTERMOVE:
+            if (isDragging) {
+              if (dragButton === 2) {
+                // Custom panning - directly move camera target
+                const deltaX = evt.clientX - lastPointerX;
+                const deltaY = evt.clientY - lastPointerY;
+                lastPointerX = evt.clientX;
+                lastPointerY = evt.clientY;
+
+                // Calculate movement in world space based on camera orientation
+                const panSpeed = 0.003 * arcCamera.radius; // Scale with zoom level
+                const forward = arcCamera.getDirection(Vector3.Forward());
+                const right = arcCamera.getDirection(Vector3.Right());
+
+                // Move target (and camera follows)
+                const moveX = right.scale(-deltaX * panSpeed);
+                const moveZ = forward.scale(deltaY * panSpeed);
+                moveX.y = 0; // Keep on horizontal plane
+                moveZ.y = 0;
+
+                arcCamera.target.addInPlace(moveX);
+                arcCamera.target.addInPlace(moveZ);
+
+                canvas.style.cursor = 'grabbing';
+              } else {
+                canvas.style.cursor = rotateCursorActive;
+              }
+            } else {
+              canvas.style.cursor = 'default';
+            }
+            break;
+        }
+      });
+      canvas.style.cursor = 'default';
 
       // Expose camera control globally for Gizmo
       if (typeof window !== 'undefined') {
@@ -1244,6 +1340,11 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           hoverOutlineRef.current.dispose();
           hoverOutlineRef.current = null;
         }
+        if (highlightLayerRef.current) {
+          highlightLayerRef.current.dispose();
+          highlightLayerRef.current = null;
+        }
+        lastHoveredMeshRef.current = null;
         scene.dispose();
         engine.dispose();
       };
@@ -2269,6 +2370,13 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         floor.material = roomFloorMat;
         floor.receiveShadows = true;
         floor.checkCollisions = true; // Enable collision for FPS mode
+
+        // Store polygon points in metadata for hover outline
+        floor.metadata = {
+          ...floor.metadata,
+          polygonPoints: roomPoints.map(p => ({ x: p.x, y: p.y, z: p.z })),
+          roomName: room.name || `Room ${roomIndex + 1}`
+        };
       });
       // Create ceilings for each room - ONLY in play mode
       if (playMode) {
@@ -2412,10 +2520,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       // === WALL/FLOOR FACE OUTLINE ON HOVER ===
       // Draw cyan outline only on the picked face (not entire mesh)
       if (!playMode && scene) {
-        // Throttle expensive outline calculations (50ms = 20fps for outline updates)
-        const now = performance.now();
-        const throttleMs = 50;
-
         if (pickResult && pickResult.hit && pickResult.pickedMesh && pickResult.faceId !== undefined) {
           const picked = pickResult.pickedMesh as Mesh;
           const meshName = picked.name.toLowerCase();
@@ -2427,10 +2531,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           const isHidden = !picked.isVisible || picked.visibility < 0.5;
 
           if ((isWall || isFloor) && !isHidden && picked.getVerticesData && picked.getIndices) {
-            // Throttle expensive floor boundary calculations (walls are faster)
-            if (isFloor && now - lastHoverTimeRef.current < throttleMs) {
-              return;
-            }
 
             const positions = picked.getVerticesData('position');
             const indices = picked.getIndices();
@@ -2465,224 +2565,170 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
               const faceNormal = Vector3.Cross(edge1, edge2).normalize();
               const planeD = Vector3.Dot(faceNormal, v0);
 
-              // For walls: skip horizontal faces (top/bottom of wall)
-              // Wall faces should be nearly vertical (normal has Y very close to 0)
-              // Only allow faces where normal is almost horizontal (Y < 0.1)
-              if (isWall && Math.abs(faceNormal.y) > 0.1) {
-                // Clear outline if hovering over wall top/bottom
-                if (hoverOutlineRef.current) {
-                  hoverOutlineRef.current.dispose();
-                  hoverOutlineRef.current = null;
-                  lastHoverKeyRef.current = '';
+              // For walls: skip non-inner-wall faces
+              if (isWall) {
+                // Skip horizontal faces (top/bottom)
+                if (Math.abs(faceNormal.y) > 0.1) {
+                  if (lastHoveredMeshRef.current && highlightLayerRef.current) {
+                    highlightLayerRef.current.removeMesh(lastHoveredMeshRef.current);
+                    lastHoveredMeshRef.current = null;
+                    lastHoverKeyRef.current = '';
+                  }
+                  return;
                 }
-                return;
+
+                // Skip thin edge faces
+                const minX = Math.min(v0.x, v1.x, v2.x);
+                const maxX = Math.max(v0.x, v1.x, v2.x);
+                const minZ = Math.min(v0.z, v1.z, v2.z);
+                const maxZ = Math.max(v0.z, v1.z, v2.z);
+                const wallThicknessThreshold = 0.35;
+                if ((maxX - minX) < wallThicknessThreshold && (maxZ - minZ) < wallThicknessThreshold) {
+                  if (lastHoveredMeshRef.current && highlightLayerRef.current) {
+                    highlightLayerRef.current.removeMesh(lastHoveredMeshRef.current);
+                    lastHoveredMeshRef.current = null;
+                    lastHoverKeyRef.current = '';
+                  }
+                  return;
+                }
               }
 
-              // Create key for this face
               const hoverKey = `${picked.uniqueId}_${faceNormal.x.toFixed(2)}_${faceNormal.y.toFixed(2)}_${faceNormal.z.toFixed(2)}_${planeD.toFixed(2)}`;
 
-              // Skip if same face (prevent flickering)
-              if (hoverKey === lastHoverKeyRef.current && hoverOutlineRef.current) {
-                return;
-              }
+              // Skip if same face
+              if (hoverKey === lastHoverKeyRef.current) return;
+              lastHoverKeyRef.current = hoverKey;
 
-              // Remove previous outline
+              // Create face overlay with glow (only on detected face, not entire mesh)
               if (hoverOutlineRef.current) {
                 hoverOutlineRef.current.dispose();
-                hoverOutlineRef.current = null;
               }
-              lastHoverKeyRef.current = hoverKey;
-              lastHoverTimeRef.current = now;
 
-              // For walls: find triangles with same normal/plane
-              // For floors: use bounding box to get the rectangle outline
+              // Calculate face vertices
               const faceVerts: Vector3[] = [];
+              if (isFloor && picked.metadata?.polygonPoints) {
+                const polyPoints = picked.metadata.polygonPoints as { x: number; y: number; z: number }[];
+                polyPoints.forEach(p => faceVerts.push(new Vector3(p.x, v0.y + 0.01, p.z)));
+              } else if (isFloor) {
+                const bb = picked.getBoundingInfo().boundingBox;
+                const min = bb.minimumWorld, max = bb.maximumWorld;
+                faceVerts.push(
+                  new Vector3(min.x, v0.y + 0.01, min.z), new Vector3(max.x, v0.y + 0.01, min.z),
+                  new Vector3(max.x, v0.y + 0.01, max.z), new Vector3(min.x, v0.y + 0.01, max.z)
+                );
+              } else {
+                // Wall: inner face only
+                const isXWall = Math.abs(faceNormal.x) > Math.abs(faceNormal.z);
+                const planePos = isXWall ? (v0.x + v1.x + v2.x) / 3 : (v0.z + v1.z + v2.z) / 3;
+                const bb = picked.getBoundingInfo().boundingBox;
+                const min = bb.minimumWorld, max = bb.maximumWorld;
+                const offset = 0.01;
+                if (isXWall) {
+                  const px = planePos + (faceNormal.x > 0 ? offset : -offset);
+                  faceVerts.push(
+                    new Vector3(px, min.y, min.z), new Vector3(px, min.y, max.z),
+                    new Vector3(px, max.y, max.z), new Vector3(px, max.y, min.z)
+                  );
+                } else {
+                  const pz = planePos + (faceNormal.z > 0 ? offset : -offset);
+                  faceVerts.push(
+                    new Vector3(min.x, min.y, pz), new Vector3(max.x, min.y, pz),
+                    new Vector3(max.x, max.y, pz), new Vector3(min.x, max.y, pz)
+                  );
+                }
+              }
+
+              // Build outline vertices
+              let outlineVerts: Vector3[] = [];
 
               if (isFloor) {
-                // Floor: find boundary edges (edges used by only one triangle)
-                const edgeMap = new Map<string, { v1: Vector3; v2: Vector3; count: number }>();
-                const floorY = v0.y; // Use picked triangle's Y level
-                const yTol = 0.15;
-
-                // Helper to create consistent edge key (rounded for better matching)
-                const makeEdgeKey = (a: Vector3, b: Vector3): string => {
-                  const ax = Math.round(a.x * 50), az = Math.round(a.z * 50);
-                  const bx = Math.round(b.x * 50), bz = Math.round(b.z * 50);
-                  return ax + az < bx + bz ? `${ax},${az}-${bx},${bz}` : `${bx},${bz}-${ax},${az}`;
-                };
-
-                for (let i = 0; i < indices.length; i += 3) {
-                  const i0 = indices[i], i1 = indices[i + 1], i2 = indices[i + 2];
-                  const p0 = Vector3.TransformCoordinates(
-                    new Vector3(positions[i0 * 3], positions[i0 * 3 + 1], positions[i0 * 3 + 2]),
-                    worldMatrix
-                  );
-                  const p1 = Vector3.TransformCoordinates(
-                    new Vector3(positions[i1 * 3], positions[i1 * 3 + 1], positions[i1 * 3 + 2]),
-                    worldMatrix
-                  );
-                  const p2 = Vector3.TransformCoordinates(
-                    new Vector3(positions[i2 * 3], positions[i2 * 3 + 1], positions[i2 * 3 + 2]),
-                    worldMatrix
-                  );
-
-                  // Check if triangle is at floor level (same Y)
-                  const avgY = (p0.y + p1.y + p2.y) / 3;
-                  if (Math.abs(avgY - floorY) > yTol) continue;
-
-                  // Check if this triangle is horizontal (floor surface - up OR down)
-                  const e1 = p1.subtract(p0), e2 = p2.subtract(p0);
-                  const n = Vector3.Cross(e1, e2).normalize();
-                  if (Math.abs(n.y) < 0.8) continue; // Skip non-horizontal triangles
-
-                  // Add edges to count map
-                  const triEdges: [Vector3, Vector3][] = [[p0, p1], [p1, p2], [p2, p0]];
-                  for (const [va, vb] of triEdges) {
-                    const key = makeEdgeKey(va, vb);
-                    const existing = edgeMap.get(key);
-                    if (existing) {
-                      existing.count++;
-                    } else {
-                      edgeMap.set(key, { v1: va.clone(), v2: vb.clone(), count: 1 });
-                    }
-                  }
-                }
-
-                // Boundary edges are used only once
-                const boundaryEdges: { v1: Vector3; v2: Vector3 }[] = [];
-                edgeMap.forEach((edge) => {
-                  if (edge.count === 1) {
-                    boundaryEdges.push({ v1: edge.v1, v2: edge.v2 });
-                  }
-                });
-
-                // Chain boundary edges into ordered vertices
-                if (boundaryEdges.length >= 3) {
-                  const orderedVerts: Vector3[] = [boundaryEdges[0].v1, boundaryEdges[0].v2];
-                  const used = new Set<number>([0]);
-                  const distTol = 0.08; // Larger tolerance for matching
-
-                  for (let iter = 0; iter < boundaryEdges.length && used.size < boundaryEdges.length; iter++) {
-                    const last = orderedVerts[orderedVerts.length - 1];
-                    let foundIdx = -1;
-                    let nextVert: Vector3 | null = null;
-
-                    for (let j = 0; j < boundaryEdges.length; j++) {
-                      if (used.has(j)) continue;
-                      const edge = boundaryEdges[j];
-                      if (Vector3.Distance(edge.v1, last) < distTol) {
-                        foundIdx = j;
-                        nextVert = edge.v2;
-                        break;
-                      } else if (Vector3.Distance(edge.v2, last) < distTol) {
-                        foundIdx = j;
-                        nextVert = edge.v1;
-                        break;
-                      }
-                    }
-
-                    if (foundIdx >= 0 && nextVert) {
-                      used.add(foundIdx);
-                      orderedVerts.push(nextVert);
-                    } else {
-                      break;
-                    }
-                  }
-
-                  faceVerts.push(...orderedVerts);
-                }
+                outlineVerts = [...faceVerts];
               } else {
-                // Wall: find triangles with same normal and plane
-                const normalTol = 0.01;
-                const planeTol = 0.05;
+                // Wall: find actual inner wall face bounds
+                const isXWall = Math.abs(faceNormal.x) > Math.abs(faceNormal.z);
+                const planePos = isXWall ? (v0.x + v1.x + v2.x) / 3 : (v0.z + v1.z + v2.z) / 3;
+
+                let minY = Infinity, maxY = -Infinity;
+                let minH = Infinity, maxH = -Infinity;
 
                 for (let i = 0; i < indices.length; i += 3) {
                   const i0 = indices[i], i1 = indices[i + 1], i2 = indices[i + 2];
-                  const p0 = Vector3.TransformCoordinates(
-                    new Vector3(positions[i0 * 3], positions[i0 * 3 + 1], positions[i0 * 3 + 2]),
-                    worldMatrix
-                  );
-                  const p1 = Vector3.TransformCoordinates(
-                    new Vector3(positions[i1 * 3], positions[i1 * 3 + 1], positions[i1 * 3 + 2]),
-                    worldMatrix
-                  );
-                  const p2 = Vector3.TransformCoordinates(
-                    new Vector3(positions[i2 * 3], positions[i2 * 3 + 1], positions[i2 * 3 + 2]),
-                    worldMatrix
-                  );
+                  const tv0 = Vector3.TransformCoordinates(new Vector3(positions[i0 * 3], positions[i0 * 3 + 1], positions[i0 * 3 + 2]), worldMatrix);
+                  const tv1 = Vector3.TransformCoordinates(new Vector3(positions[i1 * 3], positions[i1 * 3 + 1], positions[i1 * 3 + 2]), worldMatrix);
+                  const tv2 = Vector3.TransformCoordinates(new Vector3(positions[i2 * 3], positions[i2 * 3 + 1], positions[i2 * 3 + 2]), worldMatrix);
 
-                  const e1 = p1.subtract(p0), e2 = p2.subtract(p0);
-                  const n = Vector3.Cross(e1, e2).normalize();
-                  const d = Vector3.Dot(n, p0);
+                  const avgP = isXWall ? (tv0.x + tv1.x + tv2.x) / 3 : (tv0.z + tv1.z + tv2.z) / 3;
+                  if (Math.abs(avgP - planePos) > 0.02) continue;
 
-                  const dotProduct = Vector3.Dot(n, faceNormal);
-                  if (Math.abs(dotProduct - 1) < normalTol && Math.abs(d - planeD) < planeTol) {
-                    [p0, p1, p2].forEach(p => {
-                      const isUnique = !faceVerts.some(fv => Vector3.Distance(fv, p) < 0.01);
-                      if (isUnique) faceVerts.push(p);
-                    });
+                  const e1 = tv1.subtract(tv0), e2 = tv2.subtract(tv0);
+                  if (Vector3.Dot(Vector3.Cross(e1, e2).normalize(), faceNormal) < 0.9) continue;
+
+                  minY = Math.min(minY, tv0.y, tv1.y, tv2.y);
+                  maxY = Math.max(maxY, tv0.y, tv1.y, tv2.y);
+                  if (isXWall) {
+                    minH = Math.min(minH, tv0.z, tv1.z, tv2.z);
+                    maxH = Math.max(maxH, tv0.z, tv1.z, tv2.z);
+                  } else {
+                    minH = Math.min(minH, tv0.x, tv1.x, tv2.x);
+                    maxH = Math.max(maxH, tv0.x, tv1.x, tv2.x);
                   }
+                }
+
+                if (minY === Infinity) return;
+
+                const offset = 0.01;
+                if (isXWall) {
+                  const px = planePos + (faceNormal.x > 0 ? offset : -offset);
+                  outlineVerts = [
+                    new Vector3(px, minY, minH), new Vector3(px, minY, maxH),
+                    new Vector3(px, maxY, maxH), new Vector3(px, maxY, minH)
+                  ];
+                } else {
+                  const pz = planePos + (faceNormal.z > 0 ? offset : -offset);
+                  outlineVerts = [
+                    new Vector3(minH, minY, pz), new Vector3(maxH, minY, pz),
+                    new Vector3(maxH, maxY, pz), new Vector3(minH, maxY, pz)
+                  ];
                 }
               }
 
-              // Need at least 3 vertices for a face (floors can have many vertices)
-              if (faceVerts.length >= 3 && (isFloor || faceVerts.length <= 8)) {
-                // For walls: sort vertices by angle to form convex polygon
-                // For floors: already in correct order from edge chaining
-                if (!isFloor) {
-                  const centroid = faceVerts.reduce((acc, v) => acc.add(v), Vector3.Zero()).scale(1 / faceVerts.length);
-
-                  let right = Vector3.Cross(faceNormal, new Vector3(0, 1, 0));
-                  if (right.length() < 0.1) right = Vector3.Cross(faceNormal, new Vector3(1, 0, 0));
-                  right.normalize();
-                  const forward = Vector3.Cross(right, faceNormal).normalize();
-
-                  faceVerts.sort((a, b) => {
-                    const da = a.subtract(centroid);
-                    const db = b.subtract(centroid);
-                    const angleA = Math.atan2(Vector3.Dot(da, forward), Vector3.Dot(da, right));
-                    const angleB = Math.atan2(Vector3.Dot(db, forward), Vector3.Dot(db, right));
-                    return angleA - angleB;
-                  });
-                }
-
-                // Create closed outline path
-                const outlinePoints = [...faceVerts, faceVerts[0]];
-
-                // Offset slightly towards camera
-                const offsetDir = faceNormal.scale(0.05);
-                const offsetPoints = outlinePoints.map(p => p.add(offsetDir));
-
-                // Create thick tube outline
+              if (outlineVerts.length >= 3) {
+                // Create tube outline (line with glow, not face)
+                const path = [...outlineVerts, outlineVerts[0]];
                 const outline = MeshBuilder.CreateTube('hoverOutline', {
-                  path: offsetPoints,
-                  radius: 0.03,
-                  tessellation: 8,
+                  path: path,
+                  radius: 0.015,
+                  tessellation: 6,
                   cap: Mesh.NO_CAP,
                   updatable: false
                 }, scene);
 
-                // Emissive cyan material - renders on top
-                const outlineMat = new StandardMaterial('hoverOutlineMat', scene);
-                outlineMat.emissiveColor = new Color3(0, 0.9, 0.9);
-                outlineMat.disableLighting = true;
-                outlineMat.disableDepthWrite = true;
-                outlineMat.depthFunction = Constants.ALWAYS;
-                outline.material = outlineMat;
+                const mat = new StandardMaterial('hoverMat', scene);
+                mat.emissiveColor = new Color3(0, 0.9, 0.9);
+                mat.disableLighting = true;
+                outline.material = mat;
                 outline.renderingGroupId = 3;
                 outline.isPickable = false;
+
+                // Add glow to line only
+                if (highlightLayerRef.current) {
+                  highlightLayerRef.current.addMesh(outline, new Color3(0, 0.9, 0.9));
+                }
 
                 hoverOutlineRef.current = outline;
               }
             }
           }
         } else {
-          // Not hovering over wall/floor - clear outline
+          // Clear overlay when not hovering
           if (hoverOutlineRef.current) {
+            if (highlightLayerRef.current) {
+              highlightLayerRef.current.removeMesh(hoverOutlineRef.current);
+            }
             hoverOutlineRef.current.dispose();
             hoverOutlineRef.current = null;
-            lastHoverKeyRef.current = '';
           }
+          lastHoverKeyRef.current = '';
         }
       }
     };
@@ -2795,6 +2841,283 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
             animate();
           }
+        }
+
+        // Add face glow on click for walls and floors
+        const clickedMeshName = picked.name.toLowerCase();
+        const isClickedWall = clickedMeshName.includes('wall') && !clickedMeshName.includes('hotspot');
+        const isClickedFloor = (clickedMeshName.includes('floor') || clickedMeshName.startsWith('room_')) && !clickedMeshName.includes('hotspot');
+
+        if ((isClickedWall || isClickedFloor) && !playMode && pickResult.faceId !== undefined) {
+          // Clear previous face overlay
+          if (clickFaceOverlayRef.current) {
+            if (highlightLayerRef.current) {
+              highlightLayerRef.current.removeMesh(clickFaceOverlayRef.current);
+            }
+            clickFaceOverlayRef.current.dispose();
+            clickFaceOverlayRef.current = null;
+          }
+
+          const clickedMesh = picked as Mesh;
+          const positions = clickedMesh.getVerticesData(VertexBuffer.PositionKind);
+          const indices = clickedMesh.getIndices();
+
+          if (positions && indices && pickResult.faceId * 3 + 2 < indices.length) {
+            const faceId = pickResult.faceId;
+            const idx0 = indices[faceId * 3];
+            const idx1 = indices[faceId * 3 + 1];
+            const idx2 = indices[faceId * 3 + 2];
+            const worldMatrix = clickedMesh.getWorldMatrix();
+
+            const v0 = Vector3.TransformCoordinates(
+              new Vector3(positions[idx0 * 3], positions[idx0 * 3 + 1], positions[idx0 * 3 + 2]),
+              worldMatrix
+            );
+            const v1 = Vector3.TransformCoordinates(
+              new Vector3(positions[idx1 * 3], positions[idx1 * 3 + 1], positions[idx1 * 3 + 2]),
+              worldMatrix
+            );
+            const v2 = Vector3.TransformCoordinates(
+              new Vector3(positions[idx2 * 3], positions[idx2 * 3 + 1], positions[idx2 * 3 + 2]),
+              worldMatrix
+            );
+
+            const edge1 = v1.subtract(v0);
+            const edge2 = v2.subtract(v0);
+            const faceNormal = Vector3.Cross(edge1, edge2).normalize();
+
+            // For walls: skip non-inner-wall faces
+            let skipFace = false;
+            if (isClickedWall) {
+              if (Math.abs(faceNormal.y) > 0.1) skipFace = true;
+              const minX = Math.min(v0.x, v1.x, v2.x);
+              const maxX = Math.max(v0.x, v1.x, v2.x);
+              const minZ = Math.min(v0.z, v1.z, v2.z);
+              const maxZ = Math.max(v0.z, v1.z, v2.z);
+              if ((maxX - minX) < 0.35 && (maxZ - minZ) < 0.35) skipFace = true;
+            }
+
+            if (!skipFace) {
+              // Build face vertices for overlay
+              let faceOverlayVerts: Vector3[] = [];
+
+              if (isClickedFloor && clickedMesh.metadata?.polygonPoints) {
+                const polyPoints = clickedMesh.metadata.polygonPoints as { x: number; y: number; z: number }[];
+                polyPoints.forEach(p => faceOverlayVerts.push(new Vector3(p.x, v0.y + 0.02, p.z)));
+              } else if (isClickedFloor) {
+                const bb = clickedMesh.getBoundingInfo().boundingBox;
+                const min = bb.minimumWorld, max = bb.maximumWorld;
+                faceOverlayVerts = [
+                  new Vector3(min.x, v0.y + 0.02, min.z),
+                  new Vector3(max.x, v0.y + 0.02, min.z),
+                  new Vector3(max.x, v0.y + 0.02, max.z),
+                  new Vector3(min.x, v0.y + 0.02, max.z)
+                ];
+              } else {
+                // Wall: find actual inner wall face bounds via triangle iteration
+                const isXWall = Math.abs(faceNormal.x) > Math.abs(faceNormal.z);
+                const planePos = isXWall ? (v0.x + v1.x + v2.x) / 3 : (v0.z + v1.z + v2.z) / 3;
+
+                let minY = Infinity, maxY = -Infinity;
+                let minH = Infinity, maxH = -Infinity;
+
+                for (let i = 0; i < indices.length; i += 3) {
+                  const i0 = indices[i], i1 = indices[i + 1], i2 = indices[i + 2];
+                  const tv0 = Vector3.TransformCoordinates(new Vector3(positions[i0 * 3], positions[i0 * 3 + 1], positions[i0 * 3 + 2]), worldMatrix);
+                  const tv1 = Vector3.TransformCoordinates(new Vector3(positions[i1 * 3], positions[i1 * 3 + 1], positions[i1 * 3 + 2]), worldMatrix);
+                  const tv2 = Vector3.TransformCoordinates(new Vector3(positions[i2 * 3], positions[i2 * 3 + 1], positions[i2 * 3 + 2]), worldMatrix);
+
+                  const avgP = isXWall ? (tv0.x + tv1.x + tv2.x) / 3 : (tv0.z + tv1.z + tv2.z) / 3;
+                  if (Math.abs(avgP - planePos) > 0.02) continue;
+
+                  const e1 = tv1.subtract(tv0), e2 = tv2.subtract(tv0);
+                  if (Vector3.Dot(Vector3.Cross(e1, e2).normalize(), faceNormal) < 0.9) continue;
+
+                  minY = Math.min(minY, tv0.y, tv1.y, tv2.y);
+                  maxY = Math.max(maxY, tv0.y, tv1.y, tv2.y);
+                  if (isXWall) {
+                    minH = Math.min(minH, tv0.z, tv1.z, tv2.z);
+                    maxH = Math.max(maxH, tv0.z, tv1.z, tv2.z);
+                  } else {
+                    minH = Math.min(minH, tv0.x, tv1.x, tv2.x);
+                    maxH = Math.max(maxH, tv0.x, tv1.x, tv2.x);
+                  }
+                }
+
+                if (minY !== Infinity) {
+                  const offset = 0.02;
+                  if (isXWall) {
+                    const px = planePos + (faceNormal.x > 0 ? offset : -offset);
+                    faceOverlayVerts = [
+                      new Vector3(px, minY, minH),
+                      new Vector3(px, minY, maxH),
+                      new Vector3(px, maxY, maxH),
+                      new Vector3(px, maxY, minH)
+                    ];
+                  } else {
+                    const pz = planePos + (faceNormal.z > 0 ? offset : -offset);
+                    faceOverlayVerts = [
+                      new Vector3(minH, minY, pz),
+                      new Vector3(maxH, minY, pz),
+                      new Vector3(maxH, maxY, pz),
+                      new Vector3(minH, maxY, pz)
+                    ];
+                  }
+                }
+              }
+
+              // Create face overlay with glow
+              if (faceOverlayVerts.length >= 3) {
+                let faceOverlay: Mesh;
+
+                if (isClickedFloor) {
+                  // Floor: create polygon
+                  const shape2D = faceOverlayVerts.map(v => new Vector2(v.x, v.z));
+                  faceOverlay = MeshBuilder.CreatePolygon('clickFaceOverlay', {
+                    shape: shape2D,
+                    depth: 0.001,
+                    sideOrientation: Mesh.DOUBLESIDE
+                  }, scene);
+                  faceOverlay.position.y = faceOverlayVerts[0].y;
+                } else {
+                  // Wall: create plane from 4 vertices
+                  const width = Vector3.Distance(faceOverlayVerts[0], faceOverlayVerts[1]);
+                  const height = Vector3.Distance(faceOverlayVerts[1], faceOverlayVerts[2]);
+                  faceOverlay = MeshBuilder.CreatePlane('clickFaceOverlay', {
+                    width: width,
+                    height: height,
+                    sideOrientation: Mesh.DOUBLESIDE
+                  }, scene);
+
+                  // Position at center of face
+                  const center = faceOverlayVerts[0].add(faceOverlayVerts[2]).scale(0.5);
+                  faceOverlay.position = center;
+
+                  // Rotate to face normal direction
+                  const isXWall = Math.abs(faceNormal.x) > Math.abs(faceNormal.z);
+                  if (isXWall) {
+                    faceOverlay.rotation.y = Math.PI / 2;
+                  }
+                }
+
+                const faceMat = new StandardMaterial('clickFaceMat', scene);
+                faceMat.emissiveColor = new Color3(0, 0.7, 0.7);
+                faceMat.alpha = 0.3;
+                faceMat.disableLighting = true;
+                faceOverlay.material = faceMat;
+                faceOverlay.renderingGroupId = 3;
+                faceOverlay.isPickable = false;
+
+                // Add glow to face overlay
+                if (highlightLayerRef.current) {
+                  highlightLayerRef.current.addMesh(faceOverlay, new Color3(0, 0.8, 0.8));
+                }
+
+                clickFaceOverlayRef.current = faceOverlay;
+              }
+            }
+          }
+        } else if (!playMode) {
+          // Clear face overlay when clicking elsewhere
+          if (clickFaceOverlayRef.current) {
+            if (highlightLayerRef.current) {
+              highlightLayerRef.current.removeMesh(clickFaceOverlayRef.current);
+            }
+            clickFaceOverlayRef.current.dispose();
+            clickFaceOverlayRef.current = null;
+          }
+        }
+
+        // Check if clicked on floor (for selection)
+        const meshName = picked.name.toLowerCase();
+        const isFloor = (meshName.includes('floor') || meshName.startsWith('room_')) && !meshName.includes('hotspot');
+
+        if (isFloor && !playMode) {
+          const floorMesh = picked as Mesh;
+
+          // Clear previous selection
+          if (selectedFloorOutlineRef.current) {
+            selectedFloorOutlineRef.current.dispose();
+            selectedFloorOutlineRef.current = null;
+          }
+
+          // Use polygon points from metadata, fallback to bounding box
+          const boundingInfo = floorMesh.getBoundingInfo();
+          const min = boundingInfo.boundingBox.minimumWorld;
+          const max = boundingInfo.boundingBox.maximumWorld;
+          const floorY = (min.y + max.y) / 2 + 0.02;
+
+          let outlinePoints: Vector3[] = [];
+
+          if (floorMesh.metadata?.polygonPoints) {
+            // Use actual polygon shape
+            const polyPoints = floorMesh.metadata.polygonPoints as { x: number; y: number; z: number }[];
+            polyPoints.forEach(p => {
+              outlinePoints.push(new Vector3(p.x, floorY, p.z));
+            });
+            outlinePoints.push(outlinePoints[0].clone()); // Close the loop
+          } else {
+            // Fallback to bounding box
+            outlinePoints = [
+              new Vector3(min.x, floorY, min.z),
+              new Vector3(max.x, floorY, min.z),
+              new Vector3(max.x, floorY, max.z),
+              new Vector3(min.x, floorY, max.z),
+              new Vector3(min.x, floorY, min.z)
+            ];
+          }
+
+          const selectionOutline = MeshBuilder.CreateTube('floorSelectionOutline', {
+            path: outlinePoints,
+            radius: 0.04,
+            tessellation: 8,
+            cap: Mesh.NO_CAP,
+            updatable: false
+          }, scene);
+
+          // Blue theme color material
+          const outlineMat = new StandardMaterial('floorSelectionMat', scene);
+          outlineMat.emissiveColor = new Color3(0.2, 0.5, 1);
+          outlineMat.disableLighting = true;
+          outlineMat.disableDepthWrite = true;
+          outlineMat.depthFunction = Constants.ALWAYS;
+          selectionOutline.material = outlineMat;
+          selectionOutline.renderingGroupId = 3;
+          selectionOutline.isPickable = false;
+
+          selectedFloorOutlineRef.current = selectionOutline;
+          selectedFloorMeshRef.current = floorMesh;
+
+          // Get screen position for toolbar
+          const floorCenter = new Vector3((min.x + max.x) / 2, floorY, (min.z + max.z) / 2);
+          const camera = arcCameraRef.current;
+          const engine = engineRef.current;
+          if (camera && engine) {
+            const screenPos = Vector3.Project(
+              floorCenter,
+              Matrix.Identity(),
+              scene.getTransformMatrix(),
+              camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight())
+            );
+
+            const roomId = floorMesh.name.replace('room_', '').replace('_floor', '');
+            const roomName = floorMesh.metadata?.roomName || roomId;
+
+            setSelectedFloor({
+              mesh: floorMesh,
+              roomId,
+              roomName,
+              screenPosition: { x: screenPos.x, y: screenPos.y + 50 }
+            });
+          }
+        } else if (!isFloor && !playMode) {
+          // Clicked elsewhere - clear selection
+          if (selectedFloorOutlineRef.current) {
+            selectedFloorOutlineRef.current.dispose();
+            selectedFloorOutlineRef.current = null;
+          }
+          selectedFloorMeshRef.current = null;
+          setSelectedFloor(null);
         }
       }
     };
@@ -3239,7 +3562,10 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       arcCamera.upperBetaLimit = Math.PI / 2.1; // Prevent going too vertical
 
       arcCamera.panningSensibility = 800; // Slower panning for trackpad
-      arcCamera.wheelPrecision = 50;
+      arcCamera.wheelPrecision = 1; // Maximum zoom speed
+      arcCamera.wheelDeltaPercentage = 0.05; // 5% zoom per scroll tick
+      arcCamera.inertia = 0; // No inertia
+      arcCamera.panningInertia = 0; // No panning inertia
 
       // Detach all other cameras
       fpsCamera.detachControl();
@@ -4472,6 +4798,104 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         tabIndex={0}
         style={{ outline: 'none' }}
       />
+      {/* Floor Editor Toolbar */}
+      {selectedFloor && !playMode && (
+        <div
+          style={{
+            position: 'absolute',
+            left: selectedFloor.screenPosition.x,
+            top: selectedFloor.screenPosition.y,
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '8px',
+            pointerEvents: 'auto',
+            zIndex: 100,
+          }}
+        >
+          {/* Floor Editor Button */}
+          <button
+            style={{
+              background: '#333',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '8px 16px',
+              fontSize: '14px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            }}
+            onClick={() => {
+              // TODO: Open floor editor
+              console.log('Open floor editor for:', selectedFloor.roomId);
+            }}
+          >
+            Floor Editor
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" />
+            </svg>
+          </button>
+          {/* Toolbar Icons */}
+          <div
+            style={{
+              background: '#333',
+              borderRadius: '6px',
+              padding: '6px 8px',
+              display: 'flex',
+              gap: '4px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            }}
+          >
+            {/* Drag handle */}
+            <div style={{ padding: '6px', color: '#888', cursor: 'grab' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+              </svg>
+            </div>
+            {/* Edit */}
+            <button style={{ background: 'transparent', border: 'none', padding: '6px', color: 'white', cursor: 'pointer', borderRadius: '4px' }} title="Edit">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+              </svg>
+            </button>
+            {/* Rotate */}
+            <button style={{ background: 'transparent', border: 'none', padding: '6px', color: 'white', cursor: 'pointer', borderRadius: '4px' }} title="Rotate">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+              </svg>
+            </button>
+            {/* Copy */}
+            <button style={{ background: 'transparent', border: 'none', padding: '6px', color: 'white', cursor: 'pointer', borderRadius: '4px' }} title="Copy">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+              </svg>
+            </button>
+            {/* Favorite */}
+            <button style={{ background: 'transparent', border: 'none', padding: '6px', color: 'white', cursor: 'pointer', borderRadius: '4px' }} title="Favorite">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+              </svg>
+            </button>
+            {/* Delete */}
+            <button style={{ background: 'transparent', border: 'none', padding: '6px', color: 'white', cursor: 'pointer', borderRadius: '4px' }} title="Delete">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+              </svg>
+            </button>
+            {/* Mirror */}
+            <button style={{ background: 'transparent', border: 'none', padding: '6px', color: 'white', cursor: 'pointer', borderRadius: '4px' }} title="Mirror">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M9.01 14H2v2h7.01v3L13 15l-3.99-4v3zm5.98-1v-3H22V8h-7.01V5L11 9l3.99 4z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
