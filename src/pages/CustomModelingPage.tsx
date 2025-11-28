@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LuRotate3D, LuPencilLine } from 'react-icons/lu';
+import { LuRotate3D, LuPencilLine, LuArrowUpFromLine } from 'react-icons/lu';
 import { BiMove } from 'react-icons/bi';
 import styles from './CustomModelingPage.module.css';
 import {
@@ -833,7 +833,7 @@ const CustomModelingPage: React.FC = () => {
     { id: 'arc', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M4 18C4 10 10 4 18 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>, title: 'Arc (A)' },
     { type: 'divider' },
     { id: 'move', icon: <BiMove size={18} />, title: 'Move (M)' },
-    { id: 'pushpull', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M4 14L10 11L16 14V18L10 21L4 18V14Z" fill="currentColor" opacity="0.3"/><path d="M4 14L10 11L16 14V18L10 21L4 18V14ZM4 9L10 6L16 9V13L10 10L4 13V9Z" stroke="currentColor" strokeWidth="1.5"/></svg>, title: 'Push/Pull (P)' },
+    { id: 'pushpull', icon: <LuArrowUpFromLine size={18} />, title: 'Push/Pull (P)' },
     { id: 'rotate', icon: <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 2"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>, title: 'Rotate (Q)' },
     { id: 'scale', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5"/><rect x="4" y="4" width="3" height="3" fill="#22c55e"/><rect x="17" y="4" width="3" height="3" fill="#22c55e"/><rect x="4" y="17" width="3" height="3" fill="#22c55e"/><rect x="17" y="17" width="3" height="3" fill="#22c55e"/></svg>, title: 'Scale (S)' },
     { id: 'offset', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="10" height="10" stroke="currentColor" strokeWidth="1.5"/><rect x="8" y="8" width="10" height="10" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 1"/></svg>, title: 'Offset (F)' },
@@ -978,43 +978,51 @@ const CustomModelingPage: React.FC = () => {
               <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 1"/><path d="M4 8V4H8M16 4H20V8M20 16V20H16M8 20H4V16" stroke="currentColor" strokeWidth="1.5"/></svg>
             </button>
             <div className={styles.topToolDivider} />
-            {/* Camera View Presets */}
+            {/* Camera View Presets - SketchUp style house icons */}
             <button className={styles.topToolBtn} onClick={() => setCameraView('iso')} title="Isometric View">
               <svg viewBox="0 0 24 24" fill="none">
-                <path d="M12 4L4 9V17L12 22L20 17V9L12 4Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.2"/>
-                <path d="M12 12V22M4 9L12 14L20 9" stroke="currentColor" strokeWidth="1.2"/>
-                <path d="M8 6L12 8.5L16 6" stroke="currentColor" strokeWidth="1.2"/>
+                {/* 3D isometric house */}
+                <path d="M12 3L4 8V12L12 17L20 12V8L12 3Z" fill="#9CA3AF" stroke="#6B7280" strokeWidth="1"/>
+                <path d="M4 12V18L12 23V17L4 12Z" fill="#D1D5DB" stroke="#6B7280" strokeWidth="1"/>
+                <path d="M20 12V18L12 23V17L20 12Z" fill="#E5E7EB" stroke="#6B7280" strokeWidth="1"/>
+                <path d="M4 8L12 13L20 8" stroke="#6B7280" strokeWidth="1"/>
               </svg>
             </button>
             <button className={styles.topToolBtn} onClick={() => setCameraView('front')} title="Front View">
               <svg viewBox="0 0 24 24" fill="none">
-                <path d="M4 20V10L12 5L20 10V20H4Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.2"/>
-                <rect x="9" y="13" width="6" height="7" stroke="currentColor" strokeWidth="1"/>
+                {/* Front view house - darker/filled */}
+                <path d="M12 3L4 9V11L12 17L20 11V9L12 3Z" fill="#6B7280" stroke="#4B5563" strokeWidth="1"/>
+                <path d="M4 11V20H20V11L12 17L4 11Z" fill="#9CA3AF" stroke="#4B5563" strokeWidth="1"/>
+                <rect x="10" y="14" width="4" height="6" fill="#4B5563"/>
               </svg>
             </button>
             <button className={styles.topToolBtn} onClick={() => setCameraView('top')} title="Top View">
               <svg viewBox="0 0 24 24" fill="none">
-                <rect x="4" y="8" width="16" height="12" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.2"/>
-                <line x1="12" y1="8" x2="12" y2="20" stroke="currentColor" strokeWidth="1" opacity="0.5"/>
-                <line x1="4" y1="14" x2="20" y2="14" stroke="currentColor" strokeWidth="1" opacity="0.5"/>
+                {/* Top view - roof from above */}
+                <path d="M12 4L3 12H6V20H18V12H21L12 4Z" fill="#E5E7EB" stroke="#6B7280" strokeWidth="1"/>
+                <path d="M12 4L3 12H21L12 4Z" fill="#D1D5DB" stroke="#6B7280" strokeWidth="1"/>
+                <line x1="12" y1="4" x2="12" y2="12" stroke="#6B7280" strokeWidth="1"/>
               </svg>
             </button>
             <button className={styles.topToolBtn} onClick={() => setCameraView('right')} title="Right View">
               <svg viewBox="0 0 24 24" fill="none">
-                <path d="M6 20V10L12 5L18 10V20H6Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.2"/>
-                <path d="M6 10L18 10" stroke="currentColor" strokeWidth="1" opacity="0.5"/>
+                {/* Right side view */}
+                <path d="M5 20V11L12 5L19 11V20H5Z" fill="#E5E7EB" stroke="#6B7280" strokeWidth="1"/>
+                <path d="M5 11L12 5L19 11" fill="#D1D5DB" stroke="#6B7280" strokeWidth="1"/>
               </svg>
             </button>
             <button className={styles.topToolBtn} onClick={() => setCameraView('back')} title="Back View">
               <svg viewBox="0 0 24 24" fill="none">
-                <path d="M4 20V10L12 5L20 10V20H4Z" stroke="currentColor" strokeWidth="1.2" strokeDasharray="2 1"/>
-                <rect x="9" y="13" width="6" height="7" stroke="currentColor" strokeWidth="1" strokeDasharray="1 1"/>
+                {/* Back view - outline style */}
+                <path d="M4 20V11L12 4L20 11V20H4Z" fill="none" stroke="#9CA3AF" strokeWidth="1.5"/>
+                <path d="M4 11L12 4L20 11" fill="none" stroke="#9CA3AF" strokeWidth="1.5"/>
               </svg>
             </button>
             <button className={styles.topToolBtn} onClick={() => setCameraView('left')} title="Left View">
               <svg viewBox="0 0 24 24" fill="none">
-                <path d="M6 20V10L12 5L18 10V20H6Z" stroke="currentColor" strokeWidth="1.2"/>
-                <path d="M6 10L18 10" stroke="currentColor" strokeWidth="1" opacity="0.5"/>
+                {/* Left view - simple outline */}
+                <path d="M5 20V11L12 5L19 11V20H5Z" fill="none" stroke="#6B7280" strokeWidth="1.5"/>
+                <path d="M5 11L12 5L19 11" fill="none" stroke="#6B7280" strokeWidth="1.5"/>
               </svg>
             </button>
           </div>
