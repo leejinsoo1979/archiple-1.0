@@ -24,6 +24,8 @@ export interface AutoWallHiderOptions {
   fadeSpeed?: number;
   /** Additional rays for better coverage */
   multiRay?: boolean;
+  /** Camera beta angle threshold for showing ceiling (radians) */
+  ceilingBetaThreshold?: number;
 }
 
 const DEFAULT_OPTIONS: AutoWallHiderOptions = {
@@ -32,6 +34,7 @@ const DEFAULT_OPTIONS: AutoWallHiderOptions = {
   smoothTransition: false,
   fadeSpeed: 0.15,
   multiRay: true,
+  ceilingBetaThreshold: 1.2, // ~70 degrees - show ceiling when looking up
 };
 
 export class AutoWallHider {
@@ -43,7 +46,9 @@ export class AutoWallHider {
 
   // Performance optimization: Cache wall meshes and throttle updates
   private cachedWallMeshes: AbstractMesh[] = [];
+  private cachedCeilingMeshes: AbstractMesh[] = [];
   private wallCacheTime: number = 0;
+  private ceilingCacheTime: number = 0;
   private lastUpdateTime: number = 0;
   private readonly CACHE_DURATION = 2000; // Refresh wall cache every 2 seconds
   private readonly UPDATE_INTERVAL = 100; // Only update every 100ms (10 FPS for wall hiding)
@@ -68,11 +73,27 @@ export class AutoWallHider {
   }
 
   /**
-   * Invalidate wall cache (call when walls are added/removed)
+   * Get ceiling meshes with caching
+   */
+  private getCeilingMeshes(): AbstractMesh[] {
+    const now = performance.now();
+    if (now - this.ceilingCacheTime > this.CACHE_DURATION || this.cachedCeilingMeshes.length === 0) {
+      this.cachedCeilingMeshes = this.scene.meshes.filter(
+        (mesh) => mesh.metadata?.type === 'ceiling' && mesh.isEnabled()
+      );
+      this.ceilingCacheTime = now;
+    }
+    return this.cachedCeilingMeshes;
+  }
+
+  /**
+   * Invalidate cache (call when walls/ceilings are added/removed)
    */
   public invalidateCache(): void {
     this.wallCacheTime = 0;
     this.cachedWallMeshes = [];
+    this.ceilingCacheTime = 0;
+    this.cachedCeilingMeshes = [];
   }
 
   /**
@@ -139,6 +160,35 @@ export class AutoWallHider {
     }
 
     this.hiddenWalls = wallsToHide;
+
+    // Update ceiling visibility based on camera angle
+    this.updateCeilingVisibility(camera);
+  }
+
+  /**
+   * Show ceiling when camera looks up (high beta angle)
+   */
+  private updateCeilingVisibility(camera: ArcRotateCamera): void {
+    const ceilingMeshes = this.getCeilingMeshes();
+    if (ceilingMeshes.length === 0) return;
+
+    const threshold = this.options.ceilingBetaThreshold!;
+    // beta > threshold means looking more upward
+    const shouldShow = camera.beta > threshold;
+    const targetVis = shouldShow ? this.options.visibleVisibility! : this.options.hiddenVisibility!;
+
+    for (const ceiling of ceilingMeshes) {
+      if (this.options.smoothTransition) {
+        const diff = targetVis - ceiling.visibility;
+        if (Math.abs(diff) > 0.01) {
+          ceiling.visibility += diff * this.options.fadeSpeed!;
+        } else {
+          ceiling.visibility = targetVis;
+        }
+      } else {
+        ceiling.visibility = targetVis;
+      }
+    }
   }
 
   private applyInstantTransition(
@@ -197,15 +247,21 @@ export class AutoWallHider {
   }
 
   /**
-   * Restore all walls to full visibility
+   * Restore all walls and ceilings to full visibility
    */
   public restoreAllWalls(): void {
     const wallMeshes = this.scene.meshes.filter(
       (mesh) => mesh.metadata?.type === 'wall'
     );
-
     for (const wall of wallMeshes) {
       wall.visibility = this.options.visibleVisibility!;
+    }
+
+    const ceilingMeshes = this.scene.meshes.filter(
+      (mesh) => mesh.metadata?.type === 'ceiling'
+    );
+    for (const ceiling of ceilingMeshes) {
+      ceiling.visibility = this.options.visibleVisibility!;
     }
 
     this.hiddenWalls.clear();

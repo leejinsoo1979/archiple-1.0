@@ -2477,6 +2477,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           ceiling.material = ceilingMaterial;
           ceiling.receiveShadows = true;
           ceiling.checkCollisions = true;
+          ceiling.metadata = { type: 'ceiling', roomIndex };
+          ceiling.visibility = 0; // Initially hidden, controlled by AutoWallHider
         });
       }
     }
