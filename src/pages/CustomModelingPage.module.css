@@ -46,7 +46,8 @@
   justify-content: space-between;
   padding: 0 16px;
   flex-shrink: 0;
-  display: none; /* Hidden in SketchUp mode */
+  display: none;
+  /* Hidden in SketchUp mode */
 }
 
 .topBarLeft {
@@ -154,7 +155,7 @@
 /* Left Vertical Toolbar - SketchUp Large Tool Set Style (2 columns) */
 .leftToolbar {
   width: 76px;
-  background: linear-gradient(90deg, #f0f0f0 0%, #e8e8e8 100%);
+  background: #f0f0f0;
   border-right: 1px solid #c8c8c8;
   display: grid;
   grid-template-columns: repeat(2, 34px);
@@ -178,38 +179,45 @@
 .verticalTool {
   width: 34px;
   height: 34px;
-  border: 1px solid transparent;
-  border-radius: 3px;
-  background: transparent;
+  border: 1px solid #808080;
+  border-radius: 2px;
+  background: #f0f0f0;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.1s ease;
+  padding: 0;
+  overflow: hidden;
 }
 
-.verticalTool svg {
-  width: 24px;
-  height: 24px;
+.spriteIcon {
+  width: 100%;
+  height: 100%;
+  background-image: url('/sketchup_icons.png');
+  background-size: 200% 1900%;
+  /* 2 cols, 19 rows */
+  background-repeat: no-repeat;
+  filter: contrast(1.1);
 }
 
 .verticalTool:hover {
-  background: linear-gradient(180deg, #ffffff 0%, #f0f0f0 100%);
-  border-color: #a0a0a0;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  border-color: #404040;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
+  z-index: 1;
 }
 
 .verticalTool.active {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--theme-color, #3b82f6) 20%, white) 0%, color-mix(in srgb, var(--theme-color, #3b82f6) 30%, white) 100%);
-  border-color: var(--theme-color, #3b82f6);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+  background: #d0d0d0;
+  border-color: #000000;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .verticalDivider {
   grid-column: span 2;
   width: 100%;
   height: 1px;
-  background: #c8c8c8;
+  background: #a0a0a0;
   margin: 2px 0;
 }
 
@@ -923,6 +931,7 @@
     opacity: 0;
     transform: scale(0.9);
   }
+
   to {
     opacity: 1;
     transform: scale(1);
@@ -933,15 +942,41 @@
   animation: cardAppear 0.15s ease forwards;
 }
 
-.modelGrid .modelCard:nth-child(1) { animation-delay: 0ms; }
-.modelGrid .modelCard:nth-child(2) { animation-delay: 20ms; }
-.modelGrid .modelCard:nth-child(3) { animation-delay: 40ms; }
-.modelGrid .modelCard:nth-child(4) { animation-delay: 60ms; }
-.modelGrid .modelCard:nth-child(5) { animation-delay: 80ms; }
-.modelGrid .modelCard:nth-child(6) { animation-delay: 100ms; }
-.modelGrid .modelCard:nth-child(7) { animation-delay: 120ms; }
-.modelGrid .modelCard:nth-child(8) { animation-delay: 140ms; }
-.modelGrid .modelCard:nth-child(9) { animation-delay: 160ms; }
+.modelGrid .modelCard:nth-child(1) {
+  animation-delay: 0ms;
+}
+
+.modelGrid .modelCard:nth-child(2) {
+  animation-delay: 20ms;
+}
+
+.modelGrid .modelCard:nth-child(3) {
+  animation-delay: 40ms;
+}
+
+.modelGrid .modelCard:nth-child(4) {
+  animation-delay: 60ms;
+}
+
+.modelGrid .modelCard:nth-child(5) {
+  animation-delay: 80ms;
+}
+
+.modelGrid .modelCard:nth-child(6) {
+  animation-delay: 100ms;
+}
+
+.modelGrid .modelCard:nth-child(7) {
+  animation-delay: 120ms;
+}
+
+.modelGrid .modelCard:nth-child(8) {
+  animation-delay: 140ms;
+}
+
+.modelGrid .modelCard:nth-child(9) {
+  animation-delay: 160ms;
+}
 
 /* Tool-specific cursor styles */
 .canvas[data-tool="select"] {

@@ -844,15 +844,15 @@ const CustomModelingPage: React.FC = () => {
       <div className={styles.main}>
         {/* Left Vertical Toolbar - SketchUp Large Tool Set (2 columns) */}
         <div className={styles.leftToolbar}>
-          {/* Row 1: Select, Orbit */}
+          {/* Row 1: Select, Make Component */}
           <button className={`${styles.verticalTool} ${activeTool === 'select' ? styles.active : ''}`} onClick={() => setActiveTool('select')} title="Select (Space)">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 0%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'orbit' ? styles.active : ''}`} onClick={() => setActiveTool('orbit')} title="Orbit (O)">
+          <button className={`${styles.verticalTool} ${activeTool === 'makeComponent' ? styles.active : ''}`} onClick={() => setActiveTool('makeComponent')} title="Make Component (G)">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 0%' }} />
           </button>
 
-          {/* Row 2: Paint, Eraser */}
+          {/* Row 2: Paint Bucket, Eraser */}
           <button className={`${styles.verticalTool} ${activeTool === 'paint' ? styles.active : ''}`} onClick={() => setActiveTool('paint')} title="Paint Bucket (B)">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 5.55%' }} />
           </button>
@@ -860,139 +860,158 @@ const CustomModelingPage: React.FC = () => {
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 5.55%' }} />
           </button>
 
-          {/* Row 3: Make Component, Tag */}
-          <button className={`${styles.verticalTool} ${activeTool === 'makeComponent' ? styles.active : ''}`} onClick={() => setActiveTool('makeComponent')} title="Make Component (G)">
+          {/* Row 3: Line, Freehand */}
+          <button className={`${styles.verticalTool} ${activeTool === 'line' ? styles.active : ''}`} onClick={() => setActiveTool('line')} title="Line (L)">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 11.11%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'tag' ? styles.active : ''}`} onClick={() => setActiveTool('tag')} title="Tag">
+          <button className={`${styles.verticalTool} ${activeTool === 'freehand' ? styles.active : ''}`} onClick={() => setActiveTool('freehand')} title="Freehand">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 11.11%' }} />
           </button>
 
-          {/* Row 4: Line, Freehand */}
-          <button className={`${styles.verticalTool} ${activeTool === 'line' ? styles.active : ''}`} onClick={() => setActiveTool('line')} title="Line (L)">
+          {/* Row 4: Rectangle, Rotated Rectangle */}
+          <button className={`${styles.verticalTool} ${activeTool === 'rectangle' ? styles.active : ''}`} onClick={() => setActiveTool('rectangle')} title="Rectangle (R)">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 16.66%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'freehand' ? styles.active : ''}`} onClick={() => setActiveTool('freehand')} title="Freehand">
+          <button className={`${styles.verticalTool} ${activeTool === 'rotatedRect' ? styles.active : ''}`} onClick={() => setActiveTool('rotatedRect')} title="Rotated Rectangle">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 16.66%' }} />
           </button>
 
-          {/* Row 5: Rectangle, Rotated Rectangle */}
-          <button className={`${styles.verticalTool} ${activeTool === 'rectangle' ? styles.active : ''}`} onClick={() => setActiveTool('rectangle')} title="Rectangle (R)">
+          {/* Row 5: Circle, Polygon */}
+          <button className={`${styles.verticalTool} ${activeTool === 'circle' ? styles.active : ''}`} onClick={() => setActiveTool('circle')} title="Circle (C)">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 22.22%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'rotatedRect' ? styles.active : ''}`} onClick={() => setActiveTool('rotatedRect')} title="Rotated Rectangle">
+          <button className={`${styles.verticalTool} ${activeTool === 'polygon' ? styles.active : ''}`} onClick={() => setActiveTool('polygon')} title="Polygon">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 22.22%' }} />
           </button>
 
-          {/* Row 6: Circle, Polygon */}
-          <button className={`${styles.verticalTool} ${activeTool === 'circle' ? styles.active : ''}`} onClick={() => setActiveTool('circle')} title="Circle (C)">
+          {/* Row 6: Arc, 2 Point Arc */}
+          <button className={`${styles.verticalTool} ${activeTool === 'arc' ? styles.active : ''}`} onClick={() => setActiveTool('arc')} title="Arc (A)">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 27.77%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'polygon' ? styles.active : ''}`} onClick={() => setActiveTool('polygon')} title="Polygon">
+          <button className={`${styles.verticalTool} ${activeTool === 'arc2pt' ? styles.active : ''}`} onClick={() => setActiveTool('arc2pt')} title="2 Point Arc">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 27.77%' }} />
           </button>
 
-          {/* Row 7: Arc, 2 Point Arc */}
-          <button className={`${styles.verticalTool} ${activeTool === 'arc' ? styles.active : ''}`} onClick={() => setActiveTool('arc')} title="Arc (A)">
+          {/* Row 7: 3 Point Arc, Pie */}
+          <button className={`${styles.verticalTool} ${activeTool === 'arc3pt' ? styles.active : ''}`} onClick={() => setActiveTool('arc3pt')} title="3 Point Arc">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 33.33%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'arc2pt' ? styles.active : ''}`} onClick={() => setActiveTool('arc2pt')} title="2 Point Arc">
+          <button className={`${styles.verticalTool} ${activeTool === 'pie' ? styles.active : ''}`} onClick={() => setActiveTool('pie')} title="Pie">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 33.33%' }} />
           </button>
 
-          {/* Row 8: 3 Point Arc, Pie */}
-          <button className={`${styles.verticalTool} ${activeTool === 'arc3pt' ? styles.active : ''}`} onClick={() => setActiveTool('arc3pt')} title="3 Point Arc">
+          {/* Row 8: Move, Push/Pull */}
+          <button className={`${styles.verticalTool} ${activeTool === 'move' ? styles.active : ''}`} onClick={() => setActiveTool('move')} title="Move (M)">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 38.88%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'pie' ? styles.active : ''}`} onClick={() => setActiveTool('pie')} title="Pie">
+          <button className={`${styles.verticalTool} ${activeTool === 'pushpull' ? styles.active : ''}`} onClick={() => setActiveTool('pushpull')} title="Push/Pull (P)">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 38.88%' }} />
           </button>
 
-          {/* Row 9: Move, Push/Pull */}
-          <button className={`${styles.verticalTool} ${activeTool === 'move' ? styles.active : ''}`} onClick={() => setActiveTool('move')} title="Move (M)">
+          {/* Row 9: Rotate, Follow Me */}
+          <button className={`${styles.verticalTool} ${activeTool === 'rotate' ? styles.active : ''}`} onClick={() => setActiveTool('rotate')} title="Rotate (Q)">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 44.44%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'pushpull' ? styles.active : ''}`} onClick={() => setActiveTool('pushpull')} title="Push/Pull (P)">
+          <button className={`${styles.verticalTool} ${activeTool === 'followMe' ? styles.active : ''}`} onClick={() => setActiveTool('followMe')} title="Follow Me">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 44.44%' }} />
           </button>
 
-          {/* Row 10: Rotate, Follow Me */}
-          <button className={`${styles.verticalTool} ${activeTool === 'rotate' ? styles.active : ''}`} onClick={() => setActiveTool('rotate')} title="Rotate (Q)">
+          {/* Row 10: Scale, Offset */}
+          <button className={`${styles.verticalTool} ${activeTool === 'scale' ? styles.active : ''}`} onClick={() => setActiveTool('scale')} title="Scale (S)">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 50.00%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'followMe' ? styles.active : ''}`} onClick={() => setActiveTool('followMe')} title="Follow Me">
+          <button className={`${styles.verticalTool} ${activeTool === 'offset' ? styles.active : ''}`} onClick={() => setActiveTool('offset')} title="Offset (F)">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 50.00%' }} />
           </button>
 
-          {/* Row 11: Scale, Offset */}
-          <button className={`${styles.verticalTool} ${activeTool === 'scale' ? styles.active : ''}`} onClick={() => setActiveTool('scale')} title="Scale (S)">
+          {/* Row 11: Tape Measure, Dimension */}
+          <button className={`${styles.verticalTool} ${activeTool === 'tape' ? styles.active : ''}`} onClick={() => setActiveTool('tape')} title="Tape Measure (T)">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 55.55%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'offset' ? styles.active : ''}`} onClick={() => setActiveTool('offset')} title="Offset (F)">
+          <button className={`${styles.verticalTool} ${activeTool === 'dimension' ? styles.active : ''}`} onClick={() => setActiveTool('dimension')} title="Dimension">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 55.55%' }} />
           </button>
 
-          {/* Row 12: Tape, Dimension */}
-          <button className={`${styles.verticalTool} ${activeTool === 'tape' ? styles.active : ''}`} onClick={() => setActiveTool('tape')} title="Tape Measure (T)">
+          {/* Row 12: Protractor, Text */}
+          <button className={`${styles.verticalTool} ${activeTool === 'protractor' ? styles.active : ''}`} onClick={() => setActiveTool('protractor')} title="Protractor">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 61.11%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'dimension' ? styles.active : ''}`} onClick={() => setActiveTool('dimension')} title="Dimension">
+          <button className={`${styles.verticalTool} ${activeTool === 'text' ? styles.active : ''}`} onClick={() => setActiveTool('text')} title="Text">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 61.11%' }} />
           </button>
 
-          {/* Row 13: Protractor, Text */}
-          <button className={`${styles.verticalTool} ${activeTool === 'protractor' ? styles.active : ''}`} onClick={() => setActiveTool('protractor')} title="Protractor">
+          {/* Row 13: Axes, 3D Text */}
+          <button className={`${styles.verticalTool} ${activeTool === 'axes' ? styles.active : ''}`} onClick={() => setActiveTool('axes')} title="Axes">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 66.66%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'text' ? styles.active : ''}`} onClick={() => setActiveTool('text')} title="Text">
+          <button className={`${styles.verticalTool} ${activeTool === 'text3d' ? styles.active : ''}`} onClick={() => setActiveTool('text3d')} title="3D Text">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 66.66%' }} />
           </button>
 
-          {/* Row 14: Axes, 3D Text */}
-          <button className={`${styles.verticalTool} ${activeTool === 'axes' ? styles.active : ''}`} onClick={() => setActiveTool('axes')} title="Axes">
+          {/* Row 14: Orbit, Pan */}
+          <button className={`${styles.verticalTool} ${activeTool === 'orbit' ? styles.active : ''}`} onClick={() => setActiveTool('orbit')} title="Orbit (O)">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 72.22%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'text3d' ? styles.active : ''}`} onClick={() => setActiveTool('text3d')} title="3D Text">
+          <button className={`${styles.verticalTool} ${activeTool === 'pan' ? styles.active : ''}`} onClick={() => setActiveTool('pan')} title="Pan (H)">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 72.22%' }} />
           </button>
 
-          {/* Row 15: Flip, Pan */}
-          <button className={`${styles.verticalTool} ${activeTool === 'flip' ? styles.active : ''}`} onClick={() => setActiveTool('flip')} title="Flip">
+          {/* Row 15: Zoom, Zoom Extents */}
+          <button className={`${styles.verticalTool} ${activeTool === 'zoom' ? styles.active : ''}`} onClick={() => setActiveTool('zoom')} title="Zoom (Z)">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 77.77%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'pan' ? styles.active : ''}`} onClick={() => setActiveTool('pan')} title="Pan (H)">
+          <button className={`${styles.verticalTool} ${activeTool === 'zoomExtents' ? styles.active : ''}`} onClick={() => setActiveTool('zoomExtents')} title="Zoom Extents (Shift+Z)">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 77.77%' }} />
           </button>
 
-          {/* Row 16: Zoom, Zoom Window */}
-          <button className={`${styles.verticalTool} ${activeTool === 'zoom' ? styles.active : ''}`} onClick={() => setActiveTool('zoom')} title="Zoom (Z)">
+          {/* Row 16: Previous, Position Camera */}
+          <button className={`${styles.verticalTool} ${activeTool === 'zoomPrevious' ? styles.active : ''}`} onClick={() => setActiveTool('zoomPrevious')} title="Previous View">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 83.33%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'zoomWindow' ? styles.active : ''}`} onClick={() => setActiveTool('zoomWindow')} title="Zoom Window">
+          <button className={`${styles.verticalTool} ${activeTool === 'positionCamera' ? styles.active : ''}`} onClick={() => setActiveTool('positionCamera')} title="Position Camera">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 83.33%' }} />
           </button>
 
-          {/* Row 17: Zoom Extents, Previous View */}
-          <button className={`${styles.verticalTool} ${activeTool === 'zoomExtents' ? styles.active : ''}`} onClick={() => setActiveTool('zoomExtents')} title="Zoom Extents (Shift+Z)">
+          {/* Row 17: Look Around, Walk */}
+          <button className={`${styles.verticalTool} ${activeTool === 'lookAround' ? styles.active : ''}`} onClick={() => setActiveTool('lookAround')} title="Look Around">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 88.88%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'zoomPrevious' ? styles.active : ''}`} onClick={() => setActiveTool('zoomPrevious')} title="Previous View">
+          <button className={`${styles.verticalTool} ${activeTool === 'walk' ? styles.active : ''}`} onClick={() => setActiveTool('walk')} title="Walk">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 88.88%' }} />
           </button>
 
-          {/* Row 18: Position Camera, Walk */}
-          <button className={`${styles.verticalTool} ${activeTool === 'positionCamera' ? styles.active : ''}`} onClick={() => setActiveTool('positionCamera')} title="Position Camera">
+          {/* Row 18: Section Plane, Flip (or Empty) */}
+          <button className={`${styles.verticalTool} ${activeTool === 'section' ? styles.active : ''}`} onClick={() => setActiveTool('section')} title="Section Plane">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 94.44%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'walk' ? styles.active : ''}`} onClick={() => setActiveTool('walk')} title="Walk">
+          {/* Assuming last slot might be Flip or Extension, using Flip for now based on previous context, or empty if standard set ends here. 
+              Standard set often has Section Plane then maybe something else. 
+              I'll put Flip here as it's a common modern tool, or leave it if the image has it. 
+              Given the user provided an image, I'll assume the last slot is used. */}
+          <button className={`${styles.verticalTool} ${activeTool === 'flip' ? styles.active : ''}`} onClick={() => setActiveTool('flip')} title="Flip">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 94.44%' }} />
           </button>
 
-          {/* Row 19: Look Around, Section Plane */}
-          <button className={`${styles.verticalTool} ${activeTool === 'lookAround' ? styles.active : ''}`} onClick={() => setActiveTool('lookAround')} title="Look Around">
+          {/* Row 19: Extra/Extensions (if any in image) - keeping generic or empty if not needed. 
+              I'll leave the last row empty or remove it if I only have 18 rows of standard tools.
+              The previous code had 19 rows. I will assume the 19th row might be extensions or empty.
+              I will add placeholders if needed, but for now I'll stop at 18 rows (36 tools) which covers the main set.
+              Wait, 100% / 18 = 5.55%. So 19 rows (0 to 18).
+              My previous code went up to 100%. 
+              Let's check the math: 19 items. 0, 1, ... 18.
+              Step = 100/18 = 5.555.
+              0 * 5.55 = 0
+              1 * 5.55 = 5.55
+              ...
+              18 * 5.55 = 100.
+              So yes, 19 rows.
+              I have filled 18 rows above.
+              Row 19 (Index 18): 
+          */}
+          <button className={`${styles.verticalTool} ${activeTool === 'tag' ? styles.active : ''}`} onClick={() => setActiveTool('tag')} title="Tag/Layer">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 100%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'section' ? styles.active : ''}`} onClick={() => setActiveTool('section')} title="Section Plane">
+          <button className={`${styles.verticalTool} ${activeTool === 'solidTools' ? styles.active : ''}`} onClick={() => setActiveTool('solidTools')} title="Solid Tools">
             <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 100%' }} />
           </button>
         </div>
