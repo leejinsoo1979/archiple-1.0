@@ -21,7 +21,6 @@ import {
   HighlightLayer,
   LinesMesh,
 } from '@babylonjs/core';
-import { GridMaterial } from '@babylonjs/materials';
 
 type ToolType = 'select' | 'eraser' | 'line' | 'arc' | 'rectangle' | 'circle' | 'polygon' | 'pushpull' | 'rotate' | 'move' | 'scale' | 'offset' | 'tape' | 'text' | 'paint' | 'orbit' | 'pan' | 'zoom' | 'zoomExtents' | 'makeComponent' | 'freehand' | 'rotatedRect' | 'arc2pt' | 'arc3pt' | 'pie' | 'followMe' | 'outerShell' | 'dimension' | 'protractor' | 'text3d' | 'axes' | 'section' | 'solidTools' | 'zoomWindow' | 'zoomPrevious' | 'lookAround' | 'walk' | 'tag' | 'positionCamera' | 'flip';
 
@@ -345,20 +344,6 @@ const CustomModelingPage: React.FC = () => {
     const light2 = new HemisphericLight('light2', new Vector3(-1, 1, 0), scene);
     light2.intensity = 0.4;
 
-    // Grid
-    const ground = MeshBuilder.CreateGround('ground', { width: 1000, height: 1000 }, scene);
-    const gridMaterial = new GridMaterial('gridMaterial', scene);
-    gridMaterial.majorUnitFrequency = 5;
-    gridMaterial.minorUnitVisibility = 0.3;
-    gridMaterial.gridRatio = 1;
-    gridMaterial.mainColor = new Color3(0.15, 0.15, 0.15);
-    gridMaterial.lineColor = new Color3(0.3, 0.3, 0.3);
-    gridMaterial.opacity = 0.99;
-    gridMaterial.useMaxLine = true;
-    gridMaterial.gridOffset = Vector3.Zero();
-    ground.material = gridMaterial;
-    ground.isPickable = false;
-
     // Ground picker
     const groundPicker = MeshBuilder.CreateGround('groundPicker', { width: 1000, height: 1000 }, scene);
     groundPicker.position.y = 0;
@@ -459,19 +444,6 @@ const CustomModelingPage: React.FC = () => {
       scene.clearColor = new Color4(0.96, 0.96, 0.96, 1);
     } else {
       scene.clearColor = new Color4(0.08, 0.08, 0.08, 1);
-    }
-
-    // Update grid material colors
-    const ground = scene.getMeshByName('ground');
-    if (ground && ground.material) {
-      const gridMaterial = ground.material as GridMaterial;
-      if (themeMode === 'light') {
-        gridMaterial.mainColor = new Color3(0.92, 0.92, 0.92);
-        gridMaterial.lineColor = new Color3(0.78, 0.78, 0.78);
-      } else {
-        gridMaterial.mainColor = new Color3(0.15, 0.15, 0.15);
-        gridMaterial.lineColor = new Color3(0.3, 0.3, 0.3);
-      }
     }
 
     // Save to localStorage
