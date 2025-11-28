@@ -1012,11 +1012,15 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       const dirY = -Math.sin(altitudeRad);
       const dirZ = -Math.cos(altitudeRad) * Math.cos(azimuthRad);
 
-      // DirectionalLight: first param is DIRECTION, not position
-      const sunLight = new DirectionalLight('sunLight', new Vector3(dirX, dirY, dirZ), scene);
+      // DirectionalLight: direction points FROM sun TO scene
+      // Sun should be in front and above, shining INTO the room
+      const sunLight = new DirectionalLight('sunLight', new Vector3(0, -1, 0.5).normalize(), scene);
       sunLight.intensity = intensity;
       sunLight.diffuse = new Color3(1, 0.98, 0.95); // Warm sunlight
       sunLight.specular = new Color3(1, 1, 1);
+      // Position sun high above and in front of scene
+      sunLight.position = new Vector3(0, 50, -30);
+      sunLight.autoCalcShadowZBounds = true;
       sunLightRef.current = sunLight;
 
       // Shadow generator - balanced quality/performance
@@ -1026,8 +1030,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       shadowGenerator.blurScale = 2;
       shadowGenerator.useKernelBlur = true;
 
-      shadowGenerator.bias = 0.00001;
-      shadowGenerator.normalBias = 0.01;
+      shadowGenerator.bias = 0.0001;
+      shadowGenerator.normalBias = 0.02;
 
       // darkness: 0 = 완전한 검정 그림자, 1 = 그림자 없음
       shadowGenerator.setDarkness(0.3);
@@ -1069,6 +1073,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
         // Disable collisions (don't interfere with character movement)
         gridPlane.checkCollisions = false;
+
+        // Disable picking (don't interfere with hover detection)
+        gridPlane.isPickable = false;
 
         // Lower render priority so it renders below everything else
         gridPlane.renderingGroupId = 0;
