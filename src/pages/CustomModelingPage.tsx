@@ -362,9 +362,9 @@ const CustomModelingPage: React.FC = () => {
 
     const xAxisNeg = MeshBuilder.CreateDashedLines('xAxisNeg', {
       points: [Vector3.Zero(), new Vector3(-axisLength, 0, 0)],
-      dashSize: 0.3,
-      gapSize: 0.2,
-      dashNb: 100,
+      dashSize: 0.08,
+      gapSize: 0.04,
+      dashNb: 800,
     }, scene);
     xAxisNeg.color = new Color3(0.5, 0.2, 0.2);
     xAxisNeg.isPickable = false;
@@ -377,9 +377,9 @@ const CustomModelingPage: React.FC = () => {
 
     const yAxisNeg = MeshBuilder.CreateDashedLines('yAxisNeg', {
       points: [Vector3.Zero(), new Vector3(0, 0, -axisLength)],
-      dashSize: 0.3,
-      gapSize: 0.2,
-      dashNb: 100,
+      dashSize: 0.08,
+      gapSize: 0.04,
+      dashNb: 800,
     }, scene);
     yAxisNeg.color = new Color3(0.2, 0.4, 0.2);
     yAxisNeg.isPickable = false;
@@ -392,9 +392,9 @@ const CustomModelingPage: React.FC = () => {
 
     const zAxisNeg = MeshBuilder.CreateDashedLines('zAxisNeg', {
       points: [Vector3.Zero(), new Vector3(0, -axisLength, 0)],
-      dashSize: 0.3,
-      gapSize: 0.2,
-      dashNb: 100,
+      dashSize: 0.08,
+      gapSize: 0.04,
+      dashNb: 800,
     }, scene);
     zAxisNeg.color = new Color3(0.2, 0.3, 0.5);
     zAxisNeg.isPickable = false;
@@ -969,17 +969,17 @@ const CustomModelingPage: React.FC = () => {
               <svg viewBox="0 0 24 24" fill="none"><path d="M5 3L5 19L9 15L12 21L14 20L11 14L17 14L5 3Z" fill="currentColor"/></svg>
             </button>
             <button className={`${styles.topToolBtn} ${activeTool === 'move' ? styles.active : ''}`} onClick={() => setActiveTool('move')} title="Move">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M12 4V20M4 12H20" stroke="currentColor" strokeWidth="2"/></svg>
+              <BiMove size={16} />
             </button>
             <button className={`${styles.topToolBtn} ${activeTool === 'rotate' ? styles.active : ''}`} onClick={() => setActiveTool('rotate')} title="Rotate">
-              <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 2"/></svg>
+              <GrRotateRight size={16} />
             </button>
             <button className={`${styles.topToolBtn} ${activeTool === 'scale' ? styles.active : ''}`} onClick={() => setActiveTool('scale')} title="Scale">
-              <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5"/></svg>
+              <LuScaling size={16} />
             </button>
             <div className={styles.topToolDivider} />
             <button className={`${styles.topToolBtn} ${activeTool === 'line' ? styles.active : ''}`} onClick={() => setActiveTool('line')} title="Line">
-              <svg viewBox="0 0 24 24" fill="none"><line x1="4" y1="20" x2="20" y2="4" stroke="currentColor" strokeWidth="2"/></svg>
+              <LuPencilLine size={16} />
             </button>
             <button className={`${styles.topToolBtn} ${activeTool === 'rectangle' ? styles.active : ''}`} onClick={() => setActiveTool('rectangle')} title="Rectangle">
               <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="12" stroke="currentColor" strokeWidth="1.5"/></svg>
@@ -988,11 +988,11 @@ const CustomModelingPage: React.FC = () => {
               <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5"/></svg>
             </button>
             <button className={`${styles.topToolBtn} ${activeTool === 'pushpull' ? styles.active : ''}`} onClick={() => setActiveTool('pushpull')} title="Push/Pull">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M4 14L10 11L16 14V18L10 21L4 18V14Z" stroke="currentColor" strokeWidth="1.5"/></svg>
+              <LuArrowUpFromLine size={16} />
             </button>
             <div className={styles.topToolDivider} />
             <button className={`${styles.topToolBtn} ${activeTool === 'orbit' ? styles.active : ''}`} onClick={() => setActiveTool('orbit')} title="Orbit">
-              <svg viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="12" rx="8" ry="3" transform="rotate(45 12 12)" stroke="currentColor" strokeWidth="1.5"/></svg>
+              <LuRotate3D size={16} />
             </button>
             <button className={`${styles.topToolBtn} ${activeTool === 'pan' ? styles.active : ''}`} onClick={() => setActiveTool('pan')} title="Pan">
               <FaHandPaper size={16} />
