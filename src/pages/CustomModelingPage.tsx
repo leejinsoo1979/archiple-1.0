@@ -853,7 +853,7 @@ const CustomModelingPage: React.FC = () => {
     { type: 'divider' },
     { id: 'tape', icon: <FaTape size={18} />, title: 'Tape Measure (T)' },
     { id: 'dimension', icon: <svg viewBox="0 0 24 24" fill="none"><line x1="4" y1="18" x2="20" y2="18" stroke="currentColor" strokeWidth="1.5"/><line x1="4" y1="15" x2="4" y2="21" stroke="currentColor" strokeWidth="1.5"/><line x1="20" y1="15" x2="20" y2="21" stroke="currentColor" strokeWidth="1.5"/><text x="12" y="14" fontSize="8" textAnchor="middle" fill="currentColor">2.5m</text></svg>, title: 'Dimension' },
-    { id: 'protractor', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M4 18A10 10 0 0120 18" stroke="currentColor" strokeWidth="1.5" fill="none"/><line x1="12" y1="18" x2="12" y2="8" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="18" r="2" fill="currentColor"/></svg>, title: 'Protractor' },
+    { id: 'protractor', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M2 20h20M2 20A10 10 0 0 1 12 10a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="20" x2="12" y2="10" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="20" x2="5" y2="12" stroke="currentColor" strokeWidth="1"/><line x1="12" y1="20" x2="19" y2="12" stroke="currentColor" strokeWidth="1"/></svg>, title: 'Protractor' },
     { type: 'divider' },
     { id: 'orbit', icon: <LuRotate3D size={18} />, title: 'Orbit (O)' },
     { id: 'pan', icon: <FaHandPaper size={18} />, title: 'Pan (H)' },
@@ -984,7 +984,7 @@ const CustomModelingPage: React.FC = () => {
               <svg viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="12" rx="8" ry="3" transform="rotate(45 12 12)" stroke="currentColor" strokeWidth="1.5"/></svg>
             </button>
             <button className={`${styles.topToolBtn} ${activeTool === 'pan' ? styles.active : ''}`} onClick={() => setActiveTool('pan')} title="Pan">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M12 3V7M8 5V9M16 5V9M6 8V14C6 17 8 19 12 19C16 19 18 17 18 14V8" stroke="currentColor" strokeWidth="2"/></svg>
+              <FaHandPaper size={16} />
             </button>
             <button className={`${styles.topToolBtn}`} onClick={zoomExtents} title="Zoom Extents">
               <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 1"/><path d="M4 8V4H8M16 4H20V8M20 16V20H16M8 20H4V16" stroke="currentColor" strokeWidth="1.5"/></svg>
