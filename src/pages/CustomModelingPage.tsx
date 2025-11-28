@@ -218,46 +218,24 @@ const CustomModelingPage: React.FC = () => {
     return face;
   }, [selectedColor]);
 
-  // Create green endpoint marker at a position
-  const createEndpointMarker = useCallback((scene: Scene, position: Vector3): Mesh => {
-    const marker = MeshBuilder.CreateSphere(`endpoint_${Date.now()}_${Math.random()}`, {
-      diameter: 0.12,
-      segments: 8,
-    }, scene);
-    marker.position = position.clone();
-    marker.position.y = 0.06; // Slightly above ground
+  // Add snap points for line (start and end points)
+  const addLineSnapPoints = useCallback((start: Vector3, end: Vector3) => {
+    const newPoints = [
+      new Vector3(start.x, 0, start.z),
+      new Vector3(end.x, 0, end.z),
+    ];
 
-    const markerMat = new StandardMaterial(`endpointMat_${Date.now()}`, scene);
-    markerMat.diffuseColor = new Color3(0.2, 0.9, 0.2); // Green
-    markerMat.emissiveColor = new Color3(0.1, 0.4, 0.1); // Slight glow
-    markerMat.specularColor = new Color3(0.5, 0.5, 0.5);
-    marker.material = markerMat;
-    marker.isPickable = false;
-
-    endpointMarkersRef.current.push(marker);
-    return marker;
+    newPoints.forEach(point => {
+      // Check if point already exists
+      const exists = snapPointsRef.current.some(p => Vector3.Distance(p, point) < 0.1);
+      if (!exists) {
+        snapPointsRef.current.push(point);
+      }
+    });
   }, []);
 
-  // Create endpoint markers for line (start and end points)
-  const createLineEndpoints = useCallback((scene: Scene, start: Vector3, end: Vector3) => {
-    // Check if markers already exist at these positions
-    const existingPositions = endpointMarkersRef.current
-      .filter(m => m && !m.isDisposed())
-      .map(m => m.position);
-
-    const startExists = existingPositions.some(p => Vector3.Distance(p, new Vector3(start.x, 0.06, start.z)) < 0.1);
-    const endExists = existingPositions.some(p => Vector3.Distance(p, new Vector3(end.x, 0.06, end.z)) < 0.1);
-
-    if (!startExists) {
-      createEndpointMarker(scene, start);
-    }
-    if (!endExists) {
-      createEndpointMarker(scene, end);
-    }
-  }, [createEndpointMarker]);
-
-  // Create endpoint markers for rectangle (4 corners)
-  const createRectangleEndpoints = useCallback((scene: Scene, start: Vector3, end: Vector3) => {
+  // Add snap points for rectangle (4 corners)
+  const addRectangleSnapPoints = useCallback((start: Vector3, end: Vector3) => {
     const corners = [
       new Vector3(start.x, 0, start.z),
       new Vector3(end.x, 0, start.z),
@@ -265,17 +243,54 @@ const CustomModelingPage: React.FC = () => {
       new Vector3(start.x, 0, end.z),
     ];
 
-    const existingPositions = endpointMarkersRef.current
-      .filter(m => m && !m.isDisposed())
-      .map(m => new Vector3(m.position.x, 0, m.position.z));
-
     corners.forEach(corner => {
-      const exists = existingPositions.some(p => Vector3.Distance(p, corner) < 0.1);
+      const exists = snapPointsRef.current.some(p => Vector3.Distance(p, corner) < 0.1);
       if (!exists) {
-        createEndpointMarker(scene, corner);
+        snapPointsRef.current.push(corner);
       }
     });
-  }, [createEndpointMarker]);
+  }, []);
+
+  // Show snap indicator at position
+  const showSnapIndicator = useCallback((position: Vector3) => {
+    const indicator = snapIndicatorRef.current;
+    if (indicator) {
+      indicator.position = new Vector3(position.x, 0.06, position.z);
+      indicator.isVisible = true;
+    }
+  }, []);
+
+  // Hide snap indicator
+  const hideSnapIndicator = useCallback(() => {
+    const indicator = snapIndicatorRef.current;
+    if (indicator) {
+      indicator.isVisible = false;
+    }
+  }, []);
+
+  // Find nearest snap point to a position
+  const findNearestSnapPoint = useCallback((position: Vector3): Vector3 | null => {
+    let nearest: Vector3 | null = null;
+    let minDist = SNAP_THRESHOLD;
+
+    // Check origin first
+    const distToOrigin = Vector3.Distance(position, Vector3.Zero());
+    if (distToOrigin < minDist) {
+      minDist = distToOrigin;
+      nearest = Vector3.Zero();
+    }
+
+    // Check all snap points
+    for (const snapPoint of snapPointsRef.current) {
+      const dist = Vector3.Distance(position, snapPoint);
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = snapPoint;
+      }
+    }
+
+    return nearest;
+  }, []);
 
   // Push/Pull functionality
   const applyPushPull = useCallback((mesh: Mesh, height: number): Mesh | null => {
@@ -479,7 +494,7 @@ const CustomModelingPage: React.FC = () => {
     zAxisNeg.color = new Color3(0.2, 0.3, 0.5);
     zAxisNeg.isPickable = false;
 
-    // Origin marker - green sphere at (0,0,0) for snap indication
+    // Origin marker - green sphere at (0,0,0) - always visible
     const originMarker = MeshBuilder.CreateSphere('originMarker', {
       diameter: 0.15,
       segments: 16,
@@ -493,8 +508,20 @@ const CustomModelingPage: React.FC = () => {
     originMarker.isPickable = false;
     originMarkerRef.current = originMarker;
 
-    // Add origin to endpoint markers list for snap detection
-    endpointMarkersRef.current.push(originMarker);
+    // Snap indicator - hidden by default, shown when hovering near snap points with drawing tools
+    const snapIndicator = MeshBuilder.CreateSphere('snapIndicator', {
+      diameter: 0.12,
+      segments: 8,
+    }, scene);
+    snapIndicator.position = new Vector3(0, 0.06, 0);
+    const snapMat = new StandardMaterial('snapMat', scene);
+    snapMat.diffuseColor = new Color3(0.2, 0.9, 0.2); // Green
+    snapMat.emissiveColor = new Color3(0.1, 0.5, 0.1); // Slight glow
+    snapMat.specularColor = new Color3(0.5, 0.5, 0.5);
+    snapIndicator.material = snapMat;
+    snapIndicator.isPickable = false;
+    snapIndicator.isVisible = false; // Hidden by default
+    snapIndicatorRef.current = snapIndicator;
 
     // Highlight layer
     highlightLayerRef.current = new HighlightLayer('highlight', scene);
@@ -599,12 +626,12 @@ const CustomModelingPage: React.FC = () => {
               if (activeTool === 'line') {
                 if (Vector3.Distance(state.startPoint, state.currentPoint) > 0.1) {
                   finalizeLine(scene, state.startPoint, state.currentPoint);
-                  createLineEndpoints(scene, state.startPoint, state.currentPoint);
+                  addLineSnapPoints(state.startPoint, state.currentPoint);
                 }
               } else if (activeTool === 'rectangle') {
                 const rectResult = finalizeRectangle(scene, state.startPoint, state.currentPoint);
                 if (rectResult) {
-                  createRectangleEndpoints(scene, state.startPoint, state.currentPoint);
+                  addRectangleSnapPoints(state.startPoint, state.currentPoint);
                 }
               }
             }
@@ -708,6 +735,29 @@ const CustomModelingPage: React.FC = () => {
         return;
       }
 
+      // Show/hide snap indicator for drawing tools (SketchUp style)
+      if (activeTool === 'line' || activeTool === 'rectangle') {
+        const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) => mesh.name === 'groundPicker');
+        if (pickResult?.hit && pickResult.pickedPoint) {
+          const snappedPoint = new Vector3(
+            Math.round(pickResult.pickedPoint.x * 2) / 2,
+            0,
+            Math.round(pickResult.pickedPoint.z * 2) / 2
+          );
+          const nearestSnap = findNearestSnapPoint(snappedPoint);
+          if (nearestSnap) {
+            showSnapIndicator(nearestSnap);
+          } else {
+            hideSnapIndicator();
+          }
+        } else {
+          hideSnapIndicator();
+        }
+      } else {
+        // Hide snap indicator when not using drawing tools
+        hideSnapIndicator();
+      }
+
       const state = drawingStateRef.current;
       if (!state.isDrawing || !state.startPoint) return;
 
@@ -762,7 +812,7 @@ const CustomModelingPage: React.FC = () => {
         canvas.removeEventListener('pointerup', handlePointerUp);
       }
     };
-  }, [activeTool, selectedColor, getGroundPoint, updatePreviewLine, updatePreviewRectangle, finalizeLine, finalizeRectangle, applyPushPull, zoomExtents, createLineEndpoints, createRectangleEndpoints]);
+  }, [activeTool, selectedColor, getGroundPoint, updatePreviewLine, updatePreviewRectangle, finalizeLine, finalizeRectangle, applyPushPull, zoomExtents, addLineSnapPoints, addRectangleSnapPoints, showSnapIndicator, hideSnapIndicator, findNearestSnapPoint]);
 
   // Keyboard shortcuts
   useEffect(() => {
