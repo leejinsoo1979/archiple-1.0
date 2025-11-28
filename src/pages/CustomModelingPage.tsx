@@ -362,9 +362,9 @@ const CustomModelingPage: React.FC = () => {
 
     const xAxisNeg = MeshBuilder.CreateDashedLines('xAxisNeg', {
       points: [Vector3.Zero(), new Vector3(-axisLength, 0, 0)],
-      dashSize: 0.08,
-      gapSize: 0.04,
-      dashNb: 800,
+      dashSize: 0.03,
+      gapSize: 0.015,
+      dashNb: 2000,
     }, scene);
     xAxisNeg.color = new Color3(0.5, 0.2, 0.2);
     xAxisNeg.isPickable = false;
@@ -377,9 +377,9 @@ const CustomModelingPage: React.FC = () => {
 
     const yAxisNeg = MeshBuilder.CreateDashedLines('yAxisNeg', {
       points: [Vector3.Zero(), new Vector3(0, 0, -axisLength)],
-      dashSize: 0.08,
-      gapSize: 0.04,
-      dashNb: 800,
+      dashSize: 0.03,
+      gapSize: 0.015,
+      dashNb: 2000,
     }, scene);
     yAxisNeg.color = new Color3(0.2, 0.4, 0.2);
     yAxisNeg.isPickable = false;
@@ -392,9 +392,9 @@ const CustomModelingPage: React.FC = () => {
 
     const zAxisNeg = MeshBuilder.CreateDashedLines('zAxisNeg', {
       points: [Vector3.Zero(), new Vector3(0, -axisLength, 0)],
-      dashSize: 0.08,
-      gapSize: 0.04,
-      dashNb: 800,
+      dashSize: 0.03,
+      gapSize: 0.015,
+      dashNb: 2000,
     }, scene);
     zAxisNeg.color = new Color3(0.2, 0.3, 0.5);
     zAxisNeg.isPickable = false;
