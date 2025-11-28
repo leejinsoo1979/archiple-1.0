@@ -58,6 +58,16 @@ export class Camera2D {
   }
 
   /**
+   * Set zoom level directly (centered on canvas)
+   * @param scale - New scale value (px/mm)
+   */
+  setZoom(scale: number): void {
+    const minScale = 0.05;
+    const maxScale = 2.0;
+    this.viewport.scalePxPerMm = Math.max(minScale, Math.min(maxScale, scale));
+  }
+
+  /**
    * Get current scale in legacy format (zoom * 10 for compatibility)
    * Legacy code expects zoom where 1.0 = normal
    */

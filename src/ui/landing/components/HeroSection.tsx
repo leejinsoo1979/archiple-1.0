@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from '../../../pages/LandingPage.module.css';
+import { FloorplanSearchModal } from '../../modals/FloorplanSearchModal';
 
 const HeroSection: React.FC = () => {
     const navigate = useNavigate();
+    const [showSearchModal, setShowSearchModal] = useState(false);
 
     return (
+        <>
         <section className={styles.heroSection}>
             <div className={styles.heroContainer}>
                 <div className={styles.heroContent}>
@@ -22,8 +25,8 @@ const HeroSection: React.FC = () => {
                         <button className={styles.btnPrimaryLarge} onClick={() => navigate('/editor')}>
                             Home Design for Free
                         </button>
-                        <button className={styles.btnSecondaryLarge}>
-                            Enterprise Free Trial
+                        <button className={styles.btnSecondaryLarge} onClick={() => setShowSearchModal(true)}>
+                            Search Floorplan
                         </button>
                     </div>
 
@@ -49,6 +52,12 @@ const HeroSection: React.FC = () => {
                 </div>
             </div>
         </section>
+
+        <FloorplanSearchModal
+            isOpen={showSearchModal}
+            onClose={() => setShowSearchModal(false)}
+        />
+        </>
     );
 };
 

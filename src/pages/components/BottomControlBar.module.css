@@ -445,3 +445,220 @@
     border-color: var(--theme-color);
     color: var(--theme-color);
 }
+
+/* ===== 2D View Type Modal ===== */
+.view2DModal {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    min-width: 140px;
+    background: var(--bg-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    overflow: hidden;
+    animation: modalSlideUp 0.15s ease-out;
+}
+
+.view2DOption {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 12px 16px;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+}
+
+.view2DOption:hover {
+    background: var(--hover-bg);
+}
+
+.view2DOption.selected {
+    color: var(--theme-color);
+}
+
+.view2DOption.selected .elevationText {
+    color: var(--theme-color);
+}
+
+.levelNumber {
+    font-weight: 400;
+    color: var(--text-color);
+    opacity: 0.6;
+}
+
+.elevationText {
+    color: inherit;
+}
+
+/* ===== 3D View Options Modal ===== */
+.view3DModal {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    min-width: 220px;
+    background: var(--bg-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    overflow: hidden;
+    animation: modalSlideUp 0.15s ease-out;
+    padding: 8px 0;
+}
+
+.view3DToggleRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-color-hover);
+}
+
+.view3DToggleRow .toggleSwitch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    cursor: pointer;
+}
+
+.view3DToggleRow .toggleSwitch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.view3DToggleRow .toggleSlider {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--divider-color);
+    border-radius: 24px;
+    transition: 0.3s;
+}
+
+.view3DToggleRow .toggleSlider::before {
+    position: absolute;
+    content: '';
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    border-radius: 50%;
+    transition: 0.3s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.view3DToggleRow .toggleSwitch input:checked + .toggleSlider {
+    background-color: var(--theme-color);
+}
+
+.view3DToggleRow .toggleSwitch input:checked + .toggleSlider::before {
+    transform: translateX(20px);
+}
+
+.view3DDivider {
+    height: 1px;
+    background: var(--divider-color);
+    margin: 4px 0;
+}
+
+.view3DOption {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 10px 16px;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+}
+
+.view3DOption:hover {
+    background: var(--hover-bg);
+    color: var(--text-color-hover);
+}
+
+.submenuArrow {
+    font-size: 16px;
+    font-weight: 400;
+    opacity: 0.5;
+}
+
+.view3DCheckboxRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.view3DCheckboxRow:hover {
+    background: var(--hover-bg);
+    color: var(--text-color-hover);
+}
+
+.view3DCheckboxRow input {
+    display: none;
+}
+
+.view3DCheckboxRow .checkmark {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--divider-color);
+    border-radius: 3px;
+    position: relative;
+    transition: all 0.2s;
+}
+
+.view3DCheckboxRow input:checked + .checkmark {
+    background: var(--theme-color);
+    border-color: var(--theme-color);
+}
+
+.view3DCheckboxRow input:checked + .checkmark::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+/* ===== 2D Display Style - Single Option ===== */
+.singleStyleOption {
+    display: flex;
+    justify-content: center;
+}
+
+.singleStyleOption .styleOption {
+    width: 140px;
+}
+
+.singleStyleOption .stylePreview {
+    aspect-ratio: 4/3;
+}

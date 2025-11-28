@@ -26,6 +26,7 @@ export const EditorEvents = {
   CAMERA_RESET: 'editor:camera:reset',
   CAMERA_FOV_CHANGED: 'editor:camera:fov:changed',
   CAMERA_PROJECTION_CHANGED: 'editor:camera:projection:changed',
+  CAMERA_HEIGHT_CHANGED: 'editor:camera:height:changed',
 
   // Grid & snap events
   GRID_TOGGLED: 'editor:grid:toggled',

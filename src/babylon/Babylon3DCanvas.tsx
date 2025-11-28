@@ -97,6 +97,8 @@ interface Babylon3DCanvasProps {
   onLightPlaced?: (light: Light) => void;
   onLightMoved?: (lightId: string, newPosition: { x: number; y: number; z: number }) => void;
   controlMode?: 'touch' | 'joystick';
+  showWalls?: boolean;
+  showEdges?: boolean;
 }
 
 // 2D 좌표(mm)를 Babylon 미터 단위로 변환
@@ -105,6 +107,96 @@ interface Babylon3DCanvasProps {
 const MM_TO_METERS = 0.001; // 1mm = 0.001m
 const DEFAULT_CAMERA_RADIUS = 8; // 8m orbit distance
 const DEFAULT_CAMERA_HEIGHT = 1.7; // 1.7m eye height
+const DEFAULT_WALL_THICKNESS = 200; // Default wall thickness 200mm
+
+/**
+ * Inset a 2D polygon by moving each vertex inward by the specified distance
+ * Used to calculate inner floor polygon from wall centerline points
+ */
+const insetPolygon2D = (points: { x: number; y: number }[], insetDistance: number): { x: number; y: number }[] => {
+  if (points.length < 3) return [];
+
+  const n = points.length;
+
+  // Calculate signed area to determine winding order
+  let signedArea = 0;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    signedArea += points[i].x * points[j].y - points[j].x * points[i].y;
+  }
+  signedArea = signedArea / 2;
+
+  // Determine inset direction based on winding order
+  // Positive area = CCW, negative area = CW
+  // We want to inset inward (shrink the polygon)
+  const insetSign = signedArea > 0 ? 1 : -1;
+
+  const insetPoints: { x: number; y: number }[] = [];
+
+  for (let i = 0; i < n; i++) {
+    const prev = points[(i - 1 + n) % n];
+    const curr = points[i];
+    const next = points[(i + 1) % n];
+
+    // Edge vectors
+    const edge1X = curr.x - prev.x;
+    const edge1Y = curr.y - prev.y;
+    const edge2X = next.x - curr.x;
+    const edge2Y = next.y - curr.y;
+
+    // Edge lengths
+    const len1 = Math.sqrt(edge1X * edge1X + edge1Y * edge1Y);
+    const len2 = Math.sqrt(edge2X * edge2X + edge2Y * edge2Y);
+
+    if (len1 === 0 || len2 === 0) {
+      insetPoints.push({ ...curr });
+      continue;
+    }
+
+    // Normalized edge vectors
+    const norm1X = edge1X / len1;
+    const norm1Y = edge1Y / len1;
+    const norm2X = edge2X / len2;
+    const norm2Y = edge2Y / len2;
+
+    // Perpendicular vectors (90° rotation)
+    // Use insetSign to ensure inward direction
+    const perp1X = -norm1Y * insetSign;
+    const perp1Y = norm1X * insetSign;
+    const perp2X = -norm2Y * insetSign;
+    const perp2Y = norm2X * insetSign;
+
+    // Bisector
+    const bisectorX = perp1X + perp2X;
+    const bisectorY = perp1Y + perp2Y;
+    const bisectorLen = Math.sqrt(bisectorX * bisectorX + bisectorY * bisectorY);
+
+    if (bisectorLen < 0.001) {
+      // Parallel edges
+      insetPoints.push({
+        x: curr.x + perp1X * insetDistance,
+        y: curr.y + perp1Y * insetDistance,
+      });
+      continue;
+    }
+
+    // Normalize and scale bisector
+    const normBisectorX = bisectorX / bisectorLen;
+    const normBisectorY = bisectorY / bisectorLen;
+
+    // Calculate offset distance
+    const sinHalfAngle = bisectorLen / 2;
+    const offsetDist = sinHalfAngle > 0.001 ? insetDistance / sinHalfAngle : insetDistance;
+    const clampedOffset = Math.min(offsetDist, insetDistance * 10);
+
+    insetPoints.push({
+      x: curr.x + normBisectorX * clampedOffset,
+      y: curr.y + normBisectorY * clampedOffset,
+    });
+  }
+
+  return insetPoints;
+};
 
 interface PlanMetrics {
   centerX: number;
@@ -228,6 +320,8 @@ const findNearestWallSnap = (
 export interface Babylon3DCanvasRef {
   captureRender: (width: number, height: number) => Promise<string>;
   takeScreenshot: () => Promise<string | null>;
+  getScene: () => Scene | null;
+  getEngine: () => Engine | null;
 }
 
 const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
@@ -247,7 +341,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     selectedLightType = 'point',
     onLightPlaced,
     onLightMoved,
-    controlMode = 'touch'
+    controlMode = 'touch',
+    showWalls = false,
+    showEdges = false
   }: Babylon3DCanvasProps,
   ref: React.ForwardedRef<Babylon3DCanvasRef>
 ) {
@@ -270,6 +366,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
   const autoWallHiderRef = useRef<AutoWallHider | null>(null); // Wall cutaway manager
   const originalMaterialsRef = useRef<Map<string, Material | null>>(new Map()); // Store original materials for display style switching
   const ssaoRef = useRef<SSAO2RenderingPipeline | null>(null); // Store SSAO pipeline for display style control
+  const hoverOutlineRef = useRef<Mesh | null>(null); // Store hover outline mesh (tube)
+  const lastHoverKeyRef = useRef<string>(''); // Track last hovered mesh+face to prevent flickering
+  const lastHoverTimeRef = useRef<number>(0); // Throttle hover outline updates
 
   // Camera settings from Zustand store
   const cameraSettings = useCameraSettingsStore();
@@ -602,6 +701,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         }
       });
     },
+    getScene: () => sceneRef.current,
+    getEngine: () => engineRef.current,
   }));
 
   useEffect(() => {
@@ -1138,6 +1239,10 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         if (autoWallHiderRef.current) {
           autoWallHiderRef.current.dispose();
           autoWallHiderRef.current = null;
+        }
+        if (hoverOutlineRef.current) {
+          hoverOutlineRef.current.dispose();
+          hoverOutlineRef.current = null;
         }
         scene.dispose();
         engine.dispose();
@@ -1702,8 +1807,27 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       mesh.dispose();
     });
 
-    const { points, walls, doors = [], windows = [], floorplan: _floorplan } = floorplanData;
+    const { points, walls, rooms = [], doors = [], windows = [], floorplan: _floorplan } = floorplanData;
     if (!walls || walls.length === 0) return;
+
+    // Build a map of pointId -> number of rooms it belongs to
+    // Points that belong to 2+ rooms are shared between rooms
+    const pointRoomCount = new Map<string, number>();
+    rooms.forEach((room: any) => {
+      if (room.points) {
+        room.points.forEach((pointId: string) => {
+          pointRoomCount.set(pointId, (pointRoomCount.get(pointId) || 0) + 1);
+        });
+      }
+    });
+
+    // Helper function: Check if a wall is internal (both endpoints shared by 2+ rooms)
+    const isWallInternal = (startPointId: string, endPointId: string): boolean => {
+      const startCount = pointRoomCount.get(startPointId) || 0;
+      const endCount = pointRoomCount.get(endPointId) || 0;
+      // Internal wall: both endpoints belong to 2+ rooms
+      return startCount >= 2 && endCount >= 2;
+    };
 
     const planMetrics = computePlanMetrics(points);
     planMetricsRef.current = planMetrics; // Store for cutaway logic
@@ -1953,7 +2077,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         // Finalize wall mesh (with or without doors/windows)
         wallMesh.receiveShadows = true;
         wallMesh.checkCollisions = true;
-        wallMesh.metadata = { type: 'wall', wallId: wall.id };
+        // Determine if this wall is internal (shared between rooms) or external (perimeter)
+        const wallIsInternal = isWallInternal(wall.startPointId, wall.endPointId);
+        wallMesh.metadata = { type: 'wall', wallId: wall.id, isInternal: wallIsInternal };
 
         // Ensure collision is properly set for CSG-generated meshes
         if (wallMesh.checkCollisions !== true) {
@@ -2042,19 +2168,32 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     autoWallHiderRef.current = new AutoWallHider(scene);
 
     // Create floors for each room - ONLY inside walls (polygon shape)
-    const { rooms } = floorplanData;
     if (rooms && rooms.length > 0) {
       rooms.forEach((room, roomIndex) => {
-        // Get room boundary points in 3D space (flip Z axis)
-        const roomPoints = room.points.map((pid: string) => {
+        // Get raw 2D points in mm coordinates
+        const raw2DPoints = room.points.map((pid: string) => {
           const p = pointMap.get(pid);
           if (!p) return null;
+          return { x: p.x, y: p.y };
+        }).filter((p: any): p is { x: number; y: number } => p !== null);
+
+        if (raw2DPoints.length < 3) return;
+
+        // Room points are at wall centerline - inset by half wall thickness to get inner edge
+        // This matches the 2D floor rendering in RoomLayer.ts
+        const insetDistance = DEFAULT_WALL_THICKNESS / 2; // 100mm inset
+        const inset2DPoints = insetPolygon2D(raw2DPoints, insetDistance);
+
+        if (inset2DPoints.length < 3) return;
+
+        // Convert inset 2D points to 3D space (flip Z axis)
+        const roomPoints = inset2DPoints.map((p) => {
           return new Vector3(
             p.x * MM_TO_METERS - centerX,
             0.01, // Slightly above Y=0 to prevent z-fighting
             -(p.y * MM_TO_METERS) - centerZ
           );
-        }).filter((p: any) => p !== null);
+        });
 
         if (roomPoints.length < 3) return;
 
@@ -2145,16 +2284,29 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         ceilingMaterial.environmentIntensity = 0.7;
 
         rooms.forEach((room, roomIndex) => {
-          // Get room boundary points
-          const roomPoints = room.points.map((pid: string) => {
+          // Get raw 2D points in mm coordinates
+          const raw2DPoints = room.points.map((pid: string) => {
             const p = pointMap.get(pid);
             if (!p) return null;
+            return { x: p.x, y: p.y };
+          }).filter((p: any): p is { x: number; y: number } => p !== null);
+
+          if (raw2DPoints.length < 3) return;
+
+          // Room points are at wall centerline - inset by half wall thickness to get inner edge
+          const insetDistance = DEFAULT_WALL_THICKNESS / 2; // 100mm inset
+          const inset2DPoints = insetPolygon2D(raw2DPoints, insetDistance);
+
+          if (inset2DPoints.length < 3) return;
+
+          // Convert inset 2D points to 3D space (flip Z axis)
+          const roomPoints = inset2DPoints.map((p) => {
             return new Vector3(
               p.x * MM_TO_METERS - centerX,
               ceilingY,
               -(p.y * MM_TO_METERS) - centerZ
             );
-          }).filter((p: any) => p !== null);
+          });
 
           if (roomPoints.length < 3) return;
 
@@ -2253,6 +2405,283 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
             if (hotspot.material) {
               (hotspot.material as PBRMaterial).alpha = playMode ? 1.0 : 0.8; // Brighter on hover in play mode
             }
+          }
+        }
+      }
+
+      // === WALL/FLOOR FACE OUTLINE ON HOVER ===
+      // Draw cyan outline only on the picked face (not entire mesh)
+      if (!playMode && scene) {
+        // Throttle expensive outline calculations (50ms = 20fps for outline updates)
+        const now = performance.now();
+        const throttleMs = 50;
+
+        if (pickResult && pickResult.hit && pickResult.pickedMesh && pickResult.faceId !== undefined) {
+          const picked = pickResult.pickedMesh as Mesh;
+          const meshName = picked.name.toLowerCase();
+
+          const isWall = meshName.includes('wall') && !meshName.includes('hotspot') && !meshName.includes('grid');
+          const isFloor = (meshName.includes('floor') || meshName.startsWith('room_')) && !meshName.includes('hotspot');
+
+          // Skip hidden/invisible meshes
+          const isHidden = !picked.isVisible || picked.visibility < 0.5;
+
+          if ((isWall || isFloor) && !isHidden && picked.getVerticesData && picked.getIndices) {
+            // Throttle expensive floor boundary calculations (walls are faster)
+            if (isFloor && now - lastHoverTimeRef.current < throttleMs) {
+              return;
+            }
+
+            const positions = picked.getVerticesData('position');
+            const indices = picked.getIndices();
+
+            if (positions && indices) {
+              const faceId = pickResult.faceId;
+              const triangleIndex = faceId * 3;
+
+              // Get picked triangle vertices
+              const idx0 = indices[triangleIndex];
+              const idx1 = indices[triangleIndex + 1];
+              const idx2 = indices[triangleIndex + 2];
+
+              const worldMatrix = picked.getWorldMatrix();
+
+              const v0 = Vector3.TransformCoordinates(
+                new Vector3(positions[idx0 * 3], positions[idx0 * 3 + 1], positions[idx0 * 3 + 2]),
+                worldMatrix
+              );
+              const v1 = Vector3.TransformCoordinates(
+                new Vector3(positions[idx1 * 3], positions[idx1 * 3 + 1], positions[idx1 * 3 + 2]),
+                worldMatrix
+              );
+              const v2 = Vector3.TransformCoordinates(
+                new Vector3(positions[idx2 * 3], positions[idx2 * 3 + 1], positions[idx2 * 3 + 2]),
+                worldMatrix
+              );
+
+              // Calculate face normal and plane
+              const edge1 = v1.subtract(v0);
+              const edge2 = v2.subtract(v0);
+              const faceNormal = Vector3.Cross(edge1, edge2).normalize();
+              const planeD = Vector3.Dot(faceNormal, v0);
+
+              // For walls: skip horizontal faces (top/bottom of wall)
+              // Wall faces should be nearly vertical (normal has Y very close to 0)
+              // Only allow faces where normal is almost horizontal (Y < 0.1)
+              if (isWall && Math.abs(faceNormal.y) > 0.1) {
+                // Clear outline if hovering over wall top/bottom
+                if (hoverOutlineRef.current) {
+                  hoverOutlineRef.current.dispose();
+                  hoverOutlineRef.current = null;
+                  lastHoverKeyRef.current = '';
+                }
+                return;
+              }
+
+              // Create key for this face
+              const hoverKey = `${picked.uniqueId}_${faceNormal.x.toFixed(2)}_${faceNormal.y.toFixed(2)}_${faceNormal.z.toFixed(2)}_${planeD.toFixed(2)}`;
+
+              // Skip if same face (prevent flickering)
+              if (hoverKey === lastHoverKeyRef.current && hoverOutlineRef.current) {
+                return;
+              }
+
+              // Remove previous outline
+              if (hoverOutlineRef.current) {
+                hoverOutlineRef.current.dispose();
+                hoverOutlineRef.current = null;
+              }
+              lastHoverKeyRef.current = hoverKey;
+              lastHoverTimeRef.current = now;
+
+              // For walls: find triangles with same normal/plane
+              // For floors: use bounding box to get the rectangle outline
+              const faceVerts: Vector3[] = [];
+
+              if (isFloor) {
+                // Floor: find boundary edges (edges used by only one triangle)
+                const edgeMap = new Map<string, { v1: Vector3; v2: Vector3; count: number }>();
+                const floorY = v0.y; // Use picked triangle's Y level
+                const yTol = 0.15;
+
+                // Helper to create consistent edge key (rounded for better matching)
+                const makeEdgeKey = (a: Vector3, b: Vector3): string => {
+                  const ax = Math.round(a.x * 50), az = Math.round(a.z * 50);
+                  const bx = Math.round(b.x * 50), bz = Math.round(b.z * 50);
+                  return ax + az < bx + bz ? `${ax},${az}-${bx},${bz}` : `${bx},${bz}-${ax},${az}`;
+                };
+
+                for (let i = 0; i < indices.length; i += 3) {
+                  const i0 = indices[i], i1 = indices[i + 1], i2 = indices[i + 2];
+                  const p0 = Vector3.TransformCoordinates(
+                    new Vector3(positions[i0 * 3], positions[i0 * 3 + 1], positions[i0 * 3 + 2]),
+                    worldMatrix
+                  );
+                  const p1 = Vector3.TransformCoordinates(
+                    new Vector3(positions[i1 * 3], positions[i1 * 3 + 1], positions[i1 * 3 + 2]),
+                    worldMatrix
+                  );
+                  const p2 = Vector3.TransformCoordinates(
+                    new Vector3(positions[i2 * 3], positions[i2 * 3 + 1], positions[i2 * 3 + 2]),
+                    worldMatrix
+                  );
+
+                  // Check if triangle is at floor level (same Y)
+                  const avgY = (p0.y + p1.y + p2.y) / 3;
+                  if (Math.abs(avgY - floorY) > yTol) continue;
+
+                  // Check if this triangle is horizontal (floor surface - up OR down)
+                  const e1 = p1.subtract(p0), e2 = p2.subtract(p0);
+                  const n = Vector3.Cross(e1, e2).normalize();
+                  if (Math.abs(n.y) < 0.8) continue; // Skip non-horizontal triangles
+
+                  // Add edges to count map
+                  const triEdges: [Vector3, Vector3][] = [[p0, p1], [p1, p2], [p2, p0]];
+                  for (const [va, vb] of triEdges) {
+                    const key = makeEdgeKey(va, vb);
+                    const existing = edgeMap.get(key);
+                    if (existing) {
+                      existing.count++;
+                    } else {
+                      edgeMap.set(key, { v1: va.clone(), v2: vb.clone(), count: 1 });
+                    }
+                  }
+                }
+
+                // Boundary edges are used only once
+                const boundaryEdges: { v1: Vector3; v2: Vector3 }[] = [];
+                edgeMap.forEach((edge) => {
+                  if (edge.count === 1) {
+                    boundaryEdges.push({ v1: edge.v1, v2: edge.v2 });
+                  }
+                });
+
+                // Chain boundary edges into ordered vertices
+                if (boundaryEdges.length >= 3) {
+                  const orderedVerts: Vector3[] = [boundaryEdges[0].v1, boundaryEdges[0].v2];
+                  const used = new Set<number>([0]);
+                  const distTol = 0.08; // Larger tolerance for matching
+
+                  for (let iter = 0; iter < boundaryEdges.length && used.size < boundaryEdges.length; iter++) {
+                    const last = orderedVerts[orderedVerts.length - 1];
+                    let foundIdx = -1;
+                    let nextVert: Vector3 | null = null;
+
+                    for (let j = 0; j < boundaryEdges.length; j++) {
+                      if (used.has(j)) continue;
+                      const edge = boundaryEdges[j];
+                      if (Vector3.Distance(edge.v1, last) < distTol) {
+                        foundIdx = j;
+                        nextVert = edge.v2;
+                        break;
+                      } else if (Vector3.Distance(edge.v2, last) < distTol) {
+                        foundIdx = j;
+                        nextVert = edge.v1;
+                        break;
+                      }
+                    }
+
+                    if (foundIdx >= 0 && nextVert) {
+                      used.add(foundIdx);
+                      orderedVerts.push(nextVert);
+                    } else {
+                      break;
+                    }
+                  }
+
+                  faceVerts.push(...orderedVerts);
+                }
+              } else {
+                // Wall: find triangles with same normal and plane
+                const normalTol = 0.01;
+                const planeTol = 0.05;
+
+                for (let i = 0; i < indices.length; i += 3) {
+                  const i0 = indices[i], i1 = indices[i + 1], i2 = indices[i + 2];
+                  const p0 = Vector3.TransformCoordinates(
+                    new Vector3(positions[i0 * 3], positions[i0 * 3 + 1], positions[i0 * 3 + 2]),
+                    worldMatrix
+                  );
+                  const p1 = Vector3.TransformCoordinates(
+                    new Vector3(positions[i1 * 3], positions[i1 * 3 + 1], positions[i1 * 3 + 2]),
+                    worldMatrix
+                  );
+                  const p2 = Vector3.TransformCoordinates(
+                    new Vector3(positions[i2 * 3], positions[i2 * 3 + 1], positions[i2 * 3 + 2]),
+                    worldMatrix
+                  );
+
+                  const e1 = p1.subtract(p0), e2 = p2.subtract(p0);
+                  const n = Vector3.Cross(e1, e2).normalize();
+                  const d = Vector3.Dot(n, p0);
+
+                  const dotProduct = Vector3.Dot(n, faceNormal);
+                  if (Math.abs(dotProduct - 1) < normalTol && Math.abs(d - planeD) < planeTol) {
+                    [p0, p1, p2].forEach(p => {
+                      const isUnique = !faceVerts.some(fv => Vector3.Distance(fv, p) < 0.01);
+                      if (isUnique) faceVerts.push(p);
+                    });
+                  }
+                }
+              }
+
+              // Need at least 3 vertices for a face (floors can have many vertices)
+              if (faceVerts.length >= 3 && (isFloor || faceVerts.length <= 8)) {
+                // For walls: sort vertices by angle to form convex polygon
+                // For floors: already in correct order from edge chaining
+                if (!isFloor) {
+                  const centroid = faceVerts.reduce((acc, v) => acc.add(v), Vector3.Zero()).scale(1 / faceVerts.length);
+
+                  let right = Vector3.Cross(faceNormal, new Vector3(0, 1, 0));
+                  if (right.length() < 0.1) right = Vector3.Cross(faceNormal, new Vector3(1, 0, 0));
+                  right.normalize();
+                  const forward = Vector3.Cross(right, faceNormal).normalize();
+
+                  faceVerts.sort((a, b) => {
+                    const da = a.subtract(centroid);
+                    const db = b.subtract(centroid);
+                    const angleA = Math.atan2(Vector3.Dot(da, forward), Vector3.Dot(da, right));
+                    const angleB = Math.atan2(Vector3.Dot(db, forward), Vector3.Dot(db, right));
+                    return angleA - angleB;
+                  });
+                }
+
+                // Create closed outline path
+                const outlinePoints = [...faceVerts, faceVerts[0]];
+
+                // Offset slightly towards camera
+                const offsetDir = faceNormal.scale(0.05);
+                const offsetPoints = outlinePoints.map(p => p.add(offsetDir));
+
+                // Create thick tube outline
+                const outline = MeshBuilder.CreateTube('hoverOutline', {
+                  path: offsetPoints,
+                  radius: 0.03,
+                  tessellation: 8,
+                  cap: Mesh.NO_CAP,
+                  updatable: false
+                }, scene);
+
+                // Emissive cyan material - renders on top
+                const outlineMat = new StandardMaterial('hoverOutlineMat', scene);
+                outlineMat.emissiveColor = new Color3(0, 0.9, 0.9);
+                outlineMat.disableLighting = true;
+                outlineMat.disableDepthWrite = true;
+                outlineMat.depthFunction = Constants.ALWAYS;
+                outline.material = outlineMat;
+                outline.renderingGroupId = 3;
+                outline.isPickable = false;
+
+                hoverOutlineRef.current = outline;
+              }
+            }
+          }
+        } else {
+          // Not hovering over wall/floor - clear outline
+          if (hoverOutlineRef.current) {
+            hoverOutlineRef.current.dispose();
+            hoverOutlineRef.current = null;
+            lastHoverKeyRef.current = '';
           }
         }
       }
@@ -3719,12 +4148,19 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           break;
       }
 
-      // Disable edge rendering only for material style (original)
+      // Handle edge rendering for material style
       if (displayStyle === 'material') {
-        mesh.disableEdgesRendering();
+        if (showEdges) {
+          // Enable edge rendering when Line toggle is on in material mode
+          mesh.enableEdgesRendering();
+          mesh.edgesWidth = 0.5;
+          mesh.edgesColor = new Color4(0.2, 0.2, 0.2, 1); // Dark gray edges
+        } else {
+          mesh.disableEdgesRendering();
+        }
       }
     });
-  }, [displayStyle, floorplanData]);
+  }, [displayStyle, floorplanData, showEdges]);
 
   // Update grid visibility when showGrid changes
   useEffect(() => {

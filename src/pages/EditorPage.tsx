@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BottomControlBar } from './components/BottomControlBar';
+import { BottomControlBar, type BottomControlBarRef } from './components/BottomControlBar';
 import FloorplanCanvas from '../floorplan/FloorplanCanvas';
 import Babylon3DCanvas, { type Babylon3DCanvasRef } from '../babylon/Babylon3DCanvas';
 import styles from './EditorPage.module.css';
@@ -8,7 +8,26 @@ import { ToolType } from '../core/types/EditorState';
 // import { createTestRoom } from '../floorplan/blueprint/BlueprintToBabylonAdapter';
 // PiCubeTransparentLight removed - display style moved to BottomControlBar
 import { HiOutlineColorSwatch } from 'react-icons/hi';
-import { MdAutoAwesome } from 'react-icons/md';
+import {
+  MdAutoAwesome,
+  MdInsertDriveFile,
+  MdSave,
+  MdUndo,
+  MdRedo,
+  MdBuild,
+  MdGridView,
+  MdCameraAlt,
+  MdPhotoLibrary,
+  MdDescription,
+  MdInfoOutline
+} from 'react-icons/md';
+import { FaCaretDown, FaEraser, FaPaintBrush } from 'react-icons/fa';
+import { TbRulerMeasure, TbFlipVertical } from 'react-icons/tb';
+import { BsGrid3X3Gap } from 'react-icons/bs';
+import { MdOutlineDevices, MdOutlineWarning, MdOutlineArticle, Md360, MdVideocam, MdOutlineAutorenew, MdHelpOutline } from 'react-icons/md';
+import { FiUser } from 'react-icons/fi';
+import { HiOutlineDocumentDuplicate } from 'react-icons/hi';
+import { TbViewportWide } from 'react-icons/tb';
 import { BiCabinet } from 'react-icons/bi';
 import { LiaPencilRulerSolid } from 'react-icons/lia';
 import { eventBus } from '../core/events/EventBus';
@@ -16,37 +35,57 @@ import { EditorEvents } from '../core/events/EditorEvents';
 import type { Light, LightType } from '../core/types/Light';
 import { CameraSettingsModal } from '../ui/modals/CameraSettingsModal';
 import { ExportModal } from '../ui/modals/ExportModal';
+import { FloorplanSearchModal } from '../ui/modals/FloorplanSearchModal';
 import { useCameraSettingsStore } from '../stores/cameraSettingsStore';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 import { AIRenderModal } from '../ui/landing/components/AIRenderModal';
 import FloorplanPreview from '../ui/components/FloorplanPreview';
+import Mini3DPreview from '../ui/components/Mini3DPreview';
 import Compass2D from '../ui/components/Compass2D';
 import CameraGizmoWrapper from '../ui/components/CameraGizmoWrapper';
+import FloorPropertiesPanel, { type FloorProperties } from './components/FloorPropertiesPanel';
+import LevelPropertiesPanel, { type LevelProperties } from './components/LevelPropertiesPanel';
 
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 
 const EditorPage = () => {
   const navigate = useNavigate();
-  const setModalOpen = useCameraSettingsStore((state) => state.setModalOpen);
+  const _setModalOpen = useCameraSettingsStore((state) => state.setModalOpen);
 
   // Camera settings from store
-  const cameraAlpha = useCameraSettingsStore((state) => state.alpha);
-  const cameraBeta = useCameraSettingsStore((state) => state.beta);
+  const _cameraAlpha = useCameraSettingsStore((state) => state.alpha);
+  const _cameraBeta = useCameraSettingsStore((state) => state.beta);
   const cameraFov = useCameraSettingsStore((state) => state.horizontalFov);
-  const projectionType = useCameraSettingsStore((state) => state.projectionType);
-  const setCameraAlpha = useCameraSettingsStore((state) => state.setAlpha);
-  const setCameraBeta = useCameraSettingsStore((state) => state.setBeta);
+  const _projectionType = useCameraSettingsStore((state) => state.projectionType);
+  const _setCameraAlpha = useCameraSettingsStore((state) => state.setAlpha);
+  const _setCameraBeta = useCameraSettingsStore((state) => state.setBeta);
   const setCameraFov = useCameraSettingsStore((state) => state.setHorizontalFov);
-  const setProjectionType = useCameraSettingsStore((state) => state.setProjectionType);
+  const _setProjectionType = useCameraSettingsStore((state) => state.setProjectionType);
   const [_activeCategory, _setActiveCategory] = useState<ToolCategory>('walls');
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [activeTool, setActiveTool] = useState<ToolType>(ToolType.SELECT);
   const [viewMode, setViewMode] = useState<'2D' | '3D'>('2D');
   const [floorplanData, setFloorplanData] = useState<any>(null);
+  const [floorplanCanvas, setFloorplanCanvas] = useState<HTMLCanvasElement | null>(null);
   const [sunPanelOpen, setSunPanelOpen] = useState(false);
   const [cameraPanelOpen, setCameraPanelOpen] = useState(false);
+  const [fileMenuOpen, setFileMenuOpen] = useState(false);
+  const fileMenuRef = useRef<HTMLDivElement>(null);
+  const [clearMenuOpen, setClearMenuOpen] = useState(false);
+  const [clearSubmenuOpen, setClearSubmenuOpen] = useState(false);
+  const clearMenuRef = useRef<HTMLDivElement>(null);
+  const [toolkitMenuOpen, setToolkitMenuOpen] = useState(false);
+  const [toolkitSubmenuOpen, setToolkitSubmenuOpen] = useState<string | null>(null);
+  const toolkitMenuRef = useRef<HTMLDivElement>(null);
+  const [drawingsMenuOpen, setDrawingsMenuOpen] = useState(false);
+  const drawingsMenuRef = useRef<HTMLDivElement>(null);
+  const [imagesMenuOpen, setImagesMenuOpen] = useState(false);
+  const imagesMenuRef = useRef<HTMLDivElement>(null);
+  const [helpMenuOpen, setHelpMenuOpen] = useState(false);
+  const helpMenuRef = useRef<HTMLDivElement>(null);
+  const bottomControlBarRef = useRef<BottomControlBarRef>(null);
   const [sunSettings, setSunSettings] = useState({
     month: 6, // 1-12월
     hour: 14, // 0-24시
@@ -84,6 +123,7 @@ const EditorPage = () => {
   const [photoRealisticMode, setPhotoRealisticMode] = useState(true); // Photo-realistic rendering
   const [exportModalOpen, setExportModalOpen] = useState(false); // Export modal toggle
   const [aiRenderModalOpen, setAiRenderModalOpen] = useState(false); // New AI Render Modal toggle
+  const [floorplanSearchModalOpen, setFloorplanSearchModalOpen] = useState(false); // Floorplan search modal
   const [capturedImage, setCapturedImage] = useState<string | null>(null); // Captured 3D view for AI
 
   // Screenshot resolution settings
@@ -98,9 +138,24 @@ const EditorPage = () => {
   const [aiOutputImage, setAiOutputImage] = useState<string | null>(null);
   const [aiGenerating, setAiGenerating] = useState(false);
 
+  // Advanced Camera Settings State
+  const [zoomCenter, setZoomCenter] = useState<'mouse' | 'screen'>('screen');
+  const [rotationCenter, setRotationCenter] = useState<'mouse' | 'screen'>('screen');
+  const [lockRotation, setLockRotation] = useState(false);
+  const [movementSpeed, setMovementSpeed] = useState(50);
+  const [cameraProjection, setCameraProjection] = useState<'perspective' | 'orthographic'>('perspective');
+  const [cameraHeight, setCameraHeight] = useState(150);
+
+  const handleHeightChange = (height: number) => {
+    setCameraHeight(height);
+    // Dispatch event for Babylon3DCanvas to handle
+    const event = new CustomEvent('CAMERA_HEIGHT_CHANGED', { detail: { height } });
+    window.dispatchEvent(event);
+  };
+
   // Rendering settings panel (right sidebar)
-  const [renderPanelOpen, setRenderPanelOpen] = useState(false);
-  const [renderSettings, setRenderSettings] = useState({
+  const [_renderPanelOpen, _setRenderPanelOpen] = useState(false);
+  const [renderSettings, _setRenderSettings] = useState({
     ssaoRadius: 1.5,
     ssaoStrength: 2.0,
     ssrStrength: 0.8,
@@ -118,8 +173,57 @@ const EditorPage = () => {
   const [displayStyle, setDisplayStyle] = useState<'material' | 'white' | 'sketch' | 'transparent'>('material');
   const [hiddenLineMode, setHiddenLineMode] = useState(false);
 
+  // 2D zoom state (0-1 normalized, default ~0.035 = 0.12 scale)
+  const [zoom2D, setZoom2D] = useState(0.035);
+
+  // Mini3DPreview height (resizable)
+  const [previewHeight, setPreviewHeight] = useState(200);
+
+  // 3D Visibility settings
+  const [view3DVisibility, setView3DVisibility] = useState({
+    showHidden: false,
+    ceiling: true,
+    furniture: true,
+    customProduct: true,
+    dimensionLine: true,
+    wall: false, // false = auto wall hiding enabled, true = show all walls
+    modeling: true
+  });
+
   // Selected room state (for right panel info)
   const [selectedRoom, setSelectedRoom] = useState<{ id: string; name: string; area: number } | null>(null);
+
+  // Floor editing mode (double-click on room to edit floor)
+  const [editingFloor, setEditingFloor] = useState(false);
+  const [floorProperties, setFloorProperties] = useState<FloorProperties>({
+    id: '',
+    name: 'Untitled',
+    roomType: 'Customized',
+    controlPoint: 'bottom-left',
+    horizontalOffset: 0,
+    verticalOffset: 0,
+    angle: 0,
+    gap: 2,
+    gapType: 'custom',
+    gapColor: '#666666',
+    patternWidth: 1200,
+    patternHeight: 120,
+    materialImage: '',
+  });
+
+  // Level properties (shown when no room is selected)
+  const [levelProperties, setLevelProperties] = useState<LevelProperties>({
+    currentFloor: 'Level 1',
+    area: 0,
+    height: 2400,
+    floorThickness: 120,
+  });
+
+  // Calculate total area from all rooms
+  const totalArea = useMemo(() => {
+    if (!floorplanData?.rooms || floorplanData.rooms.length === 0) return 0;
+    return floorplanData.rooms.reduce((sum: number, room: any) => sum + (room.area || 0), 0);
+  }, [floorplanData?.rooms]);
 
   // Background image state
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
@@ -141,6 +245,7 @@ const EditorPage = () => {
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
   const glbFileInputRef = useRef<HTMLInputElement>(null);
+  const cadFileInputRef = useRef<HTMLInputElement>(null);
 
   // Dimension editing state
   const [editingWallId, setEditingWallId] = useState<string | null>(null);
@@ -148,7 +253,35 @@ const EditorPage = () => {
 
   // Wall settings state (for right panel)
   const [wallHeight, setWallHeight] = useState(2400); // mm
-  const [wallThickness, setWallThickness] = useState(100); // mm
+  const [wallThickness, setWallThickness] = useState(200); // mm
+
+  // Close dropdown menus when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (fileMenuRef.current && !fileMenuRef.current.contains(event.target as Node)) {
+        setFileMenuOpen(false);
+      }
+      if (clearMenuRef.current && !clearMenuRef.current.contains(event.target as Node)) {
+        setClearMenuOpen(false);
+        setClearSubmenuOpen(false);
+      }
+      if (toolkitMenuRef.current && !toolkitMenuRef.current.contains(event.target as Node)) {
+        setToolkitMenuOpen(false);
+        setToolkitSubmenuOpen(null);
+      }
+      if (drawingsMenuRef.current && !drawingsMenuRef.current.contains(event.target as Node)) {
+        setDrawingsMenuOpen(false);
+      }
+      if (imagesMenuRef.current && !imagesMenuRef.current.contains(event.target as Node)) {
+        setImagesMenuOpen(false);
+      }
+      if (helpMenuRef.current && !helpMenuRef.current.contains(event.target as Node)) {
+        setHelpMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Update floorplanData when wall settings change
   useEffect(() => {
@@ -213,7 +346,7 @@ const EditorPage = () => {
   const babylon3DCanvasRef = useRef<Babylon3DCanvasRef | null>(null);
 
   // Capture and download high-quality render
-  const handleCaptureScreenshot = async () => {
+  const _handleCaptureScreenshot = async () => {
     if (!babylon3DCanvasRef.current) {
       alert('3D 뷰를 먼저 로드해주세요.');
       return;
@@ -568,7 +701,7 @@ ARTISTIC APPROACH:
   };
 
   // Open AI render panel and capture input image
-  const openAIRenderPanel = async () => {
+  const _openAIRenderPanel = async () => {
     if (!babylon3DCanvasRef.current || viewMode !== '3D') {
       alert('3D 뷰로 전환해주세요.');
       return;
@@ -804,6 +937,26 @@ ARTISTIC APPROACH:
 
     setGlbModelFile(file);
     setViewMode('3D'); // Switch to 3D view
+  };
+
+  // Handle CAD file upload
+  const handleCadUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      console.warn('[EditorPage] No CAD file selected');
+      return;
+    }
+
+    const ext = file.name.toLowerCase();
+    if (!ext.endsWith('.dxf') && !ext.endsWith('.dwg')) {
+      alert('CAD 파일을 선택하세요 (.dxf, .dwg 지원)');
+      return;
+    }
+
+    // TODO: CAD file processing implementation
+    console.log('[EditorPage] CAD file selected:', file.name);
+    alert('CAD 파일 가져오기 기능은 준비 중입니다.');
   };
 
   // Handle image upload
@@ -1186,7 +1339,7 @@ ARTISTIC APPROACH:
   return (
     <div className={styles.editorContainer}>
       {/* Header */}
-      <header className={styles.header}>
+      <header className={styles.header} style={{ '--theme-color': themeColor } as React.CSSProperties}>
         <div className={styles.headerLeft}>
           <div className={styles.logoWrapper}>
             <img src="/images/archiple_logo.png" alt="Archiple Studio" className={styles.headerLogo} />
@@ -1194,1807 +1347,739 @@ ARTISTIC APPROACH:
         </div>
         <div className={styles.headerCenter}>
           {/* Top Toolbar */}
-          <div className={styles.topToolbar}>
-            <div style={{ position: 'relative' }}>
+          <div className={styles.newToolbar}>
+            {/* File Group with Dropdown */}
+            <div className={styles.toolbarDropdown} ref={fileMenuRef}>
               <button
-                className={`${styles.topBtn} ${lightPanelOpen ? styles.active : ''}`}
-                title="Light"
-                onClick={() => setLightPanelOpen(!lightPanelOpen)}
+                className={`${styles.toolbarBtn} ${styles.toolbarBtnWithArrow} ${fileMenuOpen ? styles.active : ''}`}
+                onClick={() => setFileMenuOpen(!fileMenuOpen)}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z" />
-                </svg>
+                <div className={styles.toolbarIconWrapper}>
+                  <MdInsertDriveFile />
+                </div>
+                <FaCaretDown className={styles.toolbarDropdownArrowIcon} />
               </button>
-
-              {lightPanelOpen && (
-                <div className={styles.sunDropdown}>
-                  <div className={styles.dropdownHeader}>
-                    <span>Light Settings</span>
-                    <button onClick={() => setLightPanelOpen(false)} className={styles.closeBtn}>×</button>
-                  </div>
-                  <div className={styles.dropdownBody}>
-                    {/* Add Light Buttons */}
-                    <div className={styles.controlGroup}>
-                      <label>조명 추가</label>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
-                        <button
-                          onClick={() => {
-                            if (lightPlacementMode && selectedLightType === 'point') {
-                              // Cancel placement mode
-                              setLightPlacementMode(false);
-                            } else {
-                              // Start placement mode
-                              setSelectedLightType('point');
-                              setLightPlacementMode(true);
-                              setViewMode('3D');
-                              setPlayMode(false); // Disable play mode during light placement
-                            }
-                          }}
-                          style={{
-                            width: '100%',
-                            padding: '12px',
-                            background: lightPlacementMode && selectedLightType === 'point' ? '#e74c3c' : '#3fae7a',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            fontSize: '14px',
-                            fontWeight: '500',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                          }}
-                        >
-                          {lightPlacementMode && selectedLightType === 'point' ? '배치 종료' : '+ 포인트 라이트'}
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (lightPlacementMode && selectedLightType === 'spot') {
-                              setLightPlacementMode(false);
-                            } else {
-                              setSelectedLightType('spot');
-                              setLightPlacementMode(true);
-                              setViewMode('3D');
-                              setPlayMode(false);
-                            }
-                          }}
-                          style={{
-                            width: '100%',
-                            padding: '12px',
-                            background: lightPlacementMode && selectedLightType === 'spot' ? '#e74c3c' : '#3fae7a',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            fontSize: '14px',
-                            fontWeight: '500',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                          }}
-                        >
-                          {lightPlacementMode && selectedLightType === 'spot' ? '배치 종료' : '+ 스포트 라이트'}
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (lightPlacementMode && selectedLightType === 'directional') {
-                              setLightPlacementMode(false);
-                            } else {
-                              setSelectedLightType('directional');
-                              setLightPlacementMode(true);
-                              setViewMode('3D');
-                              setPlayMode(false);
-                            }
-                          }}
-                          style={{
-                            width: '100%',
-                            padding: '12px',
-                            background: lightPlacementMode && selectedLightType === 'directional' ? '#e74c3c' : '#3fae7a',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            fontSize: '14px',
-                            fontWeight: '500',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                          }}
-                        >
-                          {lightPlacementMode && selectedLightType === 'directional' ? '배치 종료' : '+ 방향성 라이트'}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Light List */}
-                    <div className={styles.controlGroup}>
-                      <label>배치된 조명 ({lights.length})</label>
-                      <div style={{ marginTop: '8px', maxHeight: '200px', overflowY: 'auto' }}>
-                        {lights.length === 0 ? (
-                          <div style={{
-                            padding: '20px',
-                            textAlign: 'center',
-                            color: '#999',
-                            fontSize: '12px',
-                            background: 'var(--bg-tertiary)',
-                            borderRadius: '4px'
-                          }}>
-                            배치된 조명이 없습니다
-                          </div>
-                        ) : (
-                          lights.map((light) => (
-                            <div
-                              key={light.id}
-                              onClick={() => setSelectedLightId(light.id)}
-                              style={{
-                                padding: '12px',
-                                marginBottom: '6px',
-                                background: selectedLightId === light.id ? '#e8f5f0' : '#f9f9f9',
-                                border: `2px solid ${selectedLightId === light.id ? '#3fae7a' : '#eee'}`,
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                              }}
-                            >
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '4px' }}>
-                                    [{light.type === 'point' ? '포인트' : light.type === 'spot' ? '스포트' : '방향성'}] {light.name}
-                                  </div>
-                                  <div style={{ fontSize: '11px', color: '#999' }}>
-                                    강도: {light.intensity.toFixed(1)} | {light.enabled ? '켜짐' : '꺼짐'}
-                                  </div>
-                                </div>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setLights(lights.filter(l => l.id !== light.id));
-                                    if (selectedLightId === light.id) {
-                                      setSelectedLightId(null);
-                                    }
-                                  }}
-                                  style={{
-                                    padding: '4px 8px',
-                                    background: '#ff4444',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '3px',
-                                    fontSize: '11px',
-                                    cursor: 'pointer',
-                                  }}
-                                >
-                                  삭제
-                                </button>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Selected Light Settings */}
-                    {selectedLightId && lights.find(l => l.id === selectedLightId) && (() => {
-                      const selectedLight = lights.find(l => l.id === selectedLightId)!;
-                      return (
-                        <div style={{ borderTop: '1px solid #eee', paddingTop: '16px', marginTop: '8px' }}>
-                          <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '12px' }}>
-                            상세 설정
-                          </div>
-
-                          {/* Name */}
-                          <div className={styles.controlGroup}>
-                            <label>이름</label>
-                            <input
-                              type="text"
-                              value={selectedLight.name}
-                              onChange={(e) => {
-                                setLights(lights.map(l =>
-                                  l.id === selectedLightId ? { ...l, name: e.target.value } : l
-                                ));
-                              }}
-                              style={{
-                                width: '100%',
-                                padding: '8px',
-                                border: '1px solid var(--border-color)',
-                                borderRadius: '4px',
-                                fontSize: '13px',
-                              }}
-                            />
-                          </div>
-
-                          {/* Intensity */}
-                          <div className={styles.controlGroup}>
-                            <label>강도 (Intensity)</label>
-                            <div className={styles.controlInput}>
-                              <input
-                                type="range"
-                                min="0"
-                                max="5"
-                                step="0.1"
-                                value={selectedLight.intensity}
-                                onChange={(e) => {
-                                  setLights(lights.map(l =>
-                                    l.id === selectedLightId ? { ...l, intensity: parseFloat(e.target.value) } : l
-                                  ));
-                                }}
-                                className={styles.rangeSlider}
-                              />
-                              <span className={styles.valueDisplay}>{selectedLight.intensity.toFixed(1)}</span>
-                            </div>
-                          </div>
-
-                          {/* Color */}
-                          <div className={styles.controlGroup}>
-                            <label>색상 (Color)</label>
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                              <input
-                                type="color"
-                                value={`#${selectedLight.color.r.toString(16).padStart(2, '0')}${selectedLight.color.g.toString(16).padStart(2, '0')}${selectedLight.color.b.toString(16).padStart(2, '0')}`}
-                                onChange={(e) => {
-                                  const hex = e.target.value;
-                                  const r = parseInt(hex.slice(1, 3), 16);
-                                  const g = parseInt(hex.slice(3, 5), 16);
-                                  const b = parseInt(hex.slice(5, 7), 16);
-                                  setLights(lights.map(l =>
-                                    l.id === selectedLightId ? { ...l, color: { r, g, b } } : l
-                                  ));
-                                }}
-                                style={{
-                                  width: '50px',
-                                  height: '32px',
-                                  border: '1px solid var(--border-color)',
-                                  borderRadius: '4px',
-                                  cursor: 'pointer',
-                                }}
-                              />
-                              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                                RGB({selectedLight.color.r}, {selectedLight.color.g}, {selectedLight.color.b})
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Range (for point and spot) */}
-                          {(selectedLight.type === 'point' || selectedLight.type === 'spot') && (
-                            <div className={styles.controlGroup}>
-                              <label>범위 (Range)</label>
-                              <div className={styles.controlInput}>
-                                <input
-                                  type="range"
-                                  min="1"
-                                  max="50"
-                                  step="0.5"
-                                  value={selectedLight.range || 10}
-                                  onChange={(e) => {
-                                    setLights(lights.map(l =>
-                                      l.id === selectedLightId ? { ...l, range: parseFloat(e.target.value) } : l
-                                    ));
-                                  }}
-                                  className={styles.rangeSlider}
-                                />
-                                <span className={styles.valueDisplay}>{(selectedLight.range || 10).toFixed(1)}m</span>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Angle (for spot) */}
-                          {selectedLight.type === 'spot' && (
-                            <div className={styles.controlGroup}>
-                              <label>각도 (Angle)</label>
-                              <div className={styles.controlInput}>
-                                <input
-                                  type="range"
-                                  min="10"
-                                  max="90"
-                                  step="1"
-                                  value={selectedLight.angle || 45}
-                                  onChange={(e) => {
-                                    setLights(lights.map(l =>
-                                      l.id === selectedLightId ? { ...l, angle: parseFloat(e.target.value) } : l
-                                    ));
-                                  }}
-                                  className={styles.rangeSlider}
-                                />
-                                <span className={styles.valueDisplay}>{selectedLight.angle || 45}°</span>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Shadows */}
-                          <div className={styles.controlGroup}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <label style={{ margin: 0 }}>그림자 (Shadows)</label>
-                              <label className={styles.toggleSwitch}>
-                                <input
-                                  type="checkbox"
-                                  checked={selectedLight.castShadows}
-                                  onChange={(e) => {
-                                    setLights(lights.map(l =>
-                                      l.id === selectedLightId ? { ...l, castShadows: e.target.checked } : l
-                                    ));
-                                  }}
-                                />
-                                <span className={styles.toggleSlider}></span>
-                              </label>
-                            </div>
-                          </div>
-
-                          {/* Enabled */}
-                          <div className={styles.controlGroup}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <label style={{ margin: 0 }}>활성화 (Enabled)</label>
-                              <label className={styles.toggleSwitch}>
-                                <input
-                                  type="checkbox"
-                                  checked={selectedLight.enabled}
-                                  onChange={(e) => {
-                                    setLights(lights.map(l =>
-                                      l.id === selectedLightId ? { ...l, enabled: e.target.checked } : l
-                                    ));
-                                  }}
-                                />
-                                <span className={styles.toggleSlider}></span>
-                              </label>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
+              {fileMenuOpen && (
+                <div className={styles.toolbarDropdownMenu}>
+                  <button className={styles.dropdownMenuItem} onClick={() => { setFileMenuOpen(false); }}>
+                    <span>New</span>
+                  </button>
+                  <button className={styles.dropdownMenuItem} onClick={() => { setFileMenuOpen(false); }}>
+                    <span>Save</span>
+                    <span className={styles.dropdownShortcut}>⌘S</span>
+                  </button>
+                  <button className={styles.dropdownMenuItem} onClick={() => { setFileMenuOpen(false); }}>
+                    <span className={styles.dropdownItemWithDot}>
+                      Save as
+                      <span className={styles.unsavedDot}></span>
+                    </span>
+                    <span className={styles.dropdownShortcut}>⇧⌘S</span>
+                  </button>
+                  <button className={styles.dropdownMenuItem} onClick={() => { setFileMenuOpen(false); }}>
+                    <span>Restore historical versions</span>
+                  </button>
                 </div>
               )}
             </div>
-            <div style={{ position: 'relative' }}>
+
+            <div className={styles.toolbarSeparator} />
+
+            {/* Save Group */}
+            <button className={styles.toolbarBtn}>
+              <div className={styles.toolbarIconWrapper}>
+                <MdSave />
+              </div>
+              <div className={styles.toolbarTextRow}>
+                <span className={styles.toolbarText}>Save</span>
+              </div>
+            </button>
+
+            <div className={styles.toolbarSeparator} />
+
+            {/* Undo/Redo Group */}
+            <button className={styles.toolbarBtn}>
+              <div className={styles.toolbarIconWrapper}>
+                <MdUndo />
+              </div>
+              <div className={styles.toolbarTextRow}>
+                <span className={styles.toolbarText}>Undo</span>
+              </div>
+            </button>
+            <button className={`${styles.toolbarBtn} ${styles.disabled}`}>
+              <div className={styles.toolbarIconWrapper}>
+                <MdRedo />
+              </div>
+              <div className={styles.toolbarTextRow}>
+                <span className={styles.toolbarText}>Redo</span>
+              </div>
+            </button>
+
+            <div className={styles.toolbarSeparator} />
+
+            {/* Clear Group with Dropdown */}
+            <div className={styles.toolbarDropdown} ref={clearMenuRef}>
               <button
-                className={`${styles.topBtn} ${renderPanelOpen ? styles.active : ''}`}
-                title="Render Settings"
-                onClick={() => setRenderPanelOpen(!renderPanelOpen)}
-                disabled={!photoRealisticMode}
-                style={{ opacity: photoRealisticMode ? 1 : 0.4 }}
+                className={`${styles.toolbarBtn} ${styles.toolbarBtnWithArrow} ${clearMenuOpen ? styles.active : ''}`}
+                onClick={() => setClearMenuOpen(!clearMenuOpen)}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z" />
-                </svg>
-              </button>
-
-              {renderPanelOpen && photoRealisticMode && (
-                <div className={styles.sunDropdown}>
-                  <div className={styles.dropdownHeader}>
-                    <span>Render Settings</span>
-                    <button onClick={() => setRenderPanelOpen(false)} className={styles.closeBtn}>×</button>
-                  </div>
-                  <div className={styles.dropdownBody}>
-                    {/* Preset Buttons */}
-                    <div className={styles.controlGroup}>
-                      <label>프리셋</label>
-                      <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                        <button
-                          onClick={() => setRenderSettings({
-                            ssaoRadius: 1.5,
-                            ssaoStrength: 2.0,
-                            ssrStrength: 0.8,
-                            bloomThreshold: 0.6,
-                            bloomWeight: 0.5,
-                            dofFocusDistance: 5000,
-                            dofFStop: 2.0,
-                            chromaticAberration: 5,
-                            grainIntensity: 8,
-                            vignetteWeight: 2.0,
-                            sharpenAmount: 0.5,
-                          })}
-                          style={{
-                            flex: 1,
-                            padding: '8px',
-                            backgroundColor: '#3a3a3a',
-                            color: '#fff',
-                            border: '1px solid #555',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                          }}
-                        >
-                          기본
-                        </button>
-                        <button
-                          onClick={() => setRenderSettings({
-                            ssaoRadius: 0,
-                            ssaoStrength: 0,
-                            ssrStrength: 0,
-                            bloomThreshold: 1,
-                            bloomWeight: 0,
-                            dofFocusDistance: 5000,
-                            dofFStop: 22,
-                            chromaticAberration: 0,
-                            grainIntensity: 0,
-                            vignetteWeight: 0,
-                            sharpenAmount: 0,
-                          })}
-                          style={{
-                            flex: 1,
-                            padding: '8px',
-                            backgroundColor: '#3a3a3a',
-                            color: '#fff',
-                            border: '1px solid #555',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                          }}
-                        >
-                          꺼짐
-                        </button>
-                        <button
-                          onClick={() => setRenderSettings({
-                            ssaoRadius: 2.0,
-                            ssaoStrength: 2.0,
-                            ssrStrength: 1.0,
-                            bloomThreshold: 0.3,
-                            bloomWeight: 1.0,
-                            dofFocusDistance: 3000,
-                            dofFStop: 1.4,
-                            chromaticAberration: 10,
-                            grainIntensity: 20,
-                            vignetteWeight: 3.0,
-                            sharpenAmount: 1.0,
-                          })}
-                          style={{
-                            flex: 1,
-                            padding: '8px',
-                            backgroundColor: '#3a3a3a',
-                            color: '#fff',
-                            border: '1px solid #555',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                          }}
-                        >
-                          극대
-                        </button>
-                        <button
-                          onClick={() => setRenderSettings({
-                            ssaoRadius: 3.0, // Beyond slider max (2.0)
-                            ssaoStrength: 3.0, // Beyond slider max (2.0)
-                            ssrStrength: 1.0,
-                            bloomThreshold: 0.1, // Very low = maximum bloom
-                            bloomWeight: 2.0, // Beyond slider max (1.0)
-                            dofFocusDistance: 2000, // Very close focus
-                            dofFStop: 1.0, // Minimum f-stop = maximum blur
-                            chromaticAberration: 30, // Beyond slider max (10)
-                            grainIntensity: 50, // Beyond slider max (20)
-                            vignetteWeight: 5.0, // Beyond slider max (3.0)
-                            sharpenAmount: 2.0, // Beyond slider max (1.0)
-                          })}
-                          style={{
-                            flex: 1,
-                            padding: '8px',
-                            backgroundColor: '#8b0000', // Dark red to indicate "extreme"
-                            color: '#fff',
-                            border: '1px solid #ff0000',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            fontWeight: 'bold',
-                          }}
-                        >
-                          슈퍼극대
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* SSAO */}
-                    <div className={styles.controlGroup}>
-                      <label>SSAO Radius</label>
-                      <div className={styles.controlInput}>
-                        <input
-                          type="range"
-                          min="0"
-                          max="2"
-                          step="0.1"
-                          value={renderSettings.ssaoRadius}
-                          onChange={(e) => setRenderSettings({ ...renderSettings, ssaoRadius: parseFloat(e.target.value) })}
-                          className={styles.rangeSlider}
-                        />
-                        <span className={styles.valueDisplay}>{renderSettings.ssaoRadius.toFixed(1)}</span>
-                      </div>
-                    </div>
-
-                    <div className={styles.controlGroup}>
-                      <label>SSAO Strength</label>
-                      <div className={styles.controlInput}>
-                        <input
-                          type="range"
-                          min="0"
-                          max="2"
-                          step="0.1"
-                          value={renderSettings.ssaoStrength}
-                          onChange={(e) => setRenderSettings({ ...renderSettings, ssaoStrength: parseFloat(e.target.value) })}
-                          className={styles.rangeSlider}
-                        />
-                        <span className={styles.valueDisplay}>{renderSettings.ssaoStrength.toFixed(1)}</span>
-                      </div>
-                    </div>
-
-                    {/* SSR */}
-                    <div className={styles.controlGroup}>
-                      <label>SSR Strength</label>
-                      <div className={styles.controlInput}>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={renderSettings.ssrStrength}
-                          onChange={(e) => setRenderSettings({ ...renderSettings, ssrStrength: parseFloat(e.target.value) })}
-                          className={styles.rangeSlider}
-                        />
-                        <span className={styles.valueDisplay}>{renderSettings.ssrStrength.toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    {/* Bloom */}
-                    <div className={styles.controlGroup}>
-                      <label>Bloom Threshold</label>
-                      <div className={styles.controlInput}>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={renderSettings.bloomThreshold}
-                          onChange={(e) => setRenderSettings({ ...renderSettings, bloomThreshold: parseFloat(e.target.value) })}
-                          className={styles.rangeSlider}
-                        />
-                        <span className={styles.valueDisplay}>{renderSettings.bloomThreshold.toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    <div className={styles.controlGroup}>
-                      <label>Bloom Weight</label>
-                      <div className={styles.controlInput}>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={renderSettings.bloomWeight}
-                          onChange={(e) => setRenderSettings({ ...renderSettings, bloomWeight: parseFloat(e.target.value) })}
-                          className={styles.rangeSlider}
-                        />
-                        <span className={styles.valueDisplay}>{renderSettings.bloomWeight.toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    {/* DOF */}
-                    <div className={styles.controlGroup}>
-                      <label>DOF Focus (mm)</label>
-                      <div className={styles.controlInput}>
-                        <input
-                          type="range"
-                          min="1000"
-                          max="10000"
-                          step="100"
-                          value={renderSettings.dofFocusDistance}
-                          onChange={(e) => setRenderSettings({ ...renderSettings, dofFocusDistance: parseFloat(e.target.value) })}
-                          className={styles.rangeSlider}
-                        />
-                        <span className={styles.valueDisplay}>{renderSettings.dofFocusDistance}</span>
-                      </div>
-                    </div>
-
-                    <div className={styles.controlGroup}>
-                      <label>DOF F-Stop</label>
-                      <div className={styles.controlInput}>
-                        <input
-                          type="range"
-                          min="1"
-                          max="22"
-                          step="0.1"
-                          value={renderSettings.dofFStop}
-                          onChange={(e) => setRenderSettings({ ...renderSettings, dofFStop: parseFloat(e.target.value) })}
-                          className={styles.rangeSlider}
-                        />
-                        <span className={styles.valueDisplay}>f/{renderSettings.dofFStop.toFixed(1)}</span>
-                      </div>
-                    </div>
-
-                    {/* Effects */}
-                    <div className={styles.controlGroup}>
-                      <label>Chromatic Aberration</label>
-                      <div className={styles.controlInput}>
-                        <input
-                          type="range"
-                          min="0"
-                          max="10"
-                          step="0.5"
-                          value={renderSettings.chromaticAberration}
-                          onChange={(e) => setRenderSettings({ ...renderSettings, chromaticAberration: parseFloat(e.target.value) })}
-                          className={styles.rangeSlider}
-                        />
-                        <span className={styles.valueDisplay}>{renderSettings.chromaticAberration.toFixed(1)}</span>
-                      </div>
-                    </div>
-
-                    <div className={styles.controlGroup}>
-                      <label>Film Grain</label>
-                      <div className={styles.controlInput}>
-                        <input
-                          type="range"
-                          min="0"
-                          max="20"
-                          step="0.5"
-                          value={renderSettings.grainIntensity}
-                          onChange={(e) => setRenderSettings({ ...renderSettings, grainIntensity: parseFloat(e.target.value) })}
-                          className={styles.rangeSlider}
-                        />
-                        <span className={styles.valueDisplay}>{renderSettings.grainIntensity.toFixed(1)}</span>
-                      </div>
-                    </div>
-
-                    <div className={styles.controlGroup}>
-                      <label>Vignette</label>
-                      <div className={styles.controlInput}>
-                        <input
-                          type="range"
-                          min="0"
-                          max="3"
-                          step="0.1"
-                          value={renderSettings.vignetteWeight}
-                          onChange={(e) => setRenderSettings({ ...renderSettings, vignetteWeight: parseFloat(e.target.value) })}
-                          className={styles.rangeSlider}
-                        />
-                        <span className={styles.valueDisplay}>{renderSettings.vignetteWeight.toFixed(1)}</span>
-                      </div>
-                    </div>
-
-                    <div className={styles.controlGroup}>
-                      <label>Sharpen</label>
-                      <div className={styles.controlInput}>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={renderSettings.sharpenAmount}
-                          onChange={(e) => setRenderSettings({ ...renderSettings, sharpenAmount: parseFloat(e.target.value) })}
-                          className={styles.rangeSlider}
-                        />
-                        <span className={styles.valueDisplay}>{renderSettings.sharpenAmount.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </div>
+                <div className={styles.toolbarIconWrapper}>
+                  <FaEraser />
                 </div>
-              )}
-            </div>
-            <button className={styles.topBtn} title="Material">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
-              </svg>
-            </button>
-            <button
-              className={`${styles.topBtn} ${showCharacter ? styles.active : ''}`}
-              title="Character"
-              onClick={() => setShowCharacter(!showCharacter)}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-              </svg>
-            </button>
-            <button className={styles.topBtn} title="Ambient">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z" />
-              </svg>
-            </button>
-            <button className={styles.topBtn} title="Dimensions">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
-              </svg>
-            </button>
-            <button className={styles.topBtn} title="Render">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
-              </svg>
-            </button>
-            <button className={styles.topBtn} title="Draw">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
-              </svg>
-            </button>
-            <button
-              className={`${styles.topBtn} ${photoRealisticMode ? styles.active : ''}`}
-              title="Photo-Realistic Rendering"
-              onClick={() => setPhotoRealisticMode(!photoRealisticMode)}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="12" r="3.2" />
-                <path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z" />
-              </svg>
-            </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <select
-                value={screenshotResolution}
-                onChange={(e) => setScreenshotResolution(e.target.value as '1080p' | '4k' | '8k')}
-                style={{
-                  padding: '6px 8px',
-                  backgroundColor: '#2a2a2a',
-                  color: '#fff',
-                  border: '1px solid #555',
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  height: '32px',
-                }}
-                title="Screenshot Resolution"
-              >
-                <option value="1080p">1080p</option>
-                <option value="4k">4K</option>
-                <option value="8k">8K</option>
-              </select>
-              <button
-                className={styles.topBtn}
-                title="Capture Screenshot"
-                onClick={handleCaptureScreenshot}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z" />
-                </svg>
+                <FaCaretDown className={styles.toolbarDropdownArrowIcon} />
               </button>
-              {/* AI Render Button - Premium Design */}
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button
-                  data-ai-render-button
-                  onClick={openAIRenderPanel}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '10px 20px',
-                    background: `linear-gradient(135deg, ${themeColor} 0%, ${themeColor}cc 100%)`,
-                    border: 'none',
-                    borderRadius: '8px',
-                    color: 'white',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                    boxShadow: `0 4px 15px ${themeColor}40`,
-                    position: 'relative',
-                    overflow: 'hidden'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = `0 6px 20px ${themeColor}60`;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = `0 4px 15px ${themeColor}40`;
-                  }}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
-                  </svg>
-                  <span>AI Render</span>
-                  <div style={{
-                    fontSize: '10px',
-                    opacity: 0.9,
-                    fontWeight: '600',
-                    background: 'rgba(255,255,255,0.2)',
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px'
-                  }}>
-                    {aiRenderStyle.substring(0, 6).toUpperCase()}
-                  </div>
-                </button>
-
-                {/* Style Selector Button */}
-                <button
-                  data-ai-render-button
-                  onClick={() => setAiRenderPanelOpen(!aiRenderPanelOpen)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: '36px',
-                    height: '36px',
-                    background: themeMode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-                    border: `1px solid ${themeColor}40`,
-                    borderRadius: '8px',
-                    color: themeColor,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = `${themeColor}20`;
-                    e.currentTarget.style.transform = 'scale(1.05)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = themeMode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
-                    e.currentTarget.style.transform = 'scale(1)';
-                  }}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-                  </svg>
-                </button>
-
-                {/* AI Render Settings Panel */}
-                {aiRenderPanelOpen && (
+              {clearMenuOpen && (
+                <div className={styles.toolbarDropdownMenu}>
+                  <button className={styles.dropdownMenuItem} onClick={() => { setClearMenuOpen(false); }}>
+                    <span>All</span>
+                  </button>
+                  <button className={styles.dropdownMenuItem} onClick={() => { setClearMenuOpen(false); }}>
+                    <span>Decoration</span>
+                  </button>
+                  <button className={styles.dropdownMenuItem} onClick={() => { setClearMenuOpen(false); }}>
+                    <span>Furniture</span>
+                  </button>
+                  <button className={styles.dropdownMenuItem} onClick={() => { setClearMenuOpen(false); }}>
+                    <span>Parametric ceiling</span>
+                  </button>
+                  <button className={styles.dropdownMenuItem} onClick={() => { setClearMenuOpen(false); }}>
+                    <span>Finishes</span>
+                  </button>
+                  <div className={styles.dropdownDivider} />
                   <div
-                    data-ai-render-panel
-                    style={{
-                      position: 'absolute',
-                      top: 'calc(100% + 10px)',
-                      right: 0,
-                      background: themeMode === 'dark' ? '#1e1e1e' : '#ffffff',
-                      border: `2px solid ${themeColor}40`,
-                      borderRadius: '12px',
-                      padding: '20px',
-                      width: '420px',
-                      maxHeight: '80vh',
-                      overflowY: 'auto',
-                      zIndex: 10000,
-                      boxShadow: `0 10px 40px ${themeColor}40`,
-                      animation: 'slideDown 0.2s ease-out'
-                    }}
+                    className={styles.dropdownMenuItemWithSubmenu}
+                    onMouseEnter={() => setClearSubmenuOpen(true)}
+                    onMouseLeave={() => setClearSubmenuOpen(false)}
                   >
-                    <style>{`
-                      @keyframes slideDown {
-                        from {
-                          opacity: 0;
-                          transform: translateY(-10px);
-                        }
-                        to {
-                          opacity: 1;
-                          transform: translateY(0);
-                        }
-                      }
-                    `}</style>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                      <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: themeColor }}>AI Rendering</h3>
-                      <button
-                        onClick={() => setAiRenderPanelOpen(false)}
-                        style={{
-                          width: '32px',
-                          height: '32px',
-                          borderRadius: '8px',
-                          border: 'none',
-                          background: themeMode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-                          color: themeMode === 'dark' ? '#fff' : '#000',
-                          cursor: 'pointer',
-                          fontSize: '20px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                      >×</button>
-                    </div>
-
-                    {/* Input Image - Show First */}
-                    {aiInputImage && (
-                      <div style={{ marginBottom: '20px' }}>
-                        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
-                          Input Image (3D View)
-                        </label>
-                        <div style={{
-                          width: '100%',
-                          borderRadius: '10px',
-                          overflow: 'hidden',
-                          border: `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
-                          background: themeMode === 'dark' ? '#252525' : '#f8f8f8'
-                        }}>
-                          <img
-                            src={aiInputImage}
-                            alt="Input 3D View"
-                            style={{
-                              width: '100%',
-                              height: 'auto',
-                              display: 'block'
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Style Selection */}
-                    <div style={{ marginBottom: '16px' }}>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '10px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
-                        Rendering Style
-                      </label>
-                      <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(2, 1fr)',
-                        gap: '8px'
-                      }}>
-                        {(['photorealistic', 'product', 'minimalist', 'sticker'] as const).map((style) => (
-                          <button
-                            key={style}
-                            onClick={() => setAiRenderStyle(style)}
-                            style={{
-                              padding: '12px 8px',
-                              borderRadius: '8px',
-                              border: aiRenderStyle === style ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
-                              background: aiRenderStyle === style ? `${themeColor}15` : (themeMode === 'dark' ? '#252525' : '#f8f8f8'),
-                              color: themeMode === 'dark' ? '#fff' : '#000',
-                              cursor: 'pointer',
-                              fontSize: '12px',
-                              fontWeight: aiRenderStyle === style ? '600' : '500',
-                              transition: 'all 0.2s',
-                              textAlign: 'center',
-                              textTransform: 'capitalize'
-                            }}
-                          >
-                            {style}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Furniture Style */}
-                    <div style={{ marginBottom: '16px' }}>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '10px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
-                        Furniture Style
-                      </label>
-                      <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(3, 1fr)',
-                        gap: '8px'
-                      }}>
-                        {([
-                          { value: 'modern', label: 'Modern' },
-                          { value: 'classic', label: 'Classic' },
-                          { value: 'scandinavian', label: 'Scandinavian' },
-                          { value: 'industrial', label: 'Industrial' },
-                          { value: 'luxury', label: 'Luxury' },
-                          { value: 'minimalist', label: 'Minimalist' }
-                        ] as const).map((furniture) => (
-                          <button
-                            key={furniture.value}
-                            onClick={() => setAiFurnitureStyle(furniture.value)}
-                            style={{
-                              padding: '10px 6px',
-                              borderRadius: '6px',
-                              border: aiFurnitureStyle === furniture.value ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
-                              background: aiFurnitureStyle === furniture.value ? `${themeColor}15` : 'transparent',
-                              color: aiFurnitureStyle === furniture.value ? themeColor : (themeMode === 'dark' ? '#fff' : '#000'),
-                              cursor: 'pointer',
-                              fontWeight: aiFurnitureStyle === furniture.value ? '600' : '500',
-                              fontSize: '11px',
-                              transition: 'all 0.2s',
-                              textAlign: 'center'
-                            }}
-                          >
-                            {furniture.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Time of Day */}
-                    <div style={{ marginBottom: '16px' }}>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '10px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
-                        Time of Day
-                      </label>
-                      <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(3, 1fr)',
-                        gap: '8px'
-                      }}>
-                        {([
-                          { value: 'day', label: 'Day' },
-                          { value: 'golden_hour', label: 'Golden Hour' },
-                          { value: 'blue_hour', label: 'Blue Hour' },
-                          { value: 'night', label: 'Night' },
-                          { value: 'overcast', label: 'Overcast' }
-                        ] as const).map((time) => (
-                          <button
-                            key={time.value}
-                            onClick={() => setAiTimeOfDay(time.value)}
-                            style={{
-                              padding: '10px 6px',
-                              borderRadius: '6px',
-                              border: aiTimeOfDay === time.value ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
-                              background: aiTimeOfDay === time.value ? `${themeColor}15` : 'transparent',
-                              color: aiTimeOfDay === time.value ? themeColor : (themeMode === 'dark' ? '#fff' : '#000'),
-                              cursor: 'pointer',
-                              fontWeight: aiTimeOfDay === time.value ? '600' : '500',
-                              fontSize: '11px',
-                              transition: 'all 0.2s',
-                              textAlign: 'center'
-                            }}
-                          >
-                            {time.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Lighting Mood */}
-                    <div style={{ marginBottom: '16px' }}>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '10px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
-                        Lighting Mood
-                      </label>
-                      <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(4, 1fr)',
-                        gap: '8px'
-                      }}>
-                        {([
-                          { value: 'bright', label: 'Bright' },
-                          { value: 'soft', label: 'Soft' },
-                          { value: 'moody', label: 'Moody' },
-                          { value: 'dramatic', label: 'Dramatic' }
-                        ] as const).map((mood) => (
-                          <button
-                            key={mood.value}
-                            onClick={() => setAiLightingMood(mood.value)}
-                            style={{
-                              padding: '10px 6px',
-                              borderRadius: '6px',
-                              border: aiLightingMood === mood.value ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
-                              background: aiLightingMood === mood.value ? `${themeColor}15` : 'transparent',
-                              color: aiLightingMood === mood.value ? themeColor : (themeMode === 'dark' ? '#fff' : '#000'),
-                              cursor: 'pointer',
-                              fontWeight: aiLightingMood === mood.value ? '600' : '500',
-                              fontSize: '11px',
-                              transition: 'all 0.2s',
-                              textAlign: 'center'
-                            }}
-                          >
-                            {mood.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Aspect Ratio Selection */}
-                    <div style={{ marginBottom: '20px' }}>
-                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
-                        Aspect Ratio
-                      </label>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
-                        {(['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'] as const).map((ratio) => (
-                          <button
-                            key={ratio}
-                            onClick={() => setAiAspectRatio(ratio)}
-                            style={{
-                              padding: '8px 4px',
-                              borderRadius: '6px',
-                              border: aiAspectRatio === ratio ? `2px solid ${themeColor}` : `2px solid ${themeMode === 'dark' ? '#333' : '#ddd'}`,
-                              background: aiAspectRatio === ratio ? `${themeColor}15` : 'transparent',
-                              color: aiAspectRatio === ratio ? themeColor : (themeMode === 'dark' ? '#fff' : '#000'),
-                              cursor: 'pointer',
-                              fontWeight: aiAspectRatio === ratio ? '600' : '500',
-                              fontSize: '11px',
-                              transition: 'all 0.2s'
-                            }}
-                          >
-                            {ratio}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Generate Button */}
-                    <button
-                      onClick={generateAIImage}
-                      disabled={aiGenerating || !aiInputImage}
-                      style={{
-                        width: '100%',
-                        padding: '14px',
-                        borderRadius: '10px',
-                        border: 'none',
-                        background: aiGenerating || !aiInputImage
-                          ? (themeMode === 'dark' ? '#444' : '#ccc')
-                          : `linear-gradient(135deg, ${themeColor} 0%, ${themeColor}cc 100%)`,
-                        color: 'white',
-                        fontSize: '15px',
-                        fontWeight: '600',
-                        cursor: aiGenerating || !aiInputImage ? 'not-allowed' : 'pointer',
-                        transition: 'all 0.2s',
-                        boxShadow: aiGenerating || !aiInputImage ? 'none' : `0 4px 15px ${themeColor}40`,
-                        opacity: aiGenerating || !aiInputImage ? 0.6 : 1
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!aiGenerating && aiInputImage) {
-                          e.currentTarget.style.transform = 'translateY(-2px)';
-                          e.currentTarget.style.boxShadow = `0 6px 20px ${themeColor}60`;
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!aiGenerating && aiInputImage) {
-                          e.currentTarget.style.transform = 'translateY(0)';
-                          e.currentTarget.style.boxShadow = `0 4px 15px ${themeColor}40`;
-                        }
-                      }}
-                    >
-                      {aiGenerating ? 'Generating...' : 'Generate AI Render'}
+                    <button className={styles.dropdownMenuItem}>
+                      <span>Custom furniture</span>
+                      <span className={styles.submenuArrow}>›</span>
                     </button>
-
-                    {/* Output Image - Show After Generation */}
-                    {aiOutputImage && (
-                      <div style={{ marginTop: '20px', marginBottom: '20px' }}>
-                        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: themeMode === 'dark' ? '#fff' : '#000' }}>
-                          AI Rendered Result
-                        </label>
-                        <div style={{
-                          width: '100%',
-                          borderRadius: '10px',
-                          overflow: 'hidden',
-                          border: `2px solid ${themeColor}`,
-                          background: themeMode === 'dark' ? '#252525' : '#f8f8f8'
-                        }}>
-                          <img
-                            src={aiOutputImage}
-                            alt="AI Rendered Output"
-                            style={{
-                              width: '100%',
-                              height: 'auto',
-                              display: 'block'
-                            }}
-                          />
-                        </div>
+                    {clearSubmenuOpen && (
+                      <div className={styles.dropdownSubmenu}>
+                        <button className={styles.dropdownMenuItem} onClick={() => { setClearMenuOpen(false); setClearSubmenuOpen(false); }}>
+                          <span>Kitchen & Bath</span>
+                        </button>
+                        <button className={styles.dropdownMenuItem} onClick={() => { setClearMenuOpen(false); setClearSubmenuOpen(false); }}>
+                          <span>Kitchen & BathDécor</span>
+                        </button>
+                        <button className={styles.dropdownMenuItem} onClick={() => { setClearMenuOpen(false); setClearSubmenuOpen(false); }}>
+                          <span>Closet</span>
+                        </button>
+                        <button className={styles.dropdownMenuItem} onClick={() => { setClearMenuOpen(false); setClearSubmenuOpen(false); }}>
+                          <span>ClosetDécor</span>
+                        </button>
+                        <button className={styles.dropdownMenuItem} onClick={() => { setClearMenuOpen(false); setClearSubmenuOpen(false); }}>
+                          <span>Doors & Windows</span>
+                        </button>
                       </div>
-                    )}
-
-                    {/* Download Button (only when output exists) */}
-                    {aiOutputImage && !aiGenerating && (
-                      <button
-                        onClick={() => {
-                          const link = document.createElement('a');
-                          link.href = aiOutputImage;
-                          link.download = `archiple-ai-render-${aiRenderStyle}-${Date.now()}.png`;
-                          link.click();
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '12px',
-                          borderRadius: '10px',
-                          border: `2px solid ${themeColor}`,
-                          background: 'transparent',
-                          color: themeColor,
-                          fontSize: '14px',
-                          fontWeight: '600',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = `${themeColor}15`;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent';
-                        }}
-                      >
-                        Download Rendered Image
-                      </button>
                     )}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
-            {false && (
-              <div className={styles.sunDropdown} style={{ width: '320px', maxHeight: '600px', overflowY: 'auto' }}>
-                <div className={styles.dropdownHeader}>
-                  <span>Rendering Settings</span>
-                  <button onClick={() => setRenderPanelOpen(false)} className={styles.closeBtn}>×</button>
-                </div>
-                <div className={styles.dropdownBody}>
-                  {/* SSAO Radius */}
-                  <div className={styles.controlGroup}>
-                    <label>SSAO Radius</label>
-                    <div className={styles.controlInput}>
-                      <input
-                        type="range"
-                        min="0"
-                        max="2"
-                        step="0.1"
-                        value={renderSettings.ssaoRadius}
-                        onChange={(e) => setRenderSettings({ ...renderSettings, ssaoRadius: parseFloat(e.target.value) })}
-                        className={styles.rangeSlider}
-                      />
-                      <span className={styles.valueDisplay}>{renderSettings.ssaoRadius.toFixed(1)}</span>
-                    </div>
-                  </div>
+            <div className={styles.toolbarSeparator} />
 
-                  {/* SSAO Strength */}
-                  <div className={styles.controlGroup}>
-                    <label>SSAO Strength</label>
-                    <div className={styles.controlInput}>
-                      <input
-                        type="range"
-                        min="0"
-                        max="2"
-                        step="0.1"
-                        value={renderSettings.ssaoStrength}
-                        onChange={(e) => setRenderSettings({ ...renderSettings, ssaoStrength: parseFloat(e.target.value) })}
-                        className={styles.rangeSlider}
-                      />
-                      <span className={styles.valueDisplay}>{renderSettings.ssaoStrength.toFixed(1)}</span>
-                    </div>
-                  </div>
-
-                  {/* SSR Strength */}
-                  <div className={styles.controlGroup}>
-                    <label>SSR Strength</label>
-                    <div className={styles.controlInput}>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.05"
-                        value={renderSettings.ssrStrength}
-                        onChange={(e) => setRenderSettings({ ...renderSettings, ssrStrength: parseFloat(e.target.value) })}
-                        className={styles.rangeSlider}
-                      />
-                      <span className={styles.valueDisplay}>{renderSettings.ssrStrength.toFixed(2)}</span>
-                    </div>
-                  </div>
-
-                  {/* Bloom Threshold */}
-                  <div className={styles.controlGroup}>
-                    <label>Bloom Threshold</label>
-                    <div className={styles.controlInput}>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.05"
-                        value={renderSettings.bloomThreshold}
-                        onChange={(e) => setRenderSettings({ ...renderSettings, bloomThreshold: parseFloat(e.target.value) })}
-                        className={styles.rangeSlider}
-                      />
-                      <span className={styles.valueDisplay}>{renderSettings.bloomThreshold.toFixed(2)}</span>
-                    </div>
-                  </div>
-
-                  {/* Bloom Weight */}
-                  <div className={styles.controlGroup}>
-                    <label>Bloom Weight</label>
-                    <div className={styles.controlInput}>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.05"
-                        value={renderSettings.bloomWeight}
-                        onChange={(e) => setRenderSettings({ ...renderSettings, bloomWeight: parseFloat(e.target.value) })}
-                        className={styles.rangeSlider}
-                      />
-                      <span className={styles.valueDisplay}>{renderSettings.bloomWeight.toFixed(2)}</span>
-                    </div>
-                  </div>
-
-                  {/* DOF Focus Distance */}
-                  <div className={styles.controlGroup}>
-                    <label>DOF Focus Distance (mm)</label>
-                    <div className={styles.controlInput}>
-                      <input
-                        type="range"
-                        min="1000"
-                        max="10000"
-                        step="100"
-                        value={renderSettings.dofFocusDistance}
-                        onChange={(e) => setRenderSettings({ ...renderSettings, dofFocusDistance: parseFloat(e.target.value) })}
-                        className={styles.rangeSlider}
-                      />
-                      <span className={styles.valueDisplay}>{renderSettings.dofFocusDistance}</span>
-                    </div>
-                  </div>
-
-                  {/* DOF F-Stop */}
-                  <div className={styles.controlGroup}>
-                    <label>DOF F-Stop</label>
-                    <div className={styles.controlInput}>
-                      <input
-                        type="range"
-                        min="1"
-                        max="22"
-                        step="0.1"
-                        value={renderSettings.dofFStop}
-                        onChange={(e) => setRenderSettings({ ...renderSettings, dofFStop: parseFloat(e.target.value) })}
-                        className={styles.rangeSlider}
-                      />
-                      <span className={styles.valueDisplay}>f/{renderSettings.dofFStop.toFixed(1)}</span>
-                    </div>
-                  </div>
-
-                  {/* Chromatic Aberration */}
-                  <div className={styles.controlGroup}>
-                    <label>Chromatic Aberration</label>
-                    <div className={styles.controlInput}>
-                      <input
-                        type="range"
-                        min="0"
-                        max="10"
-                        step="0.5"
-                        value={renderSettings.chromaticAberration}
-                        onChange={(e) => setRenderSettings({ ...renderSettings, chromaticAberration: parseFloat(e.target.value) })}
-                        className={styles.rangeSlider}
-                      />
-                      <span className={styles.valueDisplay}>{renderSettings.chromaticAberration.toFixed(1)}</span>
-                    </div>
-                  </div>
-
-                  {/* Grain Intensity */}
-                  <div className={styles.controlGroup}>
-                    <label>Grain Intensity</label>
-                    <div className={styles.controlInput}>
-                      <input
-                        type="range"
-                        min="0"
-                        max="20"
-                        step="0.5"
-                        value={renderSettings.grainIntensity}
-                        onChange={(e) => setRenderSettings({ ...renderSettings, grainIntensity: parseFloat(e.target.value) })}
-                        className={styles.rangeSlider}
-                      />
-                      <span className={styles.valueDisplay}>{renderSettings.grainIntensity.toFixed(1)}</span>
-                    </div>
-                  </div>
-
-                  {/* Vignette Weight */}
-                  <div className={styles.controlGroup}>
-                    <label>Vignette Weight</label>
-                    <div className={styles.controlInput}>
-                      <input
-                        type="range"
-                        min="0"
-                        max="3"
-                        step="0.1"
-                        value={renderSettings.vignetteWeight}
-                        onChange={(e) => setRenderSettings({ ...renderSettings, vignetteWeight: parseFloat(e.target.value) })}
-                        className={styles.rangeSlider}
-                      />
-                      <span className={styles.valueDisplay}>{renderSettings.vignetteWeight.toFixed(1)}</span>
-                    </div>
-                  </div>
-
-                  {/* Sharpen Amount */}
-                  <div className={styles.controlGroup}>
-                    <label>Sharpen Amount</label>
-                    <div className={styles.controlInput}>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.05"
-                        value={renderSettings.sharpenAmount}
-                        onChange={(e) => setRenderSettings({ ...renderSettings, sharpenAmount: parseFloat(e.target.value) })}
-                        className={styles.rangeSlider}
-                      />
-                      <span className={styles.valueDisplay}>{renderSettings.sharpenAmount.toFixed(2)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <button className={styles.topBtn} title="Target">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z" />
-                <circle cx="12" cy="12" r="5" />
-              </svg>
-            </button>
-            <button className={styles.topBtn} title="Layout">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M3 5v4h2V5h4V3H5c-1.1 0-2 .9-2 2zm2 10H3v4c0 1.1.9 2 2 2h4v-2H5v-4zm14 4h-4v2h4c1.1 0 2-.9 2-2v-4h-2v4zm0-16h-4v2h4v4h2V5c0-1.1-.9-2-2-2z" />
-              </svg>
-            </button>
-            <button
-              className={`${styles.topBtn} ${showGrid ? styles.topBtnActive : ''}`}
-              title="Grid"
-              onClick={() => setShowGrid(!showGrid)}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM8 20H4v-4h4v4zm0-6H4v-4h4v4zm0-6H4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4z" />
-              </svg>
-            </button>
-            <button className={styles.topBtn} title="View">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" />
-              </svg>
-            </button>
-
-            <div className={styles.playButtons}>
-              <button className={styles.navBtn}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
-                </svg>
-              </button>
-              <button className={styles.navBtn}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
-                </svg>
-              </button>
+            {/* Toolkit Group with Dropdown */}
+            <div className={styles.toolbarDropdown} ref={toolkitMenuRef}>
               <button
-                className={`${styles.playBtn} ${playMode ? styles.playBtnActive : ''}`}
-                onClick={() => {
-                  if (!playMode) {
-                    setViewMode('3D'); // Switch to 3D view
-                    setDisplayStyle('material'); // Ensure textures are visible
-                    setShowGrid(false); // Hide grid for immersive experience
-                    // Photo-realistic mode disabled - clean PBR rendering is better quality
-                  } else {
-                    setDisplayStyle('material'); // Keep material style
-                    setShowGrid(true); // Restore grid
-                  }
-                  setPlayMode(!playMode);
-                }}
-                title={playMode ? 'Exit Play Mode' : 'Enter Play Mode (WASD)'}
+                className={`${styles.toolbarBtn} ${styles.toolbarBtnWithArrow} ${toolkitMenuOpen ? styles.active : ''}`}
+                onClick={() => setToolkitMenuOpen(!toolkitMenuOpen)}
               >
-                {playMode ? (
-                  <>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: '6px' }}>
-                      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-                    </svg>
-                    Stop
-                  </>
-                ) : (
-                  <>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: '6px' }}>
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                    Play
-                  </>
-                )}
+                <div className={styles.toolbarIconWrapper}>
+                  <MdBuild />
+                </div>
+                <FaCaretDown className={styles.toolbarDropdownArrowIcon} />
               </button>
-              {playMode && (
-                <button
-                  className={styles.topBtn}
-                  onClick={() => setModalOpen(true)}
-                  title="Camera Settings"
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                </button>
+              {toolkitMenuOpen && (
+                <div className={`${styles.toolbarDropdownMenu} ${styles.toolkitMenu}`}>
+                  <button className={styles.dropdownMenuItemWithIcon} onClick={() => { setToolkitMenuOpen(false); }}>
+                    <span className={styles.dropdownMenuItemLeft}>
+                      <FaPaintBrush className={styles.dropdownMenuIcon} />
+                      <span>Material brush</span>
+                      <MdInfoOutline className={styles.dropdownInfoIcon} />
+                    </span>
+                    <span className={styles.dropdownShortcut}>M</span>
+                  </button>
+                  <button className={styles.dropdownMenuItemWithIcon} onClick={() => { setToolkitMenuOpen(false); }}>
+                    <span className={styles.dropdownMenuItemLeft}>
+                      <TbRulerMeasure className={styles.dropdownMenuIcon} />
+                      <span>Measure</span>
+                    </span>
+                    <span className={styles.dropdownShortcut}>Z</span>
+                  </button>
+                  <div
+                    className={styles.dropdownMenuItemWithSubmenu}
+                    onMouseEnter={() => setToolkitSubmenuOpen('array')}
+                    onMouseLeave={() => setToolkitSubmenuOpen(null)}
+                  >
+                    <button className={styles.dropdownMenuItemWithIcon}>
+                      <span className={styles.dropdownMenuItemLeft}>
+                        <BsGrid3X3Gap className={styles.dropdownMenuIcon} />
+                        <span>Array</span>
+                      </span>
+                      <span className={styles.submenuArrow}>›</span>
+                    </button>
+                    {toolkitSubmenuOpen === 'array' && (
+                      <div className={styles.dropdownSubmenu}>
+                        <button className={styles.dropdownMenuItem} onClick={() => { setToolkitMenuOpen(false); setToolkitSubmenuOpen(null); }}>
+                          <span>Linear Array</span>
+                        </button>
+                        <button className={styles.dropdownMenuItem} onClick={() => { setToolkitMenuOpen(false); setToolkitSubmenuOpen(null); }}>
+                          <span>Radial Array</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className={styles.dropdownDivider} />
+                  <div className={styles.dropdownSectionHeader}>Type</div>
+                  <div
+                    className={styles.dropdownMenuItemWithSubmenu}
+                    onMouseEnter={() => setToolkitSubmenuOpen('flip')}
+                    onMouseLeave={() => setToolkitSubmenuOpen(null)}
+                  >
+                    <button className={styles.dropdownMenuItemWithIcon}>
+                      <span className={styles.dropdownMenuItemLeft}>
+                        <TbFlipVertical className={styles.dropdownMenuIcon} />
+                        <span>Flip</span>
+                        <MdInfoOutline className={styles.dropdownInfoIcon} />
+                      </span>
+                      <span className={styles.submenuArrow}>›</span>
+                    </button>
+                    {toolkitSubmenuOpen === 'flip' && (
+                      <div className={styles.dropdownSubmenu}>
+                        <button className={styles.dropdownMenuItem} onClick={() => { setToolkitMenuOpen(false); setToolkitSubmenuOpen(null); }}>
+                          <span>Flip Horizontal</span>
+                        </button>
+                        <button className={styles.dropdownMenuItem} onClick={() => { setToolkitMenuOpen(false); setToolkitSubmenuOpen(null); }}>
+                          <span>Flip Vertical</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <button className={styles.dropdownMenuItemWithIcon} onClick={() => { setToolkitMenuOpen(false); }}>
+                    <span className={styles.dropdownMenuItemLeft}>
+                      <MdOutlineDevices className={styles.dropdownMenuIcon} />
+                      <span>Household detection tools</span>
+                      <MdInfoOutline className={styles.dropdownInfoIcon} />
+                    </span>
+                  </button>
+                  <button className={styles.dropdownMenuItemWithIcon} onClick={() => { setToolkitMenuOpen(false); }}>
+                    <span className={styles.dropdownMenuItemLeft}>
+                      <MdOutlineWarning className={styles.dropdownMenuIcon} />
+                      <span>Check hardware abnormalities</span>
+                      <MdInfoOutline className={styles.dropdownInfoIcon} />
+                    </span>
+                  </button>
+                </div>
               )}
+            </div>
 
-              {/* New AI Render Button (Nanobanana) */}
+            <div className={styles.toolbarSeparator} />
+
+            {/* View Modes Group */}
+            <button className={styles.toolbarBtn}>
+              <div className={styles.toolbarIconWrapper}>
+                <MdGridView />
+              </div>
+              <div className={styles.toolbarTextRow}>
+                <span className={styles.toolbarText}>Furniture Plan</span>
+              </div>
+            </button>
+
+            {/* Images/Videos Group with Dropdown */}
+            <div className={styles.toolbarDropdown} ref={imagesMenuRef}>
               <button
-                className={styles.topBtn}
-                onClick={async () => {
-                  // Capture current view using Babylon's built-in tool
-                  if (babylon3DCanvasRef.current) {
-                    try {
-                      // Capture screenshot via ref
-                      const screenshot = await babylon3DCanvasRef.current.takeScreenshot();
-                      if (screenshot) {
-                        setCapturedImage(screenshot);
-                      } else {
-                        console.warn('[EditorPage] Screenshot returned null');
-                      }
-                    } catch (e) {
-                      console.error('[EditorPage] Failed to capture screenshot:', e);
-                    }
-                  }
-                  setAiRenderModalOpen(true);
-                }}
-                title="AI Render (Nanobanana)"
-                style={{ marginLeft: '8px', color: themeColor }}
+                className={`${styles.toolbarBtn} ${styles.toolbarBtnPrimary} ${styles.toolbarBtnWithArrow} ${imagesMenuOpen ? styles.active : ''}`}
+                onClick={() => setImagesMenuOpen(!imagesMenuOpen)}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z" />
-                  <path d="M12 6v6l4 2" />
-                </svg>
+                <div className={styles.toolbarIconWrapper}>
+                  <MdCameraAlt />
+                </div>
+                <FaCaretDown className={styles.toolbarDropdownArrowIcon} style={{ color: 'white' }} />
               </button>
+              {imagesMenuOpen && (
+                <div className={styles.toolbarDropdownMenu}>
+                  <div className={styles.dropdownSectionHeader}>Professional visual</div>
+                  <button className={styles.dropdownMenuItemWithIcon} onClick={() => { setImagesMenuOpen(false); }}>
+                    <span className={styles.dropdownMenuItemLeft}>
+                      <MdPhotoLibrary className={styles.dropdownMenuIcon} />
+                      <span>Perspective view</span>
+                    </span>
+                  </button>
+                  <button className={styles.dropdownMenuItemWithIcon} onClick={() => { setImagesMenuOpen(false); }}>
+                    <span className={styles.dropdownMenuItemLeft}>
+                      <Md360 className={styles.dropdownMenuIcon} />
+                      <span>360° walkthrough</span>
+                    </span>
+                  </button>
+                  <button className={styles.dropdownMenuItemWithIcon} onClick={() => { setImagesMenuOpen(false); }}>
+                    <span className={styles.dropdownMenuItemLeft}>
+                      <TbViewportWide className={styles.dropdownMenuIcon} />
+                      <span>Top view</span>
+                    </span>
+                  </button>
+                  <button className={styles.dropdownMenuItemWithIcon} onClick={() => { setImagesMenuOpen(false); }}>
+                    <span className={styles.dropdownMenuItemLeft}>
+                      <MdVideocam className={styles.dropdownMenuIcon} />
+                      <span>Video</span>
+                    </span>
+                    <span className={styles.dropdownBetaBadge}>Beta</span>
+                  </button>
+                  <div className={styles.dropdownDivider} />
+                  <div className={styles.dropdownSectionHeader}>Live visual</div>
+                  <button className={styles.dropdownMenuItemWithIcon} onClick={() => { setImagesMenuOpen(false); }}>
+                    <span className={styles.dropdownMenuItemLeft}>
+                      <MdOutlineAutorenew className={styles.dropdownMenuIcon} />
+                      <span>Real-time rendering</span>
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <button className={styles.toolbarBtn}>
+              <div className={styles.toolbarIconWrapper}>
+                <MdPhotoLibrary />
+              </div>
+              <div className={styles.toolbarTextRow}>
+                <span className={styles.toolbarText}>Gallery</span>
+              </div>
+            </button>
+
+            <div className={styles.toolbarSeparator} />
+
+            {/* Drawings Group with Dropdown */}
+            <div className={styles.toolbarDropdown} ref={drawingsMenuRef}>
+              <button
+                className={`${styles.toolbarBtn} ${styles.toolbarBtnWithArrow} ${drawingsMenuOpen ? styles.active : ''}`}
+                onClick={() => setDrawingsMenuOpen(!drawingsMenuOpen)}
+              >
+                <div className={styles.toolbarIconWrapper}>
+                  <MdDescription />
+                </div>
+                <FaCaretDown className={styles.toolbarDropdownArrowIcon} />
+              </button>
+              {drawingsMenuOpen && (
+                <div className={styles.toolbarDropdownMenu}>
+                  <div className={styles.dropdownSectionHeader}>Drawings</div>
+                  <button className={styles.dropdownMenuItemWithIcon} onClick={() => { setDrawingsMenuOpen(false); }}>
+                    <span className={styles.dropdownMenuItemLeft}>
+                      <HiOutlineDocumentDuplicate className={styles.dropdownMenuIcon} />
+                      <span>Construction drawings</span>
+                    </span>
+                  </button>
+                  <button className={styles.dropdownMenuItemWithIcon} onClick={() => { setDrawingsMenuOpen(false); }}>
+                    <span className={styles.dropdownMenuItemLeft}>
+                      <MdOutlineArticle className={styles.dropdownMenuIcon} />
+                      <span>Floor plan drawings</span>
+                    </span>
+                    <span className={styles.dropdownNewBadge}>New</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
+
         <div className={styles.headerRight}>
-          <button className={styles.headerBtn}>Save</button>
-          <button className={styles.headerBtn} onClick={() => setExportModalOpen(true)}>Export</button>
-          <button className={styles.headerBtnPrimary}>Publish</button>
+          <button
+            className={`${styles.playBtn} ${playMode ? styles.playBtnActive : ''}`}
+            onClick={() => {
+              if (!playMode && viewMode === '2D') {
+                setViewMode('3D');
+              }
+              setPlayMode(!playMode);
+            }}
+          >
+            {playMode ? 'Stop' : 'Play'}
+          </button>
+
+          {/* Help Button */}
+          <div className={styles.helpMenuContainer} ref={helpMenuRef}>
+            <button
+              className={styles.headerIconBtn}
+              title="Help"
+              onClick={() => setHelpMenuOpen(!helpMenuOpen)}
+            >
+              <MdHelpOutline size={22} />
+            </button>
+            {helpMenuOpen && (
+              <div className={styles.helpMenu}>
+                <button className={styles.helpMenuItem} onClick={() => setHelpMenuOpen(false)}>
+                  Free learning pack
+                </button>
+                <button className={styles.helpMenuItem} onClick={() => setHelpMenuOpen(false)}>
+                  Join group
+                </button>
+                <div className={styles.helpMenuDivider} />
+                <button className={styles.helpMenuItem} onClick={() => setHelpMenuOpen(false)}>
+                  Tutorials
+                </button>
+                <div className={styles.helpMenuDivider} />
+                <button className={styles.helpMenuItem} onClick={() => setHelpMenuOpen(false)}>
+                  Feature update
+                </button>
+                <div className={styles.helpMenuDivider} />
+                <button className={styles.helpMenuItem} onClick={() => setHelpMenuOpen(false)}>
+                  Help center
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* User Profile Button */}
+          <button className={styles.headerIconBtn} title="Profile">
+            <FiUser size={20} />
+          </button>
         </div>
       </header>
 
       {/* Main Content Area */}
       <div className={styles.mainContent} style={playMode ? { paddingLeft: 0 } : {}}>
         {/* Left Green Sidebar */}
-        {!playMode && (
-          <div className={styles.leftSidebar}>
-            <div className={styles.sidebarButtons}>
-              {/* Create Room */}
-              <button className={styles.sidebarBtn} title="Create Room">
-                <div className={styles.icon}>
-                  <LiaPencilRulerSolid size={24} />
-                </div>
-              </button>
-
-              {/* Asset Library */}
-              <button className={styles.sidebarBtn} title="Asset Library">
-                <div className={styles.icon}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                  </svg>
-                </div>
-              </button>
-
-              {/* Material */}
-              <button className={styles.sidebarBtn} title="Material">
-                <div className={styles.icon}>
-                  <HiOutlineColorSwatch size={24} />
-                </div>
-              </button>
-
-              {/* Lighting */}
-              <button
-                className={styles.sidebarBtn}
-                onClick={() => setLightPanelOpen(!lightPanelOpen)}
-                title="Lighting"
-              >
-                <div className={styles.icon}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M9 21h6M12 3a6 6 0 0 0-6 6c0 2.22 1.21 4.16 3 5.19V17a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-2.81c1.79-1.03 3-2.97 3-5.19a6 6 0 0 0-6-6z" />
-                  </svg>
-                </div>
-              </button>
-
-              {/* Kitchen & Cabinet */}
-              <button className={styles.sidebarBtn} title="Kitchen & Cabinet">
-                <div className={styles.icon}>
-                  <BiCabinet size={24} />
-                </div>
-              </button>
-
-              {/* A.I Layout */}
-              <button className={styles.sidebarBtn} title="A.I Layout">
-                <div className={styles.icon}>
-                  <MdAutoAwesome size={24} />
-                </div>
-              </button>
-
-              {/* My Page */}
-              <button className={styles.sidebarBtn} title="My Page">
-                <div className={styles.icon}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <circle cx="12" cy="8" r="4" />
-                    <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
-                  </svg>
-                </div>
-              </button>
-            </div>
-
-            <div className={styles.sidebarBottom}>
-              {/* Settings */}
-              <button className={styles.sidebarBtn} onClick={() => setThemeSettingsOpen(!themeSettingsOpen)} title="설정">
-                <div className={styles.icon}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
-                  </svg>
-                </div>
-              </button>
-              {/* Exit */}
-              <button className={styles.sidebarBtn} onClick={() => navigate('/')} title="나가기">
-                <div className={styles.icon}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z" />
-                  </svg>
-                </div>
-              </button>
-            </div>
+        {
+  !playMode && (
+    <div className={styles.leftSidebar}>
+      <div className={styles.sidebarButtons}>
+        {/* Create Room */}
+        <button className={styles.sidebarBtn} title="Create Room">
+          <div className={styles.icon}>
+            <LiaPencilRulerSolid size={24} />
           </div>
-        )}
+        </button>
 
-        {/* Left Tools Panel */}
-        {!playMode && (
-          leftPanelOpen ? (
-            <div className={styles.leftPanel}>
-              <div className={styles.panelHeader}>
-                <h3>Create Room</h3>
-                <button onClick={() => setLeftPanelOpen(false)} className={styles.toggleBtn}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
-                  </svg>
-                </button>
-              </div>
+        {/* Asset Library */}
+        <button className={styles.sidebarBtn} title="Asset Library">
+          <div className={styles.icon}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+          </div>
+        </button>
 
-              <div className={styles.createRoomOptions}>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  style={{ display: 'none' }}
-                />
-                <input
-                  ref={glbFileInputRef}
-                  type="file"
-                  accept=".glb"
-                  onChange={handleGlbUpload}
-                  style={{ display: 'none' }}
-                />
-                <button className={styles.optionCard}>
-                  <div className={styles.optionIcon}>
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
-                    </svg>
-                  </div>
-                  <span>Explore</span>
-                </button>
-                <button className={styles.optionCard} onClick={() => fileInputRef.current?.click()}>
-                  <div className={styles.optionIcon}>
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
-                    </svg>
-                  </div>
-                  <span>Import</span>
-                </button>
-                <button className={styles.optionCard} onClick={() => glbFileInputRef.current?.click()}>
-                  <div className={styles.optionIcon}>
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M21.9 8.89l-1.05-4.37c-.22-.9-1-1.52-1.91-1.52H5.05c-.9 0-1.69.63-1.9 1.52L2.1 8.89c-.24 1.02-.02 2.06.62 2.88.08.11.19.19.28.29V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-6.94c.09-.09.2-.18.28-.28.64-.82.87-1.87.62-2.89zM18.91 4.99l1.05 4.37c.1.42.01.84-.25 1.17-.14.18-.44.47-1.05.47-.83 0-1.52-.64-1.63-1.5l-.5-4.5h2.38zM13 4.99h1.96l.54 4.52c.05.46.23.88.5 1.23.1.15.22.28.36.4-.07.08-.14.16-.22.25v3.61h-3.14V4.99zM5.05 4.99h2.38l-.5 4.5c-.11.86-.8 1.5-1.63 1.5-.61 0-.91-.29-1.05-.47-.25-.33-.35-.75-.25-1.17l1.05-4.36zM5 19v-6.03c.08-.01.15-.03.23-.06.24-.07.48-.23.7-.4.1.17.23.33.39.47.41.37.95.59 1.55.59.64 0 1.24-.25 1.66-.66.23-.23.39-.5.48-.78.09.28.25.54.48.78.42.41 1.02.66 1.66.66.23 0 .45-.03.66-.08v4.51H5zm14 0h-3V5.71l.54 4.79c.1.92.48 1.76 1.07 2.42.1.11.2.2.31.29v5.79z" />
-                    </svg>
-                  </div>
-                  <span>3D Model</span>
-                </button>
-                <button className={styles.optionCard}>
-                  <div className={styles.optionIcon}>
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z" />
-                    </svg>
-                  </div>
-                  <span>RoomScaner</span>
-                </button>
-              </div>
+        {/* Material */}
+        <button className={styles.sidebarBtn} title="Material">
+          <div className={styles.icon}>
+            <HiOutlineColorSwatch size={24} />
+          </div>
+        </button>
 
-              {/* Walls */}
-              <div className={styles.toolSection}>
-                <h4>Walls</h4>
-                <div className={styles.toolGrid}>
-                  <button
-                    className={`${styles.toolBtn} ${activeTool === ToolType.WALL ? styles.toolBtnActive : ''}`}
-                    title="Draw Staight Walls"
-                    onClick={() => setActiveTool(ToolType.WALL)}
-                  >
-                    <img src="/icons/wall.svg" alt="Wall" width="32" height="32" />
-                    <span>Draw Staight Walls</span>
-                  </button>
-                  <button className={styles.toolBtn} title="Draw Arc Walls">
-                    <svg width="32" height="32" viewBox="0 0 48 48">
-                      <path d="M 8 28 Q 24 8, 40 28" stroke="currentColor" strokeWidth="2" fill="none" />
-                    </svg>
-                    <span>Draw Arc Walls</span>
-                  </button>
-                  <button
-                    className={`${styles.toolBtn} ${activeTool === ToolType.RECTANGLE ? styles.toolBtnActive : ''}`}
-                    title="Draw Rooms"
-                    onClick={() => setActiveTool(ToolType.RECTANGLE)}
-                  >
-                    <img src="/icons/room.svg" alt="Room" width="32" height="32" />
-                    <span>Draw Rooms</span>
-                  </button>
-                </div>
-              </div>
+        {/* Lighting */}
+        <button
+          className={styles.sidebarBtn}
+          onClick={() => setLightPanelOpen(!lightPanelOpen)}
+          title="Lighting"
+        >
+          <div className={styles.icon}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M9 21h6M12 3a6 6 0 0 0-6 6c0 2.22 1.21 4.16 3 5.19V17a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-2.81c1.79-1.03 3-2.97 3-5.19a6 6 0 0 0-6-6z" />
+            </svg>
+          </div>
+        </button>
 
-              {/* Door */}
-              <div className={styles.toolSection}>
-                <h4>Door</h4>
-                <div className={styles.toolGrid}>
-                  <button
-                    className={`${styles.toolBtn} ${activeTool === ToolType.DOOR ? styles.toolBtnActive : ''}`}
-                    title="Place Door (900mm x 2100mm)"
-                    onClick={() => setActiveTool(ToolType.DOOR)}
-                  >
-                    <img src="/icons/singledoor.svg" alt="Single Door" width="32" height="32" />
-                    <span>Single Door</span>
-                  </button>
-                  <button className={styles.toolBtn}>
-                    <img src="/icons/doubledoor.svg" alt="Double Door" width="32" height="32" />
-                    <span>Double Door</span>
-                  </button>
-                  <button className={styles.toolBtn}>
-                    <img src="/icons/window.svg" alt="Sliding Door" width="32" height="32" />
-                    <span>Sliding Door</span>
-                  </button>
-                </div>
-              </div>
+        {/* Kitchen & Cabinet */}
+        <button className={styles.sidebarBtn} title="Kitchen & Cabinet">
+          <div className={styles.icon}>
+            <BiCabinet size={24} />
+          </div>
+        </button>
 
-              {/* Window */}
-              <div className={styles.toolSection}>
-                <h4>Window</h4>
-                <div className={styles.toolGrid}>
-                  <button
-                    className={`${styles.toolBtn} ${activeTool === ToolType.WINDOW ? styles.toolBtnActive : ''}`}
-                    title="Place Window (1200mm x 1200mm)"
-                    onClick={() => setActiveTool(ToolType.WINDOW)}
-                  >
-                    <img src="/icons/slidingdoor.svg" alt="Single Window" width="32" height="32" />
-                    <span>Single Window</span>
-                  </button>
-                  <button className={styles.toolBtn}>
-                    <img src="/icons/dualwindow.svg" alt="Dual Window" width="32" height="32" />
-                    <span>Dual Window</span>
-                  </button>
-                  <button className={styles.toolBtn}>
-                    <svg width="32" height="32" viewBox="0 0 48 48">
-                      <rect x="8" y="18" width="10" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
-                      <rect x="18" y="18" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
-                      <rect x="30" y="18" width="10" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
-                    </svg>
-                    <span>Unequal Double Door</span>
-                  </button>
-                  <button className={styles.toolBtn}>
-                    <svg width="32" height="32" viewBox="0 0 48 48">
-                      <path d="M 12 24 L 18 18 L 30 18 L 36 24 L 30 30 L 18 30 Z" stroke="currentColor" strokeWidth="2" fill="none" />
-                    </svg>
-                    <span>Corner Bay Window</span>
-                  </button>
-                  <button className={styles.toolBtn}>
-                    <svg width="32" height="32" viewBox="0 0 48 48">
-                      <path d="M 14 24 L 20 20 L 28 20 L 34 24" stroke="currentColor" strokeWidth="2" fill="none" />
-                    </svg>
-                    <span>Corner Window</span>
-                  </button>
-                  <button className={styles.toolBtn}>
-                    <svg width="32" height="32" viewBox="0 0 48 48">
-                      <rect x="12" y="20" width="24" height="8" stroke="currentColor" strokeWidth="2" fill="none" />
-                    </svg>
-                    <span>Bay Window</span>
-                  </button>
-                  <button className={styles.toolBtn}>
-                    <svg width="32" height="32" viewBox="0 0 48 48">
-                      <path d="M 16 24 Q 24 16, 32 24" stroke="currentColor" strokeWidth="2" fill="none" />
-                    </svg>
-                    <span>Arc Window</span>
-                  </button>
-                </div>
-              </div>
+        {/* A.I Layout */}
+        <button className={styles.sidebarBtn} title="A.I Layout">
+          <div className={styles.icon}>
+            <MdAutoAwesome size={24} />
+          </div>
+        </button>
 
-              {/* Structure */}
-              <div className={styles.toolSection}>
-                <h4>Structure</h4>
-                <div className={styles.toolGrid}>
-                  <button className={styles.toolBtn}>
-                    <svg width="32" height="32" viewBox="0 0 48 48">
-                      <path d="M 16 12 L 16 36 M 32 12 L 32 36" stroke="currentColor" strokeWidth="2" />
-                    </svg>
-                    <span>Door Opening</span>
-                  </button>
-                  <button className={styles.toolBtn}>
-                    <svg width="32" height="32" viewBox="0 0 48 48">
-                      <rect x="16" y="20" width="16" height="8" stroke="currentColor" strokeWidth="2" fill="none" />
-                    </svg>
-                    <span>Flue</span>
-                  </button>
-                  <button className={styles.toolBtn}>
-                    <svg width="32" height="32" viewBox="0 0 48 48">
-                      <rect x="12" y="20" width="24" height="3" fill="currentColor" />
-                    </svg>
-                    <span>Beam</span>
-                  </button>
-                  <button className={styles.toolBtn}>
-                    <svg width="32" height="32" viewBox="0 0 48 48">
-                      <rect x="16" y="16" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" />
-                    </svg>
-                    <span>Square</span>
-                  </button>
-                  <button className={styles.toolBtn}>
-                    <svg width="32" height="32" viewBox="0 0 48 48">
-                      <circle cx="24" cy="24" r="10" stroke="currentColor" strokeWidth="2" fill="none" />
-                    </svg>
-                    <span>Circle</span>
-                  </button>
-                  <button className={styles.toolBtn}>
-                    <svg width="32" height="32" viewBox="0 0 48 48">
-                      <rect x="14" y="14" width="20" height="20" stroke="currentColor" strokeWidth="2" fill="none" />
-                      <rect x="18" y="18" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
-                    </svg>
-                    <span>Frame</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className={styles.leftPanelCollapsed} onClick={() => setLeftPanelOpen(true)} title="Expand Panel">
-              <button className={styles.toggleBtn}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+        {/* My Page */}
+        <button className={styles.sidebarBtn} title="My Page">
+          <div className={styles.icon}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+            </svg>
+          </div>
+        </button>
+      </div>
+
+      <div className={styles.sidebarBottom}>
+        {/* Settings */}
+        <button className={styles.sidebarBtn} onClick={() => setThemeSettingsOpen(!themeSettingsOpen)} title="설정">
+          <div className={styles.icon}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+            </svg>
+          </div>
+        </button>
+        {/* Exit */}
+        <button className={styles.sidebarBtn} onClick={() => navigate('/')} title="나가기">
+          <div className={styles.icon}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z" />
+            </svg>
+          </div>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+{/* Left Tools Panel */ }
+{
+  !playMode && (
+    leftPanelOpen ? (
+      <div className={styles.leftPanel}>
+        <div className={styles.panelHeader}>
+          <h3>Create Room</h3>
+          <button onClick={() => setLeftPanelOpen(false)} className={styles.toggleBtn}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Import Floor Plan Section */}
+        <div className={styles.importFloorPlanSection}>
+          <h4 className={styles.sectionTitle}>Import Floor Plan</h4>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageUpload}
+            style={{ display: 'none' }}
+          />
+          <input
+            ref={cadFileInputRef}
+            type="file"
+            accept=".dxf,.dwg"
+            onChange={handleCadUpload}
+            style={{ display: 'none' }}
+          />
+          <div className={styles.importOptionsGrid}>
+            <button className={styles.importCard} onClick={() => setFloorplanSearchModalOpen(true)}>
+              <div className={styles.importIconWrapper}>
+                <svg width="52" height="52" viewBox="0 0 56 56" fill="none">
+                  {/* Window frame background */}
+                  <rect x="8" y="8" width="40" height="32" rx="3" fill="var(--icon-bg)" stroke="var(--icon-stroke)" strokeWidth="1.5"/>
+                  {/* Window top bar */}
+                  <rect x="8" y="8" width="40" height="8" rx="3" fill="var(--icon-light)"/>
+                  <rect x="8" y="13" width="40" height="3" fill="var(--icon-light)"/>
+                  {/* Window buttons */}
+                  <circle cx="14" cy="12" r="1.5" fill="var(--icon-stroke)"/>
+                  <circle cx="19" cy="12" r="1.5" fill="var(--icon-stroke)"/>
+                  <circle cx="24" cy="12" r="1.5" fill="var(--icon-stroke)"/>
+                  {/* Content lines */}
+                  <rect x="12" y="22" width="16" height="2" rx="1" fill="var(--icon-stroke)"/>
+                  <rect x="12" y="27" width="12" height="2" rx="1" fill="var(--icon-stroke)"/>
+                  <rect x="12" y="32" width="20" height="2" rx="1" fill="var(--icon-stroke)"/>
+                  {/* Magnifying glass */}
+                  <circle cx="38" cy="36" r="10" fill="var(--icon-secondary)" stroke="var(--icon-primary)" strokeWidth="2"/>
+                  <circle cx="38" cy="36" r="6" fill="white" fillOpacity="0.4"/>
+                  <line x1="45" y1="43" x2="52" y2="50" stroke="var(--icon-primary)" strokeWidth="3" strokeLinecap="round"/>
                 </svg>
-              </button>
-            </div>
-          )
-        )}
+              </div>
+              <span className={styles.importLabel}>Search Floor<br/>Plan</span>
+            </button>
+            <button className={styles.importCard} onClick={() => (cadFileInputRef as React.RefObject<HTMLInputElement>).current?.click()}>
+              <div className={styles.importIconWrapper}>
+                <svg width="52" height="52" viewBox="0 0 56 56" fill="none">
+                  {/* Document shape with fold */}
+                  <path d="M12 6C12 4.89543 12.8954 4 14 4H32L44 16V50C44 51.1046 43.1046 52 42 52H14C12.8954 52 12 51.1046 12 50V6Z" fill="var(--icon-bg)" stroke="var(--icon-stroke)" strokeWidth="1.5"/>
+                  {/* Fold corner */}
+                  <path d="M32 4V14C32 15.1046 32.8954 16 34 16H44" fill="var(--icon-light)"/>
+                  <path d="M32 4V14C32 15.1046 32.8954 16 34 16H44" stroke="var(--icon-stroke)" strokeWidth="1.5"/>
+                  {/* CAD badge */}
+                  <rect x="16" y="28" width="24" height="16" rx="3" fill="var(--icon-primary)"/>
+                  <text x="28" y="40" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold" fontFamily="system-ui">CAD</text>
+                </svg>
+              </div>
+              <span className={styles.importLabel}>Import CAD</span>
+            </button>
+            <button className={styles.importCard} onClick={() => fileInputRef.current?.click()}>
+              <div className={styles.importIconWrapper}>
+                <svg width="52" height="52" viewBox="0 0 56 56" fill="none">
+                  {/* Image frame */}
+                  <rect x="6" y="10" width="44" height="36" rx="4" fill="var(--icon-bg)" stroke="var(--icon-stroke)" strokeWidth="1.5"/>
+                  {/* Sky area */}
+                  <rect x="8" y="12" width="40" height="20" rx="2" fill="var(--icon-light)"/>
+                  {/* Sun */}
+                  <circle cx="38" cy="20" r="5" fill="white" fillOpacity="0.9"/>
+                  {/* Mountains */}
+                  <path d="M8 32L20 18L32 32H8Z" fill="var(--icon-primary)"/>
+                  <path d="M24 32L36 20L48 32V44H8V32H24Z" fill="var(--icon-secondary)"/>
+                  {/* Fold corner accent */}
+                  <path d="M42 10L50 18V14C50 11.7909 48.2091 10 46 10H42Z" fill="var(--icon-light)" stroke="var(--icon-stroke)" strokeWidth="1"/>
+                </svg>
+              </div>
+              <span className={styles.importLabel}>Import Image</span>
+            </button>
+          </div>
+        </div>
 
-        {/* Main Viewport */}
-        <div className={styles.viewport}>
-          {/* View Mode Toggle (Top Right) - Replaced by BottomControlBar */}
-          {/* <div className={styles.viewModeToggle}>
+        {/* Walls */}
+        <div className={styles.toolSection}>
+          <h4>Walls</h4>
+          <div className={styles.toolGrid}>
+            <button
+              className={`${styles.toolBtn} ${activeTool === ToolType.WALL ? styles.toolBtnActive : ''}`}
+              title="Draw Staight Walls"
+              onClick={() => setActiveTool(ToolType.WALL)}
+            >
+              <img src="/icons/wall.svg" alt="Wall" width="32" height="32" />
+              <span>Draw Staight Walls</span>
+            </button>
+            <button className={styles.toolBtn} title="Draw Arc Walls">
+              <svg width="32" height="32" viewBox="0 0 48 48">
+                <path d="M 8 28 Q 24 8, 40 28" stroke="currentColor" strokeWidth="2" fill="none" />
+              </svg>
+              <span>Draw Arc Walls</span>
+            </button>
+            <button
+              className={`${styles.toolBtn} ${activeTool === ToolType.RECTANGLE ? styles.toolBtnActive : ''}`}
+              title="Draw Rooms"
+              onClick={() => setActiveTool(ToolType.RECTANGLE)}
+            >
+              <img src="/icons/room.svg" alt="Room" width="32" height="32" />
+              <span>Draw Rooms</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Door */}
+        <div className={styles.toolSection}>
+          <h4>Door</h4>
+          <div className={styles.toolGrid}>
+            <button
+              className={`${styles.toolBtn} ${activeTool === ToolType.DOOR ? styles.toolBtnActive : ''}`}
+              title="Place Door (900mm x 2100mm)"
+              onClick={() => setActiveTool(ToolType.DOOR)}
+            >
+              <img src="/icons/singledoor.svg" alt="Single Door" width="32" height="32" />
+              <span>Single Door</span>
+            </button>
+            <button className={styles.toolBtn}>
+              <img src="/icons/doubledoor.svg" alt="Double Door" width="32" height="32" />
+              <span>Double Door</span>
+            </button>
+            <button className={styles.toolBtn}>
+              <img src="/icons/window.svg" alt="Sliding Door" width="32" height="32" />
+              <span>Sliding Door</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Window */}
+        <div className={styles.toolSection}>
+          <h4>Window</h4>
+          <div className={styles.toolGrid}>
+            <button
+              className={`${styles.toolBtn} ${activeTool === ToolType.WINDOW ? styles.toolBtnActive : ''}`}
+              title="Place Window (1200mm x 1200mm)"
+              onClick={() => setActiveTool(ToolType.WINDOW)}
+            >
+              <img src="/icons/slidingdoor.svg" alt="Single Window" width="32" height="32" />
+              <span>Single Window</span>
+            </button>
+            <button className={styles.toolBtn}>
+              <img src="/icons/dualwindow.svg" alt="Dual Window" width="32" height="32" />
+              <span>Dual Window</span>
+            </button>
+            <button className={styles.toolBtn}>
+              <svg width="32" height="32" viewBox="0 0 48 48">
+                <rect x="8" y="18" width="10" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
+                <rect x="18" y="18" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
+                <rect x="30" y="18" width="10" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
+              </svg>
+              <span>Unequal Double Door</span>
+            </button>
+            <button className={styles.toolBtn}>
+              <svg width="32" height="32" viewBox="0 0 48 48">
+                <path d="M 12 24 L 18 18 L 30 18 L 36 24 L 30 30 L 18 30 Z" stroke="currentColor" strokeWidth="2" fill="none" />
+              </svg>
+              <span>Corner Bay Window</span>
+            </button>
+            <button className={styles.toolBtn}>
+              <svg width="32" height="32" viewBox="0 0 48 48">
+                <path d="M 14 24 L 20 20 L 28 20 L 34 24" stroke="currentColor" strokeWidth="2" fill="none" />
+              </svg>
+              <span>Corner Window</span>
+            </button>
+            <button className={styles.toolBtn}>
+              <svg width="32" height="32" viewBox="0 0 48 48">
+                <rect x="12" y="20" width="24" height="8" stroke="currentColor" strokeWidth="2" fill="none" />
+              </svg>
+              <span>Bay Window</span>
+            </button>
+            <button className={styles.toolBtn}>
+              <svg width="32" height="32" viewBox="0 0 48 48">
+                <path d="M 16 24 Q 24 16, 32 24" stroke="currentColor" strokeWidth="2" fill="none" />
+              </svg>
+              <span>Arc Window</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Structure */}
+        <div className={styles.toolSection}>
+          <h4>Structure</h4>
+          <div className={styles.toolGrid}>
+            <button className={styles.toolBtn}>
+              <svg width="32" height="32" viewBox="0 0 48 48">
+                <path d="M 16 12 L 16 36 M 32 12 L 32 36" stroke="currentColor" strokeWidth="2" />
+              </svg>
+              <span>Door Opening</span>
+            </button>
+            <button className={styles.toolBtn}>
+              <svg width="32" height="32" viewBox="0 0 48 48">
+                <rect x="16" y="20" width="16" height="8" stroke="currentColor" strokeWidth="2" fill="none" />
+              </svg>
+              <span>Flue</span>
+            </button>
+            <button className={styles.toolBtn}>
+              <svg width="32" height="32" viewBox="0 0 48 48">
+                <rect x="12" y="20" width="24" height="3" fill="currentColor" />
+              </svg>
+              <span>Beam</span>
+            </button>
+            <button className={styles.toolBtn}>
+              <svg width="32" height="32" viewBox="0 0 48 48">
+                <rect x="16" y="16" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" />
+              </svg>
+              <span>Square</span>
+            </button>
+            <button className={styles.toolBtn}>
+              <svg width="32" height="32" viewBox="0 0 48 48">
+                <circle cx="24" cy="24" r="10" stroke="currentColor" strokeWidth="2" fill="none" />
+              </svg>
+              <span>Circle</span>
+            </button>
+            <button className={styles.toolBtn}>
+              <svg width="32" height="32" viewBox="0 0 48 48">
+                <rect x="14" y="14" width="20" height="20" stroke="currentColor" strokeWidth="2" fill="none" />
+                <rect x="18" y="18" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" />
+              </svg>
+              <span>Frame</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : (
+      <div className={styles.leftPanelCollapsed} onClick={() => setLeftPanelOpen(true)} title="Expand Panel">
+        <button className={styles.toggleBtn}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+          </svg>
+        </button>
+      </div>
+    )
+  )
+}
+
+{/* Main Viewport */ }
+<div className={styles.viewport}>
+  {/* View Mode Toggle (Top Right) - Replaced by BottomControlBar */}
+  {/* <div className={styles.viewModeToggle}>
             <button
               className={`${styles.viewModeBtn} ${viewMode === '2D' ? styles.viewModeBtnActive : ''}`}
               onClick={() => {
@@ -3015,402 +2100,172 @@ ARTISTIC APPROACH:
             </button>
           </div> */}
 
-          <BottomControlBar
-            viewMode={viewMode}
-            onViewModeChange={(mode) => {
-              setViewMode(mode);
-              if (mode === '2D') setPlayMode(false);
-            }}
-            zoom={(120 - cameraFov) / 90} // Convert FOV (30-120) to zoom (0-1): FOV 120 = zoom 0, FOV 30 = zoom 1
-            onZoomChange={(newZoom) => {
-              // Convert zoom (0-1) back to FOV (30-120)
-              const newFov = 120 - (newZoom * 90);
-              setCameraFov(newFov);
-              eventBus.emit(EditorEvents.CAMERA_FOV_CHANGED, { fov: newFov });
-            }}
-            themeColor={themeColor}
-            themeMode={themeMode}
-            onSunSettingsClick={() => setSunPanelOpen(!sunPanelOpen)}
-            sunPanelOpen={sunPanelOpen}
-            onCameraSettingsClick={() => setCameraPanelOpen(!cameraPanelOpen)}
-            cameraPanelOpen={cameraPanelOpen}
-            displayStyle={displayStyle}
-            onDisplayStyleChange={setDisplayStyle}
-            wireframeMode={hiddenLineMode}
-            onWireframeModeChange={setHiddenLineMode}
-            qualityFirst={photoRealisticMode}
-            onQualityFirstChange={setPhotoRealisticMode}
-          />
+  <BottomControlBar
+    ref={bottomControlBarRef}
+    viewMode={viewMode}
+    onViewModeChange={(mode) => {
+      setViewMode(mode);
+      if (mode === '2D') setPlayMode(false);
+    }}
+    zoom={viewMode === '2D' ? zoom2D : (120 - cameraFov) / 90}
+    onZoomChange={(newZoom) => {
+      if (viewMode === '2D') {
+        // 2D zoom: directly set normalized zoom value
+        setZoom2D(newZoom);
+      } else {
+        // 3D zoom: Convert zoom (0-1) back to FOV (30-120)
+        const newFov = 120 - (newZoom * 90);
+        setCameraFov(newFov);
+        eventBus.emit(EditorEvents.CAMERA_FOV_CHANGED, { fov: newFov });
+      }
+    }}
+    themeColor={themeColor}
+    themeMode={themeMode}
+    onSunSettingsClick={() => setSunPanelOpen(!sunPanelOpen)}
+    sunPanelOpen={sunPanelOpen}
+    onCameraSettingsClick={() => setCameraPanelOpen(!cameraPanelOpen)}
+    cameraPanelOpen={cameraPanelOpen}
+    displayStyle={displayStyle}
+    onDisplayStyleChange={setDisplayStyle}
+    wireframeMode={hiddenLineMode}
+    onWireframeModeChange={setHiddenLineMode}
+    qualityFirst={photoRealisticMode}
+    onQualityFirstChange={setPhotoRealisticMode}
+    view3DVisibility={view3DVisibility}
+    onView3DVisibilityChange={setView3DVisibility}
+  />
 
-          {/* Sun Settings Panel - Bottom */}
-          {viewMode === '3D' && sunPanelOpen && (
-            <div
-              className={styles.sunPanelBottom}
-              data-theme={themeMode}
-              style={{ '--theme-color': themeColor } as React.CSSProperties}
-            >
-              <div className={styles.sunPanelHeader}>
-                <span>Sun Settings</span>
-                <button onClick={() => setSunPanelOpen(false)} className={styles.sunPanelCloseBtn}>×</button>
-              </div>
-              <div className={styles.sunPanelBody}>
-                {/* Month */}
-                <div className={styles.sunControlGroup}>
-                  <label>월 (Month)</label>
-                  <div className={styles.sunControlInput}>
-                    <input
-                      type="range"
-                      min="1"
-                      max="12"
-                      step="1"
-                      value={sunSettings.month}
-                      onChange={(e) => setSunSettings({ ...sunSettings, month: parseInt(e.target.value) })}
-                      className={styles.sunRangeSlider}
-                    />
-                    <span className={styles.sunValueDisplay}>{sunSettings.month}월</span>
-                  </div>
-                </div>
-
-                {/* Hour */}
-                <div className={styles.sunControlGroup}>
-                  <label>시간 (Time)</label>
-                  <div className={styles.sunControlInput}>
-                    <input
-                      type="range"
-                      min="5"
-                      max="20"
-                      step="0.5"
-                      value={sunSettings.hour}
-                      onChange={(e) => setSunSettings({ ...sunSettings, hour: parseFloat(e.target.value) })}
-                      className={styles.sunRangeSlider}
-                    />
-                    <span className={styles.sunValueDisplay}>
-                      {Math.floor(sunSettings.hour)}:{String(Math.round((sunSettings.hour % 1) * 60)).padStart(2, '0')}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Intensity */}
-                <div className={styles.sunControlGroup}>
-                  <label>강도 (Intensity)</label>
-                  <div className={styles.sunControlInput}>
-                    <input
-                      type="range"
-                      min="0"
-                      max="3"
-                      step="0.1"
-                      value={sunSettings.intensity}
-                      onChange={(e) => setSunSettings({ ...sunSettings, intensity: parseFloat(e.target.value) })}
-                      className={styles.sunRangeSlider}
-                    />
-                    <span className={styles.sunValueDisplay}>{sunSettings.intensity.toFixed(1)}</span>
-                  </div>
-                </div>
-
-                {/* Azimuth */}
-                <div className={styles.sunControlGroup}>
-                  <label>방위각 (Azimuth)</label>
-                  <div className={styles.sunControlInput}>
-                    <input
-                      type="range"
-                      min="0"
-                      max="360"
-                      step="1"
-                      value={sunSettings.azimuth}
-                      onChange={(e) => setSunSettings({ ...sunSettings, azimuth: parseInt(e.target.value) })}
-                      className={styles.sunRangeSlider}
-                    />
-                    <span className={styles.sunValueDisplay}>{sunSettings.azimuth}°</span>
-                  </div>
-                </div>
-
-                {/* Altitude (Auto-calculated) */}
-                <div className={styles.sunControlGroup} style={{ opacity: 0.6 }}>
-                  <label>고도 (Altitude)</label>
-                  <div className={styles.sunControlInput}>
-                    <span className={styles.sunValueDisplay} style={{ marginLeft: 'auto', fontSize: '12px' }}>
-                      {calculateSunAltitude(sunSettings.month, sunSettings.hour).toFixed(1)}° (자동)
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Camera Settings Panel - Bottom */}
-          {viewMode === '3D' && cameraPanelOpen && (
-            <div
-              className={styles.cameraPanelBottom}
-              data-theme={themeMode}
-              style={{ '--theme-color': themeColor } as React.CSSProperties}
-            >
-              <div className={styles.cameraPanelHeader}>
-                <span>Camera Settings</span>
-                <button onClick={() => setCameraPanelOpen(false)} className={styles.cameraPanelCloseBtn}>×</button>
-              </div>
-              <div className={styles.cameraPanelBody}>
-                {/* Visual Angle Indicator + Sliders */}
-                <div className={styles.cameraMainContent}>
-                  {/* Left: Camera Altitude Visualization */}
-                  <div className={styles.cameraGizmoContainer}>
-                    <svg viewBox="0 0 180 200" className={styles.cameraGizmoSvg} preserveAspectRatio="none">
-                      {/* Background rectangle */}
-                      <rect x="0" y="0" width="180" height="200" fill="#d8d8d8" />
-
-                      {/* Calculate camera altitude arc parameters */}
-                      {(() => {
-                        // Use cameraBeta for the altitude angle
-                        const betaDegrees = cameraBeta * 180 / Math.PI;
-
-                        // Origin point (red dot)
-                        const originX = 10;
-                        const originY = 100;
-
-                        // Arc radius
-                        const radius = 70;
-
-                        // Axis line length
-                        const axisLength = 165;
-
-                        // Calculate arc endpoints based on cameraBeta
-                        // Beta goes from 0 (horizontal) to PI/2 (vertical up)
-                        const startAngle = 0; // 0° (horizontal right)
-                        const endAngle = cameraBeta; // Current camera altitude
-
-                        const x1 = originX + radius * Math.cos(startAngle);
-                        const y1 = originY - radius * Math.sin(startAngle);
-                        const x2 = originX + radius * Math.cos(endAngle);
-                        const y2 = originY - radius * Math.sin(endAngle);
-
-                        // Large arc flag - 0 for outward arc
-                        const largeArcFlag = 0;
-
-                        // Camera icon position (at the end of the arc)
-                        const cameraDistance = radius + 12;
-                        const cameraX = originX + cameraDistance * Math.cos(endAngle);
-                        const cameraY = originY - cameraDistance * Math.sin(endAngle);
-
-                        // Camera rotation angle
-                        const cameraRotation = (endAngle * 180 / Math.PI);
-
-                        return (
-                          <>
-                            {/* Axis lines */}
-                            {/* 90° line (vertical up) */}
-                            <line
-                              x1={originX}
-                              y1={originY}
-                              x2={originX}
-                              y2={originY - axisLength}
-                              stroke="#999999"
-                              strokeWidth="1.5"
-                            />
-                            {/* 0° line (horizontal right) */}
-                            <line
-                              x1={originX}
-                              y1={originY}
-                              x2={originX + axisLength}
-                              y2={originY}
-                              stroke="#999999"
-                              strokeWidth="1.5"
-                            />
-                            {/* -90° line (vertical down) */}
-                            <line
-                              x1={originX}
-                              y1={originY}
-                              x2={originX}
-                              y2={originY + axisLength}
-                              stroke="#999999"
-                              strokeWidth="1.5"
-                            />
-
-                            {/* Camera altitude Arc (filled) - outward arc */}
-                            <path
-                              d={`M ${originX} ${originY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 0 ${x2} ${y2} Z`}
-                              fill="var(--theme-color)"
-                              opacity="0.7"
-                            />
-
-                            {/* Origin point (red dot) */}
-                            <circle cx={originX} cy={originY} r="3" fill="#ff4444" />
-
-                            {/* Camera icon (video camera) - rotates with altitude */}
-                            <g transform={`translate(${cameraX}, ${cameraY}) rotate(${cameraRotation})`}>
-                              {/* Camera body (trapezoid shape) */}
-                              <path d="M -6,-4 L 2,-4 L 2,4 L -6,4 Z" fill="#666666" />
-                              {/* Camera lens (triangle pointing right) */}
-                              <path d="M 2,-2 L 6,0 L 2,2 Z" fill="#666666" />
-                              {/* Camera handle */}
-                              <rect x="-6" y="-6" width="3" height="2" fill="#666666" rx="0.5" />
-                            </g>
-                          </>
-                        );
-                      })()}
-
-                      {/* Degree labels */}
-                      <text x="10" y="20" textAnchor="start" fontSize="14" fill="#555555" fontWeight="600">90°</text>
-                      <text x="170" y="102" textAnchor="end" fontSize="14" fill="#555555" fontWeight="600">0°</text>
-                      <text x="10" y="185" textAnchor="start" fontSize="14" fill="#555555" fontWeight="600">-90°</text>
-
-                      {/* "최대" label at bottom right */}
-                      <text x="170" y="195" textAnchor="end" fontSize="12" fill="#888888">최대</text>
-                    </svg>
-                  </div>
-
-
-                  {/* Right: Sliders */}
-                  <div className={styles.cameraSlidersContainer}>
-                    {/* Camera Altitude (Beta) */}
-                    <div className={styles.cameraControlGroup}>
-                      <label>카메라 고도</label>
-                      <div className={styles.cameraControlInput}>
-                        <input
-                          type="range"
-                          min="0.01"
-                          max={Math.PI / 2 - 0.01}
-                          step="0.01"
-                          value={cameraBeta}
-                          onChange={(e) => {
-                            const newBeta = parseFloat(e.target.value);
-                            setCameraBeta(newBeta);
-                            // Update Babylon camera via global function
-                            if (typeof window !== 'undefined' && (window as any).__setCameraRotation) {
-                              (window as any).__setCameraRotation(cameraAlpha, newBeta);
-                            }
-                          }}
-                          className={styles.cameraRangeSlider}
-                        />
-                        <span className={styles.cameraValueDisplay}>
-                          {Math.round(cameraBeta * 180 / Math.PI)}°
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Azimuth (Alpha) */}
-                    <div className={styles.cameraControlGroup}>
-                      <label>방위각</label>
-                      <div className={styles.cameraControlInput}>
-                        <input
-                          type="range"
-                          min={-Math.PI}
-                          max={Math.PI}
-                          step="0.01"
-                          value={cameraAlpha}
-                          onChange={(e) => {
-                            const newAlpha = parseFloat(e.target.value);
-                            setCameraAlpha(newAlpha);
-                            // Update Babylon camera via global function
-                            if (typeof window !== 'undefined' && (window as any).__setCameraRotation) {
-                              (window as any).__setCameraRotation(newAlpha, cameraBeta);
-                            }
-                          }}
-                          className={styles.cameraRangeSlider}
-                        />
-                        <span className={styles.cameraValueDisplay}>
-                          {Math.round(cameraAlpha * 180 / Math.PI)}°
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* FOV */}
-                    <div className={styles.cameraControlGroup}>
-                      <label>시야각</label>
-                      <div className={styles.cameraControlInput}>
-                        <div className={styles.cameraFovLabels}>
-                          <span>최소</span>
-                          <span>기본</span>
-                          <span>최대</span>
-                        </div>
-                      </div>
-                      <div className={styles.cameraControlInput}>
-                        <input
-                          type="range"
-                          min="30"
-                          max="120"
-                          step="1"
-                          value={cameraFov}
-                          onChange={(e) => {
-                            const newFov = parseFloat(e.target.value);
-                            setCameraFov(newFov);
-                            // Update Babylon camera FOV via event bus
-                            eventBus.emit(EditorEvents.CAMERA_FOV_CHANGED, { fov: newFov });
-                          }}
-                          className={styles.cameraRangeSlider}
-                        />
-                        <span className={styles.cameraValueDisplay}>{cameraFov}°</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Projection Type Toggle */}
-                <div className={styles.cameraProjectionToggle}>
-                  <button
-                    className={`${styles.cameraProjectionBtn} ${projectionType === 'perspective' ? styles.active : ''}`}
-                    onClick={() => {
-                      setProjectionType('perspective');
-                      eventBus.emit(EditorEvents.CAMERA_PROJECTION_CHANGED, { type: 'perspective' });
-                    }}
-                  >
-                    원근
-                  </button>
-                  <button
-                    className={`${styles.cameraProjectionBtn} ${projectionType === 'orthographic' ? styles.active : ''}`}
-                    onClick={() => {
-                      setProjectionType('orthographic');
-                      eventBus.emit(EditorEvents.CAMERA_PROJECTION_CHANGED, { type: 'orthographic' });
-                    }}
-                  >
-                    직교
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 2D View - Main Viewport */}
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            visibility: playMode ? 'hidden' : (viewMode === '2D' ? 'visible' : 'hidden'),
-            pointerEvents: playMode ? 'none' : (viewMode === '2D' ? 'auto' : 'none')
-          }}>
-            <FloorplanCanvas
-              activeTool={activeTool}
-              onDataChange={setFloorplanData}
-              backgroundImage={showBackgroundImage ? backgroundImage : null}
-              renderStyle={hiddenLineMode ? 'wireframe' : renderStyle}
-              showGrid={showGrid}
-              imageScale={imageScale}
-              imageOpacity={imageOpacity}
-              onDimensionClick={handleDimensionClick}
-              wallHeight={wallHeight}
-              wallThickness={wallThickness}
-              rulerVisible={rulerVisible}
-              rulerStart={rulerStart}
-              rulerEnd={rulerEnd}
-              onRulerDragStart={handleRulerDragStart}
-              onRulerDrag={handleRulerDrag}
-              onRulerDragEnd={handleRulerDragEnd}
-              onRulerLabelClick={handleRulerLabelClick}
-              draggingRulerPoint={draggingRulerPoint}
-              scannedWalls={scannedWalls}
-              onRoomSelect={setSelectedRoom}
-              selectedRoomId={selectedRoom?.id ?? null}
+  {/* Sun Settings Panel - Bottom */}
+  {viewMode === '3D' && sunPanelOpen && (
+    <div
+      className={styles.sunPanelBottom}
+      data-theme={themeMode}
+      style={{ '--theme-color': themeColor } as React.CSSProperties}
+    >
+      <div className={styles.sunPanelHeader}>
+        <span>Sun Settings</span>
+        <button onClick={() => setSunPanelOpen(false)} className={styles.sunPanelCloseBtn}>×</button>
+      </div>
+      <div className={styles.sunPanelBody}>
+        {/* Month */}
+        <div className={styles.sunControlGroup}>
+          <label>월 (Month)</label>
+          <div className={styles.sunControlInput}>
+            <input
+              type="range"
+              min="1"
+              max="12"
+              step="1"
+              value={sunSettings.month}
+              onChange={(e) => setSunSettings({ ...sunSettings, month: parseInt(e.target.value) })}
+              className={styles.sunRangeSlider}
             />
-
-            {/* 2D Compass */}
-            <Compass2D
-              rotation={0}
-              themeColor={themeColor}
-            />
+            <span className={styles.sunValueDisplay}>{sunSettings.month}월</span>
           </div>
+        </div>
 
-          {/* 2D View - Preview in right panel - DISABLED due to React DOM conflicts */}
-          {/* {viewMode === '3D' && (
+        {/* Hour */}
+        <div className={styles.sunControlGroup}>
+          <label>시간 (Time)</label>
+          <div className={styles.sunControlInput}>
+            <input
+              type="range"
+              min="5"
+              max="20"
+              step="0.5"
+              value={sunSettings.hour}
+              onChange={(e) => setSunSettings({ ...sunSettings, hour: parseFloat(e.target.value) })}
+              className={styles.sunRangeSlider}
+            />
+            <span className={styles.sunValueDisplay}>
+              {Math.floor(sunSettings.hour)}:{String(Math.round((sunSettings.hour % 1) * 60)).padStart(2, '0')}
+            </span>
+          </div>
+        </div>
+
+        {/* Intensity */}
+        <div className={styles.sunControlGroup}>
+          <label>강도 (Intensity)</label>
+          <div className={styles.sunControlInput}>
+            <input
+              type="range"
+              min="0"
+              max="3"
+              step="0.1"
+              value={sunSettings.intensity}
+              onChange={(e) => setSunSettings({ ...sunSettings, intensity: parseFloat(e.target.value) })}
+              className={styles.sunRangeSlider}
+            />
+            <span className={styles.sunValueDisplay}>{sunSettings.intensity.toFixed(1)}</span>
+          </div>
+        </div>
+
+        {/* Azimuth */}
+        <div className={styles.sunControlGroup}>
+          <label>방위각 (Azimuth)</label>
+          <div className={styles.sunControlInput}>
+            <input
+              type="range"
+              min="0"
+              max="360"
+              step="1"
+              value={sunSettings.azimuth}
+              onChange={(e) => setSunSettings({ ...sunSettings, azimuth: parseInt(e.target.value) })}
+              className={styles.sunRangeSlider}
+            />
+            <span className={styles.sunValueDisplay}>{sunSettings.azimuth}°</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {/* 2D View - Main Viewport */}
+  <div
+    onMouseDown={() => bottomControlBarRef.current?.closeAllModals()}
+    style={{
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    visibility: playMode ? 'hidden' : (viewMode === '2D' ? 'visible' : 'hidden'),
+    pointerEvents: playMode ? 'none' : (viewMode === '2D' ? 'auto' : 'none')
+  }}>
+    <FloorplanCanvas
+      activeTool={activeTool}
+      onDataChange={setFloorplanData}
+      backgroundImage={showBackgroundImage ? backgroundImage : null}
+      renderStyle={hiddenLineMode ? 'wireframe' : renderStyle}
+      showGrid={showGrid}
+      imageScale={imageScale}
+      imageOpacity={imageOpacity}
+      onDimensionClick={handleDimensionClick}
+      wallHeight={wallHeight}
+      wallThickness={wallThickness}
+      rulerVisible={rulerVisible}
+      rulerStart={rulerStart}
+      rulerEnd={rulerEnd}
+      onRulerDragStart={handleRulerDragStart}
+      onRulerDrag={handleRulerDrag}
+      onRulerDragEnd={handleRulerDragEnd}
+      onRulerLabelClick={handleRulerLabelClick}
+      draggingRulerPoint={draggingRulerPoint}
+      scannedWalls={scannedWalls}
+      onRoomSelect={setSelectedRoom}
+      selectedRoomId={selectedRoom?.id ?? null}
+      onCanvasReady={setFloorplanCanvas}
+    />
+
+    {/* 2D Compass */}
+    <Compass2D
+      rotation={0}
+      themeColor={themeColor}
+    />
+  </div>
+
+  {/* 2D View - Preview in right panel - DISABLED due to React DOM conflicts */}
+  {/* {viewMode === '3D' && (
             <div id="preview-2d-container" style={{
               position: 'absolute',
               top: 0,
@@ -3433,676 +2288,855 @@ ARTISTIC APPROACH:
             </div>
           )} */}
 
-          {/* 3D View - Main Viewport */}
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
+  {/* 3D View - Main Viewport */}
+  <div
+    onMouseDown={() => bottomControlBarRef.current?.closeAllModals()}
+    style={{
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    visibility: playMode || viewMode === '3D' ? 'visible' : 'hidden',
+    pointerEvents: playMode || viewMode === '3D' ? 'auto' : 'none',
+    cursor: lightPlacementMode ? 'crosshair' : 'default'
+  }}>
+    <Babylon3DCanvas
+      ref={babylon3DCanvasRef}
+      floorplanData={floorplanData}
+      visible={playMode || viewMode === '3D'}
+      sunSettings={{
+        ...sunSettings,
+        altitude: calculateSunAltitude(sunSettings.month, sunSettings.hour)
+      }}
+      playMode={playMode}
+      showCharacter={showCharacter}
+      glbModelFile={glbModelFile}
+      photoRealisticMode={photoRealisticMode}
+      renderSettings={renderSettings}
+      lights={lights}
+      lightPlacementMode={lightPlacementMode}
+      selectedLightType={selectedLightType}
+      onLightPlaced={handleLightPlaced}
+      onLightMoved={handleLightMoved}
+      displayStyle={displayStyle}
+      showGrid={showGrid}
+      showWalls={view3DVisibility.wall}
+      showEdges={hiddenLineMode}
+    />
+
+    {/* 3D Axis Gizmo (isolated component to prevent parent re-renders) */}
+    <CameraGizmoWrapper visible={!playMode} size={120} />
+
+    {/* Light Placement Guide Overlay */}
+    {lightPlacementMode && viewMode === '3D' && (
+      <div style={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        background: 'rgba(0, 0, 0, 0.85)',
+        color: 'white',
+        padding: '32px 48px',
+        borderRadius: '12px',
+        fontSize: '24px',
+        fontWeight: '600',
+        textAlign: 'center',
+        pointerEvents: 'none',
+        zIndex: 1000,
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+      }}>
+        <div style={{ marginBottom: '12px' }}>
+          {selectedLightType === 'point' ? '포인트 라이트' :
+            selectedLightType === 'spot' ? '스포트 라이트' :
+              '방향성 라이트'} 배치 모드
+        </div>
+        <div style={{ fontSize: '18px', fontWeight: '400', color: '#ffc107' }}>
+          3D 뷰를 클릭해서 조명을 배치하세요
+        </div>
+        <div style={{ fontSize: '14px', fontWeight: '400', color: '#aaa', marginTop: '8px' }}>
+          여러 개 배치 가능 | 종료: 빨간 버튼 클릭
+        </div>
+      </div>
+    )}
+  </div>
+
+  {/* 3D View - Preview in right panel (always rendered) */}
+  <div id="preview-3d-container" style={{
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    visibility: 'hidden', // Hidden in main viewport, shown in preview
+    pointerEvents: 'none'
+  }}>
+    <Babylon3DCanvas
+      floorplanData={floorplanData}
+      visible={true}
+      sunSettings={{
+        ...sunSettings,
+        altitude: calculateSunAltitude(sunSettings.month, sunSettings.hour)
+      }}
+      playMode={false}
+      showCharacter={false}
+      glbModelFile={null}
+      photoRealisticMode={false}
+      renderSettings={renderSettings}
+      lights={lights}
+      lightPlacementMode={false}
+      displayStyle={displayStyle}
+      showGrid={false}
+      showEdges={hiddenLineMode}
+    />
+  </div>
+
+  {/* Dimension Edit Modal */}
+  {editingWallId && viewMode === '2D' && !playMode && (
+    <div style={{
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      background: 'white',
+      padding: '24px',
+      borderRadius: '8px',
+      border: '2px solid #3fae7a',
+      boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
+      zIndex: 2000,
+      minWidth: '320px',
+    }}>
+      <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)' }}>
+        벽 치수 수정
+      </h3>
+      <div style={{ marginBottom: '16px' }}>
+        <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500' }}>
+          치수 (mm):
+        </label>
+        <input
+          type="number"
+          value={dimensionInput}
+          onChange={(e) => setDimensionInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleDimensionSubmit();
+            if (e.key === 'Escape') {
+              setEditingWallId(null);
+              setDimensionInput('');
+            }
+          }}
+          autoFocus
+          style={{
             width: '100%',
-            height: '100%',
-            visibility: playMode || viewMode === '3D' ? 'visible' : 'hidden',
-            pointerEvents: playMode || viewMode === '3D' ? 'auto' : 'none',
-            cursor: lightPlacementMode ? 'crosshair' : 'default'
-          }}>
-            <Babylon3DCanvas
-              ref={babylon3DCanvasRef}
-              floorplanData={floorplanData}
-              visible={playMode || viewMode === '3D'}
-              sunSettings={{
-                ...sunSettings,
-                altitude: calculateSunAltitude(sunSettings.month, sunSettings.hour)
-              }}
-              playMode={playMode}
-              showCharacter={showCharacter}
-              glbModelFile={glbModelFile}
-              photoRealisticMode={photoRealisticMode}
-              renderSettings={renderSettings}
-              lights={lights}
-              lightPlacementMode={lightPlacementMode}
-              selectedLightType={selectedLightType}
-              onLightPlaced={handleLightPlaced}
-              onLightMoved={handleLightMoved}
-              displayStyle={displayStyle}
-              showGrid={showGrid}
-            />
+            padding: '10px 12px',
+            border: '1px solid var(--border-color)',
+            borderRadius: '4px',
+            fontSize: '14px',
+            background: 'var(--bg-primary)',
+            color: 'var(--text-primary)',
+          }}
+        />
+      </div>
+      <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+        <button
+          onClick={() => {
+            setEditingWallId(null);
+            setDimensionInput('');
+          }}
+          style={{
+            padding: '8px 16px',
+            background: 'var(--bg-tertiary)',
+            color: 'var(--text-secondary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '4px',
+            fontSize: '13px',
+            fontWeight: '500',
+            cursor: 'pointer',
+          }}
+        >
+          취소
+        </button>
+        <button
+          onClick={handleDimensionSubmit}
+          style={{
+            padding: '8px 20px',
+            background: 'var(--theme-color)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            fontSize: '13px',
+            fontWeight: '500',
+            cursor: 'pointer',
+          }}
+        >
+          확인
+        </button>
+      </div>
+    </div>
+  )}
 
-            {/* 3D Axis Gizmo (isolated component to prevent parent re-renders) */}
-            <CameraGizmoWrapper visible={!playMode} size={120} />
+  {/* Ruler Label Edit Overlay */}
+  {editingRulerLabel && viewMode === '2D' && !playMode && (
+    <div style={{
+      position: 'absolute',
+      left: `${editingRulerLabel.x}px`,
+      top: `${editingRulerLabel.y + 40}px`,
+      background: 'white',
+      padding: '12px',
+      borderRadius: '6px',
+      border: '2px solid #FF0000',
+      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
+      zIndex: 2000,
+      minWidth: '200px',
+    }}>
+      <div style={{ marginBottom: '8px', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '500' }}>
+        실제 거리 입력:
+      </div>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <input
+          type="number"
+          value={rulerDistance}
+          onChange={(e) => setRulerDistance(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleRulerLabelSubmit();
+            if (e.key === 'Escape') setEditingRulerLabel(null);
+          }}
+          autoFocus
+          style={{
+            flex: 1,
+            padding: '6px 8px',
+            border: '1px solid var(--border-color)',
+            borderRadius: '4px',
+            fontSize: '13px',
+            background: 'var(--bg-primary)',
+            color: 'var(--text-primary)',
+          }}
+        />
+        <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>mm</span>
+      </div>
+      <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+        <button
+          onClick={() => setEditingRulerLabel(null)}
+          style={{
+            flex: 1,
+            padding: '6px 12px',
+            background: 'var(--bg-tertiary)',
+            color: 'var(--text-secondary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '4px',
+            fontSize: '12px',
+            cursor: 'pointer',
+          }}
+        >
+          취소
+        </button>
+        <button
+          onClick={handleRulerLabelSubmit}
+          style={{
+            flex: 1,
+            padding: '6px 12px',
+            background: '#FF0000',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            fontSize: '12px',
+            fontWeight: '500',
+            cursor: 'pointer',
+          }}
+        >
+          확인
+        </button>
+      </div>
+    </div>
+  )}
 
-            {/* Light Placement Guide Overlay */}
-            {lightPlacementMode && viewMode === '3D' && (
-              <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                background: 'rgba(0, 0, 0, 0.85)',
-                color: 'white',
-                padding: '32px 48px',
-                borderRadius: '12px',
-                fontSize: '24px',
-                fontWeight: '600',
-                textAlign: 'center',
-                pointerEvents: 'none',
-                zIndex: 1000,
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-              }}>
-                <div style={{ marginBottom: '12px' }}>
-                  {selectedLightType === 'point' ? '포인트 라이트' :
-                    selectedLightType === 'spot' ? '스포트 라이트' :
-                      '방향성 라이트'} 배치 모드
-                </div>
-                <div style={{ fontSize: '18px', fontWeight: '400', color: '#ffc107' }}>
-                  3D 뷰를 클릭해서 조명을 배치하세요
-                </div>
-                <div style={{ fontSize: '14px', fontWeight: '400', color: '#aaa', marginTop: '8px' }}>
-                  여러 개 배치 가능 | 종료: 빨간 버튼 클릭
-                </div>
-              </div>
-            )}
-          </div>
+  {/* Image Controls Overlay */}
+  {backgroundImage && viewMode === '2D' && !playMode && (
+    <div style={{
+      position: 'absolute',
+      bottom: '20px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      background: 'white',
+      padding: '16px 24px',
+      borderRadius: '4px',
+      border: '1px solid var(--border-color)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '16px',
+      zIndex: 1000,
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+      minWidth: '400px',
+    }}>
+      {/* Ruler Guide Instructions */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500' }}>
+          🎯 줄자 가이드를 드래그해서 이미지의 알려진 치수에 맞추세요
+        </span>
+      </div>
 
-          {/* 3D View - Preview in right panel (always rendered) */}
-          <div id="preview-3d-container" style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            visibility: 'hidden', // Hidden in main viewport, shown in preview
-            pointerEvents: 'none'
-          }}>
-            <Babylon3DCanvas
-              floorplanData={floorplanData}
-              visible={true}
-              sunSettings={{
-                ...sunSettings,
-                altitude: calculateSunAltitude(sunSettings.month, sunSettings.hour)
-              }}
-              playMode={false}
-              showCharacter={false}
-              glbModelFile={null}
-              photoRealisticMode={false}
-              renderSettings={renderSettings}
-              lights={lights}
-              lightPlacementMode={false}
-              displayStyle={displayStyle}
-              showGrid={false}
-            />
-          </div>
-
-          {/* Dimension Edit Modal */}
-          {editingWallId && viewMode === '2D' && !playMode && (
-            <div style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              background: 'white',
-              padding: '24px',
-              borderRadius: '8px',
-              border: '2px solid #3fae7a',
-              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
-              zIndex: 2000,
-              minWidth: '320px',
-            }}>
-              <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)' }}>
-                벽 치수 수정
-              </h3>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500' }}>
-                  치수 (mm):
-                </label>
-                <input
-                  type="number"
-                  value={dimensionInput}
-                  onChange={(e) => setDimensionInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleDimensionSubmit();
-                    if (e.key === 'Escape') {
-                      setEditingWallId(null);
-                      setDimensionInput('');
-                    }
-                  }}
-                  autoFocus
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '4px',
-                    fontSize: '14px',
-                    background: 'var(--bg-primary)',
-                    color: 'var(--text-primary)',
-                  }}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                <button
-                  onClick={() => {
-                    setEditingWallId(null);
-                    setDimensionInput('');
-                  }}
-                  style={{
-                    padding: '8px 16px',
-                    background: 'var(--bg-tertiary)',
-                    color: 'var(--text-secondary)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '4px',
-                    fontSize: '13px',
-                    fontWeight: '500',
-                    cursor: 'pointer',
-                  }}
-                >
-                  취소
-                </button>
-                <button
-                  onClick={handleDimensionSubmit}
-                  style={{
-                    padding: '8px 20px',
-                    background: 'var(--theme-color)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    fontSize: '13px',
-                    fontWeight: '500',
-                    cursor: 'pointer',
-                  }}
-                >
-                  확인
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Ruler Label Edit Overlay */}
-          {editingRulerLabel && viewMode === '2D' && !playMode && (
-            <div style={{
-              position: 'absolute',
-              left: `${editingRulerLabel.x}px`,
-              top: `${editingRulerLabel.y + 40}px`,
-              background: 'white',
-              padding: '12px',
-              borderRadius: '6px',
-              border: '2px solid #FF0000',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
-              zIndex: 2000,
-              minWidth: '200px',
-            }}>
-              <div style={{ marginBottom: '8px', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '500' }}>
-                실제 거리 입력:
-              </div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <input
-                  type="number"
-                  value={rulerDistance}
-                  onChange={(e) => setRulerDistance(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleRulerLabelSubmit();
-                    if (e.key === 'Escape') setEditingRulerLabel(null);
-                  }}
-                  autoFocus
-                  style={{
-                    flex: 1,
-                    padding: '6px 8px',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '4px',
-                    fontSize: '13px',
-                    background: 'var(--bg-primary)',
-                    color: 'var(--text-primary)',
-                  }}
-                />
-                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>mm</span>
-              </div>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                <button
-                  onClick={() => setEditingRulerLabel(null)}
-                  style={{
-                    flex: 1,
-                    padding: '6px 12px',
-                    background: 'var(--bg-tertiary)',
-                    color: 'var(--text-secondary)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  취소
-                </button>
-                <button
-                  onClick={handleRulerLabelSubmit}
-                  style={{
-                    flex: 1,
-                    padding: '6px 12px',
-                    background: '#FF0000',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                    fontWeight: '500',
-                    cursor: 'pointer',
-                  }}
-                >
-                  확인
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Image Controls Overlay */}
-          {backgroundImage && viewMode === '2D' && !playMode && (
-            <div style={{
-              position: 'absolute',
-              bottom: '20px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              background: 'white',
-              padding: '16px 24px',
-              borderRadius: '4px',
+      {/* Distance Input (always visible when ruler is present) */}
+      {rulerVisible && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <label style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', minWidth: '80px' }}>
+            실제 거리:
+          </label>
+          <input
+            type="number"
+            value={rulerDistance}
+            onChange={(e) => setRulerDistance(e.target.value)}
+            placeholder="예: 3550"
+            style={{
+              flex: 1,
+              padding: '8px 12px',
               border: '1px solid var(--border-color)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '16px',
-              zIndex: 1000,
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-              minWidth: '400px',
-            }}>
-              {/* Ruler Guide Instructions */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500' }}>
-                  🎯 줄자 가이드를 드래그해서 이미지의 알려진 치수에 맞추세요
-                </span>
-              </div>
+              borderRadius: '4px',
+              fontSize: '13px',
+            }}
+          />
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>mm</span>
+          <button
+            onClick={handleRulerSubmit}
+            style={{
+              padding: '8px 20px',
+              background: 'var(--theme-color)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              fontSize: '13px',
+              fontWeight: '500',
+              cursor: 'pointer',
+            }}
+          >
+            스케일 적용
+          </button>
+        </div>
+      )}
 
-              {/* Distance Input (always visible when ruler is present) */}
-              {rulerVisible && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <label style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', minWidth: '80px' }}>
-                    실제 거리:
-                  </label>
-                  <input
-                    type="number"
-                    value={rulerDistance}
-                    onChange={(e) => setRulerDistance(e.target.value)}
-                    placeholder="예: 3550"
-                    style={{
-                      flex: 1,
-                      padding: '8px 12px',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '4px',
-                      fontSize: '13px',
-                    }}
-                  />
-                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>mm</span>
-                  <button
-                    onClick={handleRulerSubmit}
-                    style={{
-                      padding: '8px 20px',
-                      background: 'var(--theme-color)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      fontSize: '13px',
-                      fontWeight: '500',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    스케일 적용
-                  </button>
-                </div>
-              )}
+      {/* Image Visibility Toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <label style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', minWidth: '80px' }}>
+          이미지 표시:
+        </label>
+        <button
+          onClick={() => setShowBackgroundImage(!showBackgroundImage)}
+          style={{
+            padding: '8px 16px',
+            background: showBackgroundImage ? '#3fae7a' : '#f5f5f5',
+            color: showBackgroundImage ? 'white' : '#666',
+            border: showBackgroundImage ? 'none' : '1px solid #ddd',
+            borderRadius: '4px',
+            fontSize: '13px',
+            fontWeight: '500',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+          }}
+        >
+          {showBackgroundImage ? '표시됨' : '숨김'}
+        </button>
+      </div>
 
-              {/* Image Visibility Toggle */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <label style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', minWidth: '80px' }}>
-                  이미지 표시:
-                </label>
-                <button
-                  onClick={() => setShowBackgroundImage(!showBackgroundImage)}
-                  style={{
-                    padding: '8px 16px',
-                    background: showBackgroundImage ? '#3fae7a' : '#f5f5f5',
-                    color: showBackgroundImage ? 'white' : '#666',
-                    border: showBackgroundImage ? 'none' : '1px solid #ddd',
-                    borderRadius: '4px',
-                    fontSize: '13px',
-                    fontWeight: '500',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                  }}
-                >
-                  {showBackgroundImage ? '표시됨' : '숨김'}
-                </button>
-              </div>
+      {/* Opacity Control */}
+      {showBackgroundImage && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <label style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', minWidth: '50px' }}>
+            투명도:
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.1"
+            value={imageOpacity}
+            onChange={(e) => setImageOpacity(parseFloat(e.target.value))}
+            style={{ flex: 1 }}
+          />
+          <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: '500', minWidth: '40px' }}>
+            {Math.round(imageOpacity * 100)}%
+          </span>
+        </div>
+      )}
 
-              {/* Opacity Control */}
-              {showBackgroundImage && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <label style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', minWidth: '50px' }}>
-                    투명도:
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.1"
-                    value={imageOpacity}
-                    onChange={(e) => setImageOpacity(parseFloat(e.target.value))}
-                    style={{ flex: 1 }}
-                  />
-                  <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: '500', minWidth: '40px' }}>
-                    {Math.round(imageOpacity * 100)}%
-                  </span>
-                </div>
-              )}
+      {/* Scan Button */}
+      <button
+        onClick={handleScan}
+        style={{
+          padding: '10px 20px',
+          background: 'var(--theme-color)',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          fontSize: '14px',
+          fontWeight: '500',
+          cursor: 'pointer',
+          transition: 'all 0.2s',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = '#2d9967';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = '#3fae7a';
+        }}
+      >
+        스캐닝
+      </button>
+    </div>
+  )}
+</div>
 
-              {/* Scan Button */}
-              <button
-                onClick={handleScan}
-                style={{
-                  padding: '10px 20px',
-                  background: 'var(--theme-color)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#2d9967';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#3fae7a';
-                }}
-              >
-                스캐닝
-              </button>
+{/* Right Settings Panel */ }
+{
+  !playMode && (
+    rightPanelOpen ? (
+      <div className={styles.rightPanel}>
+        {/* 3D Preview - Fixed at top, does not scroll */}
+        <Mini3DPreview
+          floorplanData={floorplanData}
+          rooms={floorplanData?.rooms?.map((r: any) => ({
+            id: r.id,
+            name: r.name || 'Unnamed',
+            area: r.area || 0
+          })) || []}
+          selectedRoomId={selectedRoom?.id}
+          onRoomSelect={(roomId) => {
+            if (roomId) {
+              const room = floorplanData?.rooms?.find((r: any) => r.id === roomId);
+              if (room) {
+                setSelectedRoom({ id: room.id, name: room.name || 'Unnamed', area: room.area || 0 });
+              }
+            } else {
+              setSelectedRoom(null);
+            }
+          }}
+          themeColor={themeColor}
+          height={previewHeight}
+          onHeightChange={setPreviewHeight}
+          viewMode={viewMode}
+          babylon3DCanvasRef={babylon3DCanvasRef}
+          floorplanCanvas={floorplanCanvas}
+        />
+
+        {/* Scrollable content below preview */}
+        <div className={styles.rightPanelContent}>
+        {editingFloor && selectedRoom ? (
+          /* Floor editing mode - show FloorPropertiesPanel */
+          <FloorPropertiesPanel
+            room={selectedRoom}
+            properties={floorProperties}
+            onPropertiesChange={setFloorProperties}
+            onClose={() => {
+              setEditingFloor(false);
+            }}
+            floors={['Level 1']}
+            currentFloor={levelProperties.currentFloor}
+            onCurrentFloorChange={(floor) => setLevelProperties(prev => ({ ...prev, currentFloor: floor }))}
+            wallHeight={wallHeight}
+            onWallHeightChange={setWallHeight}
+            wallThickness={wallThickness}
+            onWallThicknessChange={setWallThickness}
+            floorThickness={levelProperties.floorThickness}
+            onFloorThicknessChange={(thickness) => setLevelProperties(prev => ({ ...prev, floorThickness: thickness }))}
+          />
+        ) : selectedRoom ? (
+          /* Room selected - show room info */
+          <div className={styles.settingsSection} style={{ backgroundColor: 'var(--theme-color-light, rgba(63, 174, 167, 0.1))', borderLeft: '3px solid var(--theme-color, #3FAEA7)' }}>
+            <h4>Selected Room</h4>
+            <div className={styles.settingRow}>
+              <label>Name</label>
+              <span style={{ fontWeight: 'bold' }}>{selectedRoom.name || 'Unnamed'}</span>
             </div>
-          )}
+            <div className={styles.settingRow}>
+              <label>Area</label>
+              <span style={{ fontWeight: 'bold', color: 'var(--theme-color, #3FAEA7)' }}>{selectedRoom.area.toFixed(2)} m²</span>
+            </div>
+            <button
+              className={styles.editBtn}
+              onClick={() => {
+                setFloorProperties(prev => ({
+                  ...prev,
+                  id: selectedRoom.id,
+                  name: selectedRoom.name || 'Untitled',
+                }));
+                setEditingFloor(true);
+              }}
+              style={{ marginTop: '8px' }}
+            >
+              Edit Floor ›
+            </button>
+            <button
+              className={styles.deleteBtn}
+              onClick={() => setSelectedRoom(null)}
+              style={{ marginTop: '8px' }}
+            >
+              Deselect Room
+            </button>
+          </div>
+        ) : (
+          /* No room selected - show LevelPropertiesPanel */
+          <LevelPropertiesPanel
+            properties={levelProperties}
+            onPropertiesChange={setLevelProperties}
+            floors={['Level 1']}
+            wallHeight={wallHeight}
+            onWallHeightChange={setWallHeight}
+            wallThickness={wallThickness}
+            onWallThicknessChange={setWallThickness}
+            totalArea={totalArea}
+          />
+        )}
+        </div>
+      </div>
+    ) : (
+      <div className={styles.rightPanelCollapsed} onClick={() => setRightPanelOpen(true)} title="Expand Panel">
+        <button className={styles.toggleBtn}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+          </svg>
+        </button>
+      </div>
+    )
+  )
+}
+
+{/* Render Style Panel */ }
+{
+  renderStyleOpen && (
+    <div className={styles.renderStylePanel}>
+      <div className={styles.panelHeader}>
+        <h3>Render Style</h3>
+        <button onClick={() => setRenderStyleOpen(false)} className={styles.closeBtn}>×</button>
+      </div>
+
+      <div className={styles.panelContent}>
+        <div className={styles.styleOption}>
+          <button
+            className={`${styles.styleBtn} ${renderStyle === 'wireframe' ? styles.active : ''}`}
+            onClick={() => setRenderStyle('wireframe')}
+          >
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+              <line x1="12" y1="22.08" x2="12" y2="12" />
+            </svg>
+            <span>Wireframe</span>
+          </button>
         </div>
 
-        {/* Right Settings Panel */}
-        {
-          !playMode && (
-            rightPanelOpen ? (
-              <div className={styles.rightPanel}>
-                <div className={styles.panelHeader}>
-                  <h3>Layer Settings</h3>
-                  <button onClick={() => setRightPanelOpen(false)} className={styles.toggleBtn}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
-                    </svg>
-                  </button>
-                </div>
+        <div className={styles.styleOption}>
+          <button
+            className={`${styles.styleBtn} ${renderStyle === 'hidden-line' ? styles.active : ''}`}
+            onClick={() => setRenderStyle('hidden-line')}
+          >
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+              <polyline points="7.5 4.21 12 6.81 16.5 4.21" />
+              <polyline points="7.5 19.79 12 17.19 16.5 19.79" />
+              <line x1="3.27" y1="6.96" x2="12" y2="12.01" />
+              <line x1="12" y1="12.01" x2="20.73" y2="6.96" />
+            </svg>
+            <span>Hidden Line</span>
+          </button>
+        </div>
 
-                {/* 3D Preview */}
-                <FloorplanPreview
-                  viewMode={viewMode}
-                  previewContainerId={viewMode === '2D' ? 'preview-3d-container' : 'preview-2d-container'}
-                />
+        <div className={styles.styleOption}>
+          <button
+            className={`${styles.styleBtn} ${renderStyle === 'solid' ? styles.active : ''}`}
+            onClick={() => setRenderStyle('solid')}
+          >
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9z" />
+            </svg>
+            <span>Solid</span>
+          </button>
+        </div>
 
-                {/* Selected Room Info */}
-                {selectedRoom && (
-                  <div className={styles.settingsSection} style={{ backgroundColor: 'var(--theme-color-light, rgba(63, 174, 167, 0.1))', borderLeft: '3px solid var(--theme-color, #3FAEA7)' }}>
-                    <h4>Selected Room</h4>
-                    <div className={styles.settingRow}>
-                      <label>Name</label>
-                      <span style={{ fontWeight: 'bold' }}>{selectedRoom.name || 'Unnamed'}</span>
-                    </div>
-                    <div className={styles.settingRow}>
-                      <label>Area</label>
-                      <span style={{ fontWeight: 'bold', color: 'var(--theme-color, #3FAEA7)' }}>{selectedRoom.area.toFixed(2)} m²</span>
-                    </div>
-                    <button
-                      className={styles.editBtn}
-                      onClick={() => setSelectedRoom(null)}
-                      style={{ marginTop: '8px' }}
-                    >
-                      Deselect Room
-                    </button>
-                  </div>
-                )}
+        <div className={styles.styleOption}>
+          <button
+            className={`${styles.styleBtn} ${renderStyle === 'realistic' ? styles.active : ''}`}
+            onClick={() => setRenderStyle('realistic')}
+          >
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+              <defs>
+                <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style={{ stopColor: 'currentColor', stopOpacity: 1 }} />
+                  <stop offset="100%" style={{ stopColor: 'currentColor', stopOpacity: 0.3 }} />
+                </linearGradient>
+              </defs>
+              <path fill="url(#grad1)" d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9z" />
+              <circle cx="8" cy="10" r="1" fill="currentColor" opacity="0.6" />
+              <circle cx="16" cy="10" r="1" fill="currentColor" opacity="0.6" />
+              <circle cx="12" cy="14" r="1" fill="currentColor" opacity="0.6" />
+            </svg>
+            <span>Realistic</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
-                {/* Basic Parameters */}
-                <div className={styles.settingsSection}>
-                  <h4>Basic Parameters</h4>
-                  <div className={styles.settingRow}>
-                    <label>Total Building</label>
-                    <input type="text" defaultValue="0.00 ㎡" readOnly />
-                  </div>
-                </div>
+{/* Theme Settings Panel */ }
+{
+  themeSettingsOpen && (
+    <div className={styles.themeSettingsPanel}>
+      <div className={styles.panelHeader}>
+        <h3>테마 설정</h3>
+        <button onClick={() => setThemeSettingsOpen(false)} className={styles.closeBtn}>×</button>
+      </div>
 
-                {/* Wall Settings */}
-                <div className={styles.settingsSection}>
-                  <h4>Wall Settings</h4>
-                  <div className={styles.settingRow}>
-                    <label>Lock Walls</label>
-                    <input type="checkbox" />
-                  </div>
-                  <div className={styles.settingRow}>
-                    <label>Wall Height</label>
-                    <input
-                      type="number"
-                      value={wallHeight}
-                      onChange={(e) => setWallHeight(parseInt(e.target.value) || 2400)}
-                      style={{ width: '80px' }}
-                    /> mm
-                  </div>
-                  <div className={styles.settingRow}>
-                    <label>Wall Thickness</label>
-                    <input
-                      type="number"
-                      value={wallThickness}
-                      onChange={(e) => setWallThickness(parseInt(e.target.value) || 100)}
-                      style={{ width: '80px' }}
-                    /> mm
-                  </div>
-                  <button className={styles.deleteBtn}>Delete All Walls</button>
-                </div>
+      <div className={styles.panelContent}>
+        {/* Theme Mode Selection */}
+        <div className={styles.settingsSection}>
+          <h4>모드</h4>
+          <div className={styles.themeModeGrid}>
+            <button
+              className={`${styles.themeModeBtn} ${themeMode === 'light' ? styles.active : ''}`}
+              onClick={() => setThemeMode('light')}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z" />
+              </svg>
+              <span>라이트</span>
+            </button>
+            <button
+              className={`${styles.themeModeBtn} ${themeMode === 'dark' ? styles.active : ''}`}
+              onClick={() => setThemeMode('dark')}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z" />
+              </svg>
+              <span>다크</span>
+            </button>
+          </div>
+        </div>
 
-                {/* Floor Setting */}
-                <div className={styles.settingsSection}>
-                  <h4>Floor Setting</h4>
-                  <div className={styles.settingRow}>
-                    <label>Floor Thickness</label>
-                    <input type="text" defaultValue="120 mm" />
-                  </div>
-                  <button className={styles.editBtn}>Edit Floor ›</button>
-                </div>
-              </div>
-            ) : (
-              <div className={styles.rightPanelCollapsed} onClick={() => setRightPanelOpen(true)} title="Expand Panel">
-                <button className={styles.toggleBtn}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+        {/* Theme Color Selection */}
+        <div className={styles.settingsSection}>
+          <h4>테마 색상</h4>
+          <div className={styles.colorGrid}>
+            {[
+              { name: '그린', color: '#3fae7a' },
+              { name: '블루', color: '#4a90e2' },
+              { name: '퍼플', color: '#9b59b6' },
+              { name: '오렌지', color: '#e67e22' },
+              { name: '레드', color: '#e74c3c' },
+              { name: '핑크', color: '#ec4899' },
+              { name: '틸', color: '#14b8a6' },
+              { name: '인디고', color: '#6366f1' },
+            ].map(({ name, color }) => (
+              <button
+                key={color}
+                className={`${styles.colorBtn} ${themeColor === color ? styles.active : ''}`}
+                style={{ backgroundColor: color }}
+                onClick={() => setThemeColor(color)}
+                title={name}
+              >
+                {themeColor === color && (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
                   </svg>
-                </button>
-              </div>
-            )
-          )
-        }
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
 
-        {/* Render Style Panel */}
-        {
-          renderStyleOpen && (
-            <div className={styles.renderStylePanel}>
-              <div className={styles.panelHeader}>
-                <h3>Render Style</h3>
-                <button onClick={() => setRenderStyleOpen(false)} className={styles.closeBtn}>×</button>
-              </div>
-
-              <div className={styles.panelContent}>
-                <div className={styles.styleOption}>
-                  <button
-                    className={`${styles.styleBtn} ${renderStyle === 'wireframe' ? styles.active : ''}`}
-                    onClick={() => setRenderStyle('wireframe')}
-                  >
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                      <line x1="12" y1="22.08" x2="12" y2="12" />
-                    </svg>
-                    <span>Wireframe</span>
-                  </button>
-                </div>
-
-                <div className={styles.styleOption}>
-                  <button
-                    className={`${styles.styleBtn} ${renderStyle === 'hidden-line' ? styles.active : ''}`}
-                    onClick={() => setRenderStyle('hidden-line')}
-                  >
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                      <polyline points="7.5 4.21 12 6.81 16.5 4.21" />
-                      <polyline points="7.5 19.79 12 17.19 16.5 19.79" />
-                      <line x1="3.27" y1="6.96" x2="12" y2="12.01" />
-                      <line x1="12" y1="12.01" x2="20.73" y2="6.96" />
-                    </svg>
-                    <span>Hidden Line</span>
-                  </button>
-                </div>
-
-                <div className={styles.styleOption}>
-                  <button
-                    className={`${styles.styleBtn} ${renderStyle === 'solid' ? styles.active : ''}`}
-                    onClick={() => setRenderStyle('solid')}
-                  >
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9z" />
-                    </svg>
-                    <span>Solid</span>
-                  </button>
-                </div>
-
-                <div className={styles.styleOption}>
-                  <button
-                    className={`${styles.styleBtn} ${renderStyle === 'realistic' ? styles.active : ''}`}
-                    onClick={() => setRenderStyle('realistic')}
-                  >
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                      <defs>
-                        <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" style={{ stopColor: 'currentColor', stopOpacity: 1 }} />
-                          <stop offset="100%" style={{ stopColor: 'currentColor', stopOpacity: 0.3 }} />
-                        </linearGradient>
-                      </defs>
-                      <path fill="url(#grad1)" d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44C3.21 17.21 3 16.88 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9z" />
-                      <circle cx="8" cy="10" r="1" fill="currentColor" opacity="0.6" />
-                      <circle cx="16" cy="10" r="1" fill="currentColor" opacity="0.6" />
-                      <circle cx="12" cy="14" r="1" fill="currentColor" opacity="0.6" />
-                    </svg>
-                    <span>Realistic</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )
-        }
-
-        {/* Theme Settings Panel */}
-        {
-          themeSettingsOpen && (
-            <div className={styles.themeSettingsPanel}>
-              <div className={styles.panelHeader}>
-                <h3>테마 설정</h3>
-                <button onClick={() => setThemeSettingsOpen(false)} className={styles.closeBtn}>×</button>
-              </div>
-
-              <div className={styles.panelContent}>
-                {/* Theme Mode Selection */}
-                <div className={styles.settingsSection}>
-                  <h4>모드</h4>
-                  <div className={styles.themeModeGrid}>
-                    <button
-                      className={`${styles.themeModeBtn} ${themeMode === 'light' ? styles.active : ''}`}
-                      onClick={() => setThemeMode('light')}
-                    >
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z" />
-                      </svg>
-                      <span>라이트</span>
-                    </button>
-                    <button
-                      className={`${styles.themeModeBtn} ${themeMode === 'dark' ? styles.active : ''}`}
-                      onClick={() => setThemeMode('dark')}
-                    >
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z" />
-                      </svg>
-                      <span>다크</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Theme Color Selection */}
-                <div className={styles.settingsSection}>
-                  <h4>테마 색상</h4>
-                  <div className={styles.colorGrid}>
-                    {[
-                      { name: '그린', color: '#3fae7a' },
-                      { name: '블루', color: '#4a90e2' },
-                      { name: '퍼플', color: '#9b59b6' },
-                      { name: '오렌지', color: '#e67e22' },
-                      { name: '레드', color: '#e74c3c' },
-                      { name: '핑크', color: '#ec4899' },
-                      { name: '틸', color: '#14b8a6' },
-                      { name: '인디고', color: '#6366f1' },
-                    ].map(({ name, color }) => (
-                      <button
-                        key={color}
-                        className={`${styles.colorBtn} ${themeColor === color ? styles.active : ''}`}
-                        style={{ backgroundColor: color }}
-                        onClick={() => setThemeColor(color)}
-                        title={name}
-                      >
-                        {themeColor === color && (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-                          </svg>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Custom Color Picker */}
-                <div className={styles.settingsSection}>
-                  <h4>커스텀 색상</h4>
-                  <div className={styles.customColorRow}>
-                    <input
-                      type="color"
-                      value={themeColor}
-                      onChange={(e) => setThemeColor(e.target.value)}
-                      className={styles.colorPicker}
-                    />
-                    <span className={styles.colorValue}>{themeColor.toUpperCase()}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )
-        }
+        {/* Custom Color Picker */}
+        <div className={styles.settingsSection}>
+          <h4>커스텀 색상</h4>
+          <div className={styles.customColorRow}>
+            <input
+              type="color"
+              value={themeColor}
+              onChange={(e) => setThemeColor(e.target.value)}
+              className={styles.colorPicker}
+            />
+            <span className={styles.colorValue}>{themeColor.toUpperCase()}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
       </div >
 
-      {/* Camera Settings Modal */}
-      < CameraSettingsModal />
+  {/* Advanced Camera Settings Panel */ }
+{
+  cameraPanelOpen && (
+    <div className={styles.cameraPanelBottom}>
+      <div className={styles.cameraPanelHeader}>
+        <span>Camera Settings</span>
+        <button className={styles.cameraPanelCloseBtn} onClick={() => setCameraPanelOpen(false)}>×</button>
+      </div>
+      <div className={styles.cameraPanelBody}>
+        <div className={styles.cameraAdvancedSettings}>
+          {/* Zoom Center */}
+          <div className={styles.cameraSettingGroup}>
+            <label>Zoom center</label>
+            <div className={styles.radioGroup}>
+              <div className={`${styles.radioOption} ${zoomCenter === 'screen' ? styles.active : ''}`} onClick={() => setZoomCenter('screen')}>
+                <div className={styles.radioButton}><div className={styles.radioButtonInner} /></div>
+                <span>Canvas</span>
+              </div>
+              <div className={`${styles.radioOption} ${zoomCenter === 'mouse' ? styles.active : ''}`} onClick={() => setZoomCenter('mouse')}>
+                <div className={styles.radioButton}><div className={styles.radioButtonInner} /></div>
+                <span>Mouse</span>
+              </div>
+            </div>
+          </div>
 
-      {/* Export Modal */}
-      < ExportModal
-        isOpen={exportModalOpen}
-        onClose={() => setExportModalOpen(false)}
-        floorplanData={floorplanData}
-      />
-      {/* New AI Render Modal */}
-      < AIRenderModal
-        isOpen={aiRenderModalOpen}
-        onClose={() => setAiRenderModalOpen(false)}
-        themeMode={themeMode}
-        themeColor={themeColor}
-        initialImage={capturedImage}
-      />
+          {/* Rotation Center */}
+          <div className={styles.cameraSettingGroup}>
+            <label>Rotation center</label>
+            <div className={styles.radioGroup}>
+              <div className={`${styles.radioOption} ${rotationCenter === 'screen' ? styles.active : ''}`} onClick={() => setRotationCenter('screen')}>
+                <div className={styles.radioButton}><div className={styles.radioButtonInner} /></div>
+                <span>Canvas</span>
+              </div>
+              <div className={`${styles.radioOption} ${rotationCenter === 'mouse' ? styles.active : ''}`} onClick={() => setRotationCenter('mouse')}>
+                <div className={styles.radioButton}><div className={styles.radioButtonInner} /></div>
+                <span>Mouse</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Lock Camera Rotation */}
+          <div className={styles.cameraSettingGroupRow}>
+            <label>Lock camera rotation</label>
+            <div className={`${styles.toggleSwitch} ${lockRotation ? styles.active : ''}`} onClick={() => setLockRotation(!lockRotation)}>
+              <div className={styles.toggleSlider} />
+            </div>
+          </div>
+
+          {/* Movement Speed */}
+          <div className={styles.cameraSettingGroup}>
+            <label>
+              Movement speed
+              <MdInfoOutline style={{ marginLeft: '4px', color: 'var(--text-tertiary)' }} />
+            </label>
+            <div className={styles.sliderGroup}>
+              <input
+                type="range"
+                min="1"
+                max="100"
+                value={movementSpeed}
+                onChange={(e) => setMovementSpeed(parseInt(e.target.value))}
+                className={styles.cameraRangeSlider}
+              />
+              <div className={styles.cameraValueInputWrapper}>
+                <input
+                  type="number"
+                  value={movementSpeed}
+                  onChange={(e) => setMovementSpeed(parseInt(e.target.value))}
+                  className={styles.cameraValueInput}
+                />
+                <span className={styles.cameraValueUnit}>%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* View (Perspective/Orthogonal) */}
+          <div className={styles.cameraSettingGroup}>
+            <label>View</label>
+            <div className={styles.radioGroup}>
+              <div className={`${styles.radioOption} ${cameraProjection === 'perspective' ? styles.active : ''}`} onClick={() => {
+                setCameraProjection('perspective');
+                eventBus.emit(EditorEvents.CAMERA_PROJECTION_CHANGED, { type: 'perspective' });
+              }}>
+                <div className={styles.radioButton}><div className={styles.radioButtonInner} /></div>
+                <span>Perspective</span>
+              </div>
+              <div className={`${styles.radioOption} ${cameraProjection === 'orthographic' ? styles.active : ''}`} onClick={() => {
+                setCameraProjection('orthographic');
+                eventBus.emit(EditorEvents.CAMERA_PROJECTION_CHANGED, { type: 'orthographic' });
+              }}>
+                <div className={styles.radioButton}><div className={styles.radioButtonInner} /></div>
+                <span>Orthogonal</span>
+              </div>
+            </div>
+          </div>
+
+          {/* FOV */}
+          <div className={styles.cameraSettingGroup}>
+            <label>FOV</label>
+            <div className={styles.sliderGroup}>
+              <input
+                type="range"
+                min="30"
+                max="120"
+                value={cameraFov}
+                onChange={(e) => {
+                  const newFov = parseFloat(e.target.value);
+                  setCameraFov(newFov);
+                  eventBus.emit(EditorEvents.CAMERA_FOV_CHANGED, { fov: newFov });
+                }}
+                className={styles.cameraRangeSlider}
+              />
+              <div className={styles.cameraValueInputWrapper}>
+                <input
+                  type="number"
+                  value={cameraFov}
+                  onChange={(e) => {
+                    const newFov = parseFloat(e.target.value);
+                    setCameraFov(newFov);
+                    eventBus.emit(EditorEvents.CAMERA_FOV_CHANGED, { fov: newFov });
+                  }}
+                  className={styles.cameraValueInput}
+                />
+                <span className={styles.cameraValueUnit}>°</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Height */}
+          <div className={styles.cameraSettingGroup}>
+            <label>Height</label>
+            <div className={styles.sliderGroup}>
+              <input
+                type="range"
+                min="0"
+                max="3000"
+                value={cameraHeight}
+                onChange={(e) => handleHeightChange(parseInt(e.target.value))}
+                className={styles.cameraRangeSlider}
+              />
+              <div className={styles.cameraValueInputWrapper}>
+                <input
+                  type="number"
+                  value={cameraHeight}
+                  onChange={(e) => handleHeightChange(parseInt(e.target.value))}
+                  className={styles.cameraValueInput}
+                />
+                <span className={styles.cameraValueUnit}>mm</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+{/* Camera Settings Modal */ }
+< CameraSettingsModal />
+
+{/* Export Modal */ }
+< ExportModal
+  isOpen={exportModalOpen}
+  onClose={() => setExportModalOpen(false)}
+  floorplanData={floorplanData}
+/>
+{/* New AI Render Modal */ }
+< AIRenderModal
+  isOpen={aiRenderModalOpen}
+  onClose={() => setAiRenderModalOpen(false)}
+  themeMode={themeMode}
+  themeColor={themeColor}
+/>
+
+<FloorplanSearchModal
+  isOpen={floorplanSearchModalOpen}
+  onClose={() => setFloorplanSearchModalOpen(false)}
+/>
     </div >
   );
 };

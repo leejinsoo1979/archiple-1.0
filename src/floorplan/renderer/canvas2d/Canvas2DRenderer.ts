@@ -25,6 +25,9 @@ export class Canvas2DRenderer {
   private fpsCounter = 0;
   private lastFpsUpdate = 0;
 
+  // Dirty flag for efficient rendering
+  private needsRender = true;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const ctx = canvas.getContext('2d');
@@ -100,9 +103,26 @@ export class Canvas2DRenderer {
   }
 
   /**
+   * Mark renderer as needing a re-render
+   */
+  markDirty(): void {
+    this.needsRender = true;
+  }
+
+  /**
+   * Check if renderer needs to render
+   */
+  isDirty(): boolean {
+    return this.needsRender;
+  }
+
+  /**
    * Render a single frame
    */
   render(): void {
+    // Reset dirty flag
+    this.needsRender = false;
+
     // Clear canvas (physical pixels)
     this.clear();
 
@@ -134,7 +154,7 @@ export class Canvas2DRenderer {
   }
 
   /**
-   * Main render loop (60fps capped)
+   * Main render loop (60fps capped, only renders when dirty)
    */
   private renderLoop(currentTime: number): void {
     if (!this.isRunning) return;
@@ -189,7 +209,8 @@ export class Canvas2DRenderer {
     this.ctx.imageSmoothingEnabled = true;
     this.ctx.imageSmoothingQuality = 'high';
 
-    // Trigger a render
+    // Mark dirty and trigger render if not running
+    this.needsRender = true;
     if (!this.isRunning) {
       this.render();
     }

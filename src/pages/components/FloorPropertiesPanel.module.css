@@ -1,0 +1,643 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-primary, #fff);
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color, #e5e5e5);
+  background: var(--bg-secondary, #fafafa);
+}
+
+.dragHandle {
+  color: var(--text-tertiary, #999);
+  cursor: grab;
+  margin-right: 8px;
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.tabs {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+}
+
+.tab {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary, #666);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  background: var(--bg-tertiary, #f0f0f0);
+}
+
+.tab.active {
+  color: var(--theme-color, #1890ff);
+  background: rgba(24, 144, 255, 0.1);
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary, #999);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.closeBtn:hover {
+  background: var(--bg-tertiary, #f0f0f0);
+  color: var(--text-primary, #333);
+}
+
+/* Content */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* Form Groups */
+.formGroup {
+  margin-bottom: 16px;
+}
+
+.label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary, #666);
+  margin-bottom: 8px;
+}
+
+.select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #e5e5e5);
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text-primary, #333);
+  background: var(--bg-primary, #fff);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.select:focus {
+  border-color: var(--theme-color, #1890ff);
+}
+
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #e5e5e5);
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text-primary, #333);
+  background: var(--bg-primary, #fff);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.input:focus {
+  border-color: var(--theme-color, #1890ff);
+}
+
+.inputWithCount {
+  position: relative;
+}
+
+.inputWithCount .input {
+  padding-right: 50px;
+}
+
+.charCount {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: var(--text-tertiary, #999);
+}
+
+/* Area Section */
+.areaSection {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border-light, #f0f0f0);
+  margin-bottom: 8px;
+}
+
+.sectionTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+  margin: 0 0 8px 0;
+}
+
+.areaDescription {
+  font-size: 13px;
+  color: var(--text-secondary, #666);
+  margin: 0 0 12px 0;
+  line-height: 1.5;
+}
+
+.editPavingBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border-color, #e5e5e5);
+  border-radius: 8px;
+  background: var(--bg-primary, #fff);
+  font-size: 14px;
+  color: var(--text-primary, #333);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.editPavingBtn:hover {
+  border-color: var(--theme-color, #1890ff);
+  color: var(--theme-color, #1890ff);
+}
+
+.editIcon {
+  font-size: 18px;
+}
+
+/* Collapsible Sections */
+.collapsibleSection {
+  border-bottom: 1px solid var(--border-light, #f0f0f0);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 0;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+  cursor: pointer;
+}
+
+.sectionHeader svg {
+  font-size: 20px;
+  color: var(--text-tertiary, #999);
+}
+
+.sectionContent {
+  padding-bottom: 16px;
+}
+
+/* Slider Groups */
+.sliderGroup {
+  margin-bottom: 16px;
+}
+
+.sliderGroup label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-secondary, #666);
+  margin-bottom: 8px;
+}
+
+.sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border-color, #e5e5e5);
+  border-radius: 2px;
+  outline: none;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--theme-color, #1890ff);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--theme-color, #1890ff);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.inputWithUnit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 80px;
+}
+
+.numberInput {
+  width: 50px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color, #e5e5e5);
+  border-radius: 4px;
+  font-size: 13px;
+  text-align: right;
+  color: var(--text-primary, #333);
+  background: var(--bg-primary, #fff);
+  outline: none;
+}
+
+.numberInput:focus {
+  border-color: var(--theme-color, #1890ff);
+}
+
+.unit {
+  font-size: 13px;
+  color: var(--text-secondary, #666);
+  min-width: 24px;
+}
+
+/* Gap Type Row */
+.gapTypeRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.radioLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-primary, #333);
+  cursor: pointer;
+}
+
+.radio {
+  display: none;
+}
+
+.radioCircle {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-color, #d9d9d9);
+  border-radius: 50%;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.radio:checked + .radioCircle {
+  border-color: var(--theme-color, #1890ff);
+}
+
+.radio:checked + .radioCircle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--theme-color, #1890ff);
+}
+
+.colorPicker {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color, #e5e5e5);
+  cursor: pointer;
+  margin-left: auto;
+}
+
+/* Pattern Section */
+.patternPreview {
+  background: var(--bg-secondary, #fafafa);
+  border: 1px solid var(--border-color, #e5e5e5);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 12px;
+}
+
+.patternDiagram {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.patternDimensions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.widthLabel {
+  font-size: 13px;
+  color: var(--text-secondary, #666);
+  margin-bottom: 4px;
+  position: relative;
+}
+
+.widthLabel::before,
+.widthLabel::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 40px;
+  height: 1px;
+  background: var(--text-tertiary, #999);
+}
+
+.widthLabel::before {
+  right: calc(100% + 8px);
+}
+
+.widthLabel::after {
+  left: calc(100% + 8px);
+}
+
+.heightLabel {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) rotate(-90deg);
+  font-size: 13px;
+  color: var(--text-secondary, #666);
+}
+
+.patternTile {
+  width: 100%;
+  height: 24px;
+  background: linear-gradient(90deg, #c9b896 0%, #d4c4a8 50%, #c9b896 100%);
+  border-radius: 2px;
+}
+
+.materialThumbnail {
+  width: 64px;
+  height: 64px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border-color, #e5e5e5);
+}
+
+.materialThumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Level Tab */
+.levelTab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+}
+
+.placeholder {
+  color: var(--text-tertiary, #999);
+  font-size: 14px;
+}
+
+/* Level Content - Matching LevelPropertiesPanel exactly */
+.levelContent {
+  padding: 0;
+}
+
+.levelSection {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-light, #f0f0f0);
+}
+
+.levelSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.levelSectionTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary, #666);
+}
+
+.levelCollapseIcon {
+  font-size: 20px;
+  color: var(--text-tertiary, #999);
+  cursor: pointer;
+}
+
+.levelFormRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.levelFormRowVertical {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.levelLabel {
+  font-size: 13px;
+  color: var(--text-secondary, #666);
+}
+
+.levelButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.levelBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border-color, #e5e5e5);
+  border-radius: 6px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-secondary, #666);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 18px;
+}
+
+.levelBtn:hover {
+  border-color: var(--theme-color, #1890ff);
+  color: var(--theme-color, #1890ff);
+}
+
+.levelSelect {
+  width: 120px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, #e5e5e5);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-primary, #333);
+  background: var(--bg-primary, #fff);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.levelSelect:focus {
+  border-color: var(--theme-color, #1890ff);
+}
+
+.levelAreaDisplay {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.levelAreaValue {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary, #333);
+}
+
+.levelInputWithUnit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.levelInput {
+  width: 70px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color, #e5e5e5);
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: right;
+  color: var(--text-primary, #333);
+  background: var(--bg-primary, #fff);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.levelInput:focus {
+  border-color: var(--theme-color, #1890ff);
+}
+
+.levelInputSmall {
+  width: 70px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color, #e5e5e5);
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: right;
+  color: var(--text-primary, #333);
+  background: var(--bg-primary, #fff);
+  outline: none;
+}
+
+.levelInputSmall:focus {
+  border-color: var(--theme-color, #1890ff);
+}
+
+.levelUnit {
+  font-size: 13px;
+  color: var(--text-secondary, #666);
+  min-width: 20px;
+}
+
+.levelSliderRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.levelSlider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border-color, #e5e5e5);
+  border-radius: 2px;
+  outline: none;
+}
+
+.levelSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--theme-color, #1890ff);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.levelSlider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--theme-color, #1890ff);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Scrollbar */
+.content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.content::-webkit-scrollbar-track {
+  background: var(--bg-tertiary, #f5f5f5);
+}
+
+.content::-webkit-scrollbar-thumb {
+  background: var(--border-color, #d9d9d9);
+  border-radius: 3px;
+}
+
+.content::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary, #999);
+}

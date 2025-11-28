@@ -26,7 +26,7 @@ export interface BabylonRoom {
   id: string;
   name: string;
   points: string[]; // point ids (CCW order)
-  area: number; // mm�
+  area: number; // m² (square meters)
 }
 
 export interface BabylonDoor {
@@ -146,8 +146,8 @@ export function convertFloorplanToBabylon(floorplan: Floorplan, doors: any[] = [
 
 /**
  * Calculate room area using Shoelace formula
- * @param corners Room corners in CCW order
- * @returns Area in mm�
+ * @param corners Room corners in CCW order (coordinates in mm)
+ * @returns Area in m² (square meters)
  */
 function calculateRoomArea(corners: Corner[]): number {
   if (corners.length < 3) return 0;
@@ -159,7 +159,9 @@ function calculateRoomArea(corners: Corner[]): number {
     sum += current.x * next.y - next.x * current.y;
   }
 
-  return Math.abs(sum / 2);
+  // Convert from mm² to m²
+  const MM_PER_METER = 1000;
+  return Math.abs(sum / 2) / (MM_PER_METER * MM_PER_METER);
 }
 
 /**
@@ -185,7 +187,7 @@ export function createTestRoom(): BabylonFloorplanData {
         id: 'room-1',
         name: 'Test Room',
         points: ['p1', 'p2', 'p3', 'p4'],
-        area: 2800 * 2800, // mm�
+        area: 7.84, // m² (2.8m x 2.8m)
       },
     ],
     doors: [],

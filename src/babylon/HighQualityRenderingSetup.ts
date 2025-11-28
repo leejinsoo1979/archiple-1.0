@@ -183,7 +183,7 @@ export function setupHighQualityRendering(
       ImageProcessingConfiguration.TONEMAPPING_ACES;
   }
 
-  // Disable heavy effects for performance
+  // Bloom disabled
   pipeline.bloomEnabled = false;
   pipeline.sharpenEnabled = false;
   pipeline.chromaticAberrationEnabled = false;

@@ -1,4 +1,4 @@
-import { CSSProperties } from 'react';
+import type { CSSProperties } from 'react';
 
 interface Compass2DProps {
   rotation?: number; // Camera rotation in degrees (0 = North up)
@@ -76,7 +76,7 @@ const Compass2D = ({ rotation = 0, size = 80, style, themeColor = '#ff4757' }: C
         {/* Precision Ticks - REMOVED per user request */}
 
         {/* Cardinal Directions - N and S only */}
-        {['N', 'S'].map((dir, i) => {
+        {['N', 'S'].map((dir) => {
           const angle = dir === 'N' ? 0 : 180;
           const rad = (angle * Math.PI) / 180;
           const textR = radius - 12;

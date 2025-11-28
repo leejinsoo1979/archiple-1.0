@@ -11,7 +11,6 @@ import {
   Scene,
   ArcRotateCamera,
   AbstractMesh,
-  Vector3,
 } from '@babylonjs/core';
 
 export interface AutoWallHiderOptions {
@@ -99,6 +98,10 @@ export class AutoWallHider {
 
     // For each wall, hide if it's BETWEEN camera and room center
     for (const wall of wallMeshes) {
+      // Skip internal walls - they should never be hidden
+      // Internal walls are shared between multiple rooms
+      if (wall.metadata?.isInternal) continue;
+
       const bounds = wall.getBoundingInfo().boundingBox;
       const wallCenter = bounds.centerWorld;
 
@@ -145,8 +148,10 @@ export class AutoWallHider {
     for (const wall of allWalls) {
       if (wallsToHide.has(wall)) {
         wall.visibility = this.options.hiddenVisibility!;
+        wall.isPickable = false; // Hidden walls shouldn't block picking
       } else {
         wall.visibility = this.options.visibleVisibility!;
+        wall.isPickable = true;
       }
     }
   }
@@ -171,6 +176,9 @@ export class AutoWallHider {
       } else {
         wall.visibility = targetVisibility;
       }
+
+      // Update pickability based on visibility threshold
+      wall.isPickable = wall.visibility > 0.5;
     }
   }
 

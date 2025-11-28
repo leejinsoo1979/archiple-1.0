@@ -63,6 +63,7 @@ interface FloorplanCanvasProps {
   scannedWalls?: { points: any[]; walls: any[] } | null;
   onRoomSelect?: (roomInfo: { id: string; name: string; area: number } | null) => void;
   selectedRoomId?: string | null;
+  onCanvasReady?: (canvas: HTMLCanvasElement) => void;
 }
 
 const FloorplanCanvas = ({
@@ -87,6 +88,7 @@ const FloorplanCanvas = ({
   scannedWalls = null,
   onRoomSelect,
   selectedRoomId = null,
+  onCanvasReady,
 }: FloorplanCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -155,6 +157,8 @@ const FloorplanCanvas = ({
     const container = containerRef.current;
     if (!canvas || !container) return;
 
+    // Notify parent that canvas is ready
+    onCanvasReady?.(canvas);
 
     // 1. Initialize SceneManager
     // Units: mm (millimeters) - 모든 내부 좌표는 mm 단위
@@ -319,6 +323,9 @@ const FloorplanCanvas = ({
       windowLayer.setWalls(walls);
       windowLayer.setPoints(points);
 
+      // Mark renderer as dirty to trigger re-render
+      renderer.markDirty();
+
       // Update stats
       setStats({
         points: points.length,
@@ -363,6 +370,8 @@ const FloorplanCanvas = ({
       roomLayer.setRooms(rooms);
       roomLayer.setPoints(points);
 
+      // Mark renderer as dirty to trigger re-render
+      renderer.markDirty();
     });
     eventBus.on(FloorEvents.POINT_UPDATED, () => {
       try {

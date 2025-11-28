@@ -31,6 +31,8 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  flex: 1;
+  min-width: 0;
 }
 
 /* Original logo with theme color using mask */
@@ -68,10 +70,10 @@
 }
 
 .headerCenter {
-  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .headerTitle {
@@ -84,7 +86,10 @@
 .headerRight {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 12px;
+  flex: 1;
+  min-width: 0;
 }
 
 .headerBtn {
@@ -258,30 +263,34 @@
 
 .createRoomOptions {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  padding: 16px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 12px;
   border-bottom: 1px solid var(--border-light);
 }
 
 .optionCard {
-  aspect-ratio: 1.2;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--bg-primary);
+  aspect-ratio: 0.85;
+  border: none;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--theme-color) 8%, white);
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  font-size: 12px;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.3;
+  padding: 8px 4px;
 }
 
 .optionCard:hover {
-  border-color: var(--theme-color);
+  background: color-mix(in srgb, var(--theme-color) 15%, white);
   box-shadow: 0 2px 8px color-mix(in srgb, var(--theme-color) 20%, transparent);
 }
 
@@ -294,6 +303,103 @@
 
 .optionIcon svg {
   opacity: 0.7;
+}
+
+.optionIconNew {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+}
+
+.optionIconNew svg {
+  width: 100%;
+  height: 100%;
+  --icon-primary: var(--theme-color);
+  --icon-secondary: color-mix(in srgb, var(--theme-color) 60%, white);
+  --icon-bg: color-mix(in srgb, var(--theme-color) 12%, white);
+  --icon-stroke: color-mix(in srgb, var(--theme-color) 40%, white);
+}
+
+/* Import Floor Plan Section */
+.importFloorPlanSection {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.sectionTitle {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.importOptionsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.importCard {
+  aspect-ratio: 0.85;
+  border: none;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--theme-color) 8%, white);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 8px 4px 10px;
+}
+
+.importCard:hover {
+  background: color-mix(in srgb, var(--theme-color) 15%, white);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--theme-color) 20%, transparent);
+}
+
+.importIconWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  width: 100%;
+}
+
+.importIconWrapper svg {
+  --icon-primary: var(--theme-color);
+  --icon-secondary: color-mix(in srgb, var(--theme-color) 70%, white);
+  --icon-bg: color-mix(in srgb, var(--theme-color) 15%, white);
+  --icon-light: color-mix(in srgb, var(--theme-color) 25%, white);
+  --icon-stroke: color-mix(in srgb, var(--theme-color) 40%, white);
+}
+
+.importLabel {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.3;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Dark mode support for import section */
+[data-theme='dark'] .importCard {
+  background: color-mix(in srgb, var(--theme-color) 15%, #1a1a1a);
+}
+
+[data-theme='dark'] .importCard:hover {
+  background: color-mix(in srgb, var(--theme-color) 25%, #1a1a1a);
+}
+
+[data-theme='dark'] .importLabel {
+  color: var(--text-secondary);
 }
 
 .toolSection {
@@ -544,7 +650,8 @@
 
 .rangeSlider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 20px;
+  appearance: none;
+  width: 100%;
   height: 20px;
   border-radius: 50%;
   background: linear-gradient(145deg, #ffffff, #f0f0f0);
@@ -660,6 +767,68 @@
   opacity: 0.9;
 }
 
+.playBtnActive {
+  background: #e74c3c;
+}
+
+.headerIconBtn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.headerIconBtn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.helpMenuContainer {
+  position: relative;
+}
+
+.helpMenu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  background: var(--bg-primary);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  padding: 8px 0;
+  z-index: 1000;
+}
+
+.helpMenuItem {
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.helpMenuItem:hover {
+  background: var(--bg-secondary);
+}
+
+.helpMenuDivider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 0;
+}
+
 /* ===== MAIN VIEWPORT ===== */
 .viewport {
   flex: 1;
@@ -755,9 +924,16 @@
   height: 100%;
   background: var(--bg-primary);
   border-left: 1px solid var(--border-color);
-  overflow-y: auto;
+  overflow: hidden;
   flex-shrink: 0;
   z-index: 150;
+  display: flex;
+  flex-direction: column;
+}
+
+.rightPanelContent {
+  flex: 1;
+  overflow-y: auto;
 }
 
 .settingsSection {
@@ -826,21 +1002,21 @@
 
 /* ===== SCROLLBAR STYLING ===== */
 .leftPanel::-webkit-scrollbar,
-.rightPanel::-webkit-scrollbar,
+.rightPanelContent::-webkit-scrollbar,
 .themeSettingsPanel::-webkit-scrollbar,
 .renderStylePanel::-webkit-scrollbar {
   width: 6px;
 }
 
 .leftPanel::-webkit-scrollbar-track,
-.rightPanel::-webkit-scrollbar-track,
+.rightPanelContent::-webkit-scrollbar-track,
 .themeSettingsPanel::-webkit-scrollbar-track,
 .renderStylePanel::-webkit-scrollbar-track {
   background: var(--bg-tertiary);
 }
 
 .leftPanel::-webkit-scrollbar-thumb,
-.rightPanel::-webkit-scrollbar-thumb,
+.rightPanelContent::-webkit-scrollbar-thumb,
 .themeSettingsPanel::-webkit-scrollbar-thumb,
 .renderStylePanel::-webkit-scrollbar-thumb {
   background: var(--border-color);
@@ -848,7 +1024,7 @@
 }
 
 .leftPanel::-webkit-scrollbar-thumb:hover,
-.rightPanel::-webkit-scrollbar-thumb:hover,
+.rightPanelContent::-webkit-scrollbar-thumb:hover,
 .themeSettingsPanel::-webkit-scrollbar-thumb:hover,
 .renderStylePanel::-webkit-scrollbar-thumb:hover {
   background: var(--text-secondary);
@@ -1554,6 +1730,7 @@
     opacity: 0;
     transform: translateY(12px) scale(0.96);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -1737,8 +1914,8 @@
 .cameraPanelBottom {
   position: absolute;
   bottom: 72px;
-  right: 170px;
-  width: 360px;
+  right: 280px;
+  width: 280px;
   background: var(--bg-primary);
   backdrop-filter: blur(20px) saturate(150%);
   -webkit-backdrop-filter: blur(20px) saturate(150%);
@@ -1761,6 +1938,7 @@
     opacity: 0;
     transform: translateY(12px) scale(0.96);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -1771,8 +1949,8 @@
   content: '';
   position: absolute;
   bottom: -7px;
-  right: 100px;
-  transform: rotate(45deg);
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
   width: 12px;
   height: 12px;
   background: var(--bg-primary);
@@ -1842,10 +2020,9 @@
 }
 
 .cameraPanelBody {
-  padding: 14px 16px;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
 }
 
 .cameraMainContent {
@@ -1855,9 +2032,10 @@
 }
 
 .cameraGizmoContainer {
-  width: 100px;
-  height: 100px;
-  flex-shrink: 0;
+  flex: 1;
+  min-height: 200px;
+  display: flex;
+  align-items: stretch;
 }
 
 .cameraGizmoSvg {
@@ -1915,6 +2093,7 @@
   background: var(--border-color);
   outline: none;
   -webkit-appearance: none;
+  appearance: none;
   cursor: pointer;
 }
 
@@ -2027,4 +2206,489 @@
   background: color-mix(in srgb, var(--theme-color) 20%, transparent);
   border-color: var(--theme-color);
   color: var(--theme-color);
+}
+
+/* Advanced Camera Settings */
+.cameraAdvancedSettings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  /* background: white; - Removed to use panel background */
+}
+
+.cameraSettingGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cameraSettingGroupRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cameraSettingGroup label {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Radio Group */
+.radioGroup {
+  display: flex;
+  gap: 24px;
+}
+
+.radioOption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.radioButton {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  background: white;
+}
+
+.radioOption:hover .radioButton {
+  border-color: var(--theme-color);
+}
+
+.radioOption.active .radioButton {
+  border-color: var(--theme-color);
+  background: var(--theme-color);
+}
+
+.radioButtonInner {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: white;
+}
+
+.radioOption span {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.radioOption.active span {
+  color: var(--text-primary);
+}
+
+/* Toggle Switch */
+.toggleSwitch {
+  width: 44px;
+  height: 24px;
+  background: #e9e9ea;
+  border-radius: 12px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  border: 1px solid transparent;
+}
+
+.toggleSwitch.active {
+  background: var(--theme-color);
+}
+
+.toggleSlider {
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 1px;
+  left: 2px;
+  transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggleSwitch.active .toggleSlider {
+  left: 21px;
+}
+
+/* Slider Group */
+.sliderGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.cameraRangeSlider {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-color);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  position: relative;
+}
+
+.cameraRangeSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--theme-color);
+  border: 2px solid white;
+  cursor: grab;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s;
+  margin-top: -5px;
+  /* Center thumb */
+}
+
+.cameraRangeSlider::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+  cursor: pointer;
+  background: var(--border-color);
+  border-radius: 2px;
+}
+
+.cameraValueInputWrapper {
+  width: 80px;
+  height: 28px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: white;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  transition: all 0.2s;
+}
+
+.cameraValueInputWrapper:focus-within {
+  border-color: var(--theme-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-color) 20%, transparent);
+}
+
+.cameraValueInput {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  text-align: right;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  padding: 0;
+  margin-right: 4px;
+}
+
+.cameraValueUnit {
+  font-size: 13px;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+/* New Header Toolbar Styles */
+.newToolbar {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 16px;
+  gap: 4px;
+}
+
+.toolbarBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.toolbarBtn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.toolbarBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.toolbarBtn:disabled:hover {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.toolbarIconWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  width: 24px;
+}
+
+.toolbarBtn svg {
+  font-size: 20px;
+}
+
+.toolbarTextRow {
+  display: none;
+}
+
+.toolbarText {
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.toolbarDropdownArrow {
+  font-size: 8px;
+  opacity: 0.7;
+  margin-top: 2px;
+}
+
+.toolbarSeparator {
+  width: 1px;
+  height: 32px;
+  background: var(--border-color);
+  margin: 0 8px;
+}
+
+.toolbarBtnPrimary {
+  background: var(--theme-color);
+  color: white !important;
+  padding: 8px;
+}
+
+.toolbarBtnPrimary:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--theme-color) 30%, transparent);
+}
+
+.toolbarBtnPrimary .toolbarText,
+.toolbarBtnPrimary svg,
+.toolbarBtnPrimary .toolbarDropdownArrow {
+  color: white;
+}
+
+/* ===== TOOLBAR DROPDOWN MENU ===== */
+.toolbarDropdown {
+  position: relative;
+}
+
+.toolbarDropdownMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 200px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  overflow: hidden;
+  animation: dropdownFadeIn 0.15s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdownMenuItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-align: left;
+}
+
+.dropdownMenuItem:hover {
+  background: var(--bg-secondary);
+}
+
+.dropdownMenuItem:first-child {
+  border-radius: 8px 8px 0 0;
+}
+
+.dropdownMenuItem:last-child {
+  border-radius: 0 0 8px 8px;
+}
+
+.dropdownShortcut {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 400;
+  margin-left: 24px;
+}
+
+.dropdownItemWithDot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.unsavedDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e74c3c;
+}
+
+.dropdownDivider {
+  height: 1px;
+  background: var(--border-light);
+  margin: 4px 0;
+}
+
+.dropdownMenuItemWithSubmenu {
+  position: relative;
+}
+
+.submenuArrow {
+  font-size: 16px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.dropdownSubmenu {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  min-width: 180px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 1001;
+  overflow: hidden;
+  animation: dropdownFadeIn 0.15s ease-out;
+}
+
+.dropdownSubmenu .dropdownMenuItem:first-child {
+  border-radius: 8px 8px 0 0;
+}
+
+.dropdownSubmenu .dropdownMenuItem:last-child {
+  border-radius: 0 0 8px 8px;
+}
+
+/* Toolbar button with dropdown arrow */
+.toolbarBtnWithArrow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.toolbarDropdownArrowIcon {
+  font-size: 10px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+/* Toolkit menu specific styles */
+.toolkitMenu {
+  min-width: 280px;
+}
+
+.dropdownMenuItemWithIcon {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-align: left;
+}
+
+.dropdownMenuItemWithIcon:hover {
+  background: var(--bg-secondary);
+}
+
+.dropdownMenuItemLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dropdownMenuIcon {
+  font-size: 16px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.dropdownInfoIcon {
+  font-size: 14px;
+  color: var(--text-tertiary);
+  opacity: 0.6;
+  margin-left: 4px;
+}
+
+.dropdownSectionHeader {
+  padding: 8px 14px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dropdownNewBadge {
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  background: #3B82F6;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 8px;
+}
+
+.dropdownBetaBadge {
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  background: #3B82F6;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 8px;
 }

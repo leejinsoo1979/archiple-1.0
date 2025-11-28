@@ -1,0 +1,180 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e0e0e0;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #fafafa;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+}
+
+.collapseBtn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: #666;
+  cursor: pointer;
+  font-size: 10px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.collapseBtn:hover {
+  background: #eee;
+  color: #333;
+}
+
+.tabHeader {
+  display: flex;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fafafa;
+}
+
+.tab {
+  flex: 1;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: #888;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  color: #555;
+  background: #f5f5f5;
+}
+
+.tab.active {
+  color: #3FAEA7;
+  border-bottom-color: #3FAEA7;
+  background: white;
+}
+
+.canvasContainer {
+  width: 100%;
+  height: 180px;
+  background: #f0f0f0;
+  position: relative;
+  cursor: grab;
+}
+
+.canvasContainer:active {
+  cursor: grabbing;
+}
+
+.canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  outline: none;
+  touch-action: none;
+  user-select: none;
+}
+
+.roomList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  min-height: 120px;
+  overflow-y: auto;
+}
+
+.roomItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.roomItem:hover {
+  border-color: #ccc;
+  background: #f9f9f9;
+}
+
+.roomItem.selected {
+  border-color: #3FAEA7;
+  background: rgba(63, 174, 167, 0.08);
+}
+
+.roomName {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+}
+
+.roomArea {
+  font-size: 12px;
+  color: #888;
+}
+
+.emptyState {
+  padding: 20px;
+  text-align: center;
+  color: #999;
+  font-size: 13px;
+}
+
+/* Resize Handle */
+.resizeHandle {
+  position: relative;
+  height: 8px;
+  background: #f5f5f5;
+  border-top: 1px solid #e0e0e0;
+  cursor: ns-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.resizeHandle:hover {
+  background: #eee;
+}
+
+.resizeHandle.resizing {
+  background: #e0e0e0;
+}
+
+.resizeGrip {
+  width: 40px;
+  height: 4px;
+  background: #ccc;
+  border-radius: 2px;
+  transition: background 0.2s;
+}
+
+.resizeHandle:hover .resizeGrip {
+  background: #999;
+}
+
+.resizeHandle.resizing .resizeGrip {
+  background: #666;
+}
