@@ -7,6 +7,35 @@
   overflow: hidden;
 }
 
+/* SketchUp Menu Bar */
+.menuBar {
+  height: 24px;
+  background: linear-gradient(180deg, #f0f0f0 0%, #e0e0e0 100%);
+  border-bottom: 1px solid #b0b0b0;
+  display: flex;
+  align-items: stretch;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.menuItem {
+  padding: 0 10px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #1a1a1a;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: background 0.1s;
+}
+
+.menuItem:hover {
+  background: linear-gradient(180deg, #3399ff 0%, #0066cc 100%);
+  color: white;
+}
+
 /* Top Bar */
 .topBar {
   height: 56px;
@@ -17,6 +46,7 @@
   justify-content: space-between;
   padding: 0 16px;
   flex-shrink: 0;
+  display: none; /* Hidden in SketchUp mode */
 }
 
 .topBarLeft {
@@ -121,16 +151,16 @@
   margin: 0 4px;
 }
 
-/* Left Vertical Toolbar - SketchUp Large Tool Set Style */
+/* Left Vertical Toolbar - SketchUp Large Tool Set Style (2 columns) */
 .leftToolbar {
-  width: 40px;
+  width: 76px;
   background: linear-gradient(90deg, #f0f0f0 0%, #e8e8e8 100%);
   border-right: 1px solid #c8c8c8;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 4px 2px;
-  gap: 1px;
+  display: grid;
+  grid-template-columns: repeat(2, 34px);
+  gap: 2px;
+  padding: 4px;
+  align-content: start;
   flex-shrink: 0;
   overflow-y: auto;
   overflow-x: hidden;
@@ -146,8 +176,8 @@
 }
 
 .verticalTool {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border: 1px solid transparent;
   border-radius: 3px;
   background: transparent;
@@ -156,7 +186,6 @@
   align-items: center;
   justify-content: center;
   transition: all 0.1s ease;
-  flex-shrink: 0;
 }
 
 .verticalTool svg {
@@ -177,11 +206,11 @@
 }
 
 .verticalDivider {
-  width: 28px;
+  grid-column: span 2;
+  width: 100%;
   height: 1px;
   background: #c8c8c8;
-  margin: 3px 0;
-  flex-shrink: 0;
+  margin: 2px 0;
 }
 
 /* Old Toolbar - keeping for reference */
@@ -257,16 +286,19 @@
   flex: 1;
   display: flex;
   overflow: hidden;
+  position: relative;
 }
 
-/* Left Panel */
+/* Left Panel - Hidden in SketchUp mode */
 .leftPanel {
-  width: 240px;
-  background: var(--bg-primary, #ffffff);
-  border-right: 1px solid var(--border-color, #e5e7eb);
+  display: none;
+}
+
+/* Main Content Area with Left Toolbar */
+.mainContent {
+  flex: 1;
   display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
+  overflow: hidden;
 }
 
 .panelHeader {
@@ -348,6 +380,50 @@
   transform: rotate(180deg);
 }
 
+/* Tool Grid */
+.toolGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  padding: 8px 12px;
+}
+
+.gridTool {
+  aspect-ratio: 1;
+  border: 1px solid var(--border-light, #e5e7eb);
+  border-radius: 6px;
+  background: var(--bg-secondary, #f9fafb);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  transition: all 0.15s;
+}
+
+.gridTool svg {
+  width: 20px;
+  height: 20px;
+}
+
+.gridTool:hover {
+  background: linear-gradient(180deg, #ffffff 0%, #f3f4f6 100%);
+  border-color: #9ca3af;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.gridTool.active {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--theme-color, #3b82f6) 15%, white) 0%, color-mix(in srgb, var(--theme-color, #3b82f6) 25%, white) 100%);
+  border-color: var(--theme-color, #3b82f6);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.panelDivider {
+  height: 1px;
+  background: var(--border-color, #e5e7eb);
+  margin: 8px 12px;
+}
+
 /* Model Grid */
 .modelGrid {
   display: grid;
@@ -399,6 +475,87 @@
   color: var(--theme-color, #3b82f6);
 }
 
+/* Viewport Wrapper */
+.viewportWrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Two-Row Toolbar Container */
+.toolbarContainer {
+  background: linear-gradient(180deg, #f0f0f0 0%, #e0e0e0 100%);
+  border-bottom: 1px solid #a0a0a0;
+  flex-shrink: 0;
+}
+
+/* Horizontal Toolbar - SketchUp Style */
+.horizontalToolbar {
+  height: 32px;
+  min-height: 32px;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  padding: 2px 4px;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.horizontalToolbar:first-child {
+  border-bottom: 1px solid #c0c0c0;
+}
+
+.hTool {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s ease;
+  padding: 2px;
+}
+
+.hTool svg {
+  width: 22px;
+  height: 22px;
+}
+
+.hTool:hover {
+  background: linear-gradient(180deg, #ffffff 0%, #f0f0f0 100%);
+  border-color: #a0a0a0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.hTool.active {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--theme-color, #3b82f6) 20%, white) 0%, color-mix(in srgb, var(--theme-color, #3b82f6) 30%, white) 100%);
+  border-color: var(--theme-color, #3b82f6);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.dropdownIndicator {
+  position: absolute;
+  bottom: 1px;
+  right: 1px;
+  font-size: 5px;
+  color: #666;
+  line-height: 1;
+}
+
+.hToolDivider {
+  width: 1px;
+  height: 20px;
+  background: #c8c8c8;
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
 /* Viewport */
 .viewport {
   flex: 1;
@@ -420,14 +577,259 @@
   box-shadow: none;
 }
 
-/* Right Panel */
+/* Right Panel Toggle Button */
+.panelToggle {
+  position: absolute;
+  right: 260px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 60px;
+  background: linear-gradient(180deg, #e8e8e8 0%, #d0d0d0 100%);
+  border: 1px solid #a0a0a0;
+  border-right: none;
+  border-radius: 4px 0 0 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: right 0.3s ease;
+}
+
+.panelToggle:hover {
+  background: linear-gradient(180deg, #f0f0f0 0%, #e0e0e0 100%);
+}
+
+.panelToggle svg {
+  width: 14px;
+  height: 14px;
+  color: #666;
+}
+
+.panelToggle.collapsed {
+  right: 0;
+}
+
+/* Right Panel - SketchUp Default Tray Style */
 .rightPanel {
-  width: 280px;
-  background: var(--bg-primary, #ffffff);
-  border-left: 1px solid var(--border-color, #e5e7eb);
+  width: 260px;
+  background: #f0f0f0;
+  border-left: 1px solid #a0a0a0;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  overflow-y: auto;
+  transition: width 0.3s ease, opacity 0.3s ease;
+}
+
+.rightPanel.collapsed {
+  width: 0;
+  min-width: 0;
+  border-left: none;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.trayHeader {
+  height: 26px;
+  background: linear-gradient(180deg, #e8e8e8 0%, #d0d0d0 100%);
+  border-bottom: 1px solid #a0a0a0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+}
+
+.trayTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+}
+
+.trayControls {
+  display: flex;
+  gap: 4px;
+}
+
+.trayBtn {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #a0a0a0;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #f8f8f8 0%, #e8e8e8 100%);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #666;
+}
+
+.trayBtn:hover {
+  background: linear-gradient(180deg, #fff 0%, #f0f0f0 100%);
+}
+
+.traySection {
+  border-bottom: 1px solid #c0c0c0;
+}
+
+.traySectionHeader {
+  height: 24px;
+  background: linear-gradient(180deg, #e0e0e0 0%, #d4d4d4 100%);
+  border-bottom: 1px solid #b0b0b0;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.traySectionHeader:hover {
+  background: linear-gradient(180deg, #e8e8e8 0%, #d8d8d8 100%);
+}
+
+.traySectionTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: #333;
+  flex: 1;
+}
+
+.traySectionIcon {
+  width: 12px;
+  height: 12px;
+  color: #666;
+}
+
+.traySectionContent {
+  background: #f8f8f8;
+  padding: 8px;
+}
+
+/* Entity Info Section */
+.entityInfo {
+  font-size: 11px;
+  color: #333;
+}
+
+.entityRow {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+
+.entityLabel {
+  color: #666;
+}
+
+.entityValue {
+  font-weight: 500;
+}
+
+/* Materials Section - Color Swatches */
+.materialsGrid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 2px;
+}
+
+.colorSwatch {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid #a0a0a0;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.colorSwatch:hover {
+  transform: scale(1.1);
+  z-index: 1;
+  border-color: #333;
+}
+
+.colorSwatch.active {
+  border: 2px solid #0066cc;
+}
+
+/* Components Section */
+.componentsList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.componentItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.componentItem:hover {
+  background: #e8f0ff;
+  border-color: #80b0ff;
+}
+
+.componentIcon {
+  width: 32px;
+  height: 32px;
+  background: #e0e0e0;
+  border: 1px solid #c0c0c0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.componentName {
+  font-size: 11px;
+  color: #333;
+}
+
+/* Bottom Status Bar */
+.statusBar {
+  height: 24px;
+  background: linear-gradient(180deg, #e8e8e8 0%, #d0d0d0 100%);
+  border-top: 1px solid #a0a0a0;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.statusText {
+  font-size: 11px;
+  color: #333;
+  flex: 1;
+}
+
+.measurementsGroup {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.measurementsLabel {
+  font-size: 11px;
+  color: #666;
+}
+
+.measurementsInput {
+  width: 120px;
+  height: 18px;
+  border: 1px solid #a0a0a0;
+  border-radius: 2px;
+  padding: 0 6px;
+  font-size: 11px;
+  background: white;
+}
+
+.measurementsInput:focus {
+  outline: none;
+  border-color: #0066cc;
 }
 
 /* Properties */
@@ -540,3 +942,125 @@
 .modelGrid .modelCard:nth-child(7) { animation-delay: 120ms; }
 .modelGrid .modelCard:nth-child(8) { animation-delay: 140ms; }
 .modelGrid .modelCard:nth-child(9) { animation-delay: 160ms; }
+
+/* Tool-specific cursor styles */
+.canvas[data-tool="select"] {
+  cursor: default;
+}
+
+.canvas[data-tool="line"],
+.canvas[data-tool="rectangle"],
+.canvas[data-tool="circle"],
+.canvas[data-tool="polygon"],
+.canvas[data-tool="arc"] {
+  cursor: crosshair;
+}
+
+.canvas[data-tool="pushpull"] {
+  cursor: ns-resize;
+}
+
+.canvas[data-tool="move"] {
+  cursor: move;
+}
+
+.canvas[data-tool="rotate"] {
+  cursor: grab;
+}
+
+.canvas[data-tool="scale"] {
+  cursor: nwse-resize;
+}
+
+.canvas[data-tool="eraser"] {
+  cursor: pointer;
+}
+
+.canvas[data-tool="pan"] {
+  cursor: grab;
+}
+
+.canvas[data-tool="pan"]:active {
+  cursor: grabbing;
+}
+
+.canvas[data-tool="zoom"] {
+  cursor: zoom-in;
+}
+
+.canvas[data-tool="orbit"] {
+  cursor: grab;
+}
+
+.canvas[data-tool="orbit"]:active {
+  cursor: grabbing;
+}
+
+.canvas[data-tool="tape"] {
+  cursor: crosshair;
+}
+
+.canvas[data-tool="paint"] {
+  cursor: crosshair;
+}
+
+.canvas[data-tool="offset"] {
+  cursor: crosshair;
+}
+
+.canvas[data-tool="text"] {
+  cursor: text;
+}
+
+/* Tool indicator in the viewport */
+.toolIndicator {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.75);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* Shortcuts panel */
+.shortcutsPanel {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 10px;
+  color: #666;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+}
+
+.shortcutsPanel h4 {
+  margin: 0 0 6px 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #333;
+}
+
+.shortcutRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 2px 0;
+}
+
+.shortcutKey {
+  background: #e8e8e8;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-family: monospace;
+  font-weight: 600;
+}
