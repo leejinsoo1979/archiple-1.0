@@ -339,34 +339,25 @@ const EditorPage = () => {
   // Advanced tool panel state
   const [advancedToolPanelOpen, setAdvancedToolPanelOpen] = useState(false);
 
-  // Custom modeling tray state
-  const [customModelingTrayOpen, setCustomModelingTrayOpen] = useState(false);
-  const [traySections, setTraySections] = useState({
-    entityInfo: false,
-    materials: false,
-    components: false,
-    styles: false,
-    tags: false,
-    shadows: false,
-    scenes: false,
-    instructor: false
-  });
-  const [shadowSettings, setShadowSettings] = useState({
-    timezone: 'UTC-07:00',
-    time: 13.5,
-    date: 11.27,
-    light: 80,
-    dark: 45,
-    useSunForShading: false,
-    displayOnFaces: true,
-    displayOnGround: true
-  });
   const [selectedLightId, setSelectedLightId] = useState<string | null>(null);
   const [lightPlacementMode, setLightPlacementMode] = useState(false);
   const [selectedLightType, setSelectedLightType] = useState<LightType>('point');
 
   // Theme settings state - load from localStorage on init
   const [themeSettingsOpen, setThemeSettingsOpen] = useState(false);
+
+  // Custom Modeling Tray state (should not be here - this is for EditorPage, Custom Modeling has its own page)
+  const [customModelingTrayOpen, setCustomModelingTrayOpen] = useState(false);
+  const [traySections, setTraySections] = useState({
+    entityInfo: true,
+    materials: true,
+    components: true,
+    styles: false,
+    tags: false,
+    shadows: false,
+    scenes: false,
+    instructor: false,
+  });
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('themeMode') as 'light' | 'dark' | null;
     return saved || 'light';
@@ -2194,7 +2185,7 @@ ARTISTIC APPROACH:
         </div>
         <div
           className={styles.advancedToolCard}
-          onClick={() => setCustomModelingTrayOpen(true)}
+          onClick={() => navigate('/custom-modeling')}
         >
           <div className={styles.advancedToolInfo}>
             <h4>Custom<br/>modeling</h4>
@@ -3061,132 +3052,6 @@ ARTISTIC APPROACH:
   )
 }
 
-{/* Custom Modeling Tray Panel - SketchUp Style */}
-{
-  customModelingTrayOpen && (
-    <div className={styles.sketchupTray}>
-      <div className={styles.sketchupTrayHeader}>
-        <span>Default Tray</span>
-        <div className={styles.sketchupTrayHeaderBtns}>
-          <button className={styles.sketchupTrayHeaderBtn}>—</button>
-          <button onClick={() => setCustomModelingTrayOpen(false)} className={styles.sketchupTrayHeaderBtn}>×</button>
-        </div>
-      </div>
-
-      {/* Entity Info */}
-      <div className={styles.sketchupSection}>
-        <div className={styles.sketchupSectionHeader} onClick={() => setTraySections(prev => ({ ...prev, entityInfo: !prev.entityInfo }))}>
-          <span className={styles.sketchupArrow}>{traySections.entityInfo ? '▼' : '▶'}</span>
-          <span className={styles.sketchupSectionTitle}>Entity Info</span>
-          <button className={styles.sketchupSectionClose} onClick={(e) => { e.stopPropagation(); }}>×</button>
-        </div>
-        {traySections.entityInfo && (
-          <div className={styles.sketchupSectionContent}>
-            <p>No entity selected</p>
-          </div>
-        )}
-      </div>
-
-      {/* Materials */}
-      <div className={styles.sketchupSection}>
-        <div className={styles.sketchupSectionHeader} onClick={() => setTraySections(prev => ({ ...prev, materials: !prev.materials }))}>
-          <span className={styles.sketchupArrow}>{traySections.materials ? '▼' : '▶'}</span>
-          <span className={styles.sketchupSectionTitle}>Materials</span>
-          <button className={styles.sketchupSectionClose} onClick={(e) => { e.stopPropagation(); }}>×</button>
-        </div>
-        {traySections.materials && (
-          <div className={styles.sketchupSectionContent}>
-            <p>No materials</p>
-          </div>
-        )}
-      </div>
-
-      {/* Components */}
-      <div className={styles.sketchupSection}>
-        <div className={styles.sketchupSectionHeader} onClick={() => setTraySections(prev => ({ ...prev, components: !prev.components }))}>
-          <span className={styles.sketchupArrow}>{traySections.components ? '▼' : '▶'}</span>
-          <span className={styles.sketchupSectionTitle}>Components</span>
-          <button className={styles.sketchupSectionClose} onClick={(e) => { e.stopPropagation(); }}>×</button>
-        </div>
-        {traySections.components && (
-          <div className={styles.sketchupSectionContent}>
-            <p>No components</p>
-          </div>
-        )}
-      </div>
-
-      {/* Styles */}
-      <div className={styles.sketchupSection}>
-        <div className={styles.sketchupSectionHeader} onClick={() => setTraySections(prev => ({ ...prev, styles: !prev.styles }))}>
-          <span className={styles.sketchupArrow}>{traySections.styles ? '▼' : '▶'}</span>
-          <span className={styles.sketchupSectionTitle}>Styles</span>
-          <button className={styles.sketchupSectionClose} onClick={(e) => { e.stopPropagation(); }}>×</button>
-        </div>
-        {traySections.styles && (
-          <div className={styles.sketchupSectionContent}>
-            <p>Default style</p>
-          </div>
-        )}
-      </div>
-
-      {/* Tags */}
-      <div className={styles.sketchupSection}>
-        <div className={styles.sketchupSectionHeader} onClick={() => setTraySections(prev => ({ ...prev, tags: !prev.tags }))}>
-          <span className={styles.sketchupArrow}>{traySections.tags ? '▼' : '▶'}</span>
-          <span className={styles.sketchupSectionTitle}>Tags</span>
-          <button className={styles.sketchupSectionClose} onClick={(e) => { e.stopPropagation(); }}>×</button>
-        </div>
-        {traySections.tags && (
-          <div className={styles.sketchupSectionContent}>
-            <p>No tags</p>
-          </div>
-        )}
-      </div>
-
-      {/* Shadows */}
-      <div className={styles.sketchupSection}>
-        <div className={styles.sketchupSectionHeader} onClick={() => setTraySections(prev => ({ ...prev, shadows: !prev.shadows }))}>
-          <span className={styles.sketchupArrow}>{traySections.shadows ? '▼' : '▶'}</span>
-          <span className={styles.sketchupSectionTitle}>Shadows</span>
-          <button className={styles.sketchupSectionClose} onClick={(e) => { e.stopPropagation(); }}>×</button>
-        </div>
-        {traySections.shadows && (
-          <div className={styles.sketchupSectionContent}>
-            <p>Shadow settings</p>
-          </div>
-        )}
-      </div>
-
-      {/* Scenes */}
-      <div className={styles.sketchupSection}>
-        <div className={styles.sketchupSectionHeader} onClick={() => setTraySections(prev => ({ ...prev, scenes: !prev.scenes }))}>
-          <span className={styles.sketchupArrow}>{traySections.scenes ? '▼' : '▶'}</span>
-          <span className={styles.sketchupSectionTitle}>Scenes</span>
-          <button className={styles.sketchupSectionClose} onClick={(e) => { e.stopPropagation(); }}>×</button>
-        </div>
-        {traySections.scenes && (
-          <div className={styles.sketchupSectionContent}>
-            <p>No scenes</p>
-          </div>
-        )}
-      </div>
-
-      {/* Instructor */}
-      <div className={styles.sketchupSection}>
-        <div className={styles.sketchupSectionHeader} onClick={() => setTraySections(prev => ({ ...prev, instructor: !prev.instructor }))}>
-          <span className={styles.sketchupArrow}>{traySections.instructor ? '▼' : '▶'}</span>
-          <span className={styles.sketchupSectionTitle}>Instructor</span>
-          <button className={styles.sketchupSectionClose} onClick={(e) => { e.stopPropagation(); }}>×</button>
-        </div>
-        {traySections.instructor && (
-          <div className={styles.sketchupSectionContent}>
-            <p>Select a tool to see instructions</p>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
 
 {/* Render Style Panel */ }
 {
