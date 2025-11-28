@@ -12,15 +12,15 @@ import { v4 as uuidv4 } from 'uuid';
  * RectangleTool - Draw rectangular rooms with 4 walls
  *
  * Features:
- * - Click to set first corner
- * - Drag to preview rectangle
- * - Release to create 4 walls
+ * - Click once to set first corner
+ * - Move mouse to preview rectangle (no drag needed)
+ * - Click again to create 4 walls
  */
 export class RectangleTool extends BaseTool {
   private sceneManager: SceneManager;
   private snapService: SnapService;
 
-  // Drawing state
+  // Drawing state - click-move-click pattern
   private isDrawing = false;
   private startPoint: Point | null = null;
   private currentPreviewEnd: Vector2 | null = null;
@@ -66,11 +66,20 @@ export class RectangleTool extends BaseTool {
     const snapResult = this.snapService.snap(position);
     const snappedPos = snapResult.position;
 
-    // Start rectangle drawing immediately on mouse down
-    this.startDrawing(snappedPos);
+    if (!this.isDrawing) {
+      // First click: start drawing
+      this.startDrawing(snappedPos);
+    } else {
+      // Second click: create rectangle
+      if (this.startPoint && this.currentPreviewEnd) {
+        this.createRectangle(this.startPoint, this.currentPreviewEnd);
+        this.resetState();
+      }
+    }
   }
 
   handleMouseMove(position: Vector2, _event: MouseEvent): void {
+    // Always update preview when in drawing mode (click-move-click pattern)
     if (!this.isDrawing || !this.startPoint) return;
 
     // Update snap service with all existing points for axis alignment
@@ -116,16 +125,9 @@ export class RectangleTool extends BaseTool {
     this.emitPreview();
   }
 
-  handleMouseUp(position: Vector2, event: MouseEvent): void {
-    if (!this.isDrawing || !this.startPoint || event.button !== 0) return;
-
-    // Snap position
-    const snapResult = this.snapService.snap(position);
-    const snappedPos = snapResult.position;
-
-    // Create rectangle
-    this.createRectangle(this.startPoint, snappedPos);
-    this.resetState();
+  handleMouseUp(_position: Vector2, _event: MouseEvent): void {
+    // Not used in click-move-click pattern
+    // Rectangle is created on second click in handleMouseDown
   }
 
   cancel(): void {
