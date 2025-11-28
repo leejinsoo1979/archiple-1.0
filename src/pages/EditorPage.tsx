@@ -335,6 +335,9 @@ const EditorPage = () => {
   // Lighting system state
   const [lightPanelOpen, setLightPanelOpen] = useState(false);
   const [lights, setLights] = useState<Light[]>([]);
+
+  // Advanced tool panel state
+  const [advancedToolPanelOpen, setAdvancedToolPanelOpen] = useState(false);
   const [selectedLightId, setSelectedLightId] = useState<string | null>(null);
   const [lightPlacementMode, setLightPlacementMode] = useState(false);
   const [selectedLightType, setSelectedLightType] = useState<LightType>('point');
@@ -1796,7 +1799,11 @@ ARTISTIC APPROACH:
         </button>
 
         {/* Kitchen & Cabinet */}
-        <button className={styles.sidebarBtn} title="Kitchen & Cabinet">
+        <button
+          className={`${styles.sidebarBtn} ${advancedToolPanelOpen ? styles.active : ''}`}
+          onClick={() => setAdvancedToolPanelOpen(!advancedToolPanelOpen)}
+          title="Advanced Tool"
+        >
           <div className={styles.icon}>
             <BiCabinet size={24} />
           </div>
@@ -2113,6 +2120,54 @@ ARTISTIC APPROACH:
         </button>
       </div>
     )
+  )
+}
+
+{/* Advanced Tool Panel */}
+{
+  !playMode && advancedToolPanelOpen && (
+    <div className={styles.advancedToolPanel}>
+      <div className={styles.panelHeader}>
+        <h3>Advanced tool</h3>
+        <div className={styles.panelHeaderActions}>
+          <button onClick={() => setAdvancedToolPanelOpen(false)} className={styles.toggleBtn}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div className={styles.advancedToolGrid}>
+        <div className={styles.advancedToolCard}>
+          <div className={styles.advancedToolInfo}>
+            <h4>Kitchen &<br/>Bath</h4>
+            <span className={styles.shortcutBadge}>⌥4</span>
+          </div>
+          <img src="/images/custom/kitchen_bath.png" alt="Kitchen & Bath" className={styles.advancedToolImage} />
+        </div>
+        <div className={styles.advancedToolCard}>
+          <div className={styles.advancedToolInfo}>
+            <h4>Closet</h4>
+            <span className={styles.shortcutBadge}>⌥5</span>
+          </div>
+          <img src="/images/custom/closet.png" alt="Closet" className={styles.advancedToolImage} />
+        </div>
+        <div className={styles.advancedToolCard}>
+          <div className={styles.advancedToolInfo}>
+            <h4>Doors &<br/>Windows</h4>
+            <span className={styles.shortcutBadge}>⌥6</span>
+          </div>
+          <img src="/images/custom/doors_windows.png" alt="Doors & Windows" className={styles.advancedToolImage} />
+        </div>
+        <div className={styles.advancedToolCard}>
+          <div className={styles.advancedToolInfo}>
+            <h4>Custom<br/>modeling</h4>
+            <span className={styles.newBadge}>New</span>
+          </div>
+          <img src="/images/custom/custom modeling.png" alt="Custom modeling" className={styles.advancedToolImage} />
+        </div>
+      </div>
+    </div>
   )
 }
 
