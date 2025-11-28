@@ -67,6 +67,7 @@ const EditorPage = () => {
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [activeTool, setActiveTool] = useState<ToolType>(ToolType.SELECT);
   const [viewMode, setViewMode] = useState<'2D' | '3D'>('2D');
+  const [view2DType, setView2DType] = useState<'floor' | 'ceiling' | 'elevation'>('floor');
   const [floorplanData, setFloorplanData] = useState<any>(null);
   const [floorplanCanvas, setFloorplanCanvas] = useState<HTMLCanvasElement | null>(null);
   const [sunPanelOpen, setSunPanelOpen] = useState(false);
@@ -2100,6 +2101,8 @@ ARTISTIC APPROACH:
       setViewMode(mode);
       if (mode === '2D') setPlayMode(false);
     }}
+    view2DType={view2DType}
+    onView2DTypeChange={setView2DType}
     zoom={viewMode === '2D' ? zoom2D : (120 - cameraFov) / 90}
     onZoomChange={(newZoom) => {
       if (viewMode === '2D') {
@@ -2268,6 +2271,7 @@ ARTISTIC APPROACH:
       onRoomSelect={setSelectedRoom}
       selectedRoomId={selectedRoom?.id ?? null}
       onCanvasReady={setFloorplanCanvas}
+      view2DType={view2DType}
     />
 
     {/* 2D Compass */}

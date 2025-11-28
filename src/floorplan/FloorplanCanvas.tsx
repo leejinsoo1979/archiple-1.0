@@ -21,6 +21,7 @@ import { SelectionLayer } from './renderer/layers/SelectionLayer';
 import { DoorLayer } from './renderer/layers/DoorLayer';
 import { WindowLayer } from './renderer/layers/WindowLayer';
 import { BackgroundImageLayer } from './renderer/layers/BackgroundImageLayer';
+import { CeilingLayer } from './renderer/layers/CeilingLayer';
 
 // Tools
 import { ToolManager } from './tools/ToolManager';
@@ -64,6 +65,7 @@ interface FloorplanCanvasProps {
   onRoomSelect?: (roomInfo: { id: string; name: string; area: number } | null) => void;
   selectedRoomId?: string | null;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
+  view2DType?: 'floor' | 'ceiling' | 'elevation';
 }
 
 const FloorplanCanvas = ({
@@ -89,6 +91,7 @@ const FloorplanCanvas = ({
   onRoomSelect,
   selectedRoomId = null,
   onCanvasReady,
+  view2DType = 'floor',
 }: FloorplanCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -146,6 +149,7 @@ const FloorplanCanvas = ({
   const backgroundLayerRef = useRef<BackgroundImageLayer | null>(null);
   const gridLayerRef = useRef<GridLayer | null>(null);
   const roomLayerRef = useRef<RoomLayer | null>(null);
+  const ceilingLayerRef = useRef<CeilingLayer | null>(null);
   const wallLayerRef = useRef<WallLayer | null>(null);
   const pointLayerRef = useRef<PointLayer | null>(null);
   const guideLayerRef = useRef<GuideLayer | null>(null);
@@ -215,6 +219,12 @@ const FloorplanCanvas = ({
     });
     roomLayerRef.current = roomLayer;
 
+    const ceilingLayer = new CeilingLayer({
+      wallThickness: config.wallThickness,
+    });
+    ceilingLayer.visible = false; // Initially hidden (floor view is default)
+    ceilingLayerRef.current = ceilingLayer;
+
     const wallLayer = new WallLayer({
       wallThickness: config.wallThickness,
     });
@@ -236,10 +246,11 @@ const FloorplanCanvas = ({
     const doorLayer = new DoorLayer();
     const windowLayer = new WindowLayer();
 
-    // Add layers to renderer (z-index order: Background→Grid→Room→Wall→Door→Window→Point→Guide→Selection)
+    // Add layers to renderer (z-index order: Background→Grid→Room/Ceiling→Wall→Door→Window→Point→Guide→Selection)
     renderer.addLayer(backgroundLayer);
     renderer.addLayer(gridLayer);
     renderer.addLayer(roomLayer);
+    renderer.addLayer(ceilingLayer);
     renderer.addLayer(wallLayer);
     renderer.addLayer(doorLayer);
     renderer.addLayer(windowLayer);
@@ -315,6 +326,12 @@ const FloorplanCanvas = ({
       roomLayer.setRooms(rooms);
       roomLayer.setPoints(points);
 
+      // Update ceiling layer with same room data
+      if (ceilingLayerRef.current) {
+        ceilingLayerRef.current.setRooms(rooms);
+        ceilingLayerRef.current.setPoints(points);
+      }
+
       doorLayer.setDoors(doors);
       doorLayer.setWalls(walls);
       doorLayer.setPoints(points);
@@ -369,6 +386,12 @@ const FloorplanCanvas = ({
       pointLayer.setPoints(points);
       roomLayer.setRooms(rooms);
       roomLayer.setPoints(points);
+
+      // Update ceiling layer with same room data
+      if (ceilingLayerRef.current) {
+        ceilingLayerRef.current.setRooms(rooms);
+        ceilingLayerRef.current.setPoints(points);
+      }
 
       // Mark renderer as dirty to trigger re-render
       renderer.markDirty();
@@ -940,11 +963,15 @@ const FloorplanCanvas = ({
   useEffect(() => {
     const wallLayer = wallLayerRef.current;
     const roomLayer = roomLayerRef.current;
+    const ceilingLayer = ceilingLayerRef.current;
     if (wallLayer) {
       wallLayer.setRenderStyle(renderStyle);
     }
     if (roomLayer) {
       roomLayer.setRenderStyle(renderStyle);
+    }
+    if (ceilingLayer) {
+      ceilingLayer.setRenderStyle(renderStyle);
     }
   }, [renderStyle]);
 
@@ -964,13 +991,17 @@ const FloorplanCanvas = ({
   // Update selected room when selectedRoomId changes from parent
   useEffect(() => {
     const roomLayer = roomLayerRef.current;
+    const ceilingLayer = ceilingLayerRef.current;
     if (roomLayer) {
       roomLayer.setSelectedRooms(selectedRoomId ? [selectedRoomId] : []);
-      // Trigger re-render
-      const renderer = rendererRef.current;
-      if (renderer) {
-        renderer.render();
-      }
+    }
+    if (ceilingLayer) {
+      ceilingLayer.setSelectedRooms(selectedRoomId ? [selectedRoomId] : []);
+    }
+    // Trigger re-render
+    const renderer = rendererRef.current;
+    if (renderer) {
+      renderer.render();
     }
   }, [selectedRoomId]);
 
@@ -1000,6 +1031,26 @@ const FloorplanCanvas = ({
       }
     }
   }, [backgroundImage, imageScale, imageOpacity]);
+
+  // Update layer visibility based on view2DType (floor vs ceiling view)
+  useEffect(() => {
+    const roomLayer = roomLayerRef.current;
+    const ceilingLayer = ceilingLayerRef.current;
+    const renderer = rendererRef.current;
+
+    if (roomLayer && ceilingLayer) {
+      // Floor view: show roomLayer (floor), hide ceilingLayer
+      // Ceiling view: hide roomLayer (floor), show ceilingLayer
+      roomLayer.visible = view2DType === 'floor';
+      ceilingLayer.visible = view2DType === 'ceiling';
+
+      // Force re-render to apply visibility change
+      if (renderer) {
+        renderer.markDirty();
+        renderer.render();
+      }
+    }
+  }, [view2DType]);
 
   // Handle mouse wheel zoom
   useEffect(() => {
