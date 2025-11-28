@@ -839,8 +839,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       arcCamera.wheelDeltaPercentage = 0.05; // 5% zoom per scroll tick
       arcCameraRef.current = arcCamera;
 
-      // Custom 3D rotation cursor - two crossing ellipses with arrows
-      const rotateCursorActive = 'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48ZWxsaXBzZSBjeD0iMTIiIGN5PSIxMiIgcng9IjEwIiByeT0iNCIgdHJhbnNmb3JtPSJyb3RhdGUoOTAgMTIgMTIpIi8+PGVsbGlwc2UgY3g9IjEyIiBjeT0iMTIiIHJ4PSIxMCIgcnk9IjQiLz48cGF0aCBkPSJNNSA4bC0yIDIgMiAyIi8+PHBhdGggZD0iTTggMTlsMiAyIDItMiIvPjwvc3ZnPg==") 12 12, move';
+      // Custom 3D rotation cursor - two crossing ellipses with arrows (thin lines)
+      const rotateCursorActive = 'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMS4yIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxlbGxpcHNlIGN4PSIxMiIgY3k9IjEyIiByeD0iMTAiIHJ5PSI0IiB0cmFuc2Zvcm09InJvdGF0ZSg5MCAxMiAxMikiLz48ZWxsaXBzZSBjeD0iMTIiIGN5PSIxMiIgcng9IjEwIiByeT0iNCIvPjxwYXRoIGQ9Ik01IDhsLTIgMiAyIDIiLz48cGF0aCBkPSJNOCAxOWwyIDIgMi0yIi8+PC9zdmc+") 12 12, move';
 
       // Track dragging state for cursor change
       // Left click: rotate (rotation icon), Right click: pan (grab cursor)
@@ -2405,8 +2405,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           roomName: room.name || `Room ${roomIndex + 1}`
         };
       });
-      // Create ceilings for each room - ONLY in play mode
-      if (playMode) {
+      // Create ceilings for each room - always create, visibility controlled by camera angle
+      {
         // Calculate maximum wall height for ceiling position
         const maxWallHeight = walls.reduce((max, wall) => Math.max(max, wall.height || 2400), 2400);
         const ceilingY = maxWallHeight * MM_TO_METERS;
@@ -2480,6 +2480,10 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           ceiling.metadata = { type: 'ceiling', roomIndex };
           ceiling.visibility = 0; // Initially hidden, controlled by AutoWallHider
         });
+        // Invalidate AutoWallHider cache so it picks up new ceilings
+        if (autoWallHiderRef.current) {
+          autoWallHiderRef.current.invalidateCache();
+        }
       }
     }
 
