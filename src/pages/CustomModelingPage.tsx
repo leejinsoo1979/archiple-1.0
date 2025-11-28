@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LuRotate3D, LuPencilLine, LuArrowUpFromLine } from 'react-icons/lu';
+import { LuRotate3D, LuPencilLine, LuArrowUpFromLine, LuSquareSquare, LuScaling } from 'react-icons/lu';
 import { BiMove } from 'react-icons/bi';
 import { FaTape } from 'react-icons/fa';
 import { FaRotate } from 'react-icons/fa6';
@@ -123,6 +123,12 @@ const CustomModelingPage: React.FC = () => {
       mat.alpha = 0.4;
       rect.material = mat;
       rect.isPickable = false;
+
+      // Enable edge rendering for preview outline
+      rect.enableEdgesRendering();
+      rect.edgesWidth = 2.0;
+      rect.edgesColor = new Color4(0.4, 0.6, 1, 1);
+
       state.previewMesh = rect;
     }
   }, []);
@@ -169,6 +175,11 @@ const CustomModelingPage: React.FC = () => {
     faceMat.specularColor = new Color3(0.2, 0.2, 0.2);
     faceMat.backFaceCulling = false;
     face.material = faceMat;
+
+    // Enable edge rendering for thin outline
+    face.enableEdgesRendering();
+    face.edgesWidth = 2.0;
+    face.edgesColor = new Color4(0.2, 0.2, 0.2, 1);
 
     face.metadata = {
       type: 'face',
@@ -837,8 +848,8 @@ const CustomModelingPage: React.FC = () => {
     { id: 'move', icon: <BiMove size={18} />, title: 'Move (M)' },
     { id: 'pushpull', icon: <LuArrowUpFromLine size={18} />, title: 'Push/Pull (P)' },
     { id: 'rotate', icon: <FaRotate size={18} />, title: 'Rotate (Q)' },
-    { id: 'scale', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5"/><rect x="4" y="4" width="3" height="3" fill="#22c55e"/><rect x="17" y="4" width="3" height="3" fill="#22c55e"/><rect x="4" y="17" width="3" height="3" fill="#22c55e"/><rect x="17" y="17" width="3" height="3" fill="#22c55e"/></svg>, title: 'Scale (S)' },
-    { id: 'offset', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M6 18C6 10 10 6 18 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/><path d="M14 4l5 2-2 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>, title: 'Offset (F)' },
+    { id: 'scale', icon: <LuScaling size={18} />, title: 'Scale (S)' },
+    { id: 'offset', icon: <LuSquareSquare size={18} />, title: 'Offset (F)' },
     { type: 'divider' },
     { id: 'tape', icon: <FaTape size={18} />, title: 'Tape Measure (T)' },
     { id: 'dimension', icon: <svg viewBox="0 0 24 24" fill="none"><line x1="4" y1="18" x2="20" y2="18" stroke="currentColor" strokeWidth="1.5"/><line x1="4" y1="15" x2="4" y2="21" stroke="currentColor" strokeWidth="1.5"/><line x1="20" y1="15" x2="20" y2="21" stroke="currentColor" strokeWidth="1.5"/><text x="12" y="14" fontSize="8" textAnchor="middle" fill="currentColor">2.5m</text></svg>, title: 'Dimension' },
