@@ -1023,18 +1023,17 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       sunLight.autoCalcShadowZBounds = true;
       sunLightRef.current = sunLight;
 
-      // Shadow generator - balanced quality/performance
+      // Shadow generator - only for furniture/objects, not walls
+      // For interior scenes, SSAO provides better ambient shadows
       const shadowGenerator = new ShadowGenerator(2048, sunLight);
       shadowGenerator.useBlurExponentialShadowMap = true;
-      shadowGenerator.blurKernel = 64;
-      shadowGenerator.blurScale = 2;
+      shadowGenerator.blurKernel = 32;
+      shadowGenerator.blurScale = 1;
       shadowGenerator.useKernelBlur = true;
-
-      shadowGenerator.bias = 0.0001;
+      shadowGenerator.bias = 0.001;
       shadowGenerator.normalBias = 0.02;
-
-      // darkness: 0 = 완전한 검정 그림자, 1 = 그림자 없음
-      shadowGenerator.setDarkness(0.3);
+      // Very subtle shadows - SSAO handles most shadow work
+      shadowGenerator.setDarkness(0.6);
 
       // Create infinite grid floor
       const createInfiniteGrid = () => {
@@ -2068,7 +2067,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         wallMesh.receiveShadows = true;
 
         if (shadowGenerator) {
-          shadowGenerator.addShadowCaster(wallMesh);
+          // shadowGenerator.addShadowCaster(wallMesh); // Walls dont cast shadows - SSAO handles this
         }
 
         // Store for snap detection
@@ -2223,7 +2222,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         wallMeshesRef.current.push(wallMesh);
 
         if (shadowGenerator) {
-          shadowGenerator.addShadowCaster(wallMesh);
+          // shadowGenerator.addShadowCaster(wallMesh); // Walls dont cast shadows - SSAO handles this
         }
 
         // Enable edge rendering for clean wall edges
@@ -2643,9 +2642,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
                 hoverOutlineRef.current.dispose();
               }
 
-              // Build outline vertices using bounding box (fast)
-              const bb = picked.getBoundingInfo().boundingBox;
-              const min = bb.minimumWorld, max = bb.maximumWorld;
+              // Build outline vertices
               const offset = 0.01;
               let outlineVerts: Vector3[];
 
@@ -2654,33 +2651,66 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
                   const polyPoints = picked.metadata.polygonPoints as { x: number; y: number; z: number }[];
                   outlineVerts = polyPoints.map(p => new Vector3(p.x, v0.y + offset, p.z));
                 } else {
+                  const bb = picked.getBoundingInfo().boundingBox;
+                  const bmin = bb.minimumWorld, bmax = bb.maximumWorld;
                   outlineVerts = [
-                    new Vector3(min.x, v0.y + offset, min.z),
-                    new Vector3(max.x, v0.y + offset, min.z),
-                    new Vector3(max.x, v0.y + offset, max.z),
-                    new Vector3(min.x, v0.y + offset, max.z)
+                    new Vector3(bmin.x, v0.y + offset, bmin.z),
+                    new Vector3(bmax.x, v0.y + offset, bmin.z),
+                    new Vector3(bmax.x, v0.y + offset, bmax.z),
+                    new Vector3(bmin.x, v0.y + offset, bmax.z)
                   ];
                 }
               } else {
-                // Wall: use picked face position with bounding box height
+                // Wall: find inner face bounds (optimized scan)
                 const isXWall = Math.abs(faceNormal.x) > Math.abs(faceNormal.z);
                 const planePos = isXWall ? (v0.x + v1.x + v2.x) / 3 : (v0.z + v1.z + v2.z) / 3;
+                const localPlanePos = isXWall ? positions[idx0 * 3] : positions[idx0 * 3 + 2];
+
+                let minY = Math.min(v0.y, v1.y, v2.y);
+                let maxY = Math.max(v0.y, v1.y, v2.y);
+                let minH = isXWall ? Math.min(v0.z, v1.z, v2.z) : Math.min(v0.x, v1.x, v2.x);
+                let maxH = isXWall ? Math.max(v0.z, v1.z, v2.z) : Math.max(v0.x, v1.x, v2.x);
+
+                // Fast scan coplanar triangles (every 3rd for speed)
+                const step = Math.max(3, Math.floor(indices.length / 300)) * 3;
+                for (let i = 0; i < indices.length; i += step) {
+                  const ti0 = indices[i], ti1 = indices[i + 1], ti2 = indices[i + 2];
+                  const tp = isXWall
+                    ? (positions[ti0 * 3] + positions[ti1 * 3] + positions[ti2 * 3]) / 3
+                    : (positions[ti0 * 3 + 2] + positions[ti1 * 3 + 2] + positions[ti2 * 3 + 2]) / 3;
+
+                  if (Math.abs(tp - localPlanePos) > 0.03) continue;
+
+                  const ty0 = positions[ti0 * 3 + 1], ty1 = positions[ti1 * 3 + 1], ty2 = positions[ti2 * 3 + 1];
+                  minY = Math.min(minY, ty0, ty1, ty2);
+                  maxY = Math.max(maxY, ty0, ty1, ty2);
+
+                  if (isXWall) {
+                    const tz0 = positions[ti0 * 3 + 2], tz1 = positions[ti1 * 3 + 2], tz2 = positions[ti2 * 3 + 2];
+                    minH = Math.min(minH, tz0, tz1, tz2);
+                    maxH = Math.max(maxH, tz0, tz1, tz2);
+                  } else {
+                    const tx0 = positions[ti0 * 3], tx1 = positions[ti1 * 3], tx2 = positions[ti2 * 3];
+                    minH = Math.min(minH, tx0, tx1, tx2);
+                    maxH = Math.max(maxH, tx0, tx1, tx2);
+                  }
+                }
 
                 if (isXWall) {
                   const px = planePos + (faceNormal.x > 0 ? offset : -offset);
                   outlineVerts = [
-                    new Vector3(px, min.y, min.z),
-                    new Vector3(px, min.y, max.z),
-                    new Vector3(px, max.y, max.z),
-                    new Vector3(px, max.y, min.z)
+                    new Vector3(px, minY, minH),
+                    new Vector3(px, minY, maxH),
+                    new Vector3(px, maxY, maxH),
+                    new Vector3(px, maxY, minH)
                   ];
                 } else {
                   const pz = planePos + (faceNormal.z > 0 ? offset : -offset);
                   outlineVerts = [
-                    new Vector3(min.x, min.y, pz),
-                    new Vector3(max.x, min.y, pz),
-                    new Vector3(max.x, max.y, pz),
-                    new Vector3(min.x, max.y, pz)
+                    new Vector3(minH, minY, pz),
+                    new Vector3(maxH, minY, pz),
+                    new Vector3(maxH, maxY, pz),
+                    new Vector3(minH, maxY, pz)
                   ];
                 }
               }
