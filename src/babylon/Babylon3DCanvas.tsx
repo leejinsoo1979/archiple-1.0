@@ -67,6 +67,25 @@ if (typeof window !== 'undefined') {
 }
 (PolygonMeshBuilder as any).earcut = earcut;
 
+// Helper function to convert hex color to Color3
+const hexToColor3 = (hex: string): Color3 => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (result) {
+    return new Color3(
+      parseInt(result[1], 16) / 255,
+      parseInt(result[2], 16) / 255,
+      parseInt(result[3], 16) / 255
+    );
+  }
+  return new Color3(0.25, 0.68, 0.48); // Default theme color #3fae7a
+};
+
+// Get theme color from localStorage
+const getThemeColor = (): Color3 => {
+  const savedColor = localStorage.getItem('themeColor');
+  return hexToColor3(savedColor || '#3fae7a');
+};
+
 interface Babylon3DCanvasProps {
   floorplanData?: { points: any[]; walls: any[]; rooms: any[]; doors?: any[]; windows?: any[]; floorplan?: any } | null;
   visible?: boolean;
@@ -1104,12 +1123,12 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         // CRITICAL: Disable backface culling to see inside of box
         skyMaterial.backFaceCulling = false;
 
-        // Clear blue sky settings
-        skyMaterial.turbidity = 1; // Very clear sky (lower = clearer)
-        skyMaterial.luminance = 1.1; // Bright sky
-        skyMaterial.rayleigh = 2.0; // Blue sky scattering
-        skyMaterial.mieCoefficient = 0.0001; // Almost no haze/fog
-        skyMaterial.mieDirectionalG = 0.999; // Sharp sun
+        // Nice clear blue sky
+        skyMaterial.turbidity = 2; // Clear atmosphere
+        skyMaterial.luminance = 1; // Normal brightness
+        skyMaterial.rayleigh = 1; // Nice blue color
+        skyMaterial.mieCoefficient = 0.005; // Minimal haze
+        skyMaterial.mieDirectionalG = 0.8; // Sun glow
         skyMaterial.useSunPosition = true; // Use sun position for realistic lighting
 
         // Sun position for lighting (matches directional light)
@@ -2710,8 +2729,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
                   updatable: false
                 }, scene);
 
+                const themeColor = getThemeColor();
                 const mat = new StandardMaterial('hoverMat', scene);
-                mat.emissiveColor = new Color3(0, 0.9, 0.9);
+                mat.emissiveColor = themeColor;
                 mat.disableLighting = true;
                 outline.material = mat;
                 outline.renderingGroupId = 3;
@@ -2719,7 +2739,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
                 // Add glow to line only
                 if (highlightLayerRef.current) {
-                  highlightLayerRef.current.addMesh(outline, new Color3(0, 0.9, 0.9));
+                  highlightLayerRef.current.addMesh(outline, themeColor);
                 }
 
                 hoverOutlineRef.current = outline;
@@ -3007,9 +3027,10 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
                   }
                 }
 
+                const themeColor = getThemeColor();
                 const faceMat = new StandardMaterial('clickFaceMat', scene);
-                faceMat.emissiveColor = new Color3(0, 0.7, 0.7);
-                faceMat.alpha = 0.3;
+                faceMat.emissiveColor = themeColor;
+                faceMat.alpha = 0.15;
                 faceMat.disableLighting = true;
                 faceOverlay.material = faceMat;
                 faceOverlay.renderingGroupId = 3;
@@ -3017,7 +3038,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
                 // Add glow to face overlay
                 if (highlightLayerRef.current) {
-                  highlightLayerRef.current.addMesh(faceOverlay, new Color3(0, 0.8, 0.8));
+                  highlightLayerRef.current.addMesh(faceOverlay, themeColor);
                 }
 
                 clickFaceOverlayRef.current = faceOverlay;
