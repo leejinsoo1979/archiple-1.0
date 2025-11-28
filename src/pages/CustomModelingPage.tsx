@@ -20,7 +20,7 @@ import {
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials';
 
-type ToolType = 'select' | 'eraser' | 'line' | 'arc' | 'rectangle' | 'circle' | 'polygon' | 'pushpull' | 'rotate' | 'move' | 'scale' | 'offset' | 'tape' | 'text' | 'paint' | 'orbit' | 'pan' | 'zoom' | 'zoomExtents' | 'makeComponent' | 'freehand' | 'rotatedRect' | 'arc2pt' | 'arc3pt' | 'pie' | 'followMe' | 'outerShell' | 'dimension' | 'protractor' | 'text3d' | 'axes' | 'section' | 'solidTools' | 'zoomWindow' | 'zoomPrevious' | 'lookAround' | 'walk' | 'tag' | 'positionCamera';
+type ToolType = 'select' | 'eraser' | 'line' | 'arc' | 'rectangle' | 'circle' | 'polygon' | 'pushpull' | 'rotate' | 'move' | 'scale' | 'offset' | 'tape' | 'text' | 'paint' | 'orbit' | 'pan' | 'zoom' | 'zoomExtents' | 'makeComponent' | 'freehand' | 'rotatedRect' | 'arc2pt' | 'arc3pt' | 'pie' | 'followMe' | 'outerShell' | 'dimension' | 'protractor' | 'text3d' | 'axes' | 'section' | 'solidTools' | 'zoomWindow' | 'zoomPrevious' | 'lookAround' | 'walk' | 'tag' | 'positionCamera' | 'flip';
 
 // Drawing state interface
 interface DrawingState {
@@ -491,14 +491,12 @@ const CustomModelingPage: React.FC = () => {
 
       if (activeTool === 'line' && state.startPoint && state.currentPoint) {
         if (Vector3.Distance(state.startPoint, state.currentPoint) > 0.1) {
-          const edge = finalizeLine(scene, state.startPoint, state.currentPoint);
-          selectMesh(edge);
+          finalizeLine(scene, state.startPoint, state.currentPoint);
+          // Don't auto-select to avoid emissive highlight glow
         }
       } else if (activeTool === 'rectangle' && state.startPoint && state.currentPoint) {
-        const face = finalizeRectangle(scene, state.startPoint, state.currentPoint);
-        if (face) {
-          selectMesh(face);
-        }
+        finalizeRectangle(scene, state.startPoint, state.currentPoint);
+        // Don't auto-select to avoid emissive highlight glow
       } else if (activeTool === 'pushpull') {
         const deltaY = (state.startPoint!.y - scene.pointerY) * 0.05;
         const targetMesh = (state as DrawingState & { targetMesh?: Mesh }).targetMesh;
@@ -812,34 +810,34 @@ const CustomModelingPage: React.FC = () => {
       {/* Two-Row Toolbar */}
       <div className={styles.toolbarContainer}>
         <div className={styles.horizontalToolbar}>
-          <button className={styles.hTool} title="New"><svg viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="1" fill="#f8f8f8" stroke="#666" strokeWidth="1.5"/></svg></button>
-          <button className={styles.hTool} title="Open"><svg viewBox="0 0 24 24" fill="none"><path d="M3 8V18a2 2 0 002 2h14a2 2 0 002-2V10a2 2 0 00-2-2H12l-2-2H5a2 2 0 00-2 2z" fill="#f0d860" stroke="#a08020" strokeWidth="1"/></svg></button>
-          <button className={styles.hTool} title="Save"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="1" fill="#a8c8e8" stroke="#457fd3" strokeWidth="1.5"/></svg></button>
+          <button className={styles.hTool} title="New"><svg viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="1" fill="#f8f8f8" stroke="#666" strokeWidth="1.5" /></svg></button>
+          <button className={styles.hTool} title="Open"><svg viewBox="0 0 24 24" fill="none"><path d="M3 8V18a2 2 0 002 2h14a2 2 0 002-2V10a2 2 0 00-2-2H12l-2-2H5a2 2 0 00-2 2z" fill="#f0d860" stroke="#a08020" strokeWidth="1" /></svg></button>
+          <button className={styles.hTool} title="Save"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="1" fill="#a8c8e8" stroke="#457fd3" strokeWidth="1.5" /></svg></button>
           <div className={styles.hToolDivider} />
-          <button className={styles.hTool} title="Undo"><svg viewBox="0 0 24 24" fill="none"><path d="M4 10c0-4 3-7 8-7s8 3 8 7" stroke="#457fd3" strokeWidth="2"/><path d="M4 10L1 7L7 7L4 10Z" fill="#457fd3"/></svg></button>
-          <button className={styles.hTool} title="Redo"><svg viewBox="0 0 24 24" fill="none"><path d="M20 10c0-4-3-7-8-7s-8 3-8 7" stroke="#457fd3" strokeWidth="2"/><path d="M20 10L23 7L17 7L20 10Z" fill="#457fd3"/></svg></button>
+          <button className={styles.hTool} title="Undo"><svg viewBox="0 0 24 24" fill="none"><path d="M4 10c0-4 3-7 8-7s8 3 8 7" stroke="#457fd3" strokeWidth="2" /><path d="M4 10L1 7L7 7L4 10Z" fill="#457fd3" /></svg></button>
+          <button className={styles.hTool} title="Redo"><svg viewBox="0 0 24 24" fill="none"><path d="M20 10c0-4-3-7-8-7s-8 3-8 7" stroke="#457fd3" strokeWidth="2" /><path d="M20 10L23 7L17 7L20 10Z" fill="#457fd3" /></svg></button>
           <div className={styles.hToolDivider} />
-          <button className={styles.hTool} onClick={() => navigate(-1)} title="Back"><svg viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 19l-7-7 7-7" stroke="#666" strokeWidth="2"/></svg></button>
+          <button className={styles.hTool} onClick={() => navigate(-1)} title="Back"><svg viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 19l-7-7 7-7" stroke="#666" strokeWidth="2" /></svg></button>
         </div>
         <div className={styles.horizontalToolbar}>
-          <button className={`${styles.hTool} ${activeTool === 'select' ? styles.active : ''}`} onClick={() => setActiveTool('select')} title="Select"><svg viewBox="0 0 24 24" fill="none"><path d="M5 3L5 19L9 15L12 21L14 20L11 14L17 14L5 3Z" fill="#2d2d2d"/></svg></button>
-          <button className={`${styles.hTool} ${activeTool === 'line' ? styles.active : ''}`} onClick={() => setActiveTool('line')} title="Line"><svg viewBox="0 0 24 24" fill="none"><line x1="4" y1="20" x2="20" y2="4" stroke="#2d2d2d" strokeWidth="1.5"/><circle cx="4" cy="20" r="2" fill="#22a352"/><circle cx="20" cy="4" r="2" fill="#e63946"/></svg></button>
-          <button className={`${styles.hTool} ${activeTool === 'rectangle' ? styles.active : ''}`} onClick={() => setActiveTool('rectangle')} title="Rectangle"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="12" fill="#c8daf0" stroke="#2d2d2d" strokeWidth="1.5"/></svg></button>
-          <button className={`${styles.hTool} ${activeTool === 'circle' ? styles.active : ''}`} onClick={() => setActiveTool('circle')} title="Circle"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" fill="#c8daf0" stroke="#2d2d2d" strokeWidth="1.5"/></svg></button>
+          <button className={`${styles.hTool} ${activeTool === 'select' ? styles.active : ''}`} onClick={() => setActiveTool('select')} title="Select"><svg viewBox="0 0 24 24" fill="none"><path d="M5 3L5 19L9 15L12 21L14 20L11 14L17 14L5 3Z" fill="#2d2d2d" /></svg></button>
+          <button className={`${styles.hTool} ${activeTool === 'line' ? styles.active : ''}`} onClick={() => setActiveTool('line')} title="Line"><svg viewBox="0 0 24 24" fill="none"><line x1="4" y1="20" x2="20" y2="4" stroke="#2d2d2d" strokeWidth="1.5" /><circle cx="4" cy="20" r="2" fill="#22a352" /><circle cx="20" cy="4" r="2" fill="#e63946" /></svg></button>
+          <button className={`${styles.hTool} ${activeTool === 'rectangle' ? styles.active : ''}`} onClick={() => setActiveTool('rectangle')} title="Rectangle"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="12" fill="#c8daf0" stroke="#2d2d2d" strokeWidth="1.5" /></svg></button>
+          <button className={`${styles.hTool} ${activeTool === 'circle' ? styles.active : ''}`} onClick={() => setActiveTool('circle')} title="Circle"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" fill="#c8daf0" stroke="#2d2d2d" strokeWidth="1.5" /></svg></button>
           <div className={styles.hToolDivider} />
-          <button className={`${styles.hTool} ${activeTool === 'pushpull' ? styles.active : ''}`} onClick={() => setActiveTool('pushpull')} title="Push/Pull"><svg viewBox="0 0 24 24" fill="none"><path d="M4 15L10 12L16 15V19L10 22L4 19V15Z" fill="#c9a227" stroke="#8b6914"/><path d="M4 10L10 7L16 10V14L10 11L4 14V10Z" fill="#e0c040" stroke="#8b6914"/></svg></button>
-          <button className={`${styles.hTool} ${activeTool === 'move' ? styles.active : ''}`} onClick={() => setActiveTool('move')} title="Move"><svg viewBox="0 0 24 24" fill="none"><line x1="12" y1="4" x2="12" y2="20" stroke="#e63946" strokeWidth="1.5"/><line x1="4" y1="12" x2="20" y2="12" stroke="#22a352" strokeWidth="1.5"/><path d="M12 4L9 8H15L12 4Z" fill="#e63946"/><path d="M12 20L9 16H15L12 20Z" fill="#e63946"/><path d="M4 12L8 9V15L4 12Z" fill="#22a352"/><path d="M20 12L16 9V15L20 12Z" fill="#22a352"/></svg></button>
-          <button className={`${styles.hTool} ${activeTool === 'rotate' ? styles.active : ''}`} onClick={() => setActiveTool('rotate')} title="Rotate"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="7" fill="none" stroke="#2d2d2d" strokeWidth="1" strokeDasharray="3 2"/><circle cx="12" cy="13" r="2" fill="#457fd3"/></svg></button>
-          <button className={`${styles.hTool} ${activeTool === 'scale' ? styles.active : ''}`} onClick={() => setActiveTool('scale')} title="Scale"><svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" fill="#e5e5e5" stroke="#2d2d2d" strokeWidth="1"/><rect x="4.5" y="4.5" width="3" height="3" fill="#22a352"/><rect x="16.5" y="4.5" width="3" height="3" fill="#22a352"/><rect x="4.5" y="16.5" width="3" height="3" fill="#22a352"/><rect x="16.5" y="16.5" width="3" height="3" fill="#22a352"/></svg></button>
+          <button className={`${styles.hTool} ${activeTool === 'pushpull' ? styles.active : ''}`} onClick={() => setActiveTool('pushpull')} title="Push/Pull"><svg viewBox="0 0 24 24" fill="none"><path d="M4 15L10 12L16 15V19L10 22L4 19V15Z" fill="#c9a227" stroke="#8b6914" /><path d="M4 10L10 7L16 10V14L10 11L4 14V10Z" fill="#e0c040" stroke="#8b6914" /></svg></button>
+          <button className={`${styles.hTool} ${activeTool === 'move' ? styles.active : ''}`} onClick={() => setActiveTool('move')} title="Move"><svg viewBox="0 0 24 24" fill="none"><line x1="12" y1="4" x2="12" y2="20" stroke="#e63946" strokeWidth="1.5" /><line x1="4" y1="12" x2="20" y2="12" stroke="#22a352" strokeWidth="1.5" /><path d="M12 4L9 8H15L12 4Z" fill="#e63946" /><path d="M12 20L9 16H15L12 20Z" fill="#e63946" /><path d="M4 12L8 9V15L4 12Z" fill="#22a352" /><path d="M20 12L16 9V15L20 12Z" fill="#22a352" /></svg></button>
+          <button className={`${styles.hTool} ${activeTool === 'rotate' ? styles.active : ''}`} onClick={() => setActiveTool('rotate')} title="Rotate"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="7" fill="none" stroke="#2d2d2d" strokeWidth="1" strokeDasharray="3 2" /><circle cx="12" cy="13" r="2" fill="#457fd3" /></svg></button>
+          <button className={`${styles.hTool} ${activeTool === 'scale' ? styles.active : ''}`} onClick={() => setActiveTool('scale')} title="Scale"><svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" fill="#e5e5e5" stroke="#2d2d2d" strokeWidth="1" /><rect x="4.5" y="4.5" width="3" height="3" fill="#22a352" /><rect x="16.5" y="4.5" width="3" height="3" fill="#22a352" /><rect x="4.5" y="16.5" width="3" height="3" fill="#22a352" /><rect x="16.5" y="16.5" width="3" height="3" fill="#22a352" /></svg></button>
           <div className={styles.hToolDivider} />
-          <button className={`${styles.hTool} ${activeTool === 'tape' ? styles.active : ''}`} onClick={() => setActiveTool('tape')} title="Tape Measure"><svg viewBox="0 0 24 24" fill="none"><rect x="2" y="9" width="12" height="6" rx="1" fill="#f0d860" stroke="#a08020"/><line x1="14" y1="12" x2="21" y2="12" stroke="#2d2d2d" strokeWidth="1"/><circle cx="21" cy="12" r="2" fill="#e63946"/></svg></button>
+          <button className={`${styles.hTool} ${activeTool === 'tape' ? styles.active : ''}`} onClick={() => setActiveTool('tape')} title="Tape Measure"><svg viewBox="0 0 24 24" fill="none"><rect x="2" y="9" width="12" height="6" rx="1" fill="#f0d860" stroke="#a08020" /><line x1="14" y1="12" x2="21" y2="12" stroke="#2d2d2d" strokeWidth="1" /><circle cx="21" cy="12" r="2" fill="#e63946" /></svg></button>
           <div className={styles.hToolDivider} />
-          <button className={`${styles.hTool} ${activeTool === 'orbit' ? styles.active : ''}`} onClick={() => setActiveTool('orbit')} title="Orbit"><svg viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="12" rx="8" ry="3.5" stroke="#22a352" strokeWidth="1.25" transform="rotate(50 12 12)"/><ellipse cx="12" cy="12" rx="8" ry="3.5" stroke="#e63946" strokeWidth="1.25" transform="rotate(-50 12 12)"/><circle cx="12" cy="12" r="2.5" fill="#457fd3"/></svg></button>
-          <button className={`${styles.hTool} ${activeTool === 'pan' ? styles.active : ''}`} onClick={() => setActiveTool('pan')} title="Pan"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3V7M8 5V9M16 5V9M6 8V14M18 8V14" stroke="#c4a060" strokeWidth="2.5" strokeLinecap="round"/><path d="M6 14C6 17 8 20 12 20C16 20 18 17 18 14" stroke="#c4a060" strokeWidth="2.5" strokeLinecap="round"/></svg></button>
-          <button className={`${styles.hTool} ${activeTool === 'zoom' ? styles.active : ''}`} onClick={() => setActiveTool('zoom')} title="Zoom"><svg viewBox="0 0 24 24" fill="none"><circle cx="10" cy="10" r="6" fill="white" stroke="#2d2d2d" strokeWidth="1.5"/><line x1="14.5" y1="14.5" x2="20" y2="20" stroke="#2d2d2d" strokeWidth="2.5" strokeLinecap="round"/></svg></button>
+          <button className={`${styles.hTool} ${activeTool === 'orbit' ? styles.active : ''}`} onClick={() => setActiveTool('orbit')} title="Orbit"><svg viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="12" rx="8" ry="3.5" stroke="#22a352" strokeWidth="1.25" transform="rotate(50 12 12)" /><ellipse cx="12" cy="12" rx="8" ry="3.5" stroke="#e63946" strokeWidth="1.25" transform="rotate(-50 12 12)" /><circle cx="12" cy="12" r="2.5" fill="#457fd3" /></svg></button>
+          <button className={`${styles.hTool} ${activeTool === 'pan' ? styles.active : ''}`} onClick={() => setActiveTool('pan')} title="Pan"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3V7M8 5V9M16 5V9M6 8V14M18 8V14" stroke="#c4a060" strokeWidth="2.5" strokeLinecap="round" /><path d="M6 14C6 17 8 20 12 20C16 20 18 17 18 14" stroke="#c4a060" strokeWidth="2.5" strokeLinecap="round" /></svg></button>
+          <button className={`${styles.hTool} ${activeTool === 'zoom' ? styles.active : ''}`} onClick={() => setActiveTool('zoom')} title="Zoom"><svg viewBox="0 0 24 24" fill="none"><circle cx="10" cy="10" r="6" fill="white" stroke="#2d2d2d" strokeWidth="1.5" /><line x1="14.5" y1="14.5" x2="20" y2="20" stroke="#2d2d2d" strokeWidth="2.5" strokeLinecap="round" /></svg></button>
           <div className={styles.hToolDivider} />
-          <button className={`${styles.hTool} ${activeTool === 'paint' ? styles.active : ''}`} onClick={() => setActiveTool('paint')} title="Paint"><svg viewBox="0 0 24 24" fill="none"><path d="M6 5h12l2 3v10a2 2 0 01-2 2H6a2 2 0 01-2-2V8l2-3z" fill="#a8c8e8" stroke="#2d2d2d" strokeWidth="1"/></svg></button>
-          <button className={`${styles.hTool} ${activeTool === 'eraser' ? styles.active : ''}`} onClick={() => { setActiveTool('eraser'); deleteSelected(); }} title="Delete"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="10" width="16" height="10" rx="1" fill="#f5a0a0" stroke="#d44" strokeWidth="1"/></svg></button>
+          <button className={`${styles.hTool} ${activeTool === 'paint' ? styles.active : ''}`} onClick={() => setActiveTool('paint')} title="Paint"><svg viewBox="0 0 24 24" fill="none"><path d="M6 5h12l2 3v10a2 2 0 01-2 2H6a2 2 0 01-2-2V8l2-3z" fill="#a8c8e8" stroke="#2d2d2d" strokeWidth="1" /></svg></button>
+          <button className={`${styles.hTool} ${activeTool === 'eraser' ? styles.active : ''}`} onClick={() => { setActiveTool('eraser'); deleteSelected(); }} title="Delete"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="10" width="16" height="10" rx="1" fill="#f5a0a0" stroke="#d44" strokeWidth="1" /></svg></button>
         </div>
       </div>
 
@@ -848,148 +846,154 @@ const CustomModelingPage: React.FC = () => {
         <div className={styles.leftToolbar}>
           {/* Row 1: Select, Orbit */}
           <button className={`${styles.verticalTool} ${activeTool === 'select' ? styles.active : ''}`} onClick={() => setActiveTool('select')} title="Select (Space)">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M5 3L5 19L9 15L12 21L14 20L11 14L17 14L5 3Z" fill="#2d2d2d"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 0%' }} />
           </button>
           <button className={`${styles.verticalTool} ${activeTool === 'orbit' ? styles.active : ''}`} onClick={() => setActiveTool('orbit')} title="Orbit (O)">
-            <svg viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="12" rx="8" ry="3.5" stroke="#22a352" strokeWidth="1.5" transform="rotate(50 12 12)"/><ellipse cx="12" cy="12" rx="8" ry="3.5" stroke="#e63946" strokeWidth="1.5" transform="rotate(-50 12 12)"/><circle cx="12" cy="12" r="3" fill="#457fd3"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 0%' }} />
           </button>
+
           {/* Row 2: Paint, Eraser */}
           <button className={`${styles.verticalTool} ${activeTool === 'paint' ? styles.active : ''}`} onClick={() => setActiveTool('paint')} title="Paint Bucket (B)">
-            <svg viewBox="0 0 24 24" fill="none"><ellipse cx="10" cy="6" rx="6" ry="3" fill="#f0d860" stroke="#a08020"/><path d="M4 6v10c0 1.5 2.7 3 6 3s6-1.5 6-3V6" fill="#f0d860" stroke="#a08020"/><path d="M16 12c2 1 4 3 4 5s-1 3-2 3-2-1-2-3" fill="#60a0e0" stroke="#2060a0"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 5.55%' }} />
           </button>
           <button className={`${styles.verticalTool} ${activeTool === 'eraser' ? styles.active : ''}`} onClick={() => { setActiveTool('eraser'); deleteSelected(); }} title="Eraser (E)">
-            <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="14" width="16" height="6" rx="1" fill="#f5a0b0" stroke="#c06080"/><rect x="4" y="10" width="16" height="4" fill="#f8c8d0" stroke="#c06080"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 5.55%' }} />
           </button>
+
           {/* Row 3: Make Component, Tag */}
           <button className={`${styles.verticalTool} ${activeTool === 'makeComponent' ? styles.active : ''}`} onClick={() => setActiveTool('makeComponent')} title="Make Component (G)">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M6 8L12 5L18 8V16L12 19L6 16V8Z" fill="#c8e8f8" stroke="#457fd3" strokeWidth="1" strokeDasharray="2 1"/><path d="M6 8L12 11L18 8M12 11V19" stroke="#457fd3" strokeWidth="1" strokeDasharray="2 1"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 11.11%' }} />
           </button>
           <button className={`${styles.verticalTool} ${activeTool === 'tag' ? styles.active : ''}`} onClick={() => setActiveTool('tag')} title="Tag">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M4 4h8l8 8-8 8-8-8V4z" fill="#90c97d" stroke="#4a8035" strokeWidth="1.5"/><circle cx="8" cy="8" r="2" fill="white"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 11.11%' }} />
           </button>
-          <div className={styles.verticalDivider} />
 
           {/* Row 4: Line, Freehand */}
           <button className={`${styles.verticalTool} ${activeTool === 'line' ? styles.active : ''}`} onClick={() => setActiveTool('line')} title="Line (L)">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M18 4L6 16" stroke="#8B4513" strokeWidth="3" strokeLinecap="round"/><path d="M5 17L7 19L3 21L5 17Z" fill="#2d2d2d"/><circle cx="18" cy="4" r="2" fill="#ffd700" stroke="#8B4513"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 16.66%' }} />
           </button>
           <button className={`${styles.verticalTool} ${activeTool === 'freehand' ? styles.active : ''}`} onClick={() => setActiveTool('freehand')} title="Freehand">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M4 16Q8 8 12 14T20 10" stroke="#e63946" strokeWidth="2" fill="none" strokeLinecap="round"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 16.66%' }} />
           </button>
+
           {/* Row 5: Rectangle, Rotated Rectangle */}
           <button className={`${styles.verticalTool} ${activeTool === 'rectangle' ? styles.active : ''}`} onClick={() => setActiveTool('rectangle')} title="Rectangle (R)">
-            <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="12" fill="#c8daf0" stroke="#2d2d2d" strokeWidth="1.5"/><circle cx="4" cy="6" r="2" fill="#e63946"/><circle cx="20" cy="6" r="2" fill="#e63946"/><circle cx="4" cy="18" r="2" fill="#e63946"/><circle cx="20" cy="18" r="2" fill="#e63946"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 22.22%' }} />
           </button>
           <button className={`${styles.verticalTool} ${activeTool === 'rotatedRect' ? styles.active : ''}`} onClick={() => setActiveTool('rotatedRect')} title="Rotated Rectangle">
-            <svg viewBox="0 0 24 24" fill="none"><rect x="5" y="5" width="14" height="14" fill="#c8daf0" stroke="#2d2d2d" strokeWidth="1.5" transform="rotate(15 12 12)"/><circle cx="7" cy="4" r="2" fill="#e63946"/><circle cx="20" cy="7" r="2" fill="#e63946"/><circle cx="17" cy="20" r="2" fill="#e63946"/><circle cx="4" cy="17" r="2" fill="#e63946"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 22.22%' }} />
           </button>
+
           {/* Row 6: Circle, Polygon */}
           <button className={`${styles.verticalTool} ${activeTool === 'circle' ? styles.active : ''}`} onClick={() => setActiveTool('circle')} title="Circle (C)">
-            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" fill="#c8daf0" stroke="#2d2d2d" strokeWidth="1.5"/><circle cx="12" cy="12" r="1.5" fill="#e63946"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 27.77%' }} />
           </button>
           <button className={`${styles.verticalTool} ${activeTool === 'polygon' ? styles.active : ''}`} onClick={() => setActiveTool('polygon')} title="Polygon">
-            <svg viewBox="0 0 24 24" fill="none"><polygon points="12,3 21,9 18,20 6,20 3,9" fill="#c8daf0" stroke="#2d2d2d" strokeWidth="1.5"/><circle cx="12" cy="12" r="2" fill="#e63946"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 27.77%' }} />
           </button>
-          {/* Row 7: Arc, 2-Point Arc */}
+
+          {/* Row 7: Arc, 2 Point Arc */}
           <button className={`${styles.verticalTool} ${activeTool === 'arc' ? styles.active : ''}`} onClick={() => setActiveTool('arc')} title="Arc (A)">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M4 18Q12 4 20 18" stroke="#2d2d2d" strokeWidth="1.5" fill="none"/><circle cx="4" cy="18" r="2" fill="#e63946"/><circle cx="20" cy="18" r="2" fill="#e63946"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 33.33%' }} />
           </button>
           <button className={`${styles.verticalTool} ${activeTool === 'arc2pt' ? styles.active : ''}`} onClick={() => setActiveTool('arc2pt')} title="2 Point Arc">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M4 18Q12 4 20 18" stroke="#2d2d2d" strokeWidth="1.5" fill="none"/><circle cx="4" cy="18" r="2" fill="#e63946"/><circle cx="20" cy="18" r="2" fill="#e63946"/><path d="M12 8L10 12L14 12Z" fill="#e63946"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 33.33%' }} />
           </button>
-          {/* Row 8: 3-Point Arc, Pie */}
+
+          {/* Row 8: 3 Point Arc, Pie */}
           <button className={`${styles.verticalTool} ${activeTool === 'arc3pt' ? styles.active : ''}`} onClick={() => setActiveTool('arc3pt')} title="3 Point Arc">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M4 16Q8 4 12 10T20 16" stroke="#2d2d2d" strokeWidth="1.5" fill="none"/><circle cx="4" cy="16" r="2" fill="#e63946"/><circle cx="12" cy="10" r="2" fill="#e63946"/><circle cx="20" cy="16" r="2" fill="#e63946"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 38.88%' }} />
           </button>
           <button className={`${styles.verticalTool} ${activeTool === 'pie' ? styles.active : ''}`} onClick={() => setActiveTool('pie')} title="Pie">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M12 12L12 4A8 8 0 0 1 19 16Z" fill="#c8daf0" stroke="#2d2d2d" strokeWidth="1.5"/><circle cx="12" cy="12" r="2" fill="#e63946"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 38.88%' }} />
           </button>
-          <div className={styles.verticalDivider} />
 
           {/* Row 9: Move, Push/Pull */}
           <button className={`${styles.verticalTool} ${activeTool === 'move' ? styles.active : ''}`} onClick={() => setActiveTool('move')} title="Move (M)">
-            <svg viewBox="0 0 24 24" fill="none"><line x1="12" y1="4" x2="12" y2="20" stroke="#e63946" strokeWidth="2"/><line x1="4" y1="12" x2="20" y2="12" stroke="#e63946" strokeWidth="2"/><path d="M12 4L9 8H15L12 4Z" fill="#e63946"/><path d="M12 20L9 16H15L12 20Z" fill="#e63946"/><path d="M4 12L8 9V15L4 12Z" fill="#e63946"/><path d="M20 12L16 9V15L20 12Z" fill="#e63946"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 44.44%' }} />
           </button>
           <button className={`${styles.verticalTool} ${activeTool === 'pushpull' ? styles.active : ''}`} onClick={() => setActiveTool('pushpull')} title="Push/Pull (P)">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M4 14L10 11L16 14V18L10 21L4 18V14Z" fill="#c9a227" stroke="#8b6914"/><path d="M4 9L10 6L16 9V13L10 10L4 13V9Z" fill="#e0c040" stroke="#8b6914"/><path d="M10 2L8 5H12L10 2Z" fill="#e63946"/><path d="M10 6V2" stroke="#e63946" strokeWidth="1.5"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 44.44%' }} />
           </button>
-          {/* Row 10: Rotate, Scale */}
+
+          {/* Row 10: Rotate, Follow Me */}
           <button className={`${styles.verticalTool} ${activeTool === 'rotate' ? styles.active : ''}`} onClick={() => setActiveTool('rotate')} title="Rotate (Q)">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M12 4A8 8 0 1 1 4.5 15" stroke="#e63946" strokeWidth="2" fill="none"/><path d="M12 4L9 8H15L12 4Z" fill="#e63946"/><path d="M4.5 15L2 11L7 11L4.5 15Z" fill="#e63946"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 50.00%' }} />
           </button>
+          <button className={`${styles.verticalTool} ${activeTool === 'followMe' ? styles.active : ''}`} onClick={() => setActiveTool('followMe')} title="Follow Me">
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 50.00%' }} />
+          </button>
+
+          {/* Row 11: Scale, Offset */}
           <button className={`${styles.verticalTool} ${activeTool === 'scale' ? styles.active : ''}`} onClick={() => setActiveTool('scale')} title="Scale (S)">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M6 10L12 7L18 10V16L12 19L6 16V10Z" fill="#e8e8e8" stroke="#2d2d2d"/><path d="M6 10L12 13L18 10M12 13V19" stroke="#2d2d2d"/><path d="M12 4L10 7H14L12 4Z" fill="#e63946"/><path d="M21 12L18 10V14L21 12Z" fill="#e63946"/><path d="M12 22L14 19H10L12 22Z" fill="#e63946"/><path d="M3 12L6 10V14L3 12Z" fill="#e63946"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 55.55%' }} />
           </button>
-          {/* Row 11: Offset, Outer Shell */}
           <button className={`${styles.verticalTool} ${activeTool === 'offset' ? styles.active : ''}`} onClick={() => setActiveTool('offset')} title="Offset (F)">
-            <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="12" height="12" fill="none" stroke="#2d2d2d" strokeWidth="1.5"/><rect x="9" y="9" width="12" height="12" fill="none" stroke="#e63946" strokeWidth="1.5"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 55.55%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'outerShell' ? styles.active : ''}`} onClick={() => setActiveTool('outerShell')} title="Outer Shell">
-            <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="10" height="10" fill="#c8daf0" stroke="#2d2d2d"/><rect x="11" y="10" width="10" height="10" fill="#f0c8c8" stroke="#2d2d2d"/><path d="M16 6L18 4M18 4L20 6M18 4V8" stroke="#e63946" strokeWidth="1.5"/><path d="M8 18L6 20M6 20L4 18M6 20V16" stroke="#e63946" strokeWidth="1.5"/></svg>
-          </button>
-          <div className={styles.verticalDivider} />
 
           {/* Row 12: Tape, Dimension */}
           <button className={`${styles.verticalTool} ${activeTool === 'tape' ? styles.active : ''}`} onClick={() => setActiveTool('tape')} title="Tape Measure (T)">
-            <svg viewBox="0 0 24 24" fill="none"><rect x="2" y="8" width="14" height="8" rx="1" fill="#f0d860" stroke="#a08020"/><line x1="16" y1="12" x2="22" y2="12" stroke="#2d2d2d" strokeWidth="1"/><circle cx="6" cy="12" r="3" fill="#a08020"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 61.11%' }} />
           </button>
           <button className={`${styles.verticalTool} ${activeTool === 'dimension' ? styles.active : ''}`} onClick={() => setActiveTool('dimension')} title="Dimension">
-            <svg viewBox="0 0 24 24" fill="none"><line x1="4" y1="18" x2="20" y2="18" stroke="#2d2d2d" strokeWidth="1.5"/><line x1="4" y1="14" x2="4" y2="20" stroke="#2d2d2d" strokeWidth="1.5"/><line x1="20" y1="14" x2="20" y2="20" stroke="#2d2d2d" strokeWidth="1.5"/><text x="12" y="14" fontSize="8" fill="#2d2d2d" textAnchor="middle">3</text><line x1="10" y1="6" x2="14" y2="10" stroke="#e63946" strokeWidth="1.5"/><line x1="14" y1="6" x2="10" y2="10" stroke="#e63946" strokeWidth="1.5"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 61.11%' }} />
           </button>
+
           {/* Row 13: Protractor, Text */}
           <button className={`${styles.verticalTool} ${activeTool === 'protractor' ? styles.active : ''}`} onClick={() => setActiveTool('protractor')} title="Protractor">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M4 18A10 10 0 0 1 20 18" fill="#f0d860" stroke="#a08020" strokeWidth="1.5"/><line x1="12" y1="18" x2="12" y2="8" stroke="#22a352" strokeWidth="1.5"/><line x1="12" y1="18" x2="18" y2="12" stroke="#e63946" strokeWidth="1.5"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 66.66%' }} />
           </button>
           <button className={`${styles.verticalTool} ${activeTool === 'text' ? styles.active : ''}`} onClick={() => setActiveTool('text')} title="Text">
-            <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" fill="white" stroke="#2d2d2d"/><text x="12" y="16" fontSize="10" fill="#2d2d2d" textAnchor="middle" fontWeight="bold">A1</text></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 66.66%' }} />
           </button>
-          {/* Row 14: 3D Text, Axes */}
-          <button className={`${styles.verticalTool} ${activeTool === 'text3d' ? styles.active : ''}`} onClick={() => setActiveTool('text3d')} title="3D Text">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M8 18L12 4L16 18M9 14H15" stroke="#2d2d2d" strokeWidth="2" fill="none"/><path d="M10 18L14 14L18 18L14 16Z" fill="#22a352"/></svg>
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'axes' ? styles.active : ''}`} onClick={() => setActiveTool('axes')} title="Axes">
-            <svg viewBox="0 0 24 24" fill="none"><line x1="12" y1="20" x2="12" y2="8" stroke="#457fd3" strokeWidth="2"/><line x1="12" y1="12" x2="4" y2="16" stroke="#e63946" strokeWidth="2"/><line x1="12" y1="12" x2="20" y2="16" stroke="#22a352" strokeWidth="2"/><circle cx="12" cy="12" r="2" fill="#2d2d2d"/></svg>
-          </button>
-          <div className={styles.verticalDivider} />
 
-          {/* Row 15: Section, Solid Tools */}
-          <button className={`${styles.verticalTool} ${activeTool === 'section' ? styles.active : ''}`} onClick={() => setActiveTool('section')} title="Section Plane">
-            <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="8" width="16" height="10" fill="#f0a060" fillOpacity="0.5" stroke="#d06020" strokeWidth="1.5" transform="rotate(-10 12 13)"/><line x1="12" y1="4" x2="12" y2="10" stroke="#d06020" strokeWidth="2"/><path d="M10 4L12 2L14 4" fill="#d06020"/></svg>
+          {/* Row 14: Axes, 3D Text */}
+          <button className={`${styles.verticalTool} ${activeTool === 'axes' ? styles.active : ''}`} onClick={() => setActiveTool('axes')} title="Axes">
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 72.22%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'solidTools' ? styles.active : ''}`} onClick={() => setActiveTool('solidTools')} title="Solid Tools">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M12 4V8M8 6V10M16 6V10M6 9V15M18 9V15" stroke="#c4a060" strokeWidth="2.5" strokeLinecap="round"/><path d="M6 15C6 18 8 21 12 21C16 21 18 18 18 15" stroke="#c4a060" strokeWidth="2.5" strokeLinecap="round"/></svg>
+          <button className={`${styles.verticalTool} ${activeTool === 'text3d' ? styles.active : ''}`} onClick={() => setActiveTool('text3d')} title="3D Text">
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 72.22%' }} />
           </button>
-          <div className={styles.verticalDivider} />
+
+          {/* Row 15: Flip, Pan */}
+          <button className={`${styles.verticalTool} ${activeTool === 'flip' ? styles.active : ''}`} onClick={() => setActiveTool('flip')} title="Flip">
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 77.77%' }} />
+          </button>
+          <button className={`${styles.verticalTool} ${activeTool === 'pan' ? styles.active : ''}`} onClick={() => setActiveTool('pan')} title="Pan (H)">
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 77.77%' }} />
+          </button>
 
           {/* Row 16: Zoom, Zoom Window */}
           <button className={`${styles.verticalTool} ${activeTool === 'zoom' ? styles.active : ''}`} onClick={() => setActiveTool('zoom')} title="Zoom (Z)">
-            <svg viewBox="0 0 24 24" fill="none"><circle cx="10" cy="10" r="6" fill="white" stroke="#2d2d2d" strokeWidth="1.5"/><line x1="14.5" y1="14.5" x2="20" y2="20" stroke="#2d2d2d" strokeWidth="2.5" strokeLinecap="round"/><line x1="7" y1="10" x2="13" y2="10" stroke="#2d2d2d" strokeWidth="1.5"/><line x1="10" y1="7" x2="10" y2="13" stroke="#2d2d2d" strokeWidth="1.5"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 83.33%' }} />
           </button>
           <button className={`${styles.verticalTool} ${activeTool === 'zoomWindow' ? styles.active : ''}`} onClick={() => setActiveTool('zoomWindow')} title="Zoom Window">
-            <svg viewBox="0 0 24 24" fill="none"><circle cx="10" cy="10" r="6" fill="white" stroke="#2d2d2d" strokeWidth="1.5"/><line x1="14.5" y1="14.5" x2="20" y2="20" stroke="#2d2d2d" strokeWidth="2.5" strokeLinecap="round"/><rect x="7" y="7" width="6" height="6" fill="none" stroke="#457fd3" strokeWidth="1" strokeDasharray="2 1"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 83.33%' }} />
           </button>
+
           {/* Row 17: Zoom Extents, Previous View */}
           <button className={`${styles.verticalTool} ${activeTool === 'zoomExtents' ? styles.active : ''}`} onClick={() => setActiveTool('zoomExtents')} title="Zoom Extents (Shift+Z)">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M12 4L14 7H10L12 4Z" fill="#e63946"/><path d="M12 20L10 17H14L12 20Z" fill="#e63946"/><path d="M4 12L7 10V14L4 12Z" fill="#e63946"/><path d="M20 12L17 14V10L20 12Z" fill="#e63946"/><rect x="8" y="8" width="8" height="8" fill="#c8daf0" stroke="#2d2d2d" strokeWidth="1"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 88.88%' }} />
           </button>
           <button className={`${styles.verticalTool} ${activeTool === 'zoomPrevious' ? styles.active : ''}`} onClick={() => setActiveTool('zoomPrevious')} title="Previous View">
-            <svg viewBox="0 0 24 24" fill="none"><circle cx="14" cy="10" r="6" fill="white" stroke="#2d2d2d" strokeWidth="1.5"/><line x1="18.5" y1="14.5" x2="22" y2="18" stroke="#2d2d2d" strokeWidth="2" strokeLinecap="round"/><path d="M8 8A6 6 0 0 0 3 14" stroke="#457fd3" strokeWidth="2" fill="none"/><path d="M3 10V14H7" fill="none" stroke="#457fd3" strokeWidth="2"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 88.88%' }} />
           </button>
-          <div className={styles.verticalDivider} />
 
-          {/* Row 18: Look Around, Position Camera */}
-          <button className={`${styles.verticalTool} ${activeTool === 'lookAround' ? styles.active : ''}`} onClick={() => setActiveTool('lookAround')} title="Look Around">
-            <svg viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="12" rx="9" ry="6" fill="white" stroke="#2d2d2d" strokeWidth="1.5"/><circle cx="12" cy="12" r="3" fill="#457fd3"/><circle cx="12" cy="12" r="1.5" fill="#2d2d2d"/></svg>
-          </button>
+          {/* Row 18: Position Camera, Walk */}
           <button className={`${styles.verticalTool} ${activeTool === 'positionCamera' ? styles.active : ''}`} onClick={() => setActiveTool('positionCamera')} title="Position Camera">
-            <svg viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="8" rx="3" ry="4" fill="none" stroke="#2d2d2d" strokeWidth="1.5"/><path d="M6 20V16C6 14 8 12 12 12C16 12 18 14 18 16V20" stroke="#2d2d2d" strokeWidth="1.5" fill="none"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 94.44%' }} />
           </button>
-          {/* Row 19: Walk, Pan */}
           <button className={`${styles.verticalTool} ${activeTool === 'walk' ? styles.active : ''}`} onClick={() => setActiveTool('walk')} title="Walk">
-            <svg viewBox="0 0 24 24" fill="none"><ellipse cx="8" cy="10" rx="3" ry="4" fill="#2d2d2d" transform="rotate(-20 8 10)"/><ellipse cx="16" cy="14" rx="3" ry="4" fill="#2d2d2d" transform="rotate(-20 16 14)"/></svg>
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 94.44%' }} />
           </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'pan' ? styles.active : ''}`} onClick={() => setActiveTool('pan')} title="Pan (H)">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3V7M8 5V9M16 5V9M6 8V14M18 8V14" stroke="#c4a060" strokeWidth="2.5" strokeLinecap="round"/><path d="M6 14C6 17 8 20 12 20C16 20 18 17 18 14" stroke="#c4a060" strokeWidth="2.5" strokeLinecap="round"/></svg>
+
+          {/* Row 19: Look Around, Section Plane */}
+          <button className={`${styles.verticalTool} ${activeTool === 'lookAround' ? styles.active : ''}`} onClick={() => setActiveTool('lookAround')} title="Look Around">
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 100%' }} />
+          </button>
+          <button className={`${styles.verticalTool} ${activeTool === 'section' ? styles.active : ''}`} onClick={() => setActiveTool('section')} title="Section Plane">
+            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 100%' }} />
           </button>
         </div>
 
@@ -1028,7 +1032,7 @@ const CustomModelingPage: React.FC = () => {
           <div className={styles.traySection}>
             <div className={styles.traySectionHeader}>
               <span className={styles.traySectionTitle}>Entity Info</span>
-              <svg className={styles.traySectionIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 9l-7 7-7-7"/></svg>
+              <svg className={styles.traySectionIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 9l-7 7-7-7" /></svg>
             </div>
             <div className={styles.traySectionContent}>
               {meshProperties ? (
@@ -1049,7 +1053,7 @@ const CustomModelingPage: React.FC = () => {
           <div className={styles.traySection}>
             <div className={styles.traySectionHeader}>
               <span className={styles.traySectionTitle}>Materials</span>
-              <svg className={styles.traySectionIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 9l-7 7-7-7"/></svg>
+              <svg className={styles.traySectionIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 9l-7 7-7-7" /></svg>
             </div>
             <div className={styles.traySectionContent}>
               <div className={styles.materialsGrid}>
@@ -1064,13 +1068,13 @@ const CustomModelingPage: React.FC = () => {
           <div className={styles.traySection}>
             <div className={styles.traySectionHeader}>
               <span className={styles.traySectionTitle}>Components</span>
-              <svg className={styles.traySectionIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 9l-7 7-7-7"/></svg>
+              <svg className={styles.traySectionIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 9l-7 7-7-7" /></svg>
             </div>
             <div className={styles.traySectionContent}>
               <div className={styles.componentsList}>
                 <div className={styles.componentItem}>
                   <div className={styles.componentIcon}>
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#666"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#666"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" /></svg>
                   </div>
                   <span className={styles.componentName}>No components in model</span>
                 </div>
@@ -1082,7 +1086,7 @@ const CustomModelingPage: React.FC = () => {
           <div className={styles.traySection}>
             <div className={styles.traySectionHeader}>
               <span className={styles.traySectionTitle}>Styles</span>
-              <svg className={styles.traySectionIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 9l-7 7-7-7"/></svg>
+              <svg className={styles.traySectionIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 9l-7 7-7-7" /></svg>
             </div>
             <div className={styles.traySectionContent}>
               <div className={styles.entityInfo}>
