@@ -1,6 +1,54 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import styles from './WallEditorPage.module.css';
+import {
+  ChevronLeft,
+  Save,
+  Undo2,
+  Redo2,
+  Eraser,
+  Ruler,
+  PenTool,
+  Eye,
+  Search,
+  Filter,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+  Maximize2,
+  Minimize2,
+  BoxSelect,
+  MousePointer2,
+  Square,
+  Circle,
+  Type,
+  Move,
+  Layers,
+  Grid,
+  Settings,
+  Image as ImageIcon,
+  Box,
+  Sun,
+  Lightbulb,
+  Palette,
+  Star,
+  User,
+  ArrowUpRight,
+  GripVertical,
+  Spline,
+  SlidersHorizontal,
+  Trash2
+} from 'lucide-react';
+
+interface WallData {
+  wallId: string;
+  dimensions: { width: number; height: number };
+  faceNormal: { x: number; y: number; z: number };
+  customizations?: {
+    molding?: string;
+    texture?: string;
+    baseboard?: string;
+  };
+}
 
 interface MoldingItem {
   id: string;
@@ -10,41 +58,55 @@ interface MoldingItem {
 }
 
 const MOLDING_CATEGORIES = [
-  { id: 'molding', name: '몰딩', icon: '▭' },
-  { id: 'baseboard', name: '받침대', icon: '▭' },
-  { id: 'cornice', name: '코니스', icon: '▭' },
-  { id: 'decorative', name: '장식 몰딩', icon: '◈' },
-  { id: 'sunAngle', name: '태양 각도선', icon: '☀' },
-  { id: 'lightBand', name: '라이트 밴드', icon: '💡' },
-  { id: 'texture', name: '질감', icon: '▤' },
-  { id: 'premium', name: '프리미엄 텍스처', icon: '★' },
-  { id: 'my', name: '나의', icon: '👤' },
+  { id: 'molding', name: 'Molding', icon: <BoxSelect size={18} /> },
+  { id: 'baseboard', name: 'Baseboard', icon: <Layers size={18} /> },
+  { id: 'cornice', name: 'Cornice', icon: <ArrowUpRight size={18} /> },
+  { id: 'decorative', name: 'Deco', icon: <Star size={18} /> },
+  { id: 'sunAngle', name: 'Sun Angle', icon: <Sun size={18} /> },
+  { id: 'lightBand', name: 'Light Band', icon: <Lightbulb size={18} /> },
+  { id: 'texture', name: 'Texture', icon: <Palette size={18} /> },
+  { id: 'premium', name: 'Premium', icon: <Box size={18} /> },
+  { id: 'my', name: 'My Library', icon: <User size={18} /> },
 ];
 
 // Sample molding items
 const SAMPLE_MOLDINGS: MoldingItem[] = [
-  { id: 'm1', name: '클래식 몰딩 1', thumbnail: '', category: 'molding' },
-  { id: 'm2', name: '클래식 몰딩 2', thumbnail: '', category: 'molding' },
-  { id: 'm3', name: '모던 몰딩 1', thumbnail: '', category: 'molding' },
-  { id: 'm4', name: '우드 몰딩', thumbnail: '', category: 'molding' },
-  { id: 'm5', name: '심플 몰딩 1', thumbnail: '', category: 'molding' },
-  { id: 'm6', name: '심플 몰딩 2', thumbnail: '', category: 'molding' },
-  { id: 'm7', name: '장식 몰딩 1', thumbnail: '', category: 'molding' },
-  { id: 'm8', name: '장식 몰딩 2', thumbnail: '', category: 'molding' },
-  { id: 'm9', name: '대리석 텍스처', thumbnail: '', category: 'texture' },
-  { id: 'm10', name: '우드 텍스처', thumbnail: '', category: 'texture' },
+  { id: 'm1', name: 'Classic Molding 1', thumbnail: '', category: 'molding' },
+  { id: 'm2', name: 'Classic Molding 2', thumbnail: '', category: 'molding' },
+  { id: 'm3', name: 'Modern Molding 1', thumbnail: '', category: 'molding' },
+  { id: 'm4', name: 'Wood Molding', thumbnail: '', category: 'molding' },
+  { id: 'm5', name: 'Simple Molding 1', thumbnail: '', category: 'molding' },
+  { id: 'm6', name: 'Simple Molding 2', thumbnail: '', category: 'molding' },
+  { id: 'm7', name: 'Deco Molding 1', thumbnail: '', category: 'molding' },
+  { id: 'm8', name: 'Deco Molding 2', thumbnail: '', category: 'molding' },
+  { id: 'm9', name: 'Marble Texture', thumbnail: '', category: 'texture' },
+  { id: 'm10', name: 'Wood Texture', thumbnail: '', category: 'texture' },
 ];
 
 export default function WallEditorPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const wallId = searchParams.get('wallId');
+  const wallIdParam = searchParams.get('wallId');
 
+  const [wallData, setWallData] = useState<WallData | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('molding');
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
-  const [wallDimensions] = useState({ width: 5563, height: 2800 });
   const [currentPage, setCurrentPage] = useState(1);
+  const [isWallSelected, setIsWallSelected] = useState(false);
   const totalPages = 5;
+
+  // Load wall data from localStorage on mount
+  useEffect(() => {
+    const savedData = localStorage.getItem('wallEditorData');
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData) as WallData;
+        setWallData(parsed);
+      } catch (e) {
+        console.error('Failed to parse wall data:', e);
+      }
+    }
+  }, []);
 
   const filteredItems = SAMPLE_MOLDINGS.filter(
     item => item.category === selectedCategory || selectedCategory === 'molding'
@@ -55,64 +117,70 @@ export default function WallEditorPage() {
   };
 
   const handleSave = () => {
-    // TODO: Save wall customization
-    console.log('Saving wall customization...');
+    if (wallData) {
+      // Save customizations back to localStorage
+      const updatedData = {
+        ...wallData,
+        customizations: {
+          ...wallData.customizations,
+          [selectedCategory]: selectedItem
+        }
+      };
+      localStorage.setItem('wallEditorData', JSON.stringify(updatedData));
+
+      // Also save to a wall-specific key for persistence
+      localStorage.setItem(`wall_${wallData.wallId}`, JSON.stringify(updatedData));
+    }
     navigate('/editor');
   };
+
+  const handleItemSelect = (itemId: string) => {
+    setSelectedItem(itemId);
+  };
+
+  // Get wall dimensions (in mm)
+  const wallWidth = wallData?.dimensions?.width || 0;
+  const wallHeight = wallData?.dimensions?.height || 0;
 
   return (
     <div className={styles.container}>
       {/* Header */}
       <header className={styles.header}>
-        <button className={styles.backButton} onClick={handleBack}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-          </svg>
-          완성 벽 커스터마이즈
-        </button>
+        <div className={styles.headerLeft}>
+          <button className={styles.backButton} onClick={handleBack}>
+            <ChevronLeft size={20} />
+            <span>Wall Editor</span>
+          </button>
+        </div>
+
+        <div className={styles.headerCenter}>
+          <span className={styles.wallIdDisplay}>{wallData?.wallId || 'No Wall Selected'}</span>
+        </div>
 
         <div className={styles.headerActions}>
-          <button className={styles.headerBtn} title="저장">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
-            </svg>
-            저장
+          <button className={styles.headerBtn} onClick={handleSave} title="Save">
+            <Save size={18} />
+            <span>Save</span>
           </button>
-          <button className={styles.headerBtn} title="실행 취소">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/>
-            </svg>
+          <div className={styles.divider}></div>
+          <button className={styles.iconBtn} title="Undo">
+            <Undo2 size={18} />
           </button>
-          <button className={styles.headerBtn} title="다시 실행">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M18.4 10.6C16.55 8.99 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/>
-            </svg>
+          <button className={styles.iconBtn} title="Redo">
+            <Redo2 size={18} />
           </button>
-          <span className={styles.divider}></span>
-          <button className={styles.headerBtn} title="지우기">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-            </svg>
-            지우기
+          <div className={styles.divider}></div>
+          <button className={styles.iconBtn} title="Clear">
+            <Eraser size={18} />
           </button>
-          <span className={styles.divider}></span>
-          <button className={styles.headerBtn}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M3 3h8v2H5v14h14v-6h2v8H3V3zm16 0h-6v2h4.59L9.3 13.29l1.41 1.41L19 6.41V11h2V3z"/>
-            </svg>
-            가이드 라인
+          <button className={styles.iconBtn} title="Guides">
+            <Ruler size={18} />
           </button>
-          <button className={styles.headerBtn}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/>
-            </svg>
-            도구
+          <button className={styles.iconBtn} title="Tools">
+            <PenTool size={18} />
           </button>
-          <button className={styles.headerBtn}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
-            </svg>
-            보기
+          <button className={styles.iconBtn} title="View">
+            <Eye size={18} />
           </button>
         </div>
       </header>
@@ -121,73 +189,71 @@ export default function WallEditorPage() {
         {/* Left Sidebar - Categories & Items */}
         <aside className={styles.leftSidebar}>
           <div className={styles.sidebarTabs}>
-            <span className={styles.tabActive}>몰딩</span>
-            <span className={styles.tab}>받침대</span>
-            <span className={styles.searchTag}>검색어 다국어 지원 ×</span>
+            <button className={`${styles.tab} ${styles.tabActive}`}>Materials</button>
+            <button className={styles.tab}>Properties</button>
           </div>
 
           <div className={styles.searchBar}>
-            <input type="text" placeholder="현재 카테고리 검색" />
-            <button className={styles.searchBtn}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-              </svg>
+            <Search size={16} className={styles.searchIcon} />
+            <input type="text" placeholder="Search materials..." />
+            <button className={styles.filterBtn}>
+              <Filter size={14} />
             </button>
-            <button className={styles.filterBtn}>1↓</button>
           </div>
 
-          <div className={styles.brandFilter}>
-            <span>브랜드</span>
-            <select>
-              <option>전체</option>
-            </select>
-          </div>
+          <div className={styles.sidebarContent}>
+            {/* Category List */}
+            <nav className={styles.categoryList}>
+              {MOLDING_CATEGORIES.map(cat => (
+                <button
+                  key={cat.id}
+                  className={`${styles.categoryItem} ${selectedCategory === cat.id ? styles.categoryActive : ''}`}
+                  onClick={() => setSelectedCategory(cat.id)}
+                >
+                  <span className={styles.categoryIcon}>{cat.icon}</span>
+                  <span className={styles.categoryName}>{cat.name}</span>
+                </button>
+              ))}
+            </nav>
 
-          {/* Category List */}
-          <nav className={styles.categoryList}>
-            {MOLDING_CATEGORIES.map(cat => (
-              <button
-                key={cat.id}
-                className={`${styles.categoryItem} ${selectedCategory === cat.id ? styles.categoryActive : ''}`}
-                onClick={() => setSelectedCategory(cat.id)}
-              >
-                <span className={styles.categoryIcon}>{cat.icon}</span>
-                <span>{cat.name}</span>
-              </button>
-            ))}
-          </nav>
-
-          {/* Item Grid */}
-          <div className={styles.itemGrid}>
-            {filteredItems.map(item => (
-              <div
-                key={item.id}
-                className={`${styles.itemCard} ${selectedItem === item.id ? styles.itemSelected : ''}`}
-                onClick={() => setSelectedItem(item.id)}
-              >
-                <div className={styles.itemThumbnail}>
-                  {item.thumbnail ? (
-                    <img src={item.thumbnail} alt={item.name} />
-                  ) : (
-                    <div className={styles.placeholderThumb}></div>
-                  )}
-                </div>
+            {/* Item Grid */}
+            <div className={styles.itemSection}>
+              <div className={styles.sectionHeader}>
+                <span>{MOLDING_CATEGORIES.find(c => c.id === selectedCategory)?.name}</span>
+                <span className={styles.itemCount}>{filteredItems.length} items</span>
               </div>
-            ))}
+              <div className={styles.itemGrid}>
+                {filteredItems.map(item => (
+                  <div
+                    key={item.id}
+                    className={`${styles.itemCard} ${selectedItem === item.id ? styles.itemSelected : ''}`}
+                    onClick={() => handleItemSelect(item.id)}
+                  >
+                    <div className={styles.itemThumbnail}>
+                      {item.thumbnail ? (
+                        <img src={item.thumbnail} alt={item.name} />
+                      ) : (
+                        <div className={styles.placeholderThumb}>
+                          <ImageIcon size={24} color="#555" />
+                        </div>
+                      )}
+                    </div>
+                    <div className={styles.itemName}>{item.name}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Pagination */}
           <div className={styles.pagination}>
-            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))}>&lt;</button>
-            <input
-              type="number"
-              value={currentPage}
-              onChange={e => setCurrentPage(Number(e.target.value))}
-              min={1}
-              max={totalPages}
-            />
-            <span>/{totalPages}</span>
-            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}>&gt;</button>
+            <button className={styles.pageBtn} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
+              <ChevronLeftIcon size={16} />
+            </button>
+            <span className={styles.pageInfo}>{currentPage} / {totalPages}</span>
+            <button className={styles.pageBtn} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+              <ChevronRightIcon size={16} />
+            </button>
           </div>
         </aside>
 
@@ -195,107 +261,144 @@ export default function WallEditorPage() {
         <main className={styles.centerPanel}>
           {/* Drawing Tools */}
           <div className={styles.drawingTools}>
-            <button className={styles.toolBtn} title="선(L)">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M4 20L20 4" stroke="currentColor" strokeWidth="2"/>
-              </svg>
-              <span>선(L)</span>
+            <button className={styles.toolBtn} title="Select">
+              <MousePointer2 size={20} />
             </button>
-            <button className={styles.toolBtn} title="직사각형(R)">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="18" height="18"/>
-              </svg>
-              <span>직사각형(R)</span>
+            <div className={styles.toolDivider}></div>
+            <button className={styles.toolBtn} title="Line (L)">
+              <PenTool size={20} />
             </button>
-            <button className={styles.toolBtn} title="다각형(P)">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polygon points="12,2 22,8 22,16 12,22 2,16 2,8"/>
-              </svg>
-              <span>다각형(P)</span>
+            <button className={styles.toolBtn} title="Rectangle (R)">
+              <Square size={20} />
             </button>
-            <button className={styles.toolBtn} title="원(C)">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10"/>
-              </svg>
-              <span>원(C)</span>
+            <button className={styles.toolBtn} title="Circle (C)">
+              <Circle size={20} />
             </button>
-            <button className={styles.toolBtn} title="필릿(F)">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M3 21V3h4v14h14v4H3z"/>
-              </svg>
-              <span>필릿(F)</span>
+            <button className={styles.toolBtn} title="Text (T)">
+              <Type size={20} />
             </button>
-            <button className={styles.toolBtn} title="오프셋(O)">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="12" height="12"/>
-                <rect x="9" y="9" width="12" height="12"/>
-              </svg>
-              <span>오프셋(O)</span>
+            <div className={styles.toolDivider}></div>
+            <button className={styles.toolBtn} title="Move (M)">
+              <Move size={20} />
             </button>
           </div>
 
           {/* 2D Canvas Area */}
           <div className={styles.canvasArea}>
-            <svg className={styles.wallPreview} viewBox="0 0 600 400">
-              {/* Wall outline */}
-              <rect
-                x="50"
-                y="50"
-                width="500"
-                height="280"
-                fill="none"
-                stroke="#333"
-                strokeWidth="2"
-              />
+            {wallData ? (
+              <div className={styles.canvasWrapper}>
+                <svg className={styles.wallPreview} viewBox="0 0 600 400">
+                  <defs>
+                    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#333" strokeWidth="0.5" />
+                    </pattern>
+                  </defs>
+                  <rect
+                    width="100%"
+                    height="100%"
+                    fill="url(#grid)"
+                    onClick={() => setIsWallSelected(false)}
+                    style={{ cursor: 'default' }}
+                  />
 
-              {/* Dimension lines */}
-              <line x1="50" y1="30" x2="550" y2="30" stroke="#666" strokeWidth="1" />
-              <line x1="50" y1="25" x2="50" y2="35" stroke="#666" strokeWidth="1" />
-              <line x1="550" y1="25" x2="550" y2="35" stroke="#666" strokeWidth="1" />
-              <text x="300" y="20" textAnchor="middle" fontSize="12" fill="#666">{wallDimensions.width}</text>
+                  {/* Wall outline */}
+                  <rect
+                    x="50"
+                    y="50"
+                    width="500"
+                    height="280"
+                    fill="#2a2a2a"
+                    stroke={isWallSelected ? "#2196f3" : "#4caf50"}
+                    strokeWidth={isWallSelected ? 3 : 2}
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsWallSelected(true);
+                    }}
+                  />
 
-              <line x1="30" y1="50" x2="30" y2="330" stroke="#666" strokeWidth="1" />
-              <line x1="25" y1="50" x2="35" y2="50" stroke="#666" strokeWidth="1" />
-              <line x1="25" y1="330" x2="35" y2="330" stroke="#666" strokeWidth="1" />
-              <text x="15" y="195" textAnchor="middle" fontSize="12" fill="#666" transform="rotate(-90, 15, 195)">{wallDimensions.height}</text>
+                  {/* Wall Toolbar - appears when wall is selected */}
+                  {isWallSelected && (
+                    <foreignObject x="430" y="55" width="115" height="36">
+                      <div className={styles.wallToolbar}>
+                        <button className={styles.wallToolbarBtn} title="Grid">
+                          <GripVertical size={16} />
+                        </button>
+                        <button className={styles.wallToolbarBtn} title="Edit Points">
+                          <Spline size={16} />
+                        </button>
+                        <button className={styles.wallToolbarBtn} title="Adjust">
+                          <SlidersHorizontal size={16} />
+                        </button>
+                        <button className={styles.wallToolbarBtn} title="Delete">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </foreignObject>
+                  )}
 
-              <line x1="570" y1="50" x2="570" y2="330" stroke="#666" strokeWidth="1" />
-              <line x1="565" y1="50" x2="575" y2="50" stroke="#666" strokeWidth="1" />
-              <line x1="565" y1="330" x2="575" y2="330" stroke="#666" strokeWidth="1" />
-              <text x="585" y="195" textAnchor="middle" fontSize="12" fill="#666" transform="rotate(90, 585, 195)">{wallDimensions.height}</text>
+                  {/* Top dimension */}
+                  <line x1="50" y1="30" x2="550" y2="30" stroke="#666" strokeWidth="1" />
+                  <line x1="50" y1="25" x2="50" y2="35" stroke="#666" strokeWidth="1" />
+                  <line x1="550" y1="25" x2="550" y2="35" stroke="#666" strokeWidth="1" />
+                  <rect x="270" y="12" width="60" height="16" rx="4" fill="#1a1a1a" />
+                  <text x="300" y="24" textAnchor="middle" fontSize="10" fill="#aaa">{wallWidth} mm</text>
 
-              <line x1="50" y1="350" x2="550" y2="350" stroke="#666" strokeWidth="1" />
-              <line x1="50" y1="345" x2="50" y2="355" stroke="#666" strokeWidth="1" />
-              <line x1="550" y1="345" x2="550" y2="355" stroke="#666" strokeWidth="1" />
-              <text x="300" y="370" textAnchor="middle" fontSize="12" fill="#666">{wallDimensions.width}</text>
+                  {/* Left dimension */}
+                  <line x1="30" y1="50" x2="30" y2="330" stroke="#666" strokeWidth="1" />
+                  <line x1="25" y1="50" x2="35" y2="50" stroke="#666" strokeWidth="1" />
+                  <line x1="25" y1="330" x2="35" y2="330" stroke="#666" strokeWidth="1" />
+                  <rect x="5" y="180" width="16" height="60" rx="4" fill="#1a1a1a" />
+                  <text x="15" y="210" textAnchor="middle" fontSize="10" fill="#aaa" transform="rotate(-90, 15, 210)">{wallHeight} mm</text>
 
-              {/* Height indicator */}
-              <text x="530" y="320" fontSize="10" fill="#666">높이 0</text>
-            </svg>
+                  {/* Right dimension */}
+                  <line x1="570" y1="50" x2="570" y2="330" stroke="#666" strokeWidth="1" />
+                  <line x1="565" y1="50" x2="575" y2="50" stroke="#666" strokeWidth="1" />
+                  <line x1="565" y1="330" x2="575" y2="330" stroke="#666" strokeWidth="1" />
+                  <rect x="575" y="180" width="16" height="60" rx="4" fill="#1a1a1a" />
+                  <text x="585" y="210" textAnchor="middle" fontSize="10" fill="#aaa" transform="rotate(90, 585, 210)">{wallHeight} mm</text>
+
+                  {/* Bottom dimension */}
+                  <line x1="50" y1="350" x2="550" y2="350" stroke="#666" strokeWidth="1" />
+                  <line x1="50" y1="345" x2="50" y2="355" stroke="#666" strokeWidth="1" />
+                  <line x1="550" y1="345" x2="550" y2="355" stroke="#666" strokeWidth="1" />
+                  <rect x="270" y="362" width="60" height="16" rx="4" fill="#1a1a1a" />
+                  <text x="300" y="374" textAnchor="middle" fontSize="10" fill="#aaa">{wallWidth} mm</text>
+
+                  {/* Wall ID label */}
+                  <text x="300" y="190" textAnchor="middle" fontSize="14" fill="#666" fontWeight="bold">
+                    {wallData.wallId}
+                  </text>
+                </svg>
+              </div>
+            ) : (
+              <div className={styles.noWallData}>
+                <p>No wall data loaded</p>
+                <button onClick={handleBack}>Return to Editor</button>
+              </div>
+            )}
           </div>
 
           {/* Bottom Controls */}
           <div className={styles.bottomControls}>
             <div className={styles.viewControls}>
-              <button className={styles.viewBtn}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                </svg>
+              <button className={styles.viewBtnActive}>
+                <Layers size={16} />
+                <span>2D View</span>
               </button>
-              <span className={styles.viewLabel}>2D</span>
-              <span className={styles.viewNum}>1</span>
+              <button className={styles.viewBtn}>
+                <Box size={16} />
+                <span>3D View</span>
+              </button>
             </div>
-            <div className={styles.directionControl}>
-              <span>방향</span>
-              <span>4</span>
-              <button className={styles.directionBtn}>↻</button>
-            </div>
+
             <div className={styles.zoomControls}>
-              <button className={styles.lockBtn}>🔒</button>
-              <button className={styles.fitBtn}>⬜</button>
-              <button className={styles.zoomOutBtn}>−</button>
-              <input type="range" className={styles.zoomSlider} />
-              <button className={styles.zoomInBtn}>+</button>
+              <button className={styles.zoomBtn}><Minimize2 size={16} /></button>
+              <div className={styles.zoomSliderWrapper}>
+                <input type="range" className={styles.zoomSlider} />
+              </div>
+              <button className={styles.zoomBtn}><Maximize2 size={16} /></button>
+              <span className={styles.zoomValue}>100%</span>
             </div>
           </div>
         </main>
@@ -303,31 +406,55 @@ export default function WallEditorPage() {
         {/* Right Sidebar - Preview & Properties */}
         <aside className={styles.rightSidebar}>
           <div className={styles.previewSection}>
-            <div className={styles.previewHeader}>
-              <span>로밍 뷰</span>
-              <button className={styles.expandBtn}>↗</button>
-              <span>방 선택</span>
+            <div className={styles.sidebarHeader}>
+              <span>3D Preview</span>
+              <button className={styles.expandBtn}><Maximize2 size={14} /></button>
             </div>
             <div className={styles.previewCanvas}>
               {/* 3D Preview would go here */}
               <div className={styles.previewPlaceholder}>
-                <span>2D 전환 🔄</span>
+                <Box size={48} color="#444" />
+                <span>No Preview Available</span>
               </div>
             </div>
           </div>
 
           <div className={styles.propertiesSection}>
-            <div className={styles.propertiesHeader}>
-              <span>속성</span>
-              <button className={styles.expandBtn}>↗</button>
+            <div className={styles.sidebarHeader}>
+              <span>Properties</span>
+              <Settings size={14} />
             </div>
             <div className={styles.propertiesContent}>
-              <div className={styles.noSelection}>
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="#ccc">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                </svg>
-                <span>객체 없음</span>
-              </div>
+              {wallData ? (
+                <div className={styles.wallProperties}>
+                  <div className={styles.propertyGroup}>
+                    <label>Wall ID</label>
+                    <div className={styles.propertyValue}>{wallData.wallId}</div>
+                  </div>
+                  <div className={styles.propertyRow}>
+                    <div className={styles.propertyGroup}>
+                      <label>Width</label>
+                      <div className={styles.propertyValue}>{wallWidth} mm</div>
+                    </div>
+                    <div className={styles.propertyGroup}>
+                      <label>Height</label>
+                      <div className={styles.propertyValue}>{wallHeight} mm</div>
+                    </div>
+                  </div>
+
+                  {selectedItem && (
+                    <div className={styles.propertyGroup}>
+                      <label>Selected Material</label>
+                      <div className={styles.propertyValueHighlight}>{selectedItem}</div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className={styles.noSelection}>
+                  <MousePointer2 size={32} color="#444" />
+                  <span>Select an object to view properties</span>
+                </div>
+              )}
             </div>
           </div>
         </aside>
