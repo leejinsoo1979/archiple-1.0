@@ -43,6 +43,7 @@ import { AIRenderModal } from '../ui/landing/components/AIRenderModal';
 import FloorplanPreview from '../ui/components/FloorplanPreview';
 import Mini3DPreview from '../ui/components/Mini3DPreview';
 import Compass2D from '../ui/components/Compass2D';
+import CustomModelingPanel from './components/CustomModelingPanel';
 import CameraGizmoWrapper from '../ui/components/CameraGizmoWrapper';
 import FloorPropertiesPanel, { type FloorProperties } from './components/FloorPropertiesPanel';
 import LevelPropertiesPanel, { type LevelProperties } from './components/LevelPropertiesPanel';
@@ -338,6 +339,7 @@ const EditorPage = () => {
 
   // Advanced tool panel state
   const [advancedToolPanelOpen, setAdvancedToolPanelOpen] = useState(false);
+  const [customModelingPanelOpen, setCustomModelingPanelOpen] = useState(false);
   const [selectedLightId, setSelectedLightId] = useState<string | null>(null);
   const [lightPlacementMode, setLightPlacementMode] = useState(false);
   const [selectedLightType, setSelectedLightType] = useState<LightType>('point');
@@ -2169,7 +2171,14 @@ ARTISTIC APPROACH:
           </div>
           <img src="/images/custom/doors_windows.png" alt="Doors & Windows" className={styles.advancedToolImage} />
         </div>
-        <div className={styles.advancedToolCard}>
+        <div
+          className={styles.advancedToolCard}
+          onClick={() => {
+            setCustomModelingPanelOpen(true);
+            setAdvancedToolPanelOpen(false);
+            setViewMode('3D');
+          }}
+        >
           <div className={styles.advancedToolInfo}>
             <h4>Custom<br/>modeling</h4>
             <span className={styles.newBadge}>New</span>
@@ -2178,6 +2187,19 @@ ARTISTIC APPROACH:
         </div>
       </div>
     </div>
+  )
+}
+
+{/* Custom Modeling Panel */}
+{
+  customModelingPanelOpen && (
+    <CustomModelingPanel
+      onClose={() => setCustomModelingPanelOpen(false)}
+      onSelectModel={(modelType, category) => {
+        console.log(`Selected model: ${modelType} from ${category}`);
+        // TODO: Implement model placement in 3D scene
+      }}
+    />
   )
 }
 
