@@ -1097,12 +1097,12 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         // CRITICAL: Disable backface culling to see inside of box
         skyMaterial.backFaceCulling = false;
 
-        // Realistic sky appearance settings
-        skyMaterial.turbidity = 3; // Clear sky (1-20, lower = clearer)
-        skyMaterial.luminance = 1.0; // Overall brightness (0-1)
-        skyMaterial.rayleigh = 3.0; // Strong blue sky scattering (0-4)
-        skyMaterial.mieCoefficient = 0.003; // Subtle cloud scattering (0-0.1)
-        skyMaterial.mieDirectionalG = 0.82; // Cloud sharpness (0-1)
+        // Clear blue sky settings
+        skyMaterial.turbidity = 1; // Very clear sky (lower = clearer)
+        skyMaterial.luminance = 1.1; // Bright sky
+        skyMaterial.rayleigh = 2.0; // Blue sky scattering
+        skyMaterial.mieCoefficient = 0.0001; // Almost no haze/fog
+        skyMaterial.mieDirectionalG = 0.999; // Sharp sun
         skyMaterial.useSunPosition = true; // Use sun position for realistic lighting
 
         // Sun position for lighting (matches directional light)
@@ -2977,7 +2977,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
                     shape: shape2D,
                     depth: 0.001,
                     sideOrientation: Mesh.DOUBLESIDE
-                  }, scene);
+                  }, scene, earcut);
                   faceOverlay.position.y = faceOverlayVerts[0].y;
                 } else {
                   // Wall: create plane from 4 vertices
