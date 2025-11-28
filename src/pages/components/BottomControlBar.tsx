@@ -289,7 +289,7 @@ export const BottomControlBar = forwardRef<BottomControlBarRef, BottomControlBar
         { key: 'material', label: 'Material', shortcut: '⌘1', image: '/images/display style/Materual.png' },
         { key: 'white', label: 'White model', shortcut: '⌘2', image: '/images/display style/white model.png' },
         { key: 'sketch', label: 'Cartoon', shortcut: '⌘3', image: '/images/display style/Cartoon.png' },
-        { key: 'transparent', label: 'Transparent', shortcut: '⌘4', image: '/images/display style/Transparent.png' },
+        { key: 'transparent', label: 'Hidden Line', shortcut: '⌘4', image: '/images/display style/Transparent.png' },
     ];
 
     // Check if any internal modal is open

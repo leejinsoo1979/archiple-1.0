@@ -409,6 +409,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     mesh: Mesh;
     wallId: string;
     screenPosition: { x: number; y: number };
+    dimensions: { width: number; height: number };
+    faceNormal: { x: number; y: number; z: number };
   } | null>(null);
 
   // Camera settings from Zustand store
@@ -999,9 +1001,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       hemisphericLight.specular = new Color3(0.1, 0.1, 0.1);
 
       // 2. Main directional light (sun) with shadows
-      const azimuth = sunSettings?.azimuth ?? -45; // Sun from front-left
-      const altitude = sunSettings?.altitude ?? 50; // Higher sun = shadows more directly below
-      const intensity = sunSettings?.intensity ?? 2.5; // Increased for stronger shadows
+      const azimuth = sunSettings?.azimuth ?? 45;
+      const altitude = sunSettings?.altitude ?? 45;
+      const intensity = sunSettings?.intensity ?? 2.0;
 
       // Calculate sun direction from azimuth/altitude
       const azimuthRad = (azimuth * Math.PI) / 180;
@@ -1012,23 +1014,37 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       const dirY = -Math.sin(altitudeRad);
       const dirZ = -Math.cos(altitudeRad) * Math.cos(azimuthRad);
 
-      // DirectionalLight: sun from side, casting clear shadows on floor
-      const sunLight = new DirectionalLight('sunLight', new Vector3(1, -2, 1).normalize(), scene);
+      // Sun position for shadow calculation (opposite of direction, far away)
+      const sunDist = 100;
+      const sunPosX = sunDist * Math.cos(altitudeRad) * Math.sin(azimuthRad);
+      const sunPosY = sunDist * Math.sin(altitudeRad);
+      const sunPosZ = sunDist * Math.cos(altitudeRad) * Math.cos(azimuthRad);
+
+      // Realistic sun color based on altitude (lower = warmer/orange, higher = whiter)
+      const altitudeNorm = altitude / 90; // 0 to 1
+      const sunR = 1.0;
+      const sunG = 0.85 + 0.15 * altitudeNorm; // 0.85 to 1.0
+      const sunB = 0.7 + 0.3 * altitudeNorm;   // 0.7 to 1.0
+
+      const sunLight = new DirectionalLight('sunLight', new Vector3(dirX, dirY, dirZ).normalize(), scene);
       sunLight.intensity = intensity;
-      sunLight.diffuse = new Color3(1, 0.98, 0.95);
-      sunLight.specular = new Color3(1, 1, 1);
-      sunLight.position = new Vector3(-50, 100, -50);
-      sunLight.shadowMinZ = 0.1;
-      sunLight.shadowMaxZ = 500;
+      sunLight.diffuse = new Color3(sunR, sunG, sunB);
+      sunLight.specular = new Color3(1, 1, 0.95);
+      sunLight.position = new Vector3(sunPosX, sunPosY, sunPosZ);
+      sunLight.shadowMinZ = 1;
+      sunLight.shadowMaxZ = 300;
       sunLightRef.current = sunLight;
 
       // Shadow generator - strong visible shadows
       const shadowGenerator = new ShadowGenerator(4096, sunLight);
-      shadowGenerator.useExponentialShadowMap = true;
+      shadowGenerator.useBlurExponentialShadowMap = true;
+      shadowGenerator.blurKernel = 64;
+      shadowGenerator.blurScale = 2;
+      shadowGenerator.useKernelBlur = true;
       shadowGenerator.bias = 0.00001;
       shadowGenerator.normalBias = 0.001;
       // darkness: 0 = completely black shadow
-      shadowGenerator.setDarkness(0);
+      shadowGenerator.setDarkness(0.2);
 
       // Create infinite grid floor
       const createInfiniteGrid = () => {
@@ -2405,8 +2421,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           roomName: room.name || `Room ${roomIndex + 1}`
         };
       });
-      // Create ceilings for each room - ONLY in play mode
-      if (playMode) {
+      // Create ceilings for each room - always create, visibility controlled by camera angle
+      {
         // Calculate maximum wall height for ceiling position
         const maxWallHeight = walls.reduce((max, wall) => Math.max(max, wall.height || 2400), 2400);
         const ceilingY = maxWallHeight * MM_TO_METERS;
@@ -2477,6 +2493,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           ceiling.material = ceilingMaterial;
           ceiling.receiveShadows = true;
           ceiling.checkCollisions = true;
+          ceiling.metadata = { type: 'ceiling', roomIndex };
+          // Initially hide ceiling - will be shown by AutoWallHider when camera looks up
+          ceiling.visibility = 0;
         });
       }
     }
@@ -3043,7 +3062,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
                 clickFaceOverlayRef.current = faceOverlay;
 
                 // Set wall toolbar position if wall clicked
-                if (isClickedWall) {
+                if (isClickedWall && faceOverlayVerts.length >= 4) {
+                  const wallWidth = Vector3.Distance(faceOverlayVerts[0], faceOverlayVerts[1]);
+                  const wallHeight = Vector3.Distance(faceOverlayVerts[1], faceOverlayVerts[2]);
                   const center = faceOverlay.getBoundingInfo().boundingBox.centerWorld;
                   const camera = arcCameraRef.current;
                   const engine = engineRef.current;
@@ -3059,7 +3080,12 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
                     setSelectedWall({
                       mesh: clickedMesh,
                       wallId,
-                      screenPosition: { x: screenPos.x, y: screenPos.y - 80 }
+                      screenPosition: { x: screenPos.x, y: screenPos.y - 80 },
+                      dimensions: {
+                        width: Math.round(wallWidth * 1000), // Convert to mm
+                        height: Math.round(wallHeight * 1000)
+                      },
+                      faceNormal: { x: faceNormal.x, y: faceNormal.y, z: faceNormal.z }
                     });
                     setSelectedFloor(null);
                   }
@@ -4489,17 +4515,19 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           break;
 
         case 'transparent':
-          // Transparent/X-ray style
-          const transparentMat = new StandardMaterial(`transparentMat_${meshId}`, scene);
-          transparentMat.diffuseColor = new Color3(0.7, 0.85, 1.0);
-          transparentMat.specularColor = new Color3(0.3, 0.3, 0.3);
-          transparentMat.alpha = 0.3;
-          transparentMat.backFaceCulling = false;
-          mesh.material = transparentMat;
-          // Enable edge rendering for wireframe effect
+          // Hidden line mode (은선모드) - wireframe with white background
+          const hiddenLineMat = new StandardMaterial(`hiddenLineMat_${meshId}`, scene);
+          hiddenLineMat.diffuseColor = new Color3(1, 1, 1);
+          hiddenLineMat.specularColor = new Color3(0, 0, 0);
+          hiddenLineMat.emissiveColor = new Color3(1, 1, 1); // Pure white, self-lit
+          hiddenLineMat.disableLighting = true;
+          hiddenLineMat.backFaceCulling = true;
+          mesh.material = hiddenLineMat;
+          mesh.receiveShadows = false;
+          // Enable black edge rendering for hidden line effect
           mesh.enableEdgesRendering();
-          mesh.edgesWidth = 1.5;
-          mesh.edgesColor = new Color4(0.3, 0.5, 0.8, 1);
+          mesh.edgesWidth = 1.2;
+          mesh.edgesColor = new Color4(0.1, 0.1, 0.1, 1); // Dark black edges
           break;
       }
 
@@ -4860,6 +4888,13 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
               boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
             }}
             onClick={() => {
+              // Save wall data to localStorage for Wall Editor
+              const wallData = {
+                wallId: selectedWall.wallId,
+                dimensions: selectedWall.dimensions,
+                faceNormal: selectedWall.faceNormal
+              };
+              localStorage.setItem('wallEditorData', JSON.stringify(wallData));
               // Navigate to wall editor
               window.location.href = `/wall-editor?wallId=${encodeURIComponent(selectedWall.wallId)}`;
             }}
