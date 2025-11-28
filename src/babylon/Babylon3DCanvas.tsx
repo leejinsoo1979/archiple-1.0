@@ -999,8 +999,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       hemisphericLight.specular = new Color3(0.1, 0.1, 0.1);
 
       // 2. Main directional light (sun) with shadows
-      const azimuth = sunSettings?.azimuth ?? 135; // Sun from front-left
-      const altitude = sunSettings?.altitude ?? 60; // Higher sun = shadows more directly below
+      const azimuth = sunSettings?.azimuth ?? -45; // Sun from front-left
+      const altitude = sunSettings?.altitude ?? 50; // Higher sun = shadows more directly below
       const intensity = sunSettings?.intensity ?? 2.5; // Increased for stronger shadows
 
       // Calculate sun direction from azimuth/altitude
@@ -2595,11 +2595,14 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
               if (isWall) {
                 // Skip horizontal faces (top/bottom)
                 if (Math.abs(faceNormal.y) > 0.1) {
-                  if (lastHoveredMeshRef.current && highlightLayerRef.current) {
-                    highlightLayerRef.current.removeMesh(lastHoveredMeshRef.current);
-                    lastHoveredMeshRef.current = null;
-                    lastHoverKeyRef.current = '';
+                  if (hoverOutlineRef.current) {
+                    if (highlightLayerRef.current) {
+                      highlightLayerRef.current.removeMesh(hoverOutlineRef.current);
+                    }
+                    hoverOutlineRef.current.dispose();
+                    hoverOutlineRef.current = null;
                   }
+                  lastHoverKeyRef.current = '';
                   return;
                 }
 
@@ -2610,11 +2613,14 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
                 const maxZ = Math.max(v0.z, v1.z, v2.z);
                 const wallThicknessThreshold = 0.35;
                 if ((maxX - minX) < wallThicknessThreshold && (maxZ - minZ) < wallThicknessThreshold) {
-                  if (lastHoveredMeshRef.current && highlightLayerRef.current) {
-                    highlightLayerRef.current.removeMesh(lastHoveredMeshRef.current);
-                    lastHoveredMeshRef.current = null;
-                    lastHoverKeyRef.current = '';
+                  if (hoverOutlineRef.current) {
+                    if (highlightLayerRef.current) {
+                      highlightLayerRef.current.removeMesh(hoverOutlineRef.current);
+                    }
+                    hoverOutlineRef.current.dispose();
+                    hoverOutlineRef.current = null;
                   }
+                  lastHoverKeyRef.current = '';
                   return;
                 }
               }
