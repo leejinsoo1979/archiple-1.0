@@ -1013,13 +1013,13 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       const dirZ = -Math.cos(altitudeRad) * Math.cos(azimuthRad);
 
       // DirectionalLight: direction points FROM sun TO scene
-      // Sun should be in front and above, shining INTO the room
-      const sunLight = new DirectionalLight('sunLight', new Vector3(0, -1, 0.5).normalize(), scene);
+      // Sun from left-front-top, casting shadows INTO the room on floor
+      const sunLight = new DirectionalLight('sunLight', new Vector3(1, -2, 1).normalize(), scene);
       sunLight.intensity = intensity;
       sunLight.diffuse = new Color3(1, 0.98, 0.95); // Warm sunlight
       sunLight.specular = new Color3(1, 1, 1);
-      // Position sun high above and in front of scene
-      sunLight.position = new Vector3(0, 50, -30);
+      // Position sun high above and to the left-front of scene
+      sunLight.position = new Vector3(-30, 50, -30);
       sunLight.autoCalcShadowZBounds = true;
       sunLightRef.current = sunLight;
 
@@ -2638,125 +2638,76 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
               if (hoverKey === lastHoverKeyRef.current) return;
               lastHoverKeyRef.current = hoverKey;
 
-              // Create face overlay with glow (only on detected face, not entire mesh)
+              // Clear previous outline
               if (hoverOutlineRef.current) {
                 hoverOutlineRef.current.dispose();
               }
 
-              // Calculate face vertices
-              const faceVerts: Vector3[] = [];
-              if (isFloor && picked.metadata?.polygonPoints) {
-                const polyPoints = picked.metadata.polygonPoints as { x: number; y: number; z: number }[];
-                polyPoints.forEach(p => faceVerts.push(new Vector3(p.x, v0.y + 0.01, p.z)));
-              } else if (isFloor) {
-                const bb = picked.getBoundingInfo().boundingBox;
-                const min = bb.minimumWorld, max = bb.maximumWorld;
-                faceVerts.push(
-                  new Vector3(min.x, v0.y + 0.01, min.z), new Vector3(max.x, v0.y + 0.01, min.z),
-                  new Vector3(max.x, v0.y + 0.01, max.z), new Vector3(min.x, v0.y + 0.01, max.z)
-                );
-              } else {
-                // Wall: inner face only
-                const isXWall = Math.abs(faceNormal.x) > Math.abs(faceNormal.z);
-                const planePos = isXWall ? (v0.x + v1.x + v2.x) / 3 : (v0.z + v1.z + v2.z) / 3;
-                const bb = picked.getBoundingInfo().boundingBox;
-                const min = bb.minimumWorld, max = bb.maximumWorld;
-                const offset = 0.01;
-                if (isXWall) {
-                  const px = planePos + (faceNormal.x > 0 ? offset : -offset);
-                  faceVerts.push(
-                    new Vector3(px, min.y, min.z), new Vector3(px, min.y, max.z),
-                    new Vector3(px, max.y, max.z), new Vector3(px, max.y, min.z)
-                  );
-                } else {
-                  const pz = planePos + (faceNormal.z > 0 ? offset : -offset);
-                  faceVerts.push(
-                    new Vector3(min.x, min.y, pz), new Vector3(max.x, min.y, pz),
-                    new Vector3(max.x, max.y, pz), new Vector3(min.x, max.y, pz)
-                  );
-                }
-              }
-
-              // Build outline vertices
-              let outlineVerts: Vector3[] = [];
+              // Build outline vertices using bounding box (fast)
+              const bb = picked.getBoundingInfo().boundingBox;
+              const min = bb.minimumWorld, max = bb.maximumWorld;
+              const offset = 0.01;
+              let outlineVerts: Vector3[];
 
               if (isFloor) {
-                outlineVerts = [...faceVerts];
+                if (picked.metadata?.polygonPoints) {
+                  const polyPoints = picked.metadata.polygonPoints as { x: number; y: number; z: number }[];
+                  outlineVerts = polyPoints.map(p => new Vector3(p.x, v0.y + offset, p.z));
+                } else {
+                  outlineVerts = [
+                    new Vector3(min.x, v0.y + offset, min.z),
+                    new Vector3(max.x, v0.y + offset, min.z),
+                    new Vector3(max.x, v0.y + offset, max.z),
+                    new Vector3(min.x, v0.y + offset, max.z)
+                  ];
+                }
               } else {
-                // Wall: find actual inner wall face bounds
+                // Wall: use picked face position with bounding box height
                 const isXWall = Math.abs(faceNormal.x) > Math.abs(faceNormal.z);
                 const planePos = isXWall ? (v0.x + v1.x + v2.x) / 3 : (v0.z + v1.z + v2.z) / 3;
 
-                let minY = Infinity, maxY = -Infinity;
-                let minH = Infinity, maxH = -Infinity;
-
-                for (let i = 0; i < indices.length; i += 3) {
-                  const i0 = indices[i], i1 = indices[i + 1], i2 = indices[i + 2];
-                  const tv0 = Vector3.TransformCoordinates(new Vector3(positions[i0 * 3], positions[i0 * 3 + 1], positions[i0 * 3 + 2]), worldMatrix);
-                  const tv1 = Vector3.TransformCoordinates(new Vector3(positions[i1 * 3], positions[i1 * 3 + 1], positions[i1 * 3 + 2]), worldMatrix);
-                  const tv2 = Vector3.TransformCoordinates(new Vector3(positions[i2 * 3], positions[i2 * 3 + 1], positions[i2 * 3 + 2]), worldMatrix);
-
-                  const avgP = isXWall ? (tv0.x + tv1.x + tv2.x) / 3 : (tv0.z + tv1.z + tv2.z) / 3;
-                  if (Math.abs(avgP - planePos) > 0.02) continue;
-
-                  const e1 = tv1.subtract(tv0), e2 = tv2.subtract(tv0);
-                  if (Vector3.Dot(Vector3.Cross(e1, e2).normalize(), faceNormal) < 0.9) continue;
-
-                  minY = Math.min(minY, tv0.y, tv1.y, tv2.y);
-                  maxY = Math.max(maxY, tv0.y, tv1.y, tv2.y);
-                  if (isXWall) {
-                    minH = Math.min(minH, tv0.z, tv1.z, tv2.z);
-                    maxH = Math.max(maxH, tv0.z, tv1.z, tv2.z);
-                  } else {
-                    minH = Math.min(minH, tv0.x, tv1.x, tv2.x);
-                    maxH = Math.max(maxH, tv0.x, tv1.x, tv2.x);
-                  }
-                }
-
-                if (minY === Infinity) return;
-
-                const offset = 0.01;
                 if (isXWall) {
                   const px = planePos + (faceNormal.x > 0 ? offset : -offset);
                   outlineVerts = [
-                    new Vector3(px, minY, minH), new Vector3(px, minY, maxH),
-                    new Vector3(px, maxY, maxH), new Vector3(px, maxY, minH)
+                    new Vector3(px, min.y, min.z),
+                    new Vector3(px, min.y, max.z),
+                    new Vector3(px, max.y, max.z),
+                    new Vector3(px, max.y, min.z)
                   ];
                 } else {
                   const pz = planePos + (faceNormal.z > 0 ? offset : -offset);
                   outlineVerts = [
-                    new Vector3(minH, minY, pz), new Vector3(maxH, minY, pz),
-                    new Vector3(maxH, maxY, pz), new Vector3(minH, maxY, pz)
+                    new Vector3(min.x, min.y, pz),
+                    new Vector3(max.x, min.y, pz),
+                    new Vector3(max.x, max.y, pz),
+                    new Vector3(min.x, max.y, pz)
                   ];
                 }
               }
 
-              if (outlineVerts.length >= 3) {
-                // Create tube outline (line with glow, not face)
-                const path = [...outlineVerts, outlineVerts[0]];
-                const outline = MeshBuilder.CreateTube('hoverOutline', {
-                  path: path,
-                  radius: 0.015,
-                  tessellation: 6,
-                  cap: Mesh.NO_CAP,
-                  updatable: false
-                }, scene);
+              // Create tube outline
+              const path = [...outlineVerts, outlineVerts[0]];
+              const outline = MeshBuilder.CreateTube('hoverOutline', {
+                path: path,
+                radius: 0.015,
+                tessellation: 4,
+                cap: Mesh.NO_CAP,
+                updatable: false
+              }, scene);
 
-                const themeColor = getThemeColor();
-                const mat = new StandardMaterial('hoverMat', scene);
-                mat.emissiveColor = themeColor;
-                mat.disableLighting = true;
-                outline.material = mat;
-                outline.renderingGroupId = 3;
-                outline.isPickable = false;
+              const themeColor = getThemeColor();
+              const mat = new StandardMaterial('hoverMat', scene);
+              mat.emissiveColor = themeColor;
+              mat.disableLighting = true;
+              outline.material = mat;
+              outline.renderingGroupId = 3;
+              outline.isPickable = false;
 
-                // Add glow to line only
-                if (highlightLayerRef.current) {
-                  highlightLayerRef.current.addMesh(outline, themeColor);
-                }
-
-                hoverOutlineRef.current = outline;
+              if (highlightLayerRef.current) {
+                highlightLayerRef.current.addMesh(outline, themeColor);
               }
+
+              hoverOutlineRef.current = outline;
             }
           }
         } else {
