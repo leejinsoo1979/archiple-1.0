@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { LuRotate3D } from 'react-icons/lu';
 import styles from './CustomModelingPage.module.css';
 import {
   Engine,
@@ -11,7 +12,6 @@ import {
   Color3,
   Color4,
   StandardMaterial,
-  PointerEventTypes,
   Mesh,
   GizmoManager,
   UtilityLayerRenderer,
@@ -54,6 +54,8 @@ const CustomModelingPage: React.FC = () => {
   const [activeTool, setActiveTool] = useState<ToolType>('select');
   const [selectedMesh, setSelectedMesh] = useState<Mesh | null>(null);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const [activeTab, setActiveTab] = useState<'info' | 'materials' | 'components'>('info');
+  const [selectedColor, setSelectedColor] = useState('#E5E7EB');
   const [meshProperties, setMeshProperties] = useState<{
     name: string;
     position: { x: number; y: number; z: number };
@@ -61,11 +63,22 @@ const CustomModelingPage: React.FC = () => {
     scale: { x: number; y: number; z: number };
   } | null>(null);
 
+  // Theme state - read from localStorage
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('themeMode') as 'light' | 'dark' | null;
+    return saved || 'dark';
+  });
+
+  // Theme color - read from localStorage (from main Archiple tool)
+  const [themeColor, setThemeColor] = useState<string>(() => {
+    const saved = localStorage.getItem('themeColor');
+    return saved || '#6366F1';
+  });
+
   // Get ground point with grid snapping
   const getGroundPoint = useCallback((scene: Scene, pointerX: number, pointerY: number): Vector3 | null => {
     const pickResult = scene.pick(pointerX, pointerY, (mesh) => mesh.name === 'groundPicker');
     if (pickResult?.hit && pickResult.pickedPoint) {
-      // Snap to 0.5 unit grid
       const snapped = new Vector3(
         Math.round(pickResult.pickedPoint.x * 2) / 2,
         0,
@@ -86,7 +99,7 @@ const CustomModelingPage: React.FC = () => {
       points: [start, end],
       updatable: false,
     }, scene);
-    line.color = new Color3(0, 0, 0);
+    line.color = new Color3(0.4, 0.6, 1);
     line.isPickable = false;
     state.previewMesh = line;
   }, []);
@@ -103,8 +116,8 @@ const CustomModelingPage: React.FC = () => {
       const rect = MeshBuilder.CreateGround('previewRect', { width, height: depth }, scene);
       rect.position = new Vector3((start.x + end.x) / 2, 0.01, (start.z + end.z) / 2);
       const mat = new StandardMaterial('previewMat', scene);
-      mat.diffuseColor = new Color3(0.8, 0.9, 1);
-      mat.alpha = 0.5;
+      mat.diffuseColor = new Color3(0.4, 0.5, 0.9);
+      mat.alpha = 0.4;
       rect.material = mat;
       rect.isPickable = false;
       state.previewMesh = rect;
@@ -115,9 +128,8 @@ const CustomModelingPage: React.FC = () => {
   const finalizeLine = useCallback((scene: Scene, start: Vector3, end: Vector3) => {
     meshCounterRef.current++;
     const edgeMat = new StandardMaterial(`edgeMat_${meshCounterRef.current}`, scene);
-    edgeMat.diffuseColor = new Color3(0.2, 0.2, 0.2);
+    edgeMat.diffuseColor = new Color3(0.3, 0.3, 0.3);
 
-    // Create a thin box to represent the line/edge
     const length = Vector3.Distance(start, end);
     const edge = MeshBuilder.CreateBox(`Edge_${meshCounterRef.current}`, {
       width: length,
@@ -125,7 +137,6 @@ const CustomModelingPage: React.FC = () => {
       depth: 0.02,
     }, scene);
 
-    // Position and rotate to connect start and end
     const midPoint = start.add(end).scale(0.5);
     edge.position = new Vector3(midPoint.x, 0.01, midPoint.z);
 
@@ -151,12 +162,11 @@ const CustomModelingPage: React.FC = () => {
     face.position = new Vector3((start.x + end.x) / 2, 0.01, (start.z + end.z) / 2);
 
     const faceMat = new StandardMaterial(`faceMat_${meshCounterRef.current}`, scene);
-    faceMat.diffuseColor = Color3.FromHexString('#E5E7EB');
+    faceMat.diffuseColor = Color3.FromHexString(selectedColor);
     faceMat.specularColor = new Color3(0.2, 0.2, 0.2);
     faceMat.backFaceCulling = false;
     face.material = faceMat;
 
-    // Store face metadata for push/pull
     face.metadata = {
       type: 'face',
       width,
@@ -165,9 +175,9 @@ const CustomModelingPage: React.FC = () => {
     };
 
     return face;
-  }, []);
+  }, [selectedColor]);
 
-  // Push/Pull functionality - extrude face into solid
+  // Push/Pull functionality
   const applyPushPull = useCallback((mesh: Mesh, height: number): Mesh | null => {
     if (!mesh.metadata || mesh.metadata.type !== 'face') return null;
 
@@ -188,15 +198,14 @@ const CustomModelingPage: React.FC = () => {
     );
 
     const solidMat = new StandardMaterial(`solidMat_${meshCounterRef.current}`, scene);
-    solidMat.diffuseColor = Color3.FromHexString('#E5E7EB');
+    solidMat.diffuseColor = Color3.FromHexString(selectedColor);
     solidMat.specularColor = new Color3(0.2, 0.2, 0.2);
     extruded.material = solidMat;
 
-    // Dispose original face
     mesh.dispose();
 
     return extruded;
-  }, []);
+  }, [selectedColor]);
 
   // Zoom to fit all meshes
   const zoomExtents = useCallback(() => {
@@ -250,10 +259,10 @@ const CustomModelingPage: React.FC = () => {
     engineRef.current = engine;
 
     const scene = new Scene(engine);
-    scene.clearColor = new Color4(0.95, 0.95, 0.95, 1);
+    scene.clearColor = new Color4(0.08, 0.08, 0.08, 1);
     sceneRef.current = scene;
 
-    // Camera - SketchUp style controls
+    // Camera
     const camera = new ArcRotateCamera(
       'camera',
       -Math.PI / 4,
@@ -263,10 +272,8 @@ const CustomModelingPage: React.FC = () => {
       scene
     );
 
-    // SketchUp-style camera: middle-drag=orbit, shift+middle=pan, scroll=zoom
     camera.attachControl(canvas, true);
 
-    // Configure camera inputs for SketchUp behavior
     const pointerInput = camera.inputs.attached.pointers as {
       buttons?: number[];
       angularSensibilityX?: number;
@@ -274,22 +281,20 @@ const CustomModelingPage: React.FC = () => {
       panningSensibility?: number;
     };
 
-    // Only middle mouse button (1) controls camera rotation
-    // Left (0) is for tools, Right (2) is disabled for camera
     if (pointerInput) {
-      pointerInput.buttons = [1]; // Middle mouse only for orbit
-      pointerInput.angularSensibilityX = 500; // SketchUp-like sensitivity
+      pointerInput.buttons = [1];
+      pointerInput.angularSensibilityX = 500;
       pointerInput.angularSensibilityY = 500;
-      pointerInput.panningSensibility = 50; // Pan with Shift+Middle
+      pointerInput.panningSensibility = 50;
     }
 
-    camera.wheelPrecision = 15; // Scroll zoom sensitivity
+    camera.wheelPrecision = 15;
     camera.pinchPrecision = 50;
     camera.lowerRadiusLimit = 1;
     camera.upperRadiusLimit = 500;
-    camera.lowerBetaLimit = 0.1; // Prevent flipping under ground
-    camera.upperBetaLimit = Math.PI - 0.1; // Prevent flipping over
-    camera.inertia = 0.7; // Smooth camera movement like SketchUp
+    camera.lowerBetaLimit = 0.1;
+    camera.upperBetaLimit = Math.PI - 0.1;
+    camera.inertia = 0.7;
     camera.panningInertia = 0.7;
 
     cameraRef.current = camera;
@@ -300,35 +305,34 @@ const CustomModelingPage: React.FC = () => {
     const light2 = new HemisphericLight('light2', new Vector3(-1, 1, 0), scene);
     light2.intensity = 0.4;
 
-    // Infinite Grid
+    // Grid
     const ground = MeshBuilder.CreateGround('ground', { width: 1000, height: 1000 }, scene);
     const gridMaterial = new GridMaterial('gridMaterial', scene);
     gridMaterial.majorUnitFrequency = 5;
-    gridMaterial.minorUnitVisibility = 0.45;
+    gridMaterial.minorUnitVisibility = 0.3;
     gridMaterial.gridRatio = 1;
-    gridMaterial.mainColor = new Color3(0.95, 0.95, 0.95);
-    gridMaterial.lineColor = new Color3(0.75, 0.75, 0.75);
+    gridMaterial.mainColor = new Color3(0.15, 0.15, 0.15);
+    gridMaterial.lineColor = new Color3(0.3, 0.3, 0.3);
     gridMaterial.opacity = 0.99;
     gridMaterial.useMaxLine = true;
     gridMaterial.gridOffset = Vector3.Zero();
     ground.material = gridMaterial;
     ground.isPickable = false;
 
-    // Invisible ground picker for drawing tools
+    // Ground picker
     const groundPicker = MeshBuilder.CreateGround('groundPicker', { width: 1000, height: 1000 }, scene);
     groundPicker.position.y = 0;
     groundPicker.visibility = 0;
     groundPicker.isPickable = true;
     groundPickerRef.current = groundPicker;
 
-    // Axis lines (like SketchUp)
+    // Axis lines
     const axisLength = 500;
 
-    // X axis - Red (positive = solid, negative = dashed)
     const xAxisPos = MeshBuilder.CreateLines('xAxisPos', {
       points: [Vector3.Zero(), new Vector3(axisLength, 0, 0)],
     }, scene);
-    xAxisPos.color = new Color3(1, 0, 0);
+    xAxisPos.color = new Color3(0.9, 0.2, 0.2);
     xAxisPos.isPickable = false;
 
     const xAxisNeg = MeshBuilder.CreateDashedLines('xAxisNeg', {
@@ -337,14 +341,13 @@ const CustomModelingPage: React.FC = () => {
       gapSize: 0.2,
       dashNb: 100,
     }, scene);
-    xAxisNeg.color = new Color3(1, 0.5, 0.5);
+    xAxisNeg.color = new Color3(0.5, 0.2, 0.2);
     xAxisNeg.isPickable = false;
 
-    // Y axis (Babylon Z) - Green (positive = solid, negative = dashed)
     const yAxisPos = MeshBuilder.CreateLines('yAxisPos', {
       points: [Vector3.Zero(), new Vector3(0, 0, axisLength)],
     }, scene);
-    yAxisPos.color = new Color3(0, 0.7, 0);
+    yAxisPos.color = new Color3(0.2, 0.8, 0.2);
     yAxisPos.isPickable = false;
 
     const yAxisNeg = MeshBuilder.CreateDashedLines('yAxisNeg', {
@@ -353,14 +356,13 @@ const CustomModelingPage: React.FC = () => {
       gapSize: 0.2,
       dashNb: 100,
     }, scene);
-    yAxisNeg.color = new Color3(0.5, 0.8, 0.5);
+    yAxisNeg.color = new Color3(0.2, 0.4, 0.2);
     yAxisNeg.isPickable = false;
 
-    // Z axis (Babylon Y) - Blue (positive = solid, negative = dashed)
     const zAxisPos = MeshBuilder.CreateLines('zAxisPos', {
       points: [Vector3.Zero(), new Vector3(0, axisLength, 0)],
     }, scene);
-    zAxisPos.color = new Color3(0, 0, 1);
+    zAxisPos.color = new Color3(0.3, 0.5, 1);
     zAxisPos.isPickable = false;
 
     const zAxisNeg = MeshBuilder.CreateDashedLines('zAxisNeg', {
@@ -369,7 +371,7 @@ const CustomModelingPage: React.FC = () => {
       gapSize: 0.2,
       dashNb: 100,
     }, scene);
-    zAxisNeg.color = new Color3(0.5, 0.5, 1);
+    zAxisNeg.color = new Color3(0.2, 0.3, 0.5);
     zAxisNeg.isPickable = false;
 
     // Highlight layer
@@ -383,14 +385,6 @@ const CustomModelingPage: React.FC = () => {
     gizmoManager.scaleGizmoEnabled = false;
     gizmoManager.boundingBoxGizmoEnabled = false;
     gizmoManagerRef.current = gizmoManager;
-
-    // Pointer events - stored reference for cleanup
-    const pointerObserver = scene.onPointerObservable.add((pointerInfo) => {
-      // Selection/default behavior handled by separate useEffect
-    });
-
-    // Store observer reference for potential cleanup
-    (scene as Scene & { _customPointerObserver?: typeof pointerObserver })._customPointerObserver = pointerObserver;
 
     engine.runRenderLoop(() => {
       scene.render();
@@ -415,21 +409,62 @@ const CustomModelingPage: React.FC = () => {
     gm.scaleGizmoEnabled = activeTool === 'scale';
   }, [activeTool]);
 
-  // Handle pointer events for drawing and selection
+  // Update scene colors when theme changes
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    // Update scene clear color based on theme
+    if (themeMode === 'light') {
+      scene.clearColor = new Color4(0.96, 0.96, 0.96, 1);
+    } else {
+      scene.clearColor = new Color4(0.08, 0.08, 0.08, 1);
+    }
+
+    // Update grid material colors
+    const ground = scene.getMeshByName('ground');
+    if (ground && ground.material) {
+      const gridMaterial = ground.material as GridMaterial;
+      if (themeMode === 'light') {
+        gridMaterial.mainColor = new Color3(0.92, 0.92, 0.92);
+        gridMaterial.lineColor = new Color3(0.78, 0.78, 0.78);
+      } else {
+        gridMaterial.mainColor = new Color3(0.15, 0.15, 0.15);
+        gridMaterial.lineColor = new Color3(0.3, 0.3, 0.3);
+      }
+    }
+
+    // Save to localStorage
+    localStorage.setItem('themeMode', themeMode);
+  }, [themeMode]);
+
+  // Toggle theme function
+  const toggleTheme = () => {
+    setThemeMode(prev => prev === 'dark' ? 'light' : 'dark');
+  };
+
+  // Handle pointer events
   useEffect(() => {
     const scene = sceneRef.current;
     const camera = cameraRef.current;
     if (!scene || !camera) return;
 
-    // SketchUp-style: Middle mouse always controls camera (orbit/pan)
-    // Left mouse is always for tools, never for camera
+    // Camera control: Middle mouse always works, Left mouse only when orbit/pan/zoom tool is active
     const pointersInput = camera.inputs.attached.pointers as { buttons?: number[] };
     if (pointersInput) {
-      pointersInput.buttons = [1]; // Only middle mouse for camera
+      if (activeTool === 'orbit' || activeTool === 'pan' || activeTool === 'zoom') {
+        pointersInput.buttons = [0, 1]; // Left and middle mouse for camera navigation tools
+      } else {
+        pointersInput.buttons = [1]; // Only middle mouse for other tools
+      }
     }
 
     const handlePointerDown = (evt: PointerEvent) => {
-      if (evt.button !== 0) return; // Only left click
+      // Skip if using camera navigation tools (camera handles these)
+      if (activeTool === 'orbit' || activeTool === 'pan' || activeTool === 'zoom') {
+        return;
+      }
+      if (evt.button !== 0) return;
 
       const state = drawingStateRef.current;
 
@@ -441,7 +476,6 @@ const CustomModelingPage: React.FC = () => {
           state.currentPoint = point;
         }
       } else if (activeTool === 'pushpull') {
-        // Push/Pull on selected face
         const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
           mesh.metadata?.type === 'face'
         );
@@ -449,11 +483,9 @@ const CustomModelingPage: React.FC = () => {
           const face = pickResult.pickedMesh as Mesh;
           state.isDrawing = true;
           state.startPoint = new Vector3(0, scene.pointerY, 0);
-          // Store reference to the face being extruded
           (state as DrawingState & { targetMesh?: Mesh }).targetMesh = face;
         }
       } else if (activeTool === 'select') {
-        // Selection
         const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
           mesh.isPickable && mesh.name !== 'ground' && mesh.name !== 'groundPicker'
         );
@@ -463,7 +495,6 @@ const CustomModelingPage: React.FC = () => {
           deselectMesh();
         }
       } else if (activeTool === 'eraser') {
-        // Delete clicked mesh
         const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
           mesh.isPickable && mesh.name !== 'ground' && mesh.name !== 'groundPicker'
         );
@@ -471,12 +502,30 @@ const CustomModelingPage: React.FC = () => {
           pickResult.pickedMesh.dispose();
           deselectMesh();
         }
+      } else if (activeTool === 'paint') {
+        // Paint tool - apply selected color to clicked mesh
+        const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
+          mesh.isPickable && mesh.name !== 'ground' && mesh.name !== 'groundPicker'
+        );
+        if (pickResult?.hit && pickResult.pickedMesh) {
+          const mesh = pickResult.pickedMesh as Mesh;
+          const material = mesh.material as StandardMaterial;
+          if (material && material.diffuseColor) {
+            material.diffuseColor = Color3.FromHexString(selectedColor);
+          } else {
+            const newMat = new StandardMaterial(`paintMat_${Date.now()}`, scene);
+            newMat.diffuseColor = Color3.FromHexString(selectedColor);
+            newMat.specularColor = new Color3(0.2, 0.2, 0.2);
+            mesh.material = newMat;
+          }
+          selectMesh(mesh);
+        }
       } else if (activeTool === 'zoomExtents') {
         zoomExtents();
       }
     };
 
-    const handlePointerMove = (evt: PointerEvent) => {
+    const handlePointerMove = () => {
       const state = drawingStateRef.current;
       if (!state.isDrawing || !state.startPoint) return;
 
@@ -493,11 +542,9 @@ const CustomModelingPage: React.FC = () => {
           updatePreviewRectangle(scene, state.startPoint, point);
         }
       } else if (activeTool === 'pushpull') {
-        // Preview extrusion height based on mouse Y movement
         const deltaY = (state.startPoint.y - scene.pointerY) * 0.05;
         const targetMesh = (state as DrawingState & { targetMesh?: Mesh }).targetMesh;
         if (targetMesh) {
-          // Update height preview (visual feedback)
           targetMesh.position.y = 0.01 + deltaY * 0.5;
         }
       }
@@ -512,11 +559,9 @@ const CustomModelingPage: React.FC = () => {
       if (activeTool === 'line' && state.startPoint && state.currentPoint) {
         if (Vector3.Distance(state.startPoint, state.currentPoint) > 0.1) {
           finalizeLine(scene, state.startPoint, state.currentPoint);
-          // Don't auto-select to avoid emissive highlight glow
         }
       } else if (activeTool === 'rectangle' && state.startPoint && state.currentPoint) {
         finalizeRectangle(scene, state.startPoint, state.currentPoint);
-        // Don't auto-select to avoid emissive highlight glow
       } else if (activeTool === 'pushpull') {
         const deltaY = (state.startPoint!.y - scene.pointerY) * 0.05;
         const targetMesh = (state as DrawingState & { targetMesh?: Mesh }).targetMesh;
@@ -528,13 +573,11 @@ const CustomModelingPage: React.FC = () => {
         }
       }
 
-      // Cleanup preview
       if (state.previewMesh) {
         state.previewMesh.dispose();
         state.previewMesh = null;
       }
 
-      // Reset state
       state.isDrawing = false;
       state.startPoint = null;
       state.currentPoint = null;
@@ -555,25 +598,20 @@ const CustomModelingPage: React.FC = () => {
         canvas.removeEventListener('pointerup', handlePointerUp);
       }
     };
-  }, [activeTool, getGroundPoint, updatePreviewLine, updatePreviewRectangle, finalizeLine, finalizeRectangle, applyPushPull, zoomExtents]);
+  }, [activeTool, selectedColor, getGroundPoint, updatePreviewLine, updatePreviewRectangle, finalizeLine, finalizeRectangle, applyPushPull, zoomExtents]);
 
-  // Keyboard shortcuts - SketchUp style
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger shortcuts when typing in inputs
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
       const key = e.key.toLowerCase();
 
-      // SketchUp keyboard shortcuts
       switch (key) {
-        // Selection & Basic
         case ' ':
           e.preventDefault();
           setActiveTool('select');
           break;
-
-        // Drawing Tools
         case 'l':
           setActiveTool('line');
           break;
@@ -584,18 +622,8 @@ const CustomModelingPage: React.FC = () => {
           setActiveTool('circle');
           break;
         case 'a':
-          if (!e.ctrlKey && !e.metaKey) {
-            setActiveTool('arc');
-          }
+          if (!e.ctrlKey && !e.metaKey) setActiveTool('arc');
           break;
-        case '2':
-          setActiveTool('arc2pt');
-          break;
-        case '3':
-          setActiveTool('arc3pt');
-          break;
-
-        // Modification Tools
         case 'p':
           setActiveTool('pushpull');
           break;
@@ -606,36 +634,26 @@ const CustomModelingPage: React.FC = () => {
           setActiveTool('rotate');
           break;
         case 's':
-          if (!e.ctrlKey && !e.metaKey) {
-            setActiveTool('scale');
-          }
+          if (!e.ctrlKey && !e.metaKey) setActiveTool('scale');
           break;
         case 'f':
           setActiveTool('offset');
           break;
-
-        // Construction Tools
         case 't':
           setActiveTool('tape');
           break;
         case 'd':
           setActiveTool('dimension');
           break;
-
-        // Component & Group
         case 'g':
           setActiveTool('makeComponent');
           break;
-
-        // Paint & Erase
         case 'b':
           setActiveTool('paint');
           break;
         case 'e':
           setActiveTool('eraser');
           break;
-
-        // Camera/Navigation
         case 'o':
           setActiveTool('orbit');
           break;
@@ -644,20 +662,15 @@ const CustomModelingPage: React.FC = () => {
           break;
         case 'z':
           if (e.shiftKey) {
-            // Shift+Z = Zoom Extents
             e.preventDefault();
             zoomExtents();
           } else if (!e.ctrlKey && !e.metaKey) {
             setActiveTool('zoom');
           }
           break;
-
-        // Section & Views
         case 'k':
           setActiveTool('section');
           break;
-
-        // Delete
         case 'delete':
         case 'backspace':
           e.preventDefault();
@@ -666,8 +679,6 @@ const CustomModelingPage: React.FC = () => {
             deselectMesh();
           }
           break;
-
-        // Escape - Cancel current operation
         case 'escape':
           const state = drawingStateRef.current;
           if (state.previewMesh) {
@@ -694,7 +705,7 @@ const CustomModelingPage: React.FC = () => {
 
     setSelectedMesh(mesh);
     if (highlightLayerRef.current) {
-      highlightLayerRef.current.addMesh(mesh, Color3.FromHexString('#3B82F6'));
+      highlightLayerRef.current.addMesh(mesh, Color3.FromHexString('#6366f1'));
     }
 
     if (gizmoManagerRef.current) {
@@ -736,28 +747,16 @@ const CustomModelingPage: React.FC = () => {
     });
   };
 
-  const addModel = (modelId: string) => {
+  const addPrimitive = (type: string) => {
     if (!sceneRef.current) return;
     const scene = sceneRef.current;
 
     let mesh: Mesh | null = null;
     const material = new StandardMaterial('mat', scene);
-    material.diffuseColor = Color3.FromHexString('#E5E7EB');
+    material.diffuseColor = Color3.FromHexString(selectedColor);
     material.specularColor = new Color3(0.2, 0.2, 0.2);
 
-    switch (modelId) {
-      case 'rectangle':
-        mesh = MeshBuilder.CreateBox('Box', { width: 2, height: 0.1, depth: 1.5 }, scene);
-        break;
-      case 'circle':
-        mesh = MeshBuilder.CreateCylinder('Cylinder', { height: 0.1, diameter: 2 }, scene);
-        break;
-      case 'polygon':
-        mesh = MeshBuilder.CreateCylinder('Polygon', { height: 0.1, diameter: 2, tessellation: 6 }, scene);
-        break;
-      case 'star':
-        mesh = MeshBuilder.CreateCylinder('Star', { height: 0.1, diameter: 2, tessellation: 5 }, scene);
-        break;
+    switch (type) {
       case 'cube':
         mesh = MeshBuilder.CreateBox('Cube', { size: 1.5 }, scene);
         mesh.position.y = 0.75;
@@ -778,59 +777,10 @@ const CustomModelingPage: React.FC = () => {
         mesh = MeshBuilder.CreateTorus('Torus', { diameter: 1.5, thickness: 0.4 }, scene);
         mesh.position.y = 0.75;
         break;
-      case 'lightStrip':
-      case 'continuousLight':
-        mesh = MeshBuilder.CreateBox('LightStrip', { width: 3, height: 0.05, depth: 0.1 }, scene);
-        material.emissiveColor = Color3.FromHexString('#FEF3C7');
-        mesh.position.y = 2.5;
+      case 'plane':
+        mesh = MeshBuilder.CreateGround('Plane', { width: 2, height: 2 }, scene);
+        mesh.position.y = 0.01;
         break;
-      case 'doubleStairs':
-      case 'singleStairs':
-        // Create simple stairs
-        const steps: Mesh[] = [];
-        for (let i = 0; i < 5; i++) {
-          const step = MeshBuilder.CreateBox(`step${i}`, { width: 1.5, height: 0.2, depth: 0.3 }, scene);
-          step.position.y = i * 0.2;
-          step.position.z = i * 0.3;
-          step.material = material;
-          steps.push(step);
-        }
-        mesh = Mesh.MergeMeshes(steps, true, true, undefined, false, true) as Mesh;
-        mesh.name = 'Stairs';
-        break;
-      case 'table':
-        const tableTop = MeshBuilder.CreateBox('tableTop', { width: 2, height: 0.1, depth: 1 }, scene);
-        tableTop.position.y = 0.8;
-        const leg1 = MeshBuilder.CreateBox('leg1', { width: 0.1, height: 0.8, depth: 0.1 }, scene);
-        leg1.position.set(-0.9, 0.4, -0.4);
-        const leg2 = MeshBuilder.CreateBox('leg2', { width: 0.1, height: 0.8, depth: 0.1 }, scene);
-        leg2.position.set(0.9, 0.4, -0.4);
-        const leg3 = MeshBuilder.CreateBox('leg3', { width: 0.1, height: 0.8, depth: 0.1 }, scene);
-        leg3.position.set(-0.9, 0.4, 0.4);
-        const leg4 = MeshBuilder.CreateBox('leg4', { width: 0.1, height: 0.8, depth: 0.1 }, scene);
-        leg4.position.set(0.9, 0.4, 0.4);
-        mesh = Mesh.MergeMeshes([tableTop, leg1, leg2, leg3, leg4], true, true, undefined, false, true) as Mesh;
-        mesh.name = 'Table';
-        break;
-      case 'chair':
-        const seat = MeshBuilder.CreateBox('seat', { width: 0.5, height: 0.05, depth: 0.5 }, scene);
-        seat.position.y = 0.45;
-        const back = MeshBuilder.CreateBox('back', { width: 0.5, height: 0.5, depth: 0.05 }, scene);
-        back.position.set(0, 0.7, -0.225);
-        const cLeg1 = MeshBuilder.CreateBox('cleg1', { width: 0.05, height: 0.45, depth: 0.05 }, scene);
-        cLeg1.position.set(-0.2, 0.225, -0.2);
-        const cLeg2 = MeshBuilder.CreateBox('cleg2', { width: 0.05, height: 0.45, depth: 0.05 }, scene);
-        cLeg2.position.set(0.2, 0.225, -0.2);
-        const cLeg3 = MeshBuilder.CreateBox('cleg3', { width: 0.05, height: 0.45, depth: 0.05 }, scene);
-        cLeg3.position.set(-0.2, 0.225, 0.2);
-        const cLeg4 = MeshBuilder.CreateBox('cleg4', { width: 0.05, height: 0.45, depth: 0.05 }, scene);
-        cLeg4.position.set(0.2, 0.225, 0.2);
-        mesh = Mesh.MergeMeshes([seat, back, cLeg1, cLeg2, cLeg3, cLeg4], true, true, undefined, false, true) as Mesh;
-        mesh.name = 'Chair';
-        break;
-      default:
-        mesh = MeshBuilder.CreateBox('Box', { size: 1 }, scene);
-        mesh.position.y = 0.5;
     }
 
     if (mesh) {
@@ -840,346 +790,469 @@ const CustomModelingPage: React.FC = () => {
     }
   };
 
-  const deleteSelected = () => {
-    if (selectedMesh) {
-      selectedMesh.dispose();
-      deselectMesh();
-    }
-  };
+  // Material colors
+  const colorPalette = [
+    '#FFFFFF', '#F5F5F5', '#E0E0E0', '#BDBDBD', '#9E9E9E', '#757575',
+    '#EF5350', '#EC407A', '#AB47BC', '#7E57C2', '#5C6BC0', '#42A5F5',
+    '#29B6F6', '#26C6DA', '#26A69A', '#66BB6A', '#9CCC65', '#D4E157',
+    '#FFEE58', '#FFCA28', '#FFA726', '#FF7043', '#8D6E63', '#78909C'
+  ];
 
-  // SketchUp material colors
-  const colorPalette = ['#FFFFFF', '#E0E0E0', '#BDBDBD', '#9E9E9E', '#757575', '#616161', '#424242', '#212121', '#F44336', '#E91E63', '#9C27B0', '#673AB7', '#3F51B5', '#2196F3', '#03A9F4', '#00BCD4', '#009688', '#4CAF50', '#8BC34A', '#CDDC39', '#FFEB3B', '#FFC107', '#FF9800', '#FF5722', '#795548', '#607D8B'];
+  // Tool definitions with SVG icons
+  const tools = [
+    { id: 'select', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M5 3L5 19L9 15L12 21L14 20L11 14L17 14L5 3Z" fill="currentColor"/></svg>, title: 'Select (Space)' },
+    { id: 'makeComponent', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>, title: 'Make Component (G)' },
+    { id: 'paint', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M19 6L17 4L7 14V17H10L20 7L19 6Z" fill="currentColor" opacity="0.3"/><path d="M19 6L17 4L7 14V17H10L20 7L19 6ZM4 20H20" stroke="currentColor" strokeWidth="1.5"/></svg>, title: 'Paint (B)' },
+    { id: 'eraser', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M18 5L9 14L5 17H10L19 8L18 5Z" fill="currentColor" opacity="0.3"/><path d="M18 5L9 14L5 17H10L19 8L18 5Z" stroke="currentColor" strokeWidth="1.5"/></svg>, title: 'Eraser (E)' },
+    { type: 'divider' },
+    { id: 'line', icon: <svg viewBox="0 0 24 24" fill="none"><line x1="4" y1="20" x2="20" y2="4" stroke="currentColor" strokeWidth="2"/><circle cx="4" cy="20" r="2" fill="#22c55e"/><circle cx="20" cy="4" r="2" fill="#ef4444"/></svg>, title: 'Line (L)' },
+    { id: 'freehand', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M4 17C8 15 10 8 14 10C18 12 16 17 20 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>, title: 'Freehand' },
+    { id: 'rectangle', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="12" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.2"/></svg>, title: 'Rectangle (R)' },
+    { id: 'circle', icon: <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.2"/></svg>, title: 'Circle (C)' },
+    { id: 'polygon', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M12 4L20 9V15L12 20L4 15V9L12 4Z" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.2"/></svg>, title: 'Polygon' },
+    { id: 'arc', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M4 18C4 10 10 4 18 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>, title: 'Arc (A)' },
+    { type: 'divider' },
+    { id: 'move', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M12 4V20M4 12H20" stroke="currentColor" strokeWidth="2"/><path d="M12 4L9 7H15L12 4Z" fill="#ef4444"/><path d="M12 20L9 17H15L12 20Z" fill="#ef4444"/><path d="M4 12L7 9V15L4 12Z" fill="#22c55e"/><path d="M20 12L17 9V15L20 12Z" fill="#22c55e"/></svg>, title: 'Move (M)' },
+    { id: 'pushpull', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M4 14L10 11L16 14V18L10 21L4 18V14Z" fill="currentColor" opacity="0.3"/><path d="M4 14L10 11L16 14V18L10 21L4 18V14ZM4 9L10 6L16 9V13L10 10L4 13V9Z" stroke="currentColor" strokeWidth="1.5"/></svg>, title: 'Push/Pull (P)' },
+    { id: 'rotate', icon: <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 2"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>, title: 'Rotate (Q)' },
+    { id: 'scale', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5"/><rect x="4" y="4" width="3" height="3" fill="#22c55e"/><rect x="17" y="4" width="3" height="3" fill="#22c55e"/><rect x="4" y="17" width="3" height="3" fill="#22c55e"/><rect x="17" y="17" width="3" height="3" fill="#22c55e"/></svg>, title: 'Scale (S)' },
+    { id: 'offset', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="10" height="10" stroke="currentColor" strokeWidth="1.5"/><rect x="8" y="8" width="10" height="10" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 1"/></svg>, title: 'Offset (F)' },
+    { type: 'divider' },
+    { id: 'tape', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="2" y="9" width="12" height="6" rx="1" fill="#fbbf24" stroke="#b45309"/><line x1="14" y1="12" x2="21" y2="12" stroke="currentColor" strokeWidth="1.5"/><circle cx="21" cy="12" r="2" fill="#ef4444"/></svg>, title: 'Tape Measure (T)' },
+    { id: 'dimension', icon: <svg viewBox="0 0 24 24" fill="none"><line x1="4" y1="18" x2="20" y2="18" stroke="currentColor" strokeWidth="1.5"/><line x1="4" y1="15" x2="4" y2="21" stroke="currentColor" strokeWidth="1.5"/><line x1="20" y1="15" x2="20" y2="21" stroke="currentColor" strokeWidth="1.5"/><text x="12" y="14" fontSize="8" textAnchor="middle" fill="currentColor">2.5m</text></svg>, title: 'Dimension' },
+    { id: 'protractor', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M4 18A10 10 0 0120 18" stroke="currentColor" strokeWidth="1.5" fill="none"/><line x1="12" y1="18" x2="12" y2="8" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="18" r="2" fill="currentColor"/></svg>, title: 'Protractor' },
+    { type: 'divider' },
+    { id: 'orbit', icon: <LuRotate3D size={18} />, title: 'Orbit (O)' },
+    { id: 'pan', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M12 3V7M8 5V9M16 5V9M6 8V14M18 8V14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/><path d="M6 14C6 17 8 20 12 20C16 20 18 17 18 14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg>, title: 'Pan (H)' },
+    { id: 'zoom', icon: <svg viewBox="0 0 24 24" fill="none"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="1.5"/><line x1="14" y1="14" x2="20" y2="20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/><line x1="10" y1="7" x2="10" y2="13" stroke="currentColor" strokeWidth="1.5"/><line x1="7" y1="10" x2="13" y2="10" stroke="currentColor" strokeWidth="1.5"/></svg>, title: 'Zoom (Z)' },
+    { id: 'zoomExtents', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 1"/><path d="M4 8V4H8M16 4H20V8M20 16V20H16M8 20H4V16" stroke="currentColor" strokeWidth="1.5"/></svg>, title: 'Zoom Extents (Shift+Z)' },
+    { type: 'divider' },
+    { id: 'section', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="8" width="16" height="8" fill="currentColor" opacity="0.2" stroke="currentColor" strokeWidth="1.5"/><line x1="4" y1="12" x2="20" y2="12" stroke="#f97316" strokeWidth="2"/></svg>, title: 'Section Plane' },
+    { id: 'text', icon: <svg viewBox="0 0 24 24" fill="none"><text x="12" y="17" fontSize="14" textAnchor="middle" fill="currentColor" fontWeight="bold">T</text></svg>, title: 'Text' },
+  ];
 
   return (
-    <div className={styles.container}>
-      {/* SketchUp Menu Bar */}
-      <div className={styles.menuBar}>
-        <button className={styles.menuItem}>File</button>
-        <button className={styles.menuItem}>Edit</button>
-        <button className={styles.menuItem}>View</button>
-        <button className={styles.menuItem}>Camera</button>
-        <button className={styles.menuItem}>Draw</button>
-        <button className={styles.menuItem}>Tools</button>
-        <button className={styles.menuItem}>Window</button>
-        <button className={styles.menuItem}>Extensions</button>
-        <button className={styles.menuItem}>Help</button>
+    <div className={`${styles.container} ${themeMode === 'light' ? styles.light : ''}`} style={{ '--theme-color': themeColor } as React.CSSProperties}>
+      {/* Header */}
+      <div className={styles.header}>
+        <div className={styles.headerLeft}>
+          <div className={styles.logoWrapper}>
+            <img src="/images/archiple_logo.png" alt="Archiple Studio" className={styles.headerLogo} />
+          </div>
+          <span className={styles.pageTitle}>Custom Modeler</span>
+        </div>
+
+        <div className={styles.headerCenter}>
+          <button className={styles.menuBtn}>File</button>
+          <button className={styles.menuBtn}>Edit</button>
+          <button className={styles.menuBtn}>View</button>
+          <button className={styles.menuBtn}>Draw</button>
+          <button className={styles.menuBtn}>Tools</button>
+          <button className={styles.menuBtn}>Window</button>
+        </div>
+
+        <div className={styles.headerRight}>
+          <button className={styles.themeToggle} onClick={toggleTheme} title={themeMode === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
+            {themeMode === 'dark' ? (
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="5"/>
+                <line x1="12" y1="1" x2="12" y2="3"/>
+                <line x1="12" y1="21" x2="12" y2="23"/>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                <line x1="1" y1="12" x2="3" y2="12"/>
+                <line x1="21" y1="12" x2="23" y2="12"/>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+              </svg>
+            )}
+          </button>
+          <button className={`${styles.headerBtn} ${styles.headerBtnGhost}`}>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Undo
+          </button>
+          <button className={`${styles.headerBtn} ${styles.headerBtnPrimary}`}>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+            </svg>
+            Export
+          </button>
+          <div className={styles.headerDivider} />
+          <button className={styles.exitBtn} onClick={() => navigate('/editor')} title="Exit to Editor">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
-      {/* Two-Row Toolbar */}
-      <div className={styles.toolbarContainer}>
-        <div className={styles.horizontalToolbar}>
-          <button className={styles.hTool} title="New"><svg viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="1" fill="#f8f8f8" stroke="#666" strokeWidth="1.5" /></svg></button>
-          <button className={styles.hTool} title="Open"><svg viewBox="0 0 24 24" fill="none"><path d="M3 8V18a2 2 0 002 2h14a2 2 0 002-2V10a2 2 0 00-2-2H12l-2-2H5a2 2 0 00-2 2z" fill="#f0d860" stroke="#a08020" strokeWidth="1" /></svg></button>
-          <button className={styles.hTool} title="Save"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="1" fill="#a8c8e8" stroke="#457fd3" strokeWidth="1.5" /></svg></button>
-          <div className={styles.hToolDivider} />
-          <button className={styles.hTool} title="Undo"><svg viewBox="0 0 24 24" fill="none"><path d="M4 10c0-4 3-7 8-7s8 3 8 7" stroke="#457fd3" strokeWidth="2" /><path d="M4 10L1 7L7 7L4 10Z" fill="#457fd3" /></svg></button>
-          <button className={styles.hTool} title="Redo"><svg viewBox="0 0 24 24" fill="none"><path d="M20 10c0-4-3-7-8-7s-8 3-8 7" stroke="#457fd3" strokeWidth="2" /><path d="M20 10L23 7L17 7L20 10Z" fill="#457fd3" /></svg></button>
-          <div className={styles.hToolDivider} />
-          <button className={styles.hTool} onClick={() => navigate(-1)} title="Back"><svg viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 19l-7-7 7-7" stroke="#666" strokeWidth="2" /></svg></button>
-        </div>
-        <div className={styles.horizontalToolbar}>
-          <button className={`${styles.hTool} ${activeTool === 'select' ? styles.active : ''}`} onClick={() => setActiveTool('select')} title="Select"><svg viewBox="0 0 24 24" fill="none"><path d="M5 3L5 19L9 15L12 21L14 20L11 14L17 14L5 3Z" fill="#2d2d2d" /></svg></button>
-          <button className={`${styles.hTool} ${activeTool === 'line' ? styles.active : ''}`} onClick={() => setActiveTool('line')} title="Line"><svg viewBox="0 0 24 24" fill="none"><line x1="4" y1="20" x2="20" y2="4" stroke="#2d2d2d" strokeWidth="1.5" /><circle cx="4" cy="20" r="2" fill="#22a352" /><circle cx="20" cy="4" r="2" fill="#e63946" /></svg></button>
-          <button className={`${styles.hTool} ${activeTool === 'rectangle' ? styles.active : ''}`} onClick={() => setActiveTool('rectangle')} title="Rectangle"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="12" fill="#c8daf0" stroke="#2d2d2d" strokeWidth="1.5" /></svg></button>
-          <button className={`${styles.hTool} ${activeTool === 'circle' ? styles.active : ''}`} onClick={() => setActiveTool('circle')} title="Circle"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" fill="#c8daf0" stroke="#2d2d2d" strokeWidth="1.5" /></svg></button>
-          <div className={styles.hToolDivider} />
-          <button className={`${styles.hTool} ${activeTool === 'pushpull' ? styles.active : ''}`} onClick={() => setActiveTool('pushpull')} title="Push/Pull"><svg viewBox="0 0 24 24" fill="none"><path d="M4 15L10 12L16 15V19L10 22L4 19V15Z" fill="#c9a227" stroke="#8b6914" /><path d="M4 10L10 7L16 10V14L10 11L4 14V10Z" fill="#e0c040" stroke="#8b6914" /></svg></button>
-          <button className={`${styles.hTool} ${activeTool === 'move' ? styles.active : ''}`} onClick={() => setActiveTool('move')} title="Move"><svg viewBox="0 0 24 24" fill="none"><line x1="12" y1="4" x2="12" y2="20" stroke="#e63946" strokeWidth="1.5" /><line x1="4" y1="12" x2="20" y2="12" stroke="#22a352" strokeWidth="1.5" /><path d="M12 4L9 8H15L12 4Z" fill="#e63946" /><path d="M12 20L9 16H15L12 20Z" fill="#e63946" /><path d="M4 12L8 9V15L4 12Z" fill="#22a352" /><path d="M20 12L16 9V15L20 12Z" fill="#22a352" /></svg></button>
-          <button className={`${styles.hTool} ${activeTool === 'rotate' ? styles.active : ''}`} onClick={() => setActiveTool('rotate')} title="Rotate"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="7" fill="none" stroke="#2d2d2d" strokeWidth="1" strokeDasharray="3 2" /><circle cx="12" cy="13" r="2" fill="#457fd3" /></svg></button>
-          <button className={`${styles.hTool} ${activeTool === 'scale' ? styles.active : ''}`} onClick={() => setActiveTool('scale')} title="Scale"><svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" fill="#e5e5e5" stroke="#2d2d2d" strokeWidth="1" /><rect x="4.5" y="4.5" width="3" height="3" fill="#22a352" /><rect x="16.5" y="4.5" width="3" height="3" fill="#22a352" /><rect x="4.5" y="16.5" width="3" height="3" fill="#22a352" /><rect x="16.5" y="16.5" width="3" height="3" fill="#22a352" /></svg></button>
-          <div className={styles.hToolDivider} />
-          <button className={`${styles.hTool} ${activeTool === 'tape' ? styles.active : ''}`} onClick={() => setActiveTool('tape')} title="Tape Measure"><svg viewBox="0 0 24 24" fill="none"><rect x="2" y="9" width="12" height="6" rx="1" fill="#f0d860" stroke="#a08020" /><line x1="14" y1="12" x2="21" y2="12" stroke="#2d2d2d" strokeWidth="1" /><circle cx="21" cy="12" r="2" fill="#e63946" /></svg></button>
-          <div className={styles.hToolDivider} />
-          <button className={`${styles.hTool} ${activeTool === 'orbit' ? styles.active : ''}`} onClick={() => setActiveTool('orbit')} title="Orbit"><svg viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="12" rx="8" ry="3.5" stroke="#22a352" strokeWidth="1.25" transform="rotate(50 12 12)" /><ellipse cx="12" cy="12" rx="8" ry="3.5" stroke="#e63946" strokeWidth="1.25" transform="rotate(-50 12 12)" /><circle cx="12" cy="12" r="2.5" fill="#457fd3" /></svg></button>
-          <button className={`${styles.hTool} ${activeTool === 'pan' ? styles.active : ''}`} onClick={() => setActiveTool('pan')} title="Pan"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3V7M8 5V9M16 5V9M6 8V14M18 8V14" stroke="#c4a060" strokeWidth="2.5" strokeLinecap="round" /><path d="M6 14C6 17 8 20 12 20C16 20 18 17 18 14" stroke="#c4a060" strokeWidth="2.5" strokeLinecap="round" /></svg></button>
-          <button className={`${styles.hTool} ${activeTool === 'zoom' ? styles.active : ''}`} onClick={() => setActiveTool('zoom')} title="Zoom"><svg viewBox="0 0 24 24" fill="none"><circle cx="10" cy="10" r="6" fill="white" stroke="#2d2d2d" strokeWidth="1.5" /><line x1="14.5" y1="14.5" x2="20" y2="20" stroke="#2d2d2d" strokeWidth="2.5" strokeLinecap="round" /></svg></button>
-          <div className={styles.hToolDivider} />
-          <button className={`${styles.hTool} ${activeTool === 'paint' ? styles.active : ''}`} onClick={() => setActiveTool('paint')} title="Paint"><svg viewBox="0 0 24 24" fill="none"><path d="M6 5h12l2 3v10a2 2 0 01-2 2H6a2 2 0 01-2-2V8l2-3z" fill="#a8c8e8" stroke="#2d2d2d" strokeWidth="1" /></svg></button>
-          <button className={`${styles.hTool} ${activeTool === 'eraser' ? styles.active : ''}`} onClick={() => { setActiveTool('eraser'); deleteSelected(); }} title="Delete"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="10" width="16" height="10" rx="1" fill="#f5a0a0" stroke="#d44" strokeWidth="1" /></svg></button>
-        </div>
-      </div>
-
+      {/* Main Content */}
       <div className={styles.main}>
-        {/* Left Vertical Toolbar - SketchUp Large Tool Set (2 columns) */}
-        <div className={styles.leftToolbar}>
-          {/* Row 1: Select, Make Component */}
-          <button className={`${styles.verticalTool} ${activeTool === 'select' ? styles.active : ''}`} onClick={() => setActiveTool('select')} title="Select (Space)">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 0%' }} />
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'makeComponent' ? styles.active : ''}`} onClick={() => setActiveTool('makeComponent')} title="Make Component (G)">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 0%' }} />
-          </button>
-
-          {/* Row 2: Paint Bucket, Eraser */}
-          <button className={`${styles.verticalTool} ${activeTool === 'paint' ? styles.active : ''}`} onClick={() => setActiveTool('paint')} title="Paint Bucket (B)">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 5.55%' }} />
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'eraser' ? styles.active : ''}`} onClick={() => { setActiveTool('eraser'); deleteSelected(); }} title="Eraser (E)">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 5.55%' }} />
-          </button>
-
-          {/* Row 3: Line, Freehand */}
-          <button className={`${styles.verticalTool} ${activeTool === 'line' ? styles.active : ''}`} onClick={() => setActiveTool('line')} title="Line (L)">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 11.11%' }} />
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'freehand' ? styles.active : ''}`} onClick={() => setActiveTool('freehand')} title="Freehand">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 11.11%' }} />
-          </button>
-
-          {/* Row 4: Rectangle, Rotated Rectangle */}
-          <button className={`${styles.verticalTool} ${activeTool === 'rectangle' ? styles.active : ''}`} onClick={() => setActiveTool('rectangle')} title="Rectangle (R)">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 16.66%' }} />
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'rotatedRect' ? styles.active : ''}`} onClick={() => setActiveTool('rotatedRect')} title="Rotated Rectangle">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 16.66%' }} />
-          </button>
-
-          {/* Row 5: Circle, Polygon */}
-          <button className={`${styles.verticalTool} ${activeTool === 'circle' ? styles.active : ''}`} onClick={() => setActiveTool('circle')} title="Circle (C)">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 22.22%' }} />
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'polygon' ? styles.active : ''}`} onClick={() => setActiveTool('polygon')} title="Polygon">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 22.22%' }} />
-          </button>
-
-          {/* Row 6: Arc, 2 Point Arc */}
-          <button className={`${styles.verticalTool} ${activeTool === 'arc' ? styles.active : ''}`} onClick={() => setActiveTool('arc')} title="Arc (A)">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 27.77%' }} />
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'arc2pt' ? styles.active : ''}`} onClick={() => setActiveTool('arc2pt')} title="2 Point Arc">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 27.77%' }} />
-          </button>
-
-          {/* Row 7: 3 Point Arc, Pie */}
-          <button className={`${styles.verticalTool} ${activeTool === 'arc3pt' ? styles.active : ''}`} onClick={() => setActiveTool('arc3pt')} title="3 Point Arc">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 33.33%' }} />
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'pie' ? styles.active : ''}`} onClick={() => setActiveTool('pie')} title="Pie">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 33.33%' }} />
-          </button>
-
-          {/* Row 8: Move, Push/Pull */}
-          <button className={`${styles.verticalTool} ${activeTool === 'move' ? styles.active : ''}`} onClick={() => setActiveTool('move')} title="Move (M)">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 38.88%' }} />
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'pushpull' ? styles.active : ''}`} onClick={() => setActiveTool('pushpull')} title="Push/Pull (P)">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 38.88%' }} />
-          </button>
-
-          {/* Row 9: Rotate, Follow Me */}
-          <button className={`${styles.verticalTool} ${activeTool === 'rotate' ? styles.active : ''}`} onClick={() => setActiveTool('rotate')} title="Rotate (Q)">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 44.44%' }} />
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'followMe' ? styles.active : ''}`} onClick={() => setActiveTool('followMe')} title="Follow Me">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 44.44%' }} />
-          </button>
-
-          {/* Row 10: Scale, Offset */}
-          <button className={`${styles.verticalTool} ${activeTool === 'scale' ? styles.active : ''}`} onClick={() => setActiveTool('scale')} title="Scale (S)">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 50.00%' }} />
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'offset' ? styles.active : ''}`} onClick={() => setActiveTool('offset')} title="Offset (F)">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 50.00%' }} />
-          </button>
-
-          {/* Row 11: Tape Measure, Dimension */}
-          <button className={`${styles.verticalTool} ${activeTool === 'tape' ? styles.active : ''}`} onClick={() => setActiveTool('tape')} title="Tape Measure (T)">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 55.55%' }} />
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'dimension' ? styles.active : ''}`} onClick={() => setActiveTool('dimension')} title="Dimension">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 55.55%' }} />
-          </button>
-
-          {/* Row 12: Protractor, Text */}
-          <button className={`${styles.verticalTool} ${activeTool === 'protractor' ? styles.active : ''}`} onClick={() => setActiveTool('protractor')} title="Protractor">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 61.11%' }} />
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'text' ? styles.active : ''}`} onClick={() => setActiveTool('text')} title="Text">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 61.11%' }} />
-          </button>
-
-          {/* Row 13: Axes, 3D Text */}
-          <button className={`${styles.verticalTool} ${activeTool === 'axes' ? styles.active : ''}`} onClick={() => setActiveTool('axes')} title="Axes">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 66.66%' }} />
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'text3d' ? styles.active : ''}`} onClick={() => setActiveTool('text3d')} title="3D Text">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 66.66%' }} />
-          </button>
-
-          {/* Row 14: Orbit, Pan */}
-          <button className={`${styles.verticalTool} ${activeTool === 'orbit' ? styles.active : ''}`} onClick={() => setActiveTool('orbit')} title="Orbit (O)">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 72.22%' }} />
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'pan' ? styles.active : ''}`} onClick={() => setActiveTool('pan')} title="Pan (H)">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 72.22%' }} />
-          </button>
-
-          {/* Row 15: Zoom, Zoom Extents */}
-          <button className={`${styles.verticalTool} ${activeTool === 'zoom' ? styles.active : ''}`} onClick={() => setActiveTool('zoom')} title="Zoom (Z)">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 77.77%' }} />
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'zoomExtents' ? styles.active : ''}`} onClick={() => setActiveTool('zoomExtents')} title="Zoom Extents (Shift+Z)">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 77.77%' }} />
-          </button>
-
-          {/* Row 16: Previous, Position Camera */}
-          <button className={`${styles.verticalTool} ${activeTool === 'zoomPrevious' ? styles.active : ''}`} onClick={() => setActiveTool('zoomPrevious')} title="Previous View">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 83.33%' }} />
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'positionCamera' ? styles.active : ''}`} onClick={() => setActiveTool('positionCamera')} title="Position Camera">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 83.33%' }} />
-          </button>
-
-          {/* Row 17: Look Around, Walk */}
-          <button className={`${styles.verticalTool} ${activeTool === 'lookAround' ? styles.active : ''}`} onClick={() => setActiveTool('lookAround')} title="Look Around">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 88.88%' }} />
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'walk' ? styles.active : ''}`} onClick={() => setActiveTool('walk')} title="Walk">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 88.88%' }} />
-          </button>
-
-          {/* Row 18: Section Plane, Flip (or Empty) */}
-          <button className={`${styles.verticalTool} ${activeTool === 'section' ? styles.active : ''}`} onClick={() => setActiveTool('section')} title="Section Plane">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 94.44%' }} />
-          </button>
-          {/* Assuming last slot might be Flip or Extension, using Flip for now based on previous context, or empty if standard set ends here. 
-              Standard set often has Section Plane then maybe something else. 
-              I'll put Flip here as it's a common modern tool, or leave it if the image has it. 
-              Given the user provided an image, I'll assume the last slot is used. */}
-          <button className={`${styles.verticalTool} ${activeTool === 'flip' ? styles.active : ''}`} onClick={() => setActiveTool('flip')} title="Flip">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 94.44%' }} />
-          </button>
-
-          {/* Row 19: Extra/Extensions (if any in image) - keeping generic or empty if not needed. 
-              I'll leave the last row empty or remove it if I only have 18 rows of standard tools.
-              The previous code had 19 rows. I will assume the 19th row might be extensions or empty.
-              I will add placeholders if needed, but for now I'll stop at 18 rows (36 tools) which covers the main set.
-              Wait, 100% / 18 = 5.55%. So 19 rows (0 to 18).
-              My previous code went up to 100%. 
-              Let's check the math: 19 items. 0, 1, ... 18.
-              Step = 100/18 = 5.555.
-              0 * 5.55 = 0
-              1 * 5.55 = 5.55
-              ...
-              18 * 5.55 = 100.
-              So yes, 19 rows.
-              I have filled 18 rows above.
-              Row 19 (Index 18): 
-          */}
-          <button className={`${styles.verticalTool} ${activeTool === 'tag' ? styles.active : ''}`} onClick={() => setActiveTool('tag')} title="Tag/Layer">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '0% 100%' }} />
-          </button>
-          <button className={`${styles.verticalTool} ${activeTool === 'solidTools' ? styles.active : ''}`} onClick={() => setActiveTool('solidTools')} title="Solid Tools">
-            <div className={styles.spriteIcon} style={{ backgroundPosition: '100% 100%' }} />
-          </button>
-        </div>
-
-        {/* 3D Viewport */}
+        {/* Viewport */}
         <div className={styles.viewport}>
           <canvas ref={canvasRef} className={styles.canvas} data-tool={activeTool} />
+
+          {/* Floating Left Toolbar */}
+          <div className={styles.leftToolbar}>
+            {tools.map((tool, idx) => {
+              if (tool.type === 'divider') {
+                return <div key={`divider-${idx}`} className={styles.toolDivider} />;
+              }
+              return (
+                <button
+                  key={tool.id}
+                  className={`${styles.toolBtn} ${activeTool === tool.id ? styles.active : ''}`}
+                  onClick={() => setActiveTool(tool.id as ToolType)}
+                  title={tool.title}
+                  data-tooltip={tool.title}
+                >
+                  {tool.icon}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Floating Top Toolbar */}
+          <div className={styles.topToolbar}>
+            <button className={`${styles.topToolBtn} ${activeTool === 'select' ? styles.active : ''}`} onClick={() => setActiveTool('select')} title="Select">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M5 3L5 19L9 15L12 21L14 20L11 14L17 14L5 3Z" fill="currentColor"/></svg>
+            </button>
+            <button className={`${styles.topToolBtn} ${activeTool === 'move' ? styles.active : ''}`} onClick={() => setActiveTool('move')} title="Move">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 4V20M4 12H20" stroke="currentColor" strokeWidth="2"/></svg>
+            </button>
+            <button className={`${styles.topToolBtn} ${activeTool === 'rotate' ? styles.active : ''}`} onClick={() => setActiveTool('rotate')} title="Rotate">
+              <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 2"/></svg>
+            </button>
+            <button className={`${styles.topToolBtn} ${activeTool === 'scale' ? styles.active : ''}`} onClick={() => setActiveTool('scale')} title="Scale">
+              <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5"/></svg>
+            </button>
+            <div className={styles.topToolDivider} />
+            <button className={`${styles.topToolBtn} ${activeTool === 'line' ? styles.active : ''}`} onClick={() => setActiveTool('line')} title="Line">
+              <svg viewBox="0 0 24 24" fill="none"><line x1="4" y1="20" x2="20" y2="4" stroke="currentColor" strokeWidth="2"/></svg>
+            </button>
+            <button className={`${styles.topToolBtn} ${activeTool === 'rectangle' ? styles.active : ''}`} onClick={() => setActiveTool('rectangle')} title="Rectangle">
+              <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="12" stroke="currentColor" strokeWidth="1.5"/></svg>
+            </button>
+            <button className={`${styles.topToolBtn} ${activeTool === 'circle' ? styles.active : ''}`} onClick={() => setActiveTool('circle')} title="Circle">
+              <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5"/></svg>
+            </button>
+            <button className={`${styles.topToolBtn} ${activeTool === 'pushpull' ? styles.active : ''}`} onClick={() => setActiveTool('pushpull')} title="Push/Pull">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M4 14L10 11L16 14V18L10 21L4 18V14Z" stroke="currentColor" strokeWidth="1.5"/></svg>
+            </button>
+            <div className={styles.topToolDivider} />
+            <button className={`${styles.topToolBtn} ${activeTool === 'orbit' ? styles.active : ''}`} onClick={() => setActiveTool('orbit')} title="Orbit">
+              <svg viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="12" rx="8" ry="3" transform="rotate(45 12 12)" stroke="currentColor" strokeWidth="1.5"/></svg>
+            </button>
+            <button className={`${styles.topToolBtn} ${activeTool === 'pan' ? styles.active : ''}`} onClick={() => setActiveTool('pan')} title="Pan">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 3V7M8 5V9M16 5V9M6 8V14C6 17 8 19 12 19C16 19 18 17 18 14V8" stroke="currentColor" strokeWidth="2"/></svg>
+            </button>
+            <button className={`${styles.topToolBtn}`} onClick={zoomExtents} title="Zoom Extents">
+              <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 1"/><path d="M4 8V4H8M16 4H20V8M20 16V20H16M8 20H4V16" stroke="currentColor" strokeWidth="1.5"/></svg>
+            </button>
+          </div>
+
+          {/* View Controls */}
+          <div className={`${styles.viewControls} ${rightPanelCollapsed ? styles.viewControlsCollapsed : ''}`}>
+            <button className={styles.viewBtn} onClick={zoomExtents} title="Fit All">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+              </svg>
+            </button>
+            <button className={styles.viewBtn} title="Top View">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="4" y="8" width="16" height="12" rx="1"/>
+              </svg>
+            </button>
+            <button className={styles.viewBtn} title="Front View">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="4" y="4" width="16" height="16" rx="1"/>
+              </svg>
+            </button>
+          </div>
         </div>
 
-        {/* Right Panel Toggle Button */}
+        {/* Panel Toggle */}
         <button
           className={`${styles.panelToggle} ${rightPanelCollapsed ? styles.collapsed : ''}`}
           onClick={() => setRightPanelCollapsed(!rightPanelCollapsed)}
-          title={rightPanelCollapsed ? 'Show Panel' : 'Hide Panel'}
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            {rightPanelCollapsed ? (
-              <path d="M15 19l-7-7 7-7" />
-            ) : (
-              <path d="M9 5l7 7-7 7" />
-            )}
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
+            {rightPanelCollapsed ? <path d="M15 19l-7-7 7-7"/> : <path d="M9 5l7 7-7 7"/>}
           </svg>
         </button>
 
-        {/* Right Panel - SketchUp Default Tray */}
+        {/* Right Panel */}
         <div className={`${styles.rightPanel} ${rightPanelCollapsed ? styles.collapsed : ''}`}>
-          {/* Tray Header */}
-          <div className={styles.trayHeader}>
-            <span className={styles.trayTitle}>Default Tray</span>
-            <div className={styles.trayControls}>
-              <button className={styles.trayBtn} title="Options">≡</button>
-              <button className={styles.trayBtn} onClick={() => setRightPanelCollapsed(true)} title="Close">×</button>
+          <div className={styles.rightPanelHeader}>
+            <span className={styles.rightPanelTitle}>Properties</span>
+            <div className={styles.rightPanelTabs}>
+              <button className={`${styles.tabBtn} ${activeTab === 'info' ? styles.active : ''}`} onClick={() => setActiveTab('info')}>Info</button>
+              <button className={`${styles.tabBtn} ${activeTab === 'materials' ? styles.active : ''}`} onClick={() => setActiveTab('materials')}>Materials</button>
+              <button className={`${styles.tabBtn} ${activeTab === 'components' ? styles.active : ''}`} onClick={() => setActiveTab('components')}>Add</button>
             </div>
           </div>
 
-          {/* Entity Info Section */}
-          <div className={styles.traySection}>
-            <div className={styles.traySectionHeader}>
-              <span className={styles.traySectionTitle}>Entity Info</span>
-              <svg className={styles.traySectionIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 9l-7 7-7-7" /></svg>
-            </div>
-            <div className={styles.traySectionContent}>
-              {meshProperties ? (
-                <div className={styles.entityInfo}>
-                  <div className={styles.entityRow}><span className={styles.entityLabel}>Entity:</span><span className={styles.entityValue}>{meshProperties.name}</span></div>
-                  <div className={styles.entityRow}><span className={styles.entityLabel}>Layer:</span><span className={styles.entityValue}>Layer0</span></div>
-                  <div className={styles.entityRow}><span className={styles.entityLabel}>Position:</span><span className={styles.entityValue}>{meshProperties.position.x.toFixed(1)}, {meshProperties.position.y.toFixed(1)}, {meshProperties.position.z.toFixed(1)}</span></div>
-                </div>
-              ) : (
-                <div className={styles.entityInfo}>
-                  <div className={styles.entityRow}><span className={styles.entityLabel}>Entity:</span><span className={styles.entityValue}>Nothing selected</span></div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Materials Section */}
-          <div className={styles.traySection}>
-            <div className={styles.traySectionHeader}>
-              <span className={styles.traySectionTitle}>Materials</span>
-              <svg className={styles.traySectionIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 9l-7 7-7-7" /></svg>
-            </div>
-            <div className={styles.traySectionContent}>
-              <div className={styles.materialsGrid}>
-                {colorPalette.map((color, idx) => (
-                  <button key={idx} className={styles.colorSwatch} style={{ backgroundColor: color }} title={color} />
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Components Section */}
-          <div className={styles.traySection}>
-            <div className={styles.traySectionHeader}>
-              <span className={styles.traySectionTitle}>Components</span>
-              <svg className={styles.traySectionIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 9l-7 7-7-7" /></svg>
-            </div>
-            <div className={styles.traySectionContent}>
-              <div className={styles.componentsList}>
-                <div className={styles.componentItem}>
-                  <div className={styles.componentIcon}>
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#666"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" /></svg>
+          <div className={styles.rightPanelContent}>
+            {activeTab === 'info' && (
+              <>
+                {/* Entity Info */}
+                <div className={styles.panelSection}>
+                  <div className={styles.sectionHeader}>
+                    <span className={styles.sectionTitle}>Entity Info</span>
                   </div>
-                  <span className={styles.componentName}>No components in model</span>
+                  {meshProperties ? (
+                    <div className={styles.entityCard}>
+                      <div className={styles.entityType}>Selected Object</div>
+                      <div className={styles.entityName}>{meshProperties.name}</div>
+                      <div className={styles.entityStats}>
+                        <div className={styles.statItem}>
+                          <div className={styles.statValue}>{meshProperties.position.x.toFixed(1)}</div>
+                          <div className={styles.statLabel}>X</div>
+                        </div>
+                        <div className={styles.statItem}>
+                          <div className={styles.statValue}>{meshProperties.position.y.toFixed(1)}</div>
+                          <div className={styles.statLabel}>Y</div>
+                        </div>
+                        <div className={styles.statItem}>
+                          <div className={styles.statValue}>{meshProperties.position.z.toFixed(1)}</div>
+                          <div className={styles.statLabel}>Z</div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={styles.emptyState}>
+                      <svg className={styles.emptyIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                      </svg>
+                      <div className={styles.emptyText}>No object selected.<br/>Click to select.</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Transform */}
+                {meshProperties && (
+                  <div className={styles.panelSection}>
+                    <div className={styles.sectionHeader}>
+                      <span className={styles.sectionTitle}>Transform</span>
+                    </div>
+                    <div className={styles.transformSection}>
+                      <div className={styles.transformRow}>
+                        <span className={styles.transformLabel}>Position</span>
+                        <div className={styles.transformInputs}>
+                          <div>
+                            <input className={styles.transformInput} value={meshProperties.position.x.toFixed(2)} readOnly />
+                            <div className={styles.inputLabel}>X</div>
+                          </div>
+                          <div>
+                            <input className={styles.transformInput} value={meshProperties.position.y.toFixed(2)} readOnly />
+                            <div className={styles.inputLabel}>Y</div>
+                          </div>
+                          <div>
+                            <input className={styles.transformInput} value={meshProperties.position.z.toFixed(2)} readOnly />
+                            <div className={styles.inputLabel}>Z</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className={styles.transformRow}>
+                        <span className={styles.transformLabel}>Rotation</span>
+                        <div className={styles.transformInputs}>
+                          <div>
+                            <input className={styles.transformInput} value={meshProperties.rotation.x.toFixed(1)} readOnly />
+                            <div className={styles.inputLabel}>X</div>
+                          </div>
+                          <div>
+                            <input className={styles.transformInput} value={meshProperties.rotation.y.toFixed(1)} readOnly />
+                            <div className={styles.inputLabel}>Y</div>
+                          </div>
+                          <div>
+                            <input className={styles.transformInput} value={meshProperties.rotation.z.toFixed(1)} readOnly />
+                            <div className={styles.inputLabel}>Z</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className={styles.transformRow}>
+                        <span className={styles.transformLabel}>Scale</span>
+                        <div className={styles.transformInputs}>
+                          <div>
+                            <input className={styles.transformInput} value={meshProperties.scale.x.toFixed(2)} readOnly />
+                            <div className={styles.inputLabel}>X</div>
+                          </div>
+                          <div>
+                            <input className={styles.transformInput} value={meshProperties.scale.y.toFixed(2)} readOnly />
+                            <div className={styles.inputLabel}>Y</div>
+                          </div>
+                          <div>
+                            <input className={styles.transformInput} value={meshProperties.scale.z.toFixed(2)} readOnly />
+                            <div className={styles.inputLabel}>Z</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {activeTab === 'materials' && (
+              <div className={styles.panelSection}>
+                <div className={styles.sectionHeader}>
+                  <span className={styles.sectionTitle}>Current Color</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                  <div
+                    style={{
+                      width: '48px',
+                      height: '48px',
+                      backgroundColor: selectedColor,
+                      borderRadius: '8px',
+                      border: '2px solid rgba(255,255,255,0.2)',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+                    }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>Selected</div>
+                    <div style={{ fontSize: '14px', color: '#fff', fontWeight: 500 }}>{selectedColor}</div>
+                  </div>
+                  {selectedMesh && (
+                    <button
+                      onClick={() => {
+                        if (selectedMesh && sceneRef.current) {
+                          const material = selectedMesh.material as StandardMaterial;
+                          if (material && material.diffuseColor) {
+                            material.diffuseColor = Color3.FromHexString(selectedColor);
+                          } else {
+                            const newMat = new StandardMaterial(`paintMat_${Date.now()}`, sceneRef.current);
+                            newMat.diffuseColor = Color3.FromHexString(selectedColor);
+                            newMat.specularColor = new Color3(0.2, 0.2, 0.2);
+                            selectedMesh.material = newMat;
+                          }
+                        }
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                        border: 'none',
+                        borderRadius: '6px',
+                        color: '#fff',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Apply
+                    </button>
+                  )}
+                </div>
+                <div className={styles.sectionHeader}>
+                  <span className={styles.sectionTitle}>Color Palette</span>
+                </div>
+                <div className={styles.materialsGrid}>
+                  {colorPalette.map((color, idx) => (
+                    <button
+                      key={idx}
+                      className={`${styles.colorSwatch} ${selectedColor === color ? styles.active : ''}`}
+                      style={{ backgroundColor: color }}
+                      onClick={() => {
+                        setSelectedColor(color);
+                        // If paint tool is active and a mesh is selected, apply immediately
+                        if (activeTool === 'paint' && selectedMesh && sceneRef.current) {
+                          const material = selectedMesh.material as StandardMaterial;
+                          if (material && material.diffuseColor) {
+                            material.diffuseColor = Color3.FromHexString(color);
+                          } else {
+                            const newMat = new StandardMaterial(`paintMat_${Date.now()}`, sceneRef.current);
+                            newMat.diffuseColor = Color3.FromHexString(color);
+                            newMat.specularColor = new Color3(0.2, 0.2, 0.2);
+                            selectedMesh.material = newMat;
+                          }
+                        }
+                      }}
+                      title={color}
+                    />
+                  ))}
                 </div>
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* Styles Section */}
-          <div className={styles.traySection}>
-            <div className={styles.traySectionHeader}>
-              <span className={styles.traySectionTitle}>Styles</span>
-              <svg className={styles.traySectionIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 9l-7 7-7-7" /></svg>
-            </div>
-            <div className={styles.traySectionContent}>
-              <div className={styles.entityInfo}>
-                <div className={styles.entityRow}><span className={styles.entityLabel}>Current:</span><span className={styles.entityValue}>Default Style</span></div>
+            {activeTab === 'components' && (
+              <div className={styles.panelSection}>
+                <div className={styles.sectionHeader}>
+                  <span className={styles.sectionTitle}>Primitives</span>
+                </div>
+                <div className={styles.primitivesGrid}>
+                  <button className={styles.primitiveBtn} onClick={() => addPrimitive('cube')}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                    </svg>
+                    <span>Cube</span>
+                  </button>
+                  <button className={styles.primitiveBtn} onClick={() => addPrimitive('sphere')}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <circle cx="12" cy="12" r="9"/>
+                      <ellipse cx="12" cy="12" rx="9" ry="4"/>
+                    </svg>
+                    <span>Sphere</span>
+                  </button>
+                  <button className={styles.primitiveBtn} onClick={() => addPrimitive('cylinder')}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <ellipse cx="12" cy="6" rx="8" ry="3"/>
+                      <path d="M4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/>
+                    </svg>
+                    <span>Cylinder</span>
+                  </button>
+                  <button className={styles.primitiveBtn} onClick={() => addPrimitive('cone')}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M12 3L4 19h16L12 3z"/>
+                      <ellipse cx="12" cy="19" rx="8" ry="2"/>
+                    </svg>
+                    <span>Cone</span>
+                  </button>
+                  <button className={styles.primitiveBtn} onClick={() => addPrimitive('torus')}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <ellipse cx="12" cy="12" rx="9" ry="4"/>
+                      <ellipse cx="12" cy="12" rx="3" ry="1.5"/>
+                    </svg>
+                    <span>Torus</span>
+                  </button>
+                  <button className={styles.primitiveBtn} onClick={() => addPrimitive('plane')}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M4 18L12 22L20 18L12 14L4 18Z"/>
+                    </svg>
+                    <span>Plane</span>
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Bottom Status Bar */}
+      {/* Status Bar */}
       <div className={styles.statusBar}>
-        <span className={styles.statusText}>Select tool active. Click to select entities.</span>
-        <div className={styles.measurementsGroup}>
-          <span className={styles.measurementsLabel}>Measurements:</span>
-          <input type="text" className={styles.measurementsInput} placeholder="Enter value" />
+        <div className={styles.statusLeft}>
+          <div className={styles.statusItem}>
+            <div className={styles.statusDot} />
+            <span>Ready</span>
+          </div>
+          <div className={styles.statusItem}>
+            <span>Tool: {activeTool.charAt(0).toUpperCase() + activeTool.slice(1)}</span>
+          </div>
+          {selectedMesh && (
+            <div className={styles.statusItem}>
+              <span>Selected: {selectedMesh.name}</span>
+            </div>
+          )}
+        </div>
+        <div className={styles.statusRight}>
+          <input className={styles.measureInput} placeholder="Measurements" />
         </div>
       </div>
     </div>
