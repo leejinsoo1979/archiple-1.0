@@ -2718,10 +2718,7 @@
 }
 /* ===== ADVANCED TOOL PANEL ===== */
 .advancedToolPanel {
-  position: absolute;
-  left: 60px;
-  top: 0;
-  width: 340px;
+  width: 310px;
   height: 100%;
   background: var(--bg-primary);
   border-right: 1px solid var(--border-color);

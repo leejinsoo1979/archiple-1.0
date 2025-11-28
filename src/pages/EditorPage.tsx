@@ -1763,7 +1763,14 @@ ARTISTIC APPROACH:
     <div className={styles.leftSidebar}>
       <div className={styles.sidebarButtons}>
         {/* Create Room */}
-        <button className={styles.sidebarBtn} title="Create Room">
+        <button
+          className={`${styles.sidebarBtn} ${leftPanelOpen ? styles.active : ''}`}
+          onClick={() => {
+            setLeftPanelOpen(!leftPanelOpen);
+            if (!leftPanelOpen) setAdvancedToolPanelOpen(false);
+          }}
+          title="Create Room"
+        >
           <div className={styles.icon}>
             <LiaPencilRulerSolid size={24} />
           </div>
@@ -1801,7 +1808,10 @@ ARTISTIC APPROACH:
         {/* Kitchen & Cabinet */}
         <button
           className={`${styles.sidebarBtn} ${advancedToolPanelOpen ? styles.active : ''}`}
-          onClick={() => setAdvancedToolPanelOpen(!advancedToolPanelOpen)}
+          onClick={() => {
+            setAdvancedToolPanelOpen(!advancedToolPanelOpen);
+            if (!advancedToolPanelOpen) setLeftPanelOpen(false);
+          }}
           title="Advanced Tool"
         >
           <div className={styles.icon}>
@@ -1851,7 +1861,7 @@ ARTISTIC APPROACH:
 
 {/* Left Tools Panel */ }
 {
-  !playMode && (
+  !playMode && !advancedToolPanelOpen && (
     leftPanelOpen ? (
       <div className={styles.leftPanel}>
         <div className={styles.panelHeader}>
