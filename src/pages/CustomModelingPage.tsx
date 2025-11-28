@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LuRotate3D } from 'react-icons/lu';
+import { LuRotate3D, LuPencilLine } from 'react-icons/lu';
+import { BiMove } from 'react-icons/bi';
 import styles from './CustomModelingPage.module.css';
 import {
   Engine,
@@ -244,6 +245,25 @@ const CustomModelingPage: React.FC = () => {
 
     camera.setTarget(center);
     camera.radius = maxDim * 2;
+  }, []);
+
+  // Camera view presets
+  const setCameraView = useCallback((view: 'iso' | 'front' | 'top' | 'right' | 'back' | 'left') => {
+    const camera = cameraRef.current;
+    if (!camera) return;
+
+    const views = {
+      iso: { alpha: -Math.PI / 4, beta: Math.PI / 3 },      // Isometric 3D view
+      front: { alpha: 0, beta: Math.PI / 2 },                // Front view
+      top: { alpha: 0, beta: 0.01 },                         // Top view (slightly off 0 to avoid gimbal lock)
+      right: { alpha: Math.PI / 2, beta: Math.PI / 2 },      // Right side view
+      back: { alpha: Math.PI, beta: Math.PI / 2 },           // Back view
+      left: { alpha: -Math.PI / 2, beta: Math.PI / 2 },      // Left side view
+    };
+
+    const target = views[view];
+    camera.alpha = target.alpha;
+    camera.beta = target.beta;
   }, []);
 
   // Initialize Babylon.js scene
@@ -805,14 +825,14 @@ const CustomModelingPage: React.FC = () => {
     { id: 'paint', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M19 6L17 4L7 14V17H10L20 7L19 6Z" fill="currentColor" opacity="0.3"/><path d="M19 6L17 4L7 14V17H10L20 7L19 6ZM4 20H20" stroke="currentColor" strokeWidth="1.5"/></svg>, title: 'Paint (B)' },
     { id: 'eraser', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M18 5L9 14L5 17H10L19 8L18 5Z" fill="currentColor" opacity="0.3"/><path d="M18 5L9 14L5 17H10L19 8L18 5Z" stroke="currentColor" strokeWidth="1.5"/></svg>, title: 'Eraser (E)' },
     { type: 'divider' },
-    { id: 'line', icon: <svg viewBox="0 0 24 24" fill="none"><line x1="4" y1="20" x2="20" y2="4" stroke="currentColor" strokeWidth="2"/><circle cx="4" cy="20" r="2" fill="#22c55e"/><circle cx="20" cy="4" r="2" fill="#ef4444"/></svg>, title: 'Line (L)' },
+    { id: 'line', icon: <LuPencilLine size={18} />, title: 'Line (L)' },
     { id: 'freehand', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M4 17C8 15 10 8 14 10C18 12 16 17 20 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>, title: 'Freehand' },
     { id: 'rectangle', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="12" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.2"/></svg>, title: 'Rectangle (R)' },
     { id: 'circle', icon: <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.2"/></svg>, title: 'Circle (C)' },
     { id: 'polygon', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M12 4L20 9V15L12 20L4 15V9L12 4Z" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.2"/></svg>, title: 'Polygon' },
     { id: 'arc', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M4 18C4 10 10 4 18 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>, title: 'Arc (A)' },
     { type: 'divider' },
-    { id: 'move', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M12 4V20M4 12H20" stroke="currentColor" strokeWidth="2"/><path d="M12 4L9 7H15L12 4Z" fill="#ef4444"/><path d="M12 20L9 17H15L12 20Z" fill="#ef4444"/><path d="M4 12L7 9V15L4 12Z" fill="#22c55e"/><path d="M20 12L17 9V15L20 12Z" fill="#22c55e"/></svg>, title: 'Move (M)' },
+    { id: 'move', icon: <BiMove size={18} />, title: 'Move (M)' },
     { id: 'pushpull', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M4 14L10 11L16 14V18L10 21L4 18V14Z" fill="currentColor" opacity="0.3"/><path d="M4 14L10 11L16 14V18L10 21L4 18V14ZM4 9L10 6L16 9V13L10 10L4 13V9Z" stroke="currentColor" strokeWidth="1.5"/></svg>, title: 'Push/Pull (P)' },
     { id: 'rotate', icon: <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 2"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>, title: 'Rotate (Q)' },
     { id: 'scale', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5"/><rect x="4" y="4" width="3" height="3" fill="#22c55e"/><rect x="17" y="4" width="3" height="3" fill="#22c55e"/><rect x="4" y="17" width="3" height="3" fill="#22c55e"/><rect x="17" y="17" width="3" height="3" fill="#22c55e"/></svg>, title: 'Scale (S)' },
@@ -956,6 +976,46 @@ const CustomModelingPage: React.FC = () => {
             </button>
             <button className={`${styles.topToolBtn}`} onClick={zoomExtents} title="Zoom Extents">
               <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 1"/><path d="M4 8V4H8M16 4H20V8M20 16V20H16M8 20H4V16" stroke="currentColor" strokeWidth="1.5"/></svg>
+            </button>
+            <div className={styles.topToolDivider} />
+            {/* Camera View Presets */}
+            <button className={styles.topToolBtn} onClick={() => setCameraView('iso')} title="Isometric View">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 4L4 9V17L12 22L20 17V9L12 4Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.2"/>
+                <path d="M12 12V22M4 9L12 14L20 9" stroke="currentColor" strokeWidth="1.2"/>
+                <path d="M8 6L12 8.5L16 6" stroke="currentColor" strokeWidth="1.2"/>
+              </svg>
+            </button>
+            <button className={styles.topToolBtn} onClick={() => setCameraView('front')} title="Front View">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M4 20V10L12 5L20 10V20H4Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.2"/>
+                <rect x="9" y="13" width="6" height="7" stroke="currentColor" strokeWidth="1"/>
+              </svg>
+            </button>
+            <button className={styles.topToolBtn} onClick={() => setCameraView('top')} title="Top View">
+              <svg viewBox="0 0 24 24" fill="none">
+                <rect x="4" y="8" width="16" height="12" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.2"/>
+                <line x1="12" y1="8" x2="12" y2="20" stroke="currentColor" strokeWidth="1" opacity="0.5"/>
+                <line x1="4" y1="14" x2="20" y2="14" stroke="currentColor" strokeWidth="1" opacity="0.5"/>
+              </svg>
+            </button>
+            <button className={styles.topToolBtn} onClick={() => setCameraView('right')} title="Right View">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M6 20V10L12 5L18 10V20H6Z" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.2"/>
+                <path d="M6 10L18 10" stroke="currentColor" strokeWidth="1" opacity="0.5"/>
+              </svg>
+            </button>
+            <button className={styles.topToolBtn} onClick={() => setCameraView('back')} title="Back View">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M4 20V10L12 5L20 10V20H4Z" stroke="currentColor" strokeWidth="1.2" strokeDasharray="2 1"/>
+                <rect x="9" y="13" width="6" height="7" stroke="currentColor" strokeWidth="1" strokeDasharray="1 1"/>
+              </svg>
+            </button>
+            <button className={styles.topToolBtn} onClick={() => setCameraView('left')} title="Left View">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M6 20V10L12 5L18 10V20H6Z" stroke="currentColor" strokeWidth="1.2"/>
+                <path d="M6 10L18 10" stroke="currentColor" strokeWidth="1" opacity="0.5"/>
+              </svg>
             </button>
           </div>
 
