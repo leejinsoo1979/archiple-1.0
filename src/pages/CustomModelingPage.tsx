@@ -44,7 +44,8 @@ const CustomModelingPage: React.FC = () => {
   const groundPickerRef = useRef<Mesh | null>(null);
   const meshCounterRef = useRef<number>(0);
   const originMarkerRef = useRef<Mesh | null>(null);
-  const endpointMarkersRef = useRef<Mesh[]>([]);
+  const snapIndicatorRef = useRef<Mesh | null>(null);
+  const snapPointsRef = useRef<Vector3[]>([]);  // Store snap point positions (not meshes)
 
   // Pan state for custom pan tool handling
   const panStateRef = useRef<{
@@ -105,13 +106,11 @@ const CustomModelingPage: React.FC = () => {
         return Vector3.Zero();
       }
 
-      // Also check for snap to existing endpoints
-      for (const marker of endpointMarkersRef.current) {
-        if (marker && !marker.isDisposed()) {
-          const dist = Vector3.Distance(snapped, marker.position);
-          if (dist < SNAP_THRESHOLD) {
-            return marker.position.clone();
-          }
+      // Also check for snap to existing snap points (vertices/corners)
+      for (const snapPoint of snapPointsRef.current) {
+        const dist = Vector3.Distance(snapped, snapPoint);
+        if (dist < SNAP_THRESHOLD) {
+          return snapPoint.clone();
         }
       }
 
