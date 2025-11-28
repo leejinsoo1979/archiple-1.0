@@ -600,9 +600,13 @@ const CustomModelingPage: React.FC = () => {
               if (activeTool === 'line') {
                 if (Vector3.Distance(state.startPoint, state.currentPoint) > 0.1) {
                   finalizeLine(scene, state.startPoint, state.currentPoint);
+                  createLineEndpoints(scene, state.startPoint, state.currentPoint);
                 }
               } else if (activeTool === 'rectangle') {
-                finalizeRectangle(scene, state.startPoint, state.currentPoint);
+                const rectResult = finalizeRectangle(scene, state.startPoint, state.currentPoint);
+                if (rectResult) {
+                  createRectangleEndpoints(scene, state.startPoint, state.currentPoint);
+                }
               }
             }
             // Cleanup preview
@@ -617,14 +621,34 @@ const CustomModelingPage: React.FC = () => {
           }
         }
       } else if (activeTool === 'pushpull') {
-        const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
-          mesh.metadata?.type === 'face'
-        );
-        if (pickResult?.hit && pickResult.pickedMesh) {
-          const face = pickResult.pickedMesh as Mesh;
-          state.isDrawing = true;
-          state.startPoint = new Vector3(0, scene.pointerY, 0);
-          (state as DrawingState & { targetMesh?: Mesh }).targetMesh = face;
+        if (!state.isDrawing) {
+          // First click: Select face to extrude
+          const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
+            mesh.metadata?.type === 'face'
+          );
+          if (pickResult?.hit && pickResult.pickedMesh) {
+            const face = pickResult.pickedMesh as Mesh;
+            state.isDrawing = true;
+            state.startPoint = new Vector3(0, scene.pointerY, 0);
+            (state as DrawingState & { targetMesh?: Mesh }).targetMesh = face;
+          }
+        } else {
+          // Second click: Finalize extrusion
+          const targetMesh = (state as DrawingState & { targetMesh?: Mesh }).targetMesh;
+          if (targetMesh && state.startPoint) {
+            const deltaY = (state.startPoint.y - scene.pointerY) * 0.05;
+            if (Math.abs(deltaY) > 0.1) {
+              const solid = applyPushPull(targetMesh, deltaY);
+              if (solid) {
+                selectMesh(solid);
+              }
+            }
+          }
+          // Reset state
+          state.isDrawing = false;
+          state.startPoint = null;
+          state.currentPoint = null;
+          (state as DrawingState & { targetMesh?: Mesh }).targetMesh = undefined;
         }
       } else if (activeTool === 'select') {
         const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
@@ -718,35 +742,10 @@ const CustomModelingPage: React.FC = () => {
 
       if (evt.button !== 0) return;
 
-      // Line and rectangle use click-click (SketchUp style), not drag
+      // Line, rectangle, and push/pull use click-click (SketchUp style), not drag
       // So don't finalize on mouse up for those tools
-      if (activeTool === 'line' || activeTool === 'rectangle') {
+      if (activeTool === 'line' || activeTool === 'rectangle' || activeTool === 'pushpull') {
         return;
-      }
-
-      const state = drawingStateRef.current;
-      if (!state.isDrawing) return;
-
-      // Push/pull is still drag-based
-      if (activeTool === 'pushpull') {
-        const deltaY = (state.startPoint!.y - scene.pointerY) * 0.05;
-        const targetMesh = (state as DrawingState & { targetMesh?: Mesh }).targetMesh;
-        if (targetMesh && Math.abs(deltaY) > 0.1) {
-          const solid = applyPushPull(targetMesh, deltaY);
-          if (solid) {
-            selectMesh(solid);
-          }
-        }
-
-        if (state.previewMesh) {
-          state.previewMesh.dispose();
-          state.previewMesh = null;
-        }
-
-        state.isDrawing = false;
-        state.startPoint = null;
-        state.currentPoint = null;
-        (state as DrawingState & { targetMesh?: Mesh }).targetMesh = undefined;
       }
     };
 
