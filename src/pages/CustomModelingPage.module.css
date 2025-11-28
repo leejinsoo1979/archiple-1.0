@@ -121,6 +121,69 @@
   margin: 0 4px;
 }
 
+/* Left Vertical Toolbar - SketchUp Large Tool Set Style */
+.leftToolbar {
+  width: 40px;
+  background: linear-gradient(90deg, #f0f0f0 0%, #e8e8e8 100%);
+  border-right: 1px solid #c8c8c8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 2px;
+  gap: 1px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.leftToolbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.leftToolbar::-webkit-scrollbar-thumb {
+  background: #c0c0c0;
+  border-radius: 2px;
+}
+
+.verticalTool {
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s ease;
+  flex-shrink: 0;
+}
+
+.verticalTool svg {
+  width: 24px;
+  height: 24px;
+}
+
+.verticalTool:hover {
+  background: linear-gradient(180deg, #ffffff 0%, #f0f0f0 100%);
+  border-color: #a0a0a0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.verticalTool.active {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--theme-color, #3b82f6) 20%, white) 0%, color-mix(in srgb, var(--theme-color, #3b82f6) 30%, white) 100%);
+  border-color: var(--theme-color, #3b82f6);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.verticalDivider {
+  width: 28px;
+  height: 1px;
+  background: #c8c8c8;
+  margin: 3px 0;
+  flex-shrink: 0;
+}
+
 /* Old Toolbar - keeping for reference */
 .toolbar {
   display: flex;

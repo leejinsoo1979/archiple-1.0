@@ -342,12 +342,14 @@ const EditorPage = () => {
   // Custom modeling tray state
   const [customModelingTrayOpen, setCustomModelingTrayOpen] = useState(false);
   const [traySections, setTraySections] = useState({
-    entityInfo: true,
-    materials: true,
+    entityInfo: false,
+    materials: false,
     components: false,
     styles: false,
     tags: false,
-    shadows: true
+    shadows: false,
+    scenes: false,
+    instructor: false
   });
   const [shadowSettings, setShadowSettings] = useState({
     timezone: 'UTC-07:00',
@@ -3059,245 +3061,126 @@ ARTISTIC APPROACH:
   )
 }
 
-{/* Custom Modeling Tray Panel */}
+{/* Custom Modeling Tray Panel - SketchUp Style */}
 {
   customModelingTrayOpen && (
-    <div className={styles.customModelingTray}>
-      <div className={styles.trayHeader}>
+    <div className={styles.sketchupTray}>
+      <div className={styles.sketchupTrayHeader}>
         <span>Default Tray</span>
-        <button onClick={() => setCustomModelingTrayOpen(false)} className={styles.trayCloseBtn}>×</button>
+        <div className={styles.sketchupTrayHeaderBtns}>
+          <button className={styles.sketchupTrayHeaderBtn}>—</button>
+          <button onClick={() => setCustomModelingTrayOpen(false)} className={styles.sketchupTrayHeaderBtn}>×</button>
+        </div>
       </div>
 
-      {/* Entity Info Section */}
-      <div className={styles.traySection}>
-        <div
-          className={styles.traySectionHeader}
-          onClick={() => setTraySections(prev => ({ ...prev, entityInfo: !prev.entityInfo }))}
-        >
-          <span className={styles.trayArrow}>{traySections.entityInfo ? '▼' : '▶'}</span>
-          <span>Entity Info</span>
+      {/* Entity Info */}
+      <div className={styles.sketchupSection}>
+        <div className={styles.sketchupSectionHeader} onClick={() => setTraySections(prev => ({ ...prev, entityInfo: !prev.entityInfo }))}>
+          <span className={styles.sketchupArrow}>{traySections.entityInfo ? '▼' : '▶'}</span>
+          <span className={styles.sketchupSectionTitle}>Entity Info</span>
+          <button className={styles.sketchupSectionClose} onClick={(e) => { e.stopPropagation(); }}>×</button>
         </div>
         {traySections.entityInfo && (
-          <div className={styles.traySectionContent}>
-            <p className={styles.trayInfoText}>No entity selected</p>
+          <div className={styles.sketchupSectionContent}>
+            <p>No entity selected</p>
           </div>
         )}
       </div>
 
-      {/* Materials Section */}
-      <div className={styles.traySection}>
-        <div
-          className={styles.traySectionHeader}
-          onClick={() => setTraySections(prev => ({ ...prev, materials: !prev.materials }))}
-        >
-          <span className={styles.trayArrow}>{traySections.materials ? '▼' : '▶'}</span>
-          <span>Materials</span>
+      {/* Materials */}
+      <div className={styles.sketchupSection}>
+        <div className={styles.sketchupSectionHeader} onClick={() => setTraySections(prev => ({ ...prev, materials: !prev.materials }))}>
+          <span className={styles.sketchupArrow}>{traySections.materials ? '▼' : '▶'}</span>
+          <span className={styles.sketchupSectionTitle}>Materials</span>
+          <button className={styles.sketchupSectionClose} onClick={(e) => { e.stopPropagation(); }}>×</button>
         </div>
         {traySections.materials && (
-          <div className={styles.traySectionContent}>
-            <div className={styles.materialPreview}>
-              <div className={styles.materialSwatch}></div>
-              <span>Default</span>
-            </div>
-            <div className={styles.materialTabs}>
-              <button className={`${styles.materialTab} ${styles.active}`}>Select</button>
-              <button className={styles.materialTab}>Edit</button>
-            </div>
-            <div className={styles.materialToolbar}>
-              <button className={styles.materialToolBtn}>🏠</button>
-              <button className={styles.materialToolBtn}>📁</button>
-              <select className={styles.materialSelect}>
-                <option>Tile</option>
-                <option>Wood</option>
-                <option>Stone</option>
-                <option>Metal</option>
-                <option>Fabric</option>
-              </select>
-            </div>
-            <div className={styles.materialGrid}>
-              {[...Array(20)].map((_, i) => (
-                <div key={i} className={styles.materialThumbnail} style={{
-                  background: `hsl(${(i * 30) % 360}, ${20 + (i % 3) * 20}%, ${70 + (i % 4) * 5}%)`
-                }}></div>
-              ))}
-            </div>
+          <div className={styles.sketchupSectionContent}>
+            <p>No materials</p>
           </div>
         )}
       </div>
 
-      {/* Components Section */}
-      <div className={styles.traySection}>
-        <div
-          className={styles.traySectionHeader}
-          onClick={() => setTraySections(prev => ({ ...prev, components: !prev.components }))}
-        >
-          <span className={styles.trayArrow}>{traySections.components ? '▼' : '▶'}</span>
-          <span>Components</span>
+      {/* Components */}
+      <div className={styles.sketchupSection}>
+        <div className={styles.sketchupSectionHeader} onClick={() => setTraySections(prev => ({ ...prev, components: !prev.components }))}>
+          <span className={styles.sketchupArrow}>{traySections.components ? '▼' : '▶'}</span>
+          <span className={styles.sketchupSectionTitle}>Components</span>
+          <button className={styles.sketchupSectionClose} onClick={(e) => { e.stopPropagation(); }}>×</button>
         </div>
         {traySections.components && (
-          <div className={styles.traySectionContent}>
-            <p className={styles.trayInfoText}>No components loaded</p>
+          <div className={styles.sketchupSectionContent}>
+            <p>No components</p>
           </div>
         )}
       </div>
 
-      {/* Styles Section */}
-      <div className={styles.traySection}>
-        <div
-          className={styles.traySectionHeader}
-          onClick={() => setTraySections(prev => ({ ...prev, styles: !prev.styles }))}
-        >
-          <span className={styles.trayArrow}>{traySections.styles ? '▼' : '▶'}</span>
-          <span>Styles</span>
+      {/* Styles */}
+      <div className={styles.sketchupSection}>
+        <div className={styles.sketchupSectionHeader} onClick={() => setTraySections(prev => ({ ...prev, styles: !prev.styles }))}>
+          <span className={styles.sketchupArrow}>{traySections.styles ? '▼' : '▶'}</span>
+          <span className={styles.sketchupSectionTitle}>Styles</span>
+          <button className={styles.sketchupSectionClose} onClick={(e) => { e.stopPropagation(); }}>×</button>
         </div>
         {traySections.styles && (
-          <div className={styles.traySectionContent}>
-            <p className={styles.trayInfoText}>Default style</p>
+          <div className={styles.sketchupSectionContent}>
+            <p>Default style</p>
           </div>
         )}
       </div>
 
-      {/* Tags Section */}
-      <div className={styles.traySection}>
-        <div
-          className={styles.traySectionHeader}
-          onClick={() => setTraySections(prev => ({ ...prev, tags: !prev.tags }))}
-        >
-          <span className={styles.trayArrow}>{traySections.tags ? '▼' : '▶'}</span>
-          <span>Tags</span>
+      {/* Tags */}
+      <div className={styles.sketchupSection}>
+        <div className={styles.sketchupSectionHeader} onClick={() => setTraySections(prev => ({ ...prev, tags: !prev.tags }))}>
+          <span className={styles.sketchupArrow}>{traySections.tags ? '▼' : '▶'}</span>
+          <span className={styles.sketchupSectionTitle}>Tags</span>
+          <button className={styles.sketchupSectionClose} onClick={(e) => { e.stopPropagation(); }}>×</button>
         </div>
         {traySections.tags && (
-          <div className={styles.traySectionContent}>
-            <p className={styles.trayInfoText}>No tags</p>
+          <div className={styles.sketchupSectionContent}>
+            <p>No tags</p>
           </div>
         )}
       </div>
 
-      {/* Shadows Section */}
-      <div className={styles.traySection}>
-        <div
-          className={styles.traySectionHeader}
-          onClick={() => setTraySections(prev => ({ ...prev, shadows: !prev.shadows }))}
-        >
-          <span className={styles.trayArrow}>{traySections.shadows ? '▼' : '▶'}</span>
-          <span>Shadows</span>
+      {/* Shadows */}
+      <div className={styles.sketchupSection}>
+        <div className={styles.sketchupSectionHeader} onClick={() => setTraySections(prev => ({ ...prev, shadows: !prev.shadows }))}>
+          <span className={styles.sketchupArrow}>{traySections.shadows ? '▼' : '▶'}</span>
+          <span className={styles.sketchupSectionTitle}>Shadows</span>
+          <button className={styles.sketchupSectionClose} onClick={(e) => { e.stopPropagation(); }}>×</button>
         </div>
         {traySections.shadows && (
-          <div className={styles.traySectionContent}>
-            <div className={styles.shadowRow}>
-              <select
-                className={styles.shadowSelect}
-                value={shadowSettings.timezone}
-                onChange={(e) => setShadowSettings(prev => ({ ...prev, timezone: e.target.value }))}
-              >
-                <option>UTC-12:00</option>
-                <option>UTC-07:00</option>
-                <option>UTC+00:00</option>
-                <option>UTC+09:00</option>
-              </select>
-            </div>
-            <div className={styles.shadowRow}>
-              <label>Time</label>
-              <div className={styles.shadowSliderRow}>
-                <span className={styles.shadowLabel}>06:43AM</span>
-                <span className={styles.shadowLabel}>Noon</span>
-                <span className={styles.shadowLabel}>4:45PM</span>
-              </div>
-              <input
-                type="range"
-                min="6" max="17" step="0.1"
-                value={shadowSettings.time}
-                onChange={(e) => setShadowSettings(prev => ({ ...prev, time: parseFloat(e.target.value) }))}
-                className={styles.shadowSlider}
-              />
-              <input
-                type="text"
-                value={`${Math.floor(shadowSettings.time)}:${Math.round((shadowSettings.time % 1) * 60).toString().padStart(2, '0')}`}
-                className={styles.shadowInput}
-                readOnly
-              />
-            </div>
-            <div className={styles.shadowRow}>
-              <label>Date</label>
-              <div className={styles.shadowSliderRow}>
-                <span className={styles.shadowLabel}>J F M A M J J A S O N D</span>
-              </div>
-              <input
-                type="range"
-                min="1" max="12" step="0.01"
-                value={shadowSettings.date}
-                onChange={(e) => setShadowSettings(prev => ({ ...prev, date: parseFloat(e.target.value) }))}
-                className={styles.shadowSlider}
-              />
-              <input
-                type="text"
-                value={`${Math.floor(shadowSettings.date)}/${Math.round((shadowSettings.date % 1) * 30).toString().padStart(2, '0')}`}
-                className={styles.shadowInput}
-                readOnly
-              />
-            </div>
-            <div className={styles.shadowRow}>
-              <label>Light</label>
-              <input
-                type="range"
-                min="0" max="100"
-                value={shadowSettings.light}
-                onChange={(e) => setShadowSettings(prev => ({ ...prev, light: parseInt(e.target.value) }))}
-                className={styles.shadowSlider}
-              />
-              <input
-                type="number"
-                value={shadowSettings.light}
-                onChange={(e) => setShadowSettings(prev => ({ ...prev, light: parseInt(e.target.value) || 0 }))}
-                className={styles.shadowInput}
-              />
-            </div>
-            <div className={styles.shadowRow}>
-              <label>Dark</label>
-              <input
-                type="range"
-                min="0" max="100"
-                value={shadowSettings.dark}
-                onChange={(e) => setShadowSettings(prev => ({ ...prev, dark: parseInt(e.target.value) }))}
-                className={styles.shadowSlider}
-              />
-              <input
-                type="number"
-                value={shadowSettings.dark}
-                onChange={(e) => setShadowSettings(prev => ({ ...prev, dark: parseInt(e.target.value) || 0 }))}
-                className={styles.shadowInput}
-              />
-            </div>
-            <div className={styles.shadowCheckbox}>
-              <input
-                type="checkbox"
-                id="useSunForShading"
-                checked={shadowSettings.useSunForShading}
-                onChange={(e) => setShadowSettings(prev => ({ ...prev, useSunForShading: e.target.checked }))}
-              />
-              <label htmlFor="useSunForShading">Use sun for shading</label>
-            </div>
-            <div className={styles.shadowDisplay}>
-              <label>Display:</label>
-              <div className={styles.shadowCheckbox}>
-                <input
-                  type="checkbox"
-                  id="displayOnFaces"
-                  checked={shadowSettings.displayOnFaces}
-                  onChange={(e) => setShadowSettings(prev => ({ ...prev, displayOnFaces: e.target.checked }))}
-                />
-                <label htmlFor="displayOnFaces">On faces</label>
-              </div>
-              <div className={styles.shadowCheckbox}>
-                <input
-                  type="checkbox"
-                  id="displayOnGround"
-                  checked={shadowSettings.displayOnGround}
-                  onChange={(e) => setShadowSettings(prev => ({ ...prev, displayOnGround: e.target.checked }))}
-                />
-                <label htmlFor="displayOnGround">On ground</label>
-              </div>
-            </div>
+          <div className={styles.sketchupSectionContent}>
+            <p>Shadow settings</p>
+          </div>
+        )}
+      </div>
+
+      {/* Scenes */}
+      <div className={styles.sketchupSection}>
+        <div className={styles.sketchupSectionHeader} onClick={() => setTraySections(prev => ({ ...prev, scenes: !prev.scenes }))}>
+          <span className={styles.sketchupArrow}>{traySections.scenes ? '▼' : '▶'}</span>
+          <span className={styles.sketchupSectionTitle}>Scenes</span>
+          <button className={styles.sketchupSectionClose} onClick={(e) => { e.stopPropagation(); }}>×</button>
+        </div>
+        {traySections.scenes && (
+          <div className={styles.sketchupSectionContent}>
+            <p>No scenes</p>
+          </div>
+        )}
+      </div>
+
+      {/* Instructor */}
+      <div className={styles.sketchupSection}>
+        <div className={styles.sketchupSectionHeader} onClick={() => setTraySections(prev => ({ ...prev, instructor: !prev.instructor }))}>
+          <span className={styles.sketchupArrow}>{traySections.instructor ? '▼' : '▶'}</span>
+          <span className={styles.sketchupSectionTitle}>Instructor</span>
+          <button className={styles.sketchupSectionClose} onClick={(e) => { e.stopPropagation(); }}>×</button>
+        </div>
+        {traySections.instructor && (
+          <div className={styles.sketchupSectionContent}>
+            <p>Select a tool to see instructions</p>
           </div>
         )}
       </div>

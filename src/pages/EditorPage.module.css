@@ -3031,3 +3031,119 @@
 .shadowDisplay > label {
   margin-bottom: 4px;
 }
+
+/* ===== SKETCHUP STYLE TRAY ===== */
+.sketchupTray {
+  position: fixed;
+  right: 0;
+  top: 56px;
+  width: 240px;
+  height: calc(100vh - 56px);
+  background: #f0f0f0;
+  border-left: 1px solid #a0a0a0;
+  overflow-y: auto;
+  z-index: 200;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 12px;
+  box-shadow: -2px 0 8px rgba(0,0,0,0.15);
+}
+
+.sketchupTrayHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 6px;
+  background: linear-gradient(180deg, #f8f8f8 0%, #e0e0e0 100%);
+  border-bottom: 1px solid #a0a0a0;
+  font-weight: normal;
+  color: #333;
+  font-size: 12px;
+}
+
+.sketchupTrayHeaderBtns {
+  display: flex;
+  gap: 2px;
+}
+
+.sketchupTrayHeaderBtn {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #a0a0a0;
+  background: linear-gradient(180deg, #f5f5f5 0%, #d8d8d8 100%);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  color: #555;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sketchupTrayHeaderBtn:hover {
+  background: linear-gradient(180deg, #fff 0%, #e8e8e8 100%);
+}
+
+.sketchupSection {
+  border-bottom: 1px solid #c0c0c0;
+}
+
+.sketchupSectionHeader {
+  display: flex;
+  align-items: center;
+  padding: 4px 6px;
+  background: linear-gradient(180deg, #e8e8e8 0%, #d0d0d0 100%);
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid #b0b0b0;
+}
+
+.sketchupSectionHeader:hover {
+  background: linear-gradient(180deg, #f0f0f0 0%, #d8d8d8 100%);
+}
+
+.sketchupArrow {
+  font-size: 8px;
+  color: #555;
+  margin-right: 4px;
+  width: 10px;
+}
+
+.sketchupSectionTitle {
+  flex: 1;
+  color: #333;
+  font-weight: normal;
+}
+
+.sketchupSectionClose {
+  width: 16px;
+  height: 16px;
+  border: 1px solid #a0a0a0;
+  background: linear-gradient(180deg, #f5f5f5 0%, #d8d8d8 100%);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  color: #555;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+}
+
+.sketchupSectionClose:hover {
+  background: linear-gradient(180deg, #fff 0%, #e8e8e8 100%);
+  color: #c00;
+}
+
+.sketchupSectionContent {
+  padding: 8px;
+  background: #f5f5f5;
+  border-top: 1px solid #d0d0d0;
+}
+
+.sketchupSectionContent p {
+  margin: 0;
+  color: #666;
+  font-size: 11px;
+}
