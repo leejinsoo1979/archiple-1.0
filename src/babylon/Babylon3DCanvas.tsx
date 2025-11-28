@@ -411,6 +411,15 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     screenPosition: { x: number; y: number };
   } | null>(null);
 
+  // Ceiling selection state
+  const selectedCeilingOutlineRef = useRef<Mesh | null>(null);
+  const selectedCeilingMeshRef = useRef<Mesh | null>(null);
+  const [selectedCeiling, setSelectedCeiling] = useState<{
+    mesh: Mesh;
+    roomIndex: number;
+    screenPosition: { x: number; y: number };
+  } | null>(null);
+
   // Camera settings from Zustand store
   const cameraSettings = useCameraSettingsStore();
 
@@ -839,8 +848,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       arcCamera.wheelDeltaPercentage = 0.05; // 5% zoom per scroll tick
       arcCameraRef.current = arcCamera;
 
-      // Custom 3D rotation cursor - two crossing ellipses with arrows (thin lines)
-      const rotateCursorActive = 'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMS4yIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxlbGxpcHNlIGN4PSIxMiIgY3k9IjEyIiByeD0iMTAiIHJ5PSI0IiB0cmFuc2Zvcm09InJvdGF0ZSg5MCAxMiAxMikiLz48ZWxsaXBzZSBjeD0iMTIiIGN5PSIxMiIgcng9IjEwIiByeT0iNCIvPjxwYXRoIGQ9Ik01IDhsLTIgMiAyIDIiLz48cGF0aCBkPSJNOCAxOWwyIDIgMi0yIi8+PC9zdmc+") 12 12, move';
+      // Custom 3D rotation cursor - two crossing ellipses with arrows (white outline + black line)
+      const rotateCursorActive = 'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxlbGxpcHNlIGN4PSIxMiIgY3k9IjEyIiByeD0iMTAiIHJ5PSI0IiB0cmFuc2Zvcm09InJvdGF0ZSg5MCAxMiAxMikiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIzIi8+PGVsbGlwc2UgY3g9IjEyIiBjeT0iMTIiIHJ4PSIxMCIgcnk9IjQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIzIi8+PHBhdGggZD0iTTUgOGwtMiAyIDIgMiIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjMiLz48cGF0aCBkPSJNOCAxOWwyIDIgMi0yIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMyIvPjxlbGxpcHNlIGN4PSIxMiIgY3k9IjEyIiByeD0iMTAiIHJ5PSI0IiB0cmFuc2Zvcm09InJvdGF0ZSg5MCAxMiAxMikiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLXdpZHRoPSIxLjIiLz48ZWxsaXBzZSBjeD0iMTIiIGN5PSIxMiIgcng9IjEwIiByeT0iNCIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuMiIvPjxwYXRoIGQ9Ik01IDhsLTIgMiAyIDIiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLXdpZHRoPSIxLjIiLz48cGF0aCBkPSJNOCAxOWwyIDIgMi0yIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMS4yIi8+PC9zdmc+") 12 12, move';
 
       // Track dragging state for cursor change
       // Left click: rotate (rotation icon), Right click: pan (grab cursor)
@@ -2559,11 +2568,12 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
           const isWall = meshName.includes('wall') && !meshName.includes('hotspot') && !meshName.includes('grid');
           const isFloor = (meshName.includes('floor') || meshName.startsWith('room_')) && !meshName.includes('hotspot');
+          const isCeiling = meshName.includes('ceiling') || picked.metadata?.type === 'ceiling';
 
           // Skip hidden/invisible meshes
           const isHidden = !picked.isVisible || picked.visibility < 0.5;
 
-          if ((isWall || isFloor) && !isHidden && picked.getVerticesData && picked.getIndices) {
+          if ((isWall || isFloor || isCeiling) && !isHidden && picked.getVerticesData && picked.getIndices) {
 
             const positions = picked.getVerticesData('position');
             const indices = picked.getIndices();
@@ -2647,18 +2657,20 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
               const offset = 0.01;
               let outlineVerts: Vector3[];
 
-              if (isFloor) {
+              if (isFloor || isCeiling) {
+                // For ceiling, offset below; for floor, offset above
+                const yOffset = isCeiling ? -offset : offset;
                 if (picked.metadata?.polygonPoints) {
                   const polyPoints = picked.metadata.polygonPoints as { x: number; y: number; z: number }[];
-                  outlineVerts = polyPoints.map(p => new Vector3(p.x, v0.y + offset, p.z));
+                  outlineVerts = polyPoints.map(p => new Vector3(p.x, v0.y + yOffset, p.z));
                 } else {
                   const bb = picked.getBoundingInfo().boundingBox;
                   const bmin = bb.minimumWorld, bmax = bb.maximumWorld;
                   outlineVerts = [
-                    new Vector3(bmin.x, v0.y + offset, bmin.z),
-                    new Vector3(bmax.x, v0.y + offset, bmin.z),
-                    new Vector3(bmax.x, v0.y + offset, bmax.z),
-                    new Vector3(bmin.x, v0.y + offset, bmax.z)
+                    new Vector3(bmin.x, v0.y + yOffset, bmin.z),
+                    new Vector3(bmax.x, v0.y + yOffset, bmin.z),
+                    new Vector3(bmax.x, v0.y + yOffset, bmax.z),
+                    new Vector3(bmin.x, v0.y + yOffset, bmax.z)
                   ];
                 }
               } else {
@@ -2875,12 +2887,13 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           }
         }
 
-        // Add face glow on click for walls and floors
+        // Add face glow on click for walls, floors, and ceilings
         const clickedMeshName = picked.name.toLowerCase();
         const isClickedWall = clickedMeshName.includes('wall') && !clickedMeshName.includes('hotspot');
         const isClickedFloor = (clickedMeshName.includes('floor') || clickedMeshName.startsWith('room_')) && !clickedMeshName.includes('hotspot');
+        const isClickedCeiling = clickedMeshName.includes('ceiling') || picked.metadata?.type === 'ceiling';
 
-        if ((isClickedWall || isClickedFloor) && !playMode && pickResult.faceId !== undefined) {
+        if ((isClickedWall || isClickedFloor || isClickedCeiling) && !playMode && pickResult.faceId !== undefined) {
           // Clear previous face overlay
           if (clickFaceOverlayRef.current) {
             if (highlightLayerRef.current) {
@@ -3092,16 +3105,19 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           lastHoverKeyRef.current = '';
           setSelectedWall(null);
           setSelectedFloor(null);
+          setSelectedCeiling(null);
         }
 
         // Check if clicked on floor (for toolbar selection state only - no blue outline)
         const meshName = picked.name.toLowerCase();
         const isFloor = (meshName.includes('floor') || meshName.startsWith('room_')) && !meshName.includes('hotspot');
+        const isCeiling = meshName.includes('ceiling') || picked.metadata?.type === 'ceiling';
 
         if (isFloor && !playMode) {
           const floorMesh = picked as Mesh;
           selectedFloorMeshRef.current = floorMesh;
           setSelectedWall(null);
+          setSelectedCeiling(null);
 
           // Get screen position for toolbar
           const boundingInfo = floorMesh.getBoundingInfo();
@@ -3129,10 +3145,43 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
               screenPosition: { x: screenPos.x, y: screenPos.y + 50 }
             });
           }
-        } else if (!isFloor && !playMode && !isClickedWall) {
-          // Clicked elsewhere (not wall, not floor) - clear selection
-          selectedFloorMeshRef.current = null;
+        } else if (isCeiling && !playMode) {
+          // Ceiling clicked - show ceiling editor toolbar
+          const ceilingMesh = picked as Mesh;
+          selectedCeilingMeshRef.current = ceilingMesh;
+          setSelectedWall(null);
           setSelectedFloor(null);
+
+          // Get screen position for toolbar
+          const boundingInfo = ceilingMesh.getBoundingInfo();
+          const min = boundingInfo.boundingBox.minimumWorld;
+          const max = boundingInfo.boundingBox.maximumWorld;
+          const ceilingY = (min.y + max.y) / 2 - 0.02;
+          const ceilingCenter = new Vector3((min.x + max.x) / 2, ceilingY, (min.z + max.z) / 2);
+          const camera = arcCameraRef.current;
+          const engine = engineRef.current;
+          if (camera && engine) {
+            const screenPos = Vector3.Project(
+              ceilingCenter,
+              Matrix.Identity(),
+              scene.getTransformMatrix(),
+              camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight())
+            );
+
+            const roomIndex = ceilingMesh.metadata?.roomIndex ?? 0;
+
+            setSelectedCeiling({
+              mesh: ceilingMesh,
+              roomIndex,
+              screenPosition: { x: screenPos.x, y: screenPos.y + 50 }
+            });
+          }
+        } else if (!isFloor && !isCeiling && !playMode && !isClickedWall) {
+          // Clicked elsewhere (not wall, not floor, not ceiling) - clear selection
+          selectedFloorMeshRef.current = null;
+          selectedCeilingMeshRef.current = null;
+          setSelectedFloor(null);
+          setSelectedCeiling(null);
         }
       } else if (!playMode) {
         // Clicked on background (no mesh hit) - clear all selections and glow
@@ -3152,8 +3201,10 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         }
         lastHoverKeyRef.current = '';
         selectedFloorMeshRef.current = null;
+        selectedCeilingMeshRef.current = null;
         setSelectedFloor(null);
         setSelectedWall(null);
+        setSelectedCeiling(null);
       }
     };
 
@@ -4994,6 +5045,74 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
             <button style={{ background: 'transparent', border: 'none', padding: '6px', color: 'white', cursor: 'pointer', borderRadius: '4px' }} title="Mirror">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M9.01 14H2v2h7.01v3L13 15l-3.99-4v3zm5.98-1v-3H22V8h-7.01V5L11 9l3.99 4z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+      {/* Ceiling Editor Toolbar */}
+      {selectedCeiling && !playMode && (
+        <div
+          style={{
+            position: 'absolute',
+            left: selectedCeiling.screenPosition.x,
+            top: selectedCeiling.screenPosition.y,
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '8px',
+            pointerEvents: 'auto',
+            zIndex: 100,
+          }}
+        >
+          {/* Ceiling Editor Button */}
+          <button
+            style={{
+              background: '#333',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '8px 16px',
+              fontSize: '14px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            }}
+            onClick={() => {
+              // TODO: Open ceiling editor
+              console.log('Open ceiling editor for room:', selectedCeiling.roomIndex);
+            }}
+          >
+            Ceiling Editor
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" />
+            </svg>
+          </button>
+          {/* Toolbar Icons */}
+          <div
+            style={{
+              background: '#333',
+              borderRadius: '6px',
+              padding: '6px 8px',
+              display: 'flex',
+              gap: '4px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            }}
+          >
+            {/* Drag handle */}
+            <div style={{ padding: '6px', color: '#888', cursor: 'grab' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+              </svg>
+            </div>
+            {/* Edit */}
+            <button style={{ background: 'transparent', border: 'none', padding: '6px', color: 'white', cursor: 'pointer', borderRadius: '4px' }} title="Edit">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
               </svg>
             </button>
           </div>

@@ -1583,13 +1583,13 @@ ARTISTIC APPROACH:
             {/* Images/Videos Group with Dropdown */}
             <div className={styles.toolbarDropdown} ref={imagesMenuRef}>
               <button
-                className={`${styles.toolbarBtn} ${styles.toolbarBtnPrimary} ${styles.toolbarBtnWithArrow} ${imagesMenuOpen ? styles.active : ''}`}
+                className={`${styles.toolbarBtn} ${styles.toolbarBtnWithArrow} ${imagesMenuOpen ? styles.active : ''}`}
                 onClick={() => setImagesMenuOpen(!imagesMenuOpen)}
               >
                 <div className={styles.toolbarIconWrapper}>
                   <MdCameraAlt />
                 </div>
-                <FaCaretDown className={styles.toolbarDropdownArrowIcon} style={{ color: 'white' }} />
+                <FaCaretDown className={styles.toolbarDropdownArrowIcon} />
               </button>
               {imagesMenuOpen && (
                 <div className={styles.toolbarDropdownMenu}>
