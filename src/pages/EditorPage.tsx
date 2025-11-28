@@ -1896,19 +1896,27 @@ ARTISTIC APPROACH:
             <button className={styles.importCard} onClick={() => glbFileInputRef.current?.click()}>
               <div className={styles.importIconWrapper}>
                 <svg width="52" height="52" viewBox="0 0 56 56" fill="none">
-                  {/* 3D Cube - isometric view */}
-                  {/* Top face */}
-                  <path d="M28 8L48 20V36L28 48L8 36V20L28 8Z" fill="var(--icon-bg)" stroke="var(--icon-stroke)" strokeWidth="1.5"/>
-                  <path d="M28 8L48 20L28 32L8 20L28 8Z" fill="var(--icon-light)"/>
-                  {/* Left face */}
-                  <path d="M8 20L28 32V48L8 36V20Z" fill="var(--icon-secondary)"/>
-                  {/* Right face */}
-                  <path d="M48 20L28 32V48L48 36V20Z" fill="var(--icon-primary)"/>
-                  {/* Center line */}
-                  <line x1="28" y1="32" x2="28" y2="48" stroke="var(--icon-stroke)" strokeWidth="1"/>
-                  {/* 3D text badge */}
-                  <rect x="18" y="38" width="20" height="12" rx="2" fill="var(--icon-primary)"/>
-                  <text x="28" y="48" textAnchor="middle" fill="white" fontSize="8" fontWeight="bold" fontFamily="system-ui">3D</text>
+                  {/* Document base */}
+                  <path d="M10 6C10 4.89543 10.8954 4 12 4H30L42 16V50C42 51.1046 41.1046 52 40 52H12C10.8954 52 10 51.1046 10 50V6Z" fill="var(--icon-bg)" stroke="var(--icon-stroke)" strokeWidth="1.5"/>
+                  {/* Document fold */}
+                  <path d="M30 4V14C30 15.1046 30.8954 16 32 16H42" fill="var(--icon-light)"/>
+                  <path d="M30 4V14C30 15.1046 30.8954 16 32 16H42" stroke="var(--icon-stroke)" strokeWidth="1.5"/>
+                  {/* 3D Cube - floating isometric */}
+                  <g transform="translate(24, 22)">
+                    {/* Shadow */}
+                    <ellipse cx="10" cy="26" rx="12" ry="4" fill="var(--icon-stroke)" opacity="0.2"/>
+                    {/* Cube top face */}
+                    <path d="M10 0L20 6L10 12L0 6L10 0Z" fill="var(--icon-light)" stroke="var(--icon-stroke)" strokeWidth="0.8"/>
+                    {/* Cube left face */}
+                    <path d="M0 6L10 12V22L0 16V6Z" fill="var(--icon-secondary)" stroke="var(--icon-stroke)" strokeWidth="0.8"/>
+                    {/* Cube right face */}
+                    <path d="M20 6L10 12V22L20 16V6Z" fill="var(--icon-primary)" stroke="var(--icon-stroke)" strokeWidth="0.8"/>
+                    {/* Highlight on top */}
+                    <path d="M10 2L17 5.5L10 9L3 5.5L10 2Z" fill="white" opacity="0.3"/>
+                  </g>
+                  {/* GLB badge */}
+                  <rect x="4" y="40" width="22" height="12" rx="2" fill="var(--icon-primary)"/>
+                  <text x="15" y="49" textAnchor="middle" fill="white" fontSize="7" fontWeight="bold" fontFamily="system-ui">GLB</text>
                 </svg>
               </div>
               <span className={styles.importLabel}>Import 3D</span>
