@@ -34,7 +34,7 @@ const DEFAULT_OPTIONS: AutoWallHiderOptions = {
   smoothTransition: false,
   fadeSpeed: 0.15,
   multiRay: true,
-  ceilingBetaThreshold: 1.2, // ~70 degrees - show ceiling when looking up
+  ceilingBetaThreshold: Math.PI / 2, // Show ceiling when looking up (beta > 90 degrees)
 };
 
 export class AutoWallHider {

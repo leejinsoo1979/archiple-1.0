@@ -824,7 +824,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       arcCamera.attachControl(canvas, true);
       arcCamera.lowerRadiusLimit = 0.001; // Allow ultra close zoom (1mm minimum distance)
       arcCamera.upperRadiusLimit = 50;
-      arcCamera.upperBetaLimit = Math.PI / 2.05;
+      arcCamera.upperBetaLimit = Math.PI * 0.85; // Allow looking up at ceiling
       arcCamera.wheelPrecision = 1; // Maximum zoom speed
       arcCamera.panningSensibility = 0.1; // Lower = faster panning
       arcCamera.inertia = 0; // No inertia - immediate stop
@@ -3590,7 +3590,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       arcCamera.lowerRadiusLimit = 0.5; // Allow close zoom
       arcCamera.upperRadiusLimit = 50;
       arcCamera.lowerBetaLimit = 0.1; // Prevent going under floor
-      arcCamera.upperBetaLimit = Math.PI / 2.1; // Prevent going too vertical
+      arcCamera.upperBetaLimit = Math.PI * 0.85; // Allow looking up at ceiling
 
       arcCamera.panningSensibility = 800; // Slower panning for trackpad
       arcCamera.wheelPrecision = 1; // Maximum zoom speed

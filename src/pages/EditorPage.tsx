@@ -316,10 +316,16 @@ const EditorPage = () => {
   const [lightPlacementMode, setLightPlacementMode] = useState(false);
   const [selectedLightType, setSelectedLightType] = useState<LightType>('point');
 
-  // Theme settings state
+  // Theme settings state - load from localStorage on init
   const [themeSettingsOpen, setThemeSettingsOpen] = useState(false);
-  const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
-  const [themeColor, setThemeColor] = useState<string>('#3fae7a');
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('themeMode') as 'light' | 'dark' | null;
+    return saved || 'light';
+  });
+  const [themeColor, setThemeColor] = useState<string>(() => {
+    const saved = localStorage.getItem('themeColor');
+    return saved || '#3fae7a';
+  });
 
   // Render style state (for header panel)
   const [renderStyleOpen, setRenderStyleOpen] = useState(false);
@@ -825,19 +831,6 @@ ARTISTIC APPROACH:
       setAiGenerating(false);
     }
   };
-
-  // Load theme from localStorage on mount
-  useEffect(() => {
-    const savedThemeMode = localStorage.getItem('themeMode') as 'light' | 'dark' | null;
-    const savedThemeColor = localStorage.getItem('themeColor');
-
-    if (savedThemeMode) {
-      setThemeMode(savedThemeMode);
-    }
-    if (savedThemeColor) {
-      setThemeColor(savedThemeColor);
-    }
-  }, []);
 
   // Listen for tool changes from keyboard shortcuts (e.g., ESC key)
   useEffect(() => {
