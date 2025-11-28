@@ -999,18 +999,18 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       hemisphericLight.specular = new Color3(0.1, 0.1, 0.1);
 
       // 2. Main directional light (sun) with shadows
-      const azimuth = sunSettings?.azimuth ?? 225; // Sun from opposite direction
-      const altitude = sunSettings?.altitude ?? 45;
+      const azimuth = sunSettings?.azimuth ?? 135; // Sun from front-left
+      const altitude = sunSettings?.altitude ?? 60; // Higher sun = shadows more directly below
       const intensity = sunSettings?.intensity ?? 2.5; // Increased for stronger shadows
 
       // Calculate sun direction from azimuth/altitude
       const azimuthRad = (azimuth * Math.PI) / 180;
       const altitudeRad = (altitude * Math.PI) / 180;
 
-      // Light direction = from sun toward scene (pointing DOWN and INTO the building)
-      const dirX = Math.cos(altitudeRad) * Math.sin(azimuthRad);
+      // Light direction pointing down into the scene
+      const dirX = -Math.cos(altitudeRad) * Math.sin(azimuthRad);
       const dirY = -Math.sin(altitudeRad);
-      const dirZ = Math.cos(altitudeRad) * Math.cos(azimuthRad);
+      const dirZ = -Math.cos(altitudeRad) * Math.cos(azimuthRad);
 
       // DirectionalLight: first param is DIRECTION, not position
       const sunLight = new DirectionalLight('sunLight', new Vector3(dirX, dirY, dirZ), scene);
@@ -3069,7 +3069,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
             }
           }
         } else if (!playMode) {
-          // Clear face overlay when clicking elsewhere
+          // Clear face overlay and hover glow when clicking on other objects
           if (clickFaceOverlayRef.current) {
             if (highlightLayerRef.current) {
               highlightLayerRef.current.removeMesh(clickFaceOverlayRef.current);
@@ -3077,7 +3077,16 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
             clickFaceOverlayRef.current.dispose();
             clickFaceOverlayRef.current = null;
           }
+          if (hoverOutlineRef.current) {
+            if (highlightLayerRef.current) {
+              highlightLayerRef.current.removeMesh(hoverOutlineRef.current);
+            }
+            hoverOutlineRef.current.dispose();
+            hoverOutlineRef.current = null;
+          }
+          lastHoverKeyRef.current = '';
           setSelectedWall(null);
+          setSelectedFloor(null);
         }
 
         // Check if clicked on floor (for toolbar selection state only - no blue outline)
@@ -3129,6 +3138,14 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           clickFaceOverlayRef.current.dispose();
           clickFaceOverlayRef.current = null;
         }
+        if (hoverOutlineRef.current) {
+          if (highlightLayerRef.current) {
+            highlightLayerRef.current.removeMesh(hoverOutlineRef.current);
+          }
+          hoverOutlineRef.current.dispose();
+          hoverOutlineRef.current = null;
+        }
+        lastHoverKeyRef.current = '';
         selectedFloorMeshRef.current = null;
         setSelectedFloor(null);
         setSelectedWall(null);
