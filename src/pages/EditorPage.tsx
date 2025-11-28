@@ -2135,6 +2135,26 @@ ARTISTIC APPROACH:
     onView3DVisibilityChange={setView3DVisibility}
   />
 
+  {/* Overlay to close all panels when clicking background */}
+  {(sunPanelOpen || cameraPanelOpen) && (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 98,
+        background: 'transparent',
+      }}
+      onClick={() => {
+        setSunPanelOpen(false);
+        setCameraPanelOpen(false);
+        bottomControlBarRef.current?.closeAllModals();
+      }}
+    />
+  )}
+
   {/* Sun Settings Panel - Bottom */}
   {viewMode === '3D' && sunPanelOpen && (
     <div

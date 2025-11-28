@@ -1012,28 +1012,23 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       const dirY = -Math.sin(altitudeRad);
       const dirZ = -Math.cos(altitudeRad) * Math.cos(azimuthRad);
 
-      // DirectionalLight: direction points FROM sun TO scene
-      // Sun from left-front-top, casting shadows INTO the room on floor
+      // DirectionalLight: sun from side, casting clear shadows on floor
       const sunLight = new DirectionalLight('sunLight', new Vector3(1, -2, 1).normalize(), scene);
       sunLight.intensity = intensity;
-      sunLight.diffuse = new Color3(1, 0.98, 0.95); // Warm sunlight
+      sunLight.diffuse = new Color3(1, 0.98, 0.95);
       sunLight.specular = new Color3(1, 1, 1);
-      // Position sun high above and to the left-front of scene
-      sunLight.position = new Vector3(-30, 50, -30);
-      sunLight.autoCalcShadowZBounds = true;
+      sunLight.position = new Vector3(-50, 100, -50);
+      sunLight.shadowMinZ = 0.1;
+      sunLight.shadowMaxZ = 500;
       sunLightRef.current = sunLight;
 
-      // Shadow generator - only for furniture/objects, not walls
-      // For interior scenes, SSAO provides better ambient shadows
-      const shadowGenerator = new ShadowGenerator(2048, sunLight);
-      shadowGenerator.useBlurExponentialShadowMap = true;
-      shadowGenerator.blurKernel = 32;
-      shadowGenerator.blurScale = 1;
-      shadowGenerator.useKernelBlur = true;
-      shadowGenerator.bias = 0.001;
-      shadowGenerator.normalBias = 0.02;
-      // Very subtle shadows - SSAO handles most shadow work
-      shadowGenerator.setDarkness(0.6);
+      // Shadow generator - strong visible shadows
+      const shadowGenerator = new ShadowGenerator(4096, sunLight);
+      shadowGenerator.useExponentialShadowMap = true;
+      shadowGenerator.bias = 0.00001;
+      shadowGenerator.normalBias = 0.001;
+      // darkness: 0 = completely black shadow
+      shadowGenerator.setDarkness(0);
 
       // Create infinite grid floor
       const createInfiniteGrid = () => {
@@ -2067,7 +2062,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         wallMesh.receiveShadows = true;
 
         if (shadowGenerator) {
-          // shadowGenerator.addShadowCaster(wallMesh); // Walls dont cast shadows - SSAO handles this
+          shadowGenerator.addShadowCaster(wallMesh);
         }
 
         // Store for snap detection
@@ -2222,7 +2217,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         wallMeshesRef.current.push(wallMesh);
 
         if (shadowGenerator) {
-          // shadowGenerator.addShadowCaster(wallMesh); // Walls dont cast shadows - SSAO handles this
+          shadowGenerator.addShadowCaster(wallMesh);
         }
 
         // Enable edge rendering for clean wall edges
@@ -4865,8 +4860,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
               boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
             }}
             onClick={() => {
-              // TODO: Open wall editor
-              console.log('Open wall editor for:', selectedWall.wallId);
+              // Navigate to wall editor
+              window.location.href = `/wall-editor?wallId=${encodeURIComponent(selectedWall.wallId)}`;
             }}
           >
             Wall Editor

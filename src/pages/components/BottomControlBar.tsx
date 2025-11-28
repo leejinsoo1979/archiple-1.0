@@ -292,8 +292,32 @@ export const BottomControlBar = forwardRef<BottomControlBarRef, BottomControlBar
         { key: 'transparent', label: 'Transparent', shortcut: '⌘4', image: '/images/display style/Transparent.png' },
     ];
 
+    // Check if any internal modal is open
+    const anyModalOpen = displayStyleModalOpen || view2DModalOpen || view3DModalOpen || view2DVisibilityModalOpen;
+
     return (
-        <div className={styles.bottomBarContainer} style={cssVariables} data-theme={themeMode}>
+        <>
+            {/* Overlay to close all modals when clicking background */}
+            {anyModalOpen && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        zIndex: 98,
+                        background: 'transparent',
+                    }}
+                    onClick={() => {
+                        setDisplayStyleModalOpen(false);
+                        setView2DModalOpen(false);
+                        setView3DModalOpen(false);
+                        setView2DVisibilityModalOpen(false);
+                    }}
+                />
+            )}
+            <div className={styles.bottomBarContainer} style={cssVariables} data-theme={themeMode}>
             {/* LEFT SECTION */}
             <div className={styles.section}>
                 {/* View Mode Switcher */}
@@ -773,5 +797,6 @@ export const BottomControlBar = forwardRef<BottomControlBarRef, BottomControlBar
                 </div>
             </div>
         </div>
+        </>
     );
 });
