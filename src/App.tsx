@@ -9,6 +9,7 @@ import ModelsPage from './pages/ModelsPage';
 import ResourcesPage from './pages/ResourcesPage';
 import PricingPage from './pages/PricingPage';
 import WallEditorPage from './pages/WallEditorPage';
+import CustomModelingPage from './pages/CustomModelingPage';
 import './App.css'
 
 function App() {
@@ -20,6 +21,7 @@ function App() {
         <Route path="/signup" element={<LoginPage />} />
         <Route path="/editor" element={<EditorPage />} />
         <Route path="/wall-editor" element={<WallEditorPage />} />
+        <Route path="/custom-modeling" element={<CustomModelingPage />} />
         <Route path="/play/:projectId" element={<PlayPage />} />
 
         {/* Specific Pages */}
