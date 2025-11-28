@@ -185,8 +185,12 @@ export class AutoWallHider {
         } else {
           ceiling.visibility = targetVis;
         }
+        // Update pickability based on visibility threshold
+        ceiling.isPickable = ceiling.visibility > 0.5;
       } else {
         ceiling.visibility = targetVis;
+        // Hidden ceiling shouldn't block picking
+        ceiling.isPickable = shouldShow;
       }
     }
   }
@@ -255,6 +259,7 @@ export class AutoWallHider {
     );
     for (const wall of wallMeshes) {
       wall.visibility = this.options.visibleVisibility!;
+      wall.isPickable = true;
     }
 
     const ceilingMeshes = this.scene.meshes.filter(
@@ -262,6 +267,7 @@ export class AutoWallHider {
     );
     for (const ceiling of ceilingMeshes) {
       ceiling.visibility = this.options.visibleVisibility!;
+      ceiling.isPickable = true;
     }
 
     this.hiddenWalls.clear();
