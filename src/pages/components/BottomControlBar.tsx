@@ -70,6 +70,8 @@ interface BottomControlBarProps {
     // 2D Visibility props
     view2DVisibility?: View2DVisibility;
     onView2DVisibilityChange?: (visibility: View2DVisibility) => void;
+    // Elevation modal callback
+    onElevationClick?: () => void;
 }
 
 export const BottomControlBar = forwardRef<BottomControlBarRef, BottomControlBarProps>(({
@@ -112,7 +114,8 @@ export const BottomControlBar = forwardRef<BottomControlBarRef, BottomControlBar
         protrudingValue: true,
         wallStyle: true
     },
-    onView2DVisibilityChange
+    onView2DVisibilityChange,
+    onElevationClick
 }, ref) => {
     const [displayStyleModalOpen, setDisplayStyleModalOpen] = useState(false);
     const [view2DModalOpen, setView2DModalOpen] = useState(false);
@@ -357,7 +360,7 @@ export const BottomControlBar = forwardRef<BottomControlBarRef, BottomControlBar
                                 <button
                                     className={`${styles.view2DOption} ${view2DType === 'elevation' ? styles.selected : ''}`}
                                     onClick={() => {
-                                        onView2DTypeChange?.('elevation');
+                                        onElevationClick?.();
                                         setView2DModalOpen(false);
                                     }}
                                 >

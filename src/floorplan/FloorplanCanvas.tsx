@@ -66,6 +66,7 @@ interface FloorplanCanvasProps {
   selectedRoomId?: string | null;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
   view2DType?: 'floor' | 'ceiling' | 'elevation';
+  onCeilingSelect?: (ceilingInfo: { id: string; name: string; area: number; screenPosition: { x: number; y: number } } | null) => void;
 }
 
 const FloorplanCanvas = ({
@@ -92,6 +93,7 @@ const FloorplanCanvas = ({
   selectedRoomId = null,
   onCanvasReady,
   view2DType = 'floor',
+  onCeilingSelect,
 }: FloorplanCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1300,6 +1302,26 @@ const FloorplanCanvas = ({
         }
       }
 
+      // Handle ceiling selection when in ceiling view mode
+      const ceilingLayer = ceilingLayerRef.current;
+      if (view2DType === 'ceiling' && ceilingLayer && onCeilingSelect) {
+        const ceilingHit = ceilingLayer.getRoomAtPoint(worldPos.x, worldPos.y);
+        if (ceilingHit) {
+          event.preventDefault();
+          event.stopPropagation();
+
+          // Select the ceiling
+          ceilingLayer.setSelectedRooms([ceilingHit.room.id]);
+          onCeilingSelect({
+            id: ceilingHit.room.id,
+            name: ceilingHit.room.name,
+            area: ceilingHit.area,
+            screenPosition: { x: screenX + rect.left, y: screenY + rect.top }
+          });
+          return;
+        }
+      }
+
       // If clicked outside any room, deselect
       if (onRoomSelect) {
         const roomLayer = roomLayerRef.current;
@@ -1308,9 +1330,18 @@ const FloorplanCanvas = ({
         }
         onRoomSelect(null);
       }
+
+      // Also deselect ceiling when clicking outside
+      if (onCeilingSelect && view2DType === 'ceiling') {
+        const ceilingLayer = ceilingLayerRef.current;
+        if (ceilingLayer) {
+          ceilingLayer.setSelectedRooms([]);
+        }
+        onCeilingSelect(null);
+      }
     };
 
-    // Single click to deselect room when clicking on empty space
+    // Single click to select/deselect room or ceiling
     const handleClick = (event: MouseEvent) => {
       if (event.button !== 0) return; // Only left click
 
@@ -1321,6 +1352,30 @@ const FloorplanCanvas = ({
       const camera = renderer.getCamera();
       const worldPos = camera.screenToWorld(screenX, screenY);
 
+      // Handle ceiling selection in ceiling view mode
+      if (view2DType === 'ceiling' && onCeilingSelect) {
+        const ceilingLayer = ceilingLayerRef.current;
+        if (ceilingLayer) {
+          const ceilingHit = ceilingLayer.getRoomAtPoint(worldPos.x, worldPos.y);
+          if (ceilingHit) {
+            // Select ceiling
+            ceilingLayer.setSelectedRooms([ceilingHit.room.id]);
+            onCeilingSelect({
+              id: ceilingHit.room.id,
+              name: ceilingHit.room.name,
+              area: ceilingHit.area,
+              screenPosition: { x: screenX + rect.left, y: screenY + rect.top }
+            });
+          } else {
+            // Clicked on empty space - deselect ceiling
+            ceilingLayer.setSelectedRooms([]);
+            onCeilingSelect(null);
+          }
+        }
+        return;
+      }
+
+      // Handle room selection in floor view mode
       const roomLayer = roomLayerRef.current;
       if (roomLayer && onRoomSelect) {
         // Check if clicked inside a room
@@ -1349,7 +1404,7 @@ const FloorplanCanvas = ({
       canvas.removeEventListener('dblclick', handleDoubleClick, true);
       canvas.removeEventListener('click', handleClick);
     };
-  }, [rulerVisible, rulerStart, rulerEnd, onRulerDragStart, onRulerDrag, onRulerDragEnd, onRulerLabelClick, draggingRulerPoint, onRoomSelect]);
+  }, [rulerVisible, rulerStart, rulerEnd, onRulerDragStart, onRulerDrag, onRulerDragEnd, onRulerLabelClick, draggingRulerPoint, onRoomSelect, view2DType, onCeilingSelect]);
 
   // Handle mouse move for coordinate display
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {

@@ -344,6 +344,7 @@ export interface Babylon3DCanvasRef {
   takeScreenshot: () => Promise<string | null>;
   getScene: () => Scene | null;
   getEngine: () => Engine | null;
+  getCanvas: () => HTMLCanvasElement | null;
 }
 
 const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
@@ -753,6 +754,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     },
     getScene: () => sceneRef.current,
     getEngine: () => engineRef.current,
+    getCanvas: () => canvasRef.current,
   }));
 
   useEffect(() => {

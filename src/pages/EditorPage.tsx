@@ -23,7 +23,7 @@ import {
 } from 'react-icons/md';
 import { FaCaretDown, FaEraser, FaPaintBrush } from 'react-icons/fa';
 import { TbRulerMeasure, TbFlipVertical } from 'react-icons/tb';
-import { BsGrid3X3Gap } from 'react-icons/bs';
+import { BsGrid3X3Gap, BsPersonWalking } from 'react-icons/bs';
 import { MdOutlineDevices, MdOutlineWarning, MdOutlineArticle, Md360, MdVideocam, MdOutlineAutorenew, MdHelpOutline } from 'react-icons/md';
 import { FiUser } from 'react-icons/fi';
 import { HiOutlineDocumentDuplicate } from 'react-icons/hi';
@@ -46,6 +46,8 @@ import Compass2D from '../ui/components/Compass2D';
 import CameraGizmoWrapper from '../ui/components/CameraGizmoWrapper';
 import FloorPropertiesPanel, { type FloorProperties } from './components/FloorPropertiesPanel';
 import LevelPropertiesPanel, { type LevelProperties } from './components/LevelPropertiesPanel';
+import ElevationModal, { type WallInfo, type ViewDirection } from './components/ElevationModal';
+import ElevationViewer from './components/ElevationViewer';
 
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 
@@ -194,6 +196,21 @@ const EditorPage = () => {
   // Selected room state (for right panel info)
   const [selectedRoom, setSelectedRoom] = useState<{ id: string; name: string; area: number } | null>(null);
 
+  // Selected ceiling in 2D view (for ceiling editor toolbar)
+  const [selectedCeiling2D, setSelectedCeiling2D] = useState<{
+    id: string;
+    name: string;
+    area: number;
+    screenPosition: { x: number; y: number };
+  } | null>(null);
+
+  // Elevation modal state
+  const [elevationModalOpen, setElevationModalOpen] = useState(false);
+  const [selectedElevationWall, setSelectedElevationWall] = useState<{
+    wall: WallInfo;
+    direction: ViewDirection;
+  } | null>(null);
+
   // Floor editing mode (double-click on room to edit floor)
   const [editingFloor, setEditingFloor] = useState(false);
   const [floorProperties, setFloorProperties] = useState<FloorProperties>({
@@ -283,6 +300,11 @@ const EditorPage = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Clear ceiling selection when view2DType changes
+  useEffect(() => {
+    setSelectedCeiling2D(null);
+  }, [view2DType]);
 
   // Update floorplanData when wall settings change
   useEffect(() => {
@@ -1686,7 +1708,8 @@ ARTISTIC APPROACH:
               setPlayMode(!playMode);
             }}
           >
-            {playMode ? 'Stop' : 'Play'}
+            <BsPersonWalking style={{ marginRight: '6px', fontSize: '18px', verticalAlign: 'middle' }} />
+            <span style={{ verticalAlign: 'middle' }}>{playMode ? 'STOP' : 'PLAY'}</span>
           </button>
 
           {/* Help Button */}
@@ -1826,11 +1849,23 @@ ARTISTIC APPROACH:
       <div className={styles.leftPanel}>
         <div className={styles.panelHeader}>
           <h3>Create Room</h3>
-          <button onClick={() => setLeftPanelOpen(false)} className={styles.toggleBtn}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
-            </svg>
-          </button>
+          <div className={styles.panelHeaderActions}>
+            <button
+              onClick={() => setFloorplanSearchModalOpen(true)}
+              className={styles.panelHeaderIconBtn}
+              title="Search Floor Plan"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="M21 21l-4.35-4.35"/>
+              </svg>
+            </button>
+            <button onClick={() => setLeftPanelOpen(false)} className={styles.toggleBtn}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Import Floor Plan Section */}
@@ -1850,30 +1885,33 @@ ARTISTIC APPROACH:
             onChange={handleCadUpload}
             style={{ display: 'none' }}
           />
+          <input
+            ref={glbFileInputRef}
+            type="file"
+            accept=".glb,.gltf"
+            onChange={handleGlbUpload}
+            style={{ display: 'none' }}
+          />
           <div className={styles.importOptionsGrid}>
-            <button className={styles.importCard} onClick={() => setFloorplanSearchModalOpen(true)}>
+            <button className={styles.importCard} onClick={() => glbFileInputRef.current?.click()}>
               <div className={styles.importIconWrapper}>
                 <svg width="52" height="52" viewBox="0 0 56 56" fill="none">
-                  {/* Window frame background */}
-                  <rect x="8" y="8" width="40" height="32" rx="3" fill="var(--icon-bg)" stroke="var(--icon-stroke)" strokeWidth="1.5"/>
-                  {/* Window top bar */}
-                  <rect x="8" y="8" width="40" height="8" rx="3" fill="var(--icon-light)"/>
-                  <rect x="8" y="13" width="40" height="3" fill="var(--icon-light)"/>
-                  {/* Window buttons */}
-                  <circle cx="14" cy="12" r="1.5" fill="var(--icon-stroke)"/>
-                  <circle cx="19" cy="12" r="1.5" fill="var(--icon-stroke)"/>
-                  <circle cx="24" cy="12" r="1.5" fill="var(--icon-stroke)"/>
-                  {/* Content lines */}
-                  <rect x="12" y="22" width="16" height="2" rx="1" fill="var(--icon-stroke)"/>
-                  <rect x="12" y="27" width="12" height="2" rx="1" fill="var(--icon-stroke)"/>
-                  <rect x="12" y="32" width="20" height="2" rx="1" fill="var(--icon-stroke)"/>
-                  {/* Magnifying glass */}
-                  <circle cx="38" cy="36" r="10" fill="var(--icon-secondary)" stroke="var(--icon-primary)" strokeWidth="2"/>
-                  <circle cx="38" cy="36" r="6" fill="white" fillOpacity="0.4"/>
-                  <line x1="45" y1="43" x2="52" y2="50" stroke="var(--icon-primary)" strokeWidth="3" strokeLinecap="round"/>
+                  {/* 3D Cube - isometric view */}
+                  {/* Top face */}
+                  <path d="M28 8L48 20V36L28 48L8 36V20L28 8Z" fill="var(--icon-bg)" stroke="var(--icon-stroke)" strokeWidth="1.5"/>
+                  <path d="M28 8L48 20L28 32L8 20L28 8Z" fill="var(--icon-light)"/>
+                  {/* Left face */}
+                  <path d="M8 20L28 32V48L8 36V20Z" fill="var(--icon-secondary)"/>
+                  {/* Right face */}
+                  <path d="M48 20L28 32V48L48 36V20Z" fill="var(--icon-primary)"/>
+                  {/* Center line */}
+                  <line x1="28" y1="32" x2="28" y2="48" stroke="var(--icon-stroke)" strokeWidth="1"/>
+                  {/* 3D text badge */}
+                  <rect x="18" y="38" width="20" height="12" rx="2" fill="var(--icon-primary)"/>
+                  <text x="28" y="48" textAnchor="middle" fill="white" fontSize="8" fontWeight="bold" fontFamily="system-ui">3D</text>
                 </svg>
               </div>
-              <span className={styles.importLabel}>Search Floor<br/>Plan</span>
+              <span className={styles.importLabel}>Import 3D</span>
             </button>
             <button className={styles.importCard} onClick={() => (cadFileInputRef as React.RefObject<HTMLInputElement>).current?.click()}>
               <div className={styles.importIconWrapper}>
@@ -2129,6 +2167,7 @@ ARTISTIC APPROACH:
     onQualityFirstChange={setPhotoRealisticMode}
     view3DVisibility={view3DVisibility}
     onView3DVisibilityChange={setView3DVisibility}
+    onElevationClick={() => setElevationModalOpen(true)}
   />
 
   {/* Overlay to close all panels when clicking background */}
@@ -2272,6 +2311,7 @@ ARTISTIC APPROACH:
       selectedRoomId={selectedRoom?.id ?? null}
       onCanvasReady={setFloorplanCanvas}
       view2DType={view2DType}
+      onCeilingSelect={setSelectedCeiling2D}
     />
 
     {/* 2D Compass */}
@@ -2279,6 +2319,114 @@ ARTISTIC APPROACH:
       rotation={0}
       themeColor={themeColor}
     />
+
+    {/* 2D Ceiling Editor Toolbar - show when ceiling is selected in ceiling view */}
+    {selectedCeiling2D && view2DType === 'ceiling' && (
+      <div
+        style={{
+          position: 'absolute',
+          left: selectedCeiling2D.screenPosition.x,
+          top: selectedCeiling2D.screenPosition.y - 60,
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '8px',
+          pointerEvents: 'auto',
+          zIndex: 100,
+        }}
+      >
+        {/* Ceiling Info */}
+        <div
+          style={{
+            background: '#333',
+            color: 'white',
+            borderRadius: '6px',
+            padding: '8px 12px',
+            fontSize: '13px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '4px',
+          }}
+        >
+          <div style={{ fontWeight: 600 }}>{selectedCeiling2D.name || 'Ceiling'}</div>
+          <div style={{ fontSize: '12px', color: '#aaa' }}>{selectedCeiling2D.area.toFixed(2)} m²</div>
+        </div>
+        {/* Ceiling Editor Button */}
+        <button
+          style={{
+            background: themeColor,
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            padding: '8px 16px',
+            fontSize: '14px',
+            fontWeight: 500,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+          }}
+          onClick={() => {
+            console.log('Open ceiling editor for:', selectedCeiling2D.id);
+            // TODO: Open ceiling editor modal/panel
+          }}
+        >
+          Ceiling Editor
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" />
+          </svg>
+        </button>
+        {/* Toolbar Icons */}
+        <div
+          style={{
+            background: '#333',
+            borderRadius: '6px',
+            padding: '6px 8px',
+            display: 'flex',
+            gap: '4px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+          }}
+        >
+          {/* Close button */}
+          <button
+            style={{
+              background: 'transparent',
+              border: 'none',
+              padding: '6px',
+              color: 'white',
+              cursor: 'pointer',
+              borderRadius: '4px',
+            }}
+            title="Close"
+            onClick={() => setSelectedCeiling2D(null)}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    )}
+
+    {/* Elevation Viewer - show when wall is selected for elevation */}
+    {view2DType === 'elevation' && selectedElevationWall && (
+      <ElevationViewer
+        wall={selectedElevationWall.wall}
+        direction={selectedElevationWall.direction}
+        wallHeight={wallHeight}
+        floorplanData={floorplanData}
+        onClose={() => {
+          setSelectedElevationWall(null);
+          setView2DType('floor');
+        }}
+        themeColor={themeColor}
+        themeMode={themeMode}
+      />
+    )}
   </div>
 
   {/* 2D View - Preview in right panel - DISABLED due to React DOM conflicts */}
@@ -3153,6 +3301,21 @@ ARTISTIC APPROACH:
 <FloorplanSearchModal
   isOpen={floorplanSearchModalOpen}
   onClose={() => setFloorplanSearchModalOpen(false)}
+/>
+
+{/* Elevation Wall Selection Modal */}
+<ElevationModal
+  isOpen={elevationModalOpen}
+  onClose={() => setElevationModalOpen(false)}
+  floorplanData={floorplanData}
+  onWallSelected={(wall, direction) => {
+    setSelectedElevationWall({ wall, direction });
+    setView2DType('elevation');
+    setElevationModalOpen(false);
+  }}
+  themeColor={themeColor}
+  themeMode={themeMode}
+  babylon3DCanvasRef={babylon3DCanvasRef}
 />
     </div >
   );
