@@ -20,7 +20,7 @@ import {
 import { GridMaterial } from '@babylonjs/materials';
 
 type ModelCategory = 'base' | 'scenario' | 'lighting' | 'furniture';
-type ToolType = 'select' | 'move' | 'rotate' | 'scale' | 'draw' | 'extrude' | 'delete';
+type ToolType = 'select' | 'eraser' | 'line' | 'arc' | 'rectangle' | 'pushpull' | 'rotate' | 'move' | 'scale' | 'offset' | 'tape' | 'text' | 'paint' | 'orbit' | 'pan' | 'zoom' | 'zoomExtents';
 
 interface ModelItem {
   id: string;
@@ -99,6 +99,58 @@ const CustomModelingPage: React.FC = () => {
     gridMaterial.opacity = 0.98;
     ground.material = gridMaterial;
     ground.isPickable = false;
+
+    // Axis lines (like SketchUp)
+    const axisLength = 25;
+    const axisThickness = 2;
+
+    // X axis - Red (positive = solid, negative = dashed)
+    const xAxisPos = MeshBuilder.CreateLines('xAxisPos', {
+      points: [Vector3.Zero(), new Vector3(axisLength, 0, 0)],
+    }, scene);
+    xAxisPos.color = new Color3(1, 0, 0);
+    xAxisPos.isPickable = false;
+
+    const xAxisNeg = MeshBuilder.CreateDashedLines('xAxisNeg', {
+      points: [Vector3.Zero(), new Vector3(-axisLength, 0, 0)],
+      dashSize: 0.3,
+      gapSize: 0.2,
+      dashNb: 100,
+    }, scene);
+    xAxisNeg.color = new Color3(1, 0.5, 0.5);
+    xAxisNeg.isPickable = false;
+
+    // Y axis (Babylon Z) - Green (positive = solid, negative = dashed)
+    const yAxisPos = MeshBuilder.CreateLines('yAxisPos', {
+      points: [Vector3.Zero(), new Vector3(0, 0, axisLength)],
+    }, scene);
+    yAxisPos.color = new Color3(0, 0.7, 0);
+    yAxisPos.isPickable = false;
+
+    const yAxisNeg = MeshBuilder.CreateDashedLines('yAxisNeg', {
+      points: [Vector3.Zero(), new Vector3(0, 0, -axisLength)],
+      dashSize: 0.3,
+      gapSize: 0.2,
+      dashNb: 100,
+    }, scene);
+    yAxisNeg.color = new Color3(0.5, 0.8, 0.5);
+    yAxisNeg.isPickable = false;
+
+    // Z axis (Babylon Y) - Blue (positive = solid, negative = dashed)
+    const zAxisPos = MeshBuilder.CreateLines('zAxisPos', {
+      points: [Vector3.Zero(), new Vector3(0, axisLength, 0)],
+    }, scene);
+    zAxisPos.color = new Color3(0, 0, 1);
+    zAxisPos.isPickable = false;
+
+    const zAxisNeg = MeshBuilder.CreateDashedLines('zAxisNeg', {
+      points: [Vector3.Zero(), new Vector3(0, -axisLength, 0)],
+      dashSize: 0.3,
+      gapSize: 0.2,
+      dashNb: 100,
+    }, scene);
+    zAxisNeg.color = new Color3(0.5, 0.5, 1);
+    zAxisNeg.isPickable = false;
 
     // Highlight layer
     highlightLayerRef.current = new HighlightLayer('highlight', scene);
@@ -359,65 +411,277 @@ const CustomModelingPage: React.FC = () => {
 
   return (
     <div className={styles.container}>
-      {/* Top Toolbar */}
+      {/* Top Toolbar - SketchUp Style */}
       <div className={styles.topBar}>
         <div className={styles.topBarLeft}>
-          <button className={styles.backBtn} onClick={() => navigate(-1)}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <button className={styles.backBtn} onClick={() => navigate(-1)} title="Back to Editor">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M19 12H5M12 19l-7-7 7-7" />
             </svg>
           </button>
-          <div className={styles.divider} />
           <span className={styles.title}>Custom Modeling</span>
         </div>
 
-        <div className={styles.toolbar}>
+        {/* Main Toolbar - SketchUp Style */}
+        <div className={styles.sketchToolbar}>
+          {/* Select Tool */}
           <button
-            className={`${styles.toolBtn} ${activeTool === 'select' ? styles.active : ''}`}
+            className={`${styles.sketchTool} ${activeTool === 'select' ? styles.active : ''}`}
             onClick={() => setActiveTool('select')}
-            title="Select (V)"
+            title="Select (Space)"
           >
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M5 3L5 19L9 15L12 21L14 20L11 14L17 14L5 3Z" fill="#2d2d2d" stroke="#1a1a1a" strokeWidth="0.5" strokeLinejoin="round"/>
             </svg>
           </button>
+
+          <div className={styles.toolDivider} />
+
+          {/* Eraser */}
           <button
-            className={`${styles.toolBtn} ${activeTool === 'move' ? styles.active : ''}`}
+            className={`${styles.sketchTool} ${activeTool === 'eraser' ? styles.active : ''}`}
+            onClick={() => { setActiveTool('eraser'); deleteSelected(); }}
+            title="Eraser (E)"
+          >
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="5" y="14" width="14" height="5" rx="0.5" fill="#d4b8a0" stroke="#8b7355" strokeWidth="1"/>
+              <path d="M6 14V9c0-.3.2-.5.5-.5h11c.3 0 .5.2.5.5v5" fill="#e8d4c4" stroke="#8b7355" strokeWidth="1"/>
+              <line x1="9" y1="14" x2="9" y2="10" stroke="#a08060" strokeWidth="0.75"/>
+              <line x1="12" y1="14" x2="12" y2="9" stroke="#a08060" strokeWidth="0.75"/>
+              <line x1="15" y1="14" x2="15" y2="10" stroke="#a08060" strokeWidth="0.75"/>
+            </svg>
+          </button>
+
+          {/* Line Tool */}
+          <button
+            className={`${styles.sketchTool} ${styles.hasDropdown} ${activeTool === 'line' ? styles.active : ''}`}
+            onClick={() => setActiveTool('line')}
+            title="Line (L)"
+          >
+            <svg viewBox="0 0 24 24" fill="none">
+              <line x1="4" y1="20" x2="20" y2="4" stroke="#2d2d2d" strokeWidth="1.5"/>
+              <circle cx="4" cy="20" r="2.5" fill="#22a352" stroke="#1a7a3a" strokeWidth="0.75"/>
+              <circle cx="20" cy="4" r="2.5" fill="#e63946" stroke="#b32d38" strokeWidth="0.75"/>
+            </svg>
+            <span className={styles.dropdownArrow}>▼</span>
+          </button>
+
+          {/* Arc Tool */}
+          <button
+            className={`${styles.sketchTool} ${styles.hasDropdown} ${activeTool === 'arc' ? styles.active : ''}`}
+            onClick={() => setActiveTool('arc')}
+            title="Arc (A)"
+          >
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M4 18Q12 4 20 18" stroke="#2d2d2d" strokeWidth="1.5" fill="none"/>
+              <circle cx="4" cy="18" r="2" fill="#22a352" stroke="#1a7a3a" strokeWidth="0.5"/>
+              <circle cx="20" cy="18" r="2" fill="#e63946" stroke="#b32d38" strokeWidth="0.5"/>
+              <circle cx="12" cy="8" r="1.5" fill="#457fd3" stroke="#3366b3" strokeWidth="0.5"/>
+            </svg>
+            <span className={styles.dropdownArrow}>▼</span>
+          </button>
+
+          {/* Rectangle Tool */}
+          <button
+            className={`${styles.sketchTool} ${styles.hasDropdown} ${activeTool === 'rectangle' ? styles.active : ''}`}
+            onClick={() => setActiveTool('rectangle')}
+            title="Rectangle (R)"
+          >
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="4" y="6" width="16" height="12" fill="#c8daf0" stroke="#2d2d2d" strokeWidth="1.5"/>
+              <circle cx="4" cy="6" r="2" fill="#22a352" stroke="#1a7a3a" strokeWidth="0.5"/>
+            </svg>
+            <span className={styles.dropdownArrow}>▼</span>
+          </button>
+
+          <div className={styles.toolDivider} />
+
+          {/* Push/Pull */}
+          <button
+            className={`${styles.sketchTool} ${activeTool === 'pushpull' ? styles.active : ''}`}
+            onClick={() => setActiveTool('pushpull')}
+            title="Push/Pull (P)"
+          >
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M4 16L10 13L16 16V20L10 23L4 20V16Z" fill="#c9a227" stroke="#8b6914" strokeWidth="0.75"/>
+              <path d="M4 16L10 19L16 16" stroke="#8b6914" strokeWidth="0.75"/>
+              <path d="M10 19V23" stroke="#8b6914" strokeWidth="0.75"/>
+              <path d="M4 11L10 8L16 11V15L10 12L4 15V11Z" fill="#e0c040" stroke="#8b6914" strokeWidth="0.75"/>
+              <path d="M10 4L7 6L10 8L13 6L10 4Z" fill="#e63946" stroke="#b32d38" strokeWidth="0.5"/>
+              <line x1="10" y1="8" x2="10" y2="5.5" stroke="#b32d38" strokeWidth="0.75"/>
+            </svg>
+          </button>
+
+          {/* Rotate */}
+          <button
+            className={`${styles.sketchTool} ${activeTool === 'rotate' ? styles.active : ''}`}
+            onClick={() => setActiveTool('rotate')}
+            title="Rotate (Q)"
+          >
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="13" r="7" fill="none" stroke="#2d2d2d" strokeWidth="1" strokeDasharray="3 2"/>
+              <circle cx="12" cy="13" r="2" fill="#457fd3" stroke="#3366b3" strokeWidth="0.5"/>
+              <line x1="12" y1="6" x2="12" y2="11" stroke="#e63946" strokeWidth="1.5"/>
+              <path d="M9 8L12 4L15 8" fill="#e63946" stroke="#b32d38" strokeWidth="0.5"/>
+              <line x1="5" y1="13" x2="9" y2="13" stroke="#22a352" strokeWidth="1.5"/>
+              <path d="M7 10L3 13L7 16" fill="#22a352" stroke="#1a7a3a" strokeWidth="0.5"/>
+            </svg>
+          </button>
+
+          {/* Move */}
+          <button
+            className={`${styles.sketchTool} ${activeTool === 'move' ? styles.active : ''}`}
             onClick={() => setActiveTool('move')}
             title="Move (M)"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20" />
+            <svg viewBox="0 0 24 24" fill="none">
+              <line x1="12" y1="4" x2="12" y2="20" stroke="#e63946" strokeWidth="1.5"/>
+              <line x1="4" y1="12" x2="20" y2="12" stroke="#22a352" strokeWidth="1.5"/>
+              <path d="M12 4L9 8H15L12 4Z" fill="#e63946"/>
+              <path d="M12 20L9 16H15L12 20Z" fill="#e63946"/>
+              <path d="M4 12L8 9V15L4 12Z" fill="#22a352"/>
+              <path d="M20 12L16 9V15L20 12Z" fill="#22a352"/>
+              <rect x="10" y="10" width="4" height="4" fill="#457fd3" stroke="#3366b3" strokeWidth="0.5"/>
             </svg>
           </button>
+
+          {/* Scale */}
           <button
-            className={`${styles.toolBtn} ${activeTool === 'rotate' ? styles.active : ''}`}
-            onClick={() => setActiveTool('rotate')}
-            title="Rotate (R)"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 12a9 9 0 11-9-9M12 3v3M21 12h-3" />
-              <path d="M12 3l3 3-3 3" />
-            </svg>
-          </button>
-          <button
-            className={`${styles.toolBtn} ${activeTool === 'scale' ? styles.active : ''}`}
+            className={`${styles.sketchTool} ${activeTool === 'scale' ? styles.active : ''}`}
             onClick={() => setActiveTool('scale')}
             title="Scale (S)"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 21l-6-6m6 6v-4m0 4h-4M3 3l6 6M3 3v4m0-4h4" />
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="6" y="6" width="12" height="12" fill="#e5e5e5" stroke="#2d2d2d" strokeWidth="1"/>
+              <rect x="4.5" y="4.5" width="3" height="3" fill="#22a352" stroke="#1a7a3a" strokeWidth="0.5"/>
+              <rect x="16.5" y="4.5" width="3" height="3" fill="#22a352" stroke="#1a7a3a" strokeWidth="0.5"/>
+              <rect x="4.5" y="16.5" width="3" height="3" fill="#22a352" stroke="#1a7a3a" strokeWidth="0.5"/>
+              <rect x="16.5" y="16.5" width="3" height="3" fill="#22a352" stroke="#1a7a3a" strokeWidth="0.5"/>
+              <rect x="10.5" y="4.5" width="3" height="3" fill="#e63946" stroke="#b32d38" strokeWidth="0.5"/>
+              <rect x="10.5" y="16.5" width="3" height="3" fill="#e63946" stroke="#b32d38" strokeWidth="0.5"/>
+              <rect x="4.5" y="10.5" width="3" height="3" fill="#e63946" stroke="#b32d38" strokeWidth="0.5"/>
+              <rect x="16.5" y="10.5" width="3" height="3" fill="#e63946" stroke="#b32d38" strokeWidth="0.5"/>
             </svg>
           </button>
-          <div className={styles.divider} />
+
+          {/* Offset */}
           <button
-            className={styles.toolBtn}
-            onClick={deleteSelected}
-            disabled={!selectedMesh}
-            title="Delete (Del)"
+            className={`${styles.sketchTool} ${activeTool === 'offset' ? styles.active : ''}`}
+            onClick={() => setActiveTool('offset')}
+            title="Offset (F)"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="11" height="11" fill="none" stroke="#2d2d2d" strokeWidth="1.5"/>
+              <rect x="10" y="10" width="11" height="11" fill="#c8daf0" stroke="#e63946" strokeWidth="1.5"/>
+              <line x1="10" y1="10" x2="6" y2="6" stroke="#e63946" strokeWidth="1" strokeDasharray="2 1"/>
+            </svg>
+          </button>
+
+          <div className={styles.toolDivider} />
+
+          {/* Tape Measure */}
+          <button
+            className={`${styles.sketchTool} ${activeTool === 'tape' ? styles.active : ''}`}
+            onClick={() => setActiveTool('tape')}
+            title="Tape Measure (T)"
+          >
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="2" y="9" width="13" height="6" rx="1" fill="#f0d860" stroke="#a08020" strokeWidth="0.75"/>
+              <line x1="4" y1="10.5" x2="4" y2="13.5" stroke="#a08020" strokeWidth="0.75"/>
+              <line x1="6" y1="11" x2="6" y2="13" stroke="#a08020" strokeWidth="0.5"/>
+              <line x1="8" y1="10.5" x2="8" y2="13.5" stroke="#a08020" strokeWidth="0.75"/>
+              <line x1="10" y1="11" x2="10" y2="13" stroke="#a08020" strokeWidth="0.5"/>
+              <line x1="12" y1="10.5" x2="12" y2="13.5" stroke="#a08020" strokeWidth="0.75"/>
+              <line x1="15" y1="12" x2="21" y2="12" stroke="#2d2d2d" strokeWidth="1"/>
+              <circle cx="21" cy="12" r="2" fill="#e63946" stroke="#b32d38" strokeWidth="0.5"/>
+            </svg>
+          </button>
+
+          {/* Dimensions */}
+          <button
+            className={`${styles.sketchTool} ${activeTool === 'text' ? styles.active : ''}`}
+            onClick={() => setActiveTool('text')}
+            title="Dimensions"
+          >
+            <svg viewBox="0 0 24 24" fill="none">
+              <line x1="4" y1="17" x2="20" y2="17" stroke="#2d2d2d" strokeWidth="1.5"/>
+              <line x1="4" y1="14" x2="4" y2="20" stroke="#2d2d2d" strokeWidth="1.5"/>
+              <line x1="20" y1="14" x2="20" y2="20" stroke="#2d2d2d" strokeWidth="1.5"/>
+              <rect x="7" y="6" width="10" height="7" fill="white" stroke="#2d2d2d" strokeWidth="1"/>
+              <text x="12" y="11.5" fontSize="5" fontFamily="Arial" fontWeight="bold" fill="#2d2d2d" textAnchor="middle">2.5m</text>
+            </svg>
+          </button>
+
+          {/* Paint Bucket */}
+          <button
+            className={`${styles.sketchTool} ${activeTool === 'paint' ? styles.active : ''}`}
+            onClick={() => setActiveTool('paint')}
+            title="Paint Bucket (B)"
+          >
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M6 5h12l2 3v11a2 2 0 01-2 2H6a2 2 0 01-2-2V8l2-3z" fill="#a8c8e8" stroke="#2d2d2d" strokeWidth="1"/>
+              <path d="M4 8h16" stroke="#2d2d2d" strokeWidth="1"/>
+              <ellipse cx="12" cy="6" rx="5" ry="1.5" fill="#7db0d8" stroke="#2d2d2d" strokeWidth="0.5"/>
+              <path d="M17 14c2 0 3 1.5 3 2.5s-1 2-2.5 2" fill="#7db0d8" stroke="#2d2d2d" strokeWidth="1"/>
+            </svg>
+          </button>
+
+          <div className={styles.toolDivider} />
+
+          {/* Orbit View */}
+          <button
+            className={`${styles.sketchTool} ${activeTool === 'orbit' ? styles.active : ''}`}
+            onClick={() => setActiveTool('orbit')}
+            title="Orbit (O)"
+          >
+            <svg viewBox="0 0 24 24" fill="none">
+              <ellipse cx="12" cy="12" rx="8" ry="3.5" stroke="#22a352" strokeWidth="1.25" transform="rotate(50 12 12)"/>
+              <ellipse cx="12" cy="12" rx="8" ry="3.5" stroke="#e63946" strokeWidth="1.25" transform="rotate(-50 12 12)"/>
+              <circle cx="12" cy="12" r="2.5" fill="#457fd3" stroke="#3366b3" strokeWidth="0.75"/>
+              <path d="M5 6L7 8" stroke="#22a352" strokeWidth="1.5" strokeLinecap="round"/>
+              <path d="M3 8L6 5" stroke="#22a352" strokeWidth="1.25" strokeLinecap="round"/>
+            </svg>
+          </button>
+
+          {/* Pan */}
+          <button
+            className={`${styles.sketchTool} ${activeTool === 'pan' ? styles.active : ''}`}
+            onClick={() => setActiveTool('pan')}
+            title="Pan (H)"
+          >
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M12 3V7M8 5V9M16 5V9M6 8V14M18 8V14" stroke="#c4a060" strokeWidth="2.5" strokeLinecap="round"/>
+              <path d="M6 14C6 17 8 20 12 20C16 20 18 17 18 14" stroke="#c4a060" strokeWidth="2.5" strokeLinecap="round"/>
+              <path d="M12 3V7M8 5V9M16 5V9M6 8V14M18 8V14" stroke="#e8d0a0" strokeWidth="1.5" strokeLinecap="round"/>
+              <path d="M6 14C6 17 8 20 12 20C16 20 18 17 18 14" stroke="#e8d0a0" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </button>
+
+          {/* Zoom */}
+          <button
+            className={`${styles.sketchTool} ${activeTool === 'zoom' ? styles.active : ''}`}
+            onClick={() => setActiveTool('zoom')}
+            title="Zoom (Z)"
+          >
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle cx="10" cy="10" r="6" fill="white" stroke="#2d2d2d" strokeWidth="1.5"/>
+              <line x1="14.5" y1="14.5" x2="20" y2="20" stroke="#2d2d2d" strokeWidth="2.5" strokeLinecap="round"/>
+              <line x1="7" y1="10" x2="13" y2="10" stroke="#2d2d2d" strokeWidth="1.5"/>
+              <line x1="10" y1="7" x2="10" y2="13" stroke="#2d2d2d" strokeWidth="1.5"/>
+            </svg>
+          </button>
+
+          {/* Zoom Extents */}
+          <button
+            className={`${styles.sketchTool} ${activeTool === 'zoomExtents' ? styles.active : ''}`}
+            onClick={() => setActiveTool('zoomExtents')}
+            title="Zoom Extents (Shift+Z)"
+          >
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle cx="10" cy="10" r="6" fill="white" stroke="#2d2d2d" strokeWidth="1.5"/>
+              <line x1="14.5" y1="14.5" x2="20" y2="20" stroke="#2d2d2d" strokeWidth="2.5" strokeLinecap="round"/>
+              <rect x="7" y="7" width="6" height="6" fill="#c8daf0" stroke="#2d2d2d" strokeWidth="0.75"/>
+              <path d="M4 4L6.5 6.5M16 4L13.5 6.5M4 16L6.5 13.5M16 16L13.5 13.5" stroke="#e63946" strokeWidth="1.25" strokeLinecap="round"/>
             </svg>
           </button>
         </div>

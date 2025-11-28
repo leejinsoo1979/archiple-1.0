@@ -10,7 +10,14 @@
   height: 100%;
   display: block;
   outline: none;
+  border: none;
   touch-action: none;
+}
+
+.canvas:focus {
+  outline: none;
+  border: none;
+  box-shadow: none;
 }
 
 .controls {

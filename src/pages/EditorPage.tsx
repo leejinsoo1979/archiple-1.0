@@ -338,6 +338,27 @@ const EditorPage = () => {
 
   // Advanced tool panel state
   const [advancedToolPanelOpen, setAdvancedToolPanelOpen] = useState(false);
+
+  // Custom modeling tray state
+  const [customModelingTrayOpen, setCustomModelingTrayOpen] = useState(false);
+  const [traySections, setTraySections] = useState({
+    entityInfo: true,
+    materials: true,
+    components: false,
+    styles: false,
+    tags: false,
+    shadows: true
+  });
+  const [shadowSettings, setShadowSettings] = useState({
+    timezone: 'UTC-07:00',
+    time: 13.5,
+    date: 11.27,
+    light: 80,
+    dark: 45,
+    useSunForShading: false,
+    displayOnFaces: true,
+    displayOnGround: true
+  });
   const [selectedLightId, setSelectedLightId] = useState<string | null>(null);
   const [lightPlacementMode, setLightPlacementMode] = useState(false);
   const [selectedLightType, setSelectedLightType] = useState<LightType>('point');
@@ -2171,7 +2192,7 @@ ARTISTIC APPROACH:
         </div>
         <div
           className={styles.advancedToolCard}
-          onClick={() => navigate('/custom-modeling')}
+          onClick={() => setCustomModelingTrayOpen(true)}
         >
           <div className={styles.advancedToolInfo}>
             <h4>Custom<br/>modeling</h4>
@@ -3035,6 +3056,252 @@ ARTISTIC APPROACH:
         </button>
       </div>
     )
+  )
+}
+
+{/* Custom Modeling Tray Panel */}
+{
+  customModelingTrayOpen && (
+    <div className={styles.customModelingTray}>
+      <div className={styles.trayHeader}>
+        <span>Default Tray</span>
+        <button onClick={() => setCustomModelingTrayOpen(false)} className={styles.trayCloseBtn}>×</button>
+      </div>
+
+      {/* Entity Info Section */}
+      <div className={styles.traySection}>
+        <div
+          className={styles.traySectionHeader}
+          onClick={() => setTraySections(prev => ({ ...prev, entityInfo: !prev.entityInfo }))}
+        >
+          <span className={styles.trayArrow}>{traySections.entityInfo ? '▼' : '▶'}</span>
+          <span>Entity Info</span>
+        </div>
+        {traySections.entityInfo && (
+          <div className={styles.traySectionContent}>
+            <p className={styles.trayInfoText}>No entity selected</p>
+          </div>
+        )}
+      </div>
+
+      {/* Materials Section */}
+      <div className={styles.traySection}>
+        <div
+          className={styles.traySectionHeader}
+          onClick={() => setTraySections(prev => ({ ...prev, materials: !prev.materials }))}
+        >
+          <span className={styles.trayArrow}>{traySections.materials ? '▼' : '▶'}</span>
+          <span>Materials</span>
+        </div>
+        {traySections.materials && (
+          <div className={styles.traySectionContent}>
+            <div className={styles.materialPreview}>
+              <div className={styles.materialSwatch}></div>
+              <span>Default</span>
+            </div>
+            <div className={styles.materialTabs}>
+              <button className={`${styles.materialTab} ${styles.active}`}>Select</button>
+              <button className={styles.materialTab}>Edit</button>
+            </div>
+            <div className={styles.materialToolbar}>
+              <button className={styles.materialToolBtn}>🏠</button>
+              <button className={styles.materialToolBtn}>📁</button>
+              <select className={styles.materialSelect}>
+                <option>Tile</option>
+                <option>Wood</option>
+                <option>Stone</option>
+                <option>Metal</option>
+                <option>Fabric</option>
+              </select>
+            </div>
+            <div className={styles.materialGrid}>
+              {[...Array(20)].map((_, i) => (
+                <div key={i} className={styles.materialThumbnail} style={{
+                  background: `hsl(${(i * 30) % 360}, ${20 + (i % 3) * 20}%, ${70 + (i % 4) * 5}%)`
+                }}></div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Components Section */}
+      <div className={styles.traySection}>
+        <div
+          className={styles.traySectionHeader}
+          onClick={() => setTraySections(prev => ({ ...prev, components: !prev.components }))}
+        >
+          <span className={styles.trayArrow}>{traySections.components ? '▼' : '▶'}</span>
+          <span>Components</span>
+        </div>
+        {traySections.components && (
+          <div className={styles.traySectionContent}>
+            <p className={styles.trayInfoText}>No components loaded</p>
+          </div>
+        )}
+      </div>
+
+      {/* Styles Section */}
+      <div className={styles.traySection}>
+        <div
+          className={styles.traySectionHeader}
+          onClick={() => setTraySections(prev => ({ ...prev, styles: !prev.styles }))}
+        >
+          <span className={styles.trayArrow}>{traySections.styles ? '▼' : '▶'}</span>
+          <span>Styles</span>
+        </div>
+        {traySections.styles && (
+          <div className={styles.traySectionContent}>
+            <p className={styles.trayInfoText}>Default style</p>
+          </div>
+        )}
+      </div>
+
+      {/* Tags Section */}
+      <div className={styles.traySection}>
+        <div
+          className={styles.traySectionHeader}
+          onClick={() => setTraySections(prev => ({ ...prev, tags: !prev.tags }))}
+        >
+          <span className={styles.trayArrow}>{traySections.tags ? '▼' : '▶'}</span>
+          <span>Tags</span>
+        </div>
+        {traySections.tags && (
+          <div className={styles.traySectionContent}>
+            <p className={styles.trayInfoText}>No tags</p>
+          </div>
+        )}
+      </div>
+
+      {/* Shadows Section */}
+      <div className={styles.traySection}>
+        <div
+          className={styles.traySectionHeader}
+          onClick={() => setTraySections(prev => ({ ...prev, shadows: !prev.shadows }))}
+        >
+          <span className={styles.trayArrow}>{traySections.shadows ? '▼' : '▶'}</span>
+          <span>Shadows</span>
+        </div>
+        {traySections.shadows && (
+          <div className={styles.traySectionContent}>
+            <div className={styles.shadowRow}>
+              <select
+                className={styles.shadowSelect}
+                value={shadowSettings.timezone}
+                onChange={(e) => setShadowSettings(prev => ({ ...prev, timezone: e.target.value }))}
+              >
+                <option>UTC-12:00</option>
+                <option>UTC-07:00</option>
+                <option>UTC+00:00</option>
+                <option>UTC+09:00</option>
+              </select>
+            </div>
+            <div className={styles.shadowRow}>
+              <label>Time</label>
+              <div className={styles.shadowSliderRow}>
+                <span className={styles.shadowLabel}>06:43AM</span>
+                <span className={styles.shadowLabel}>Noon</span>
+                <span className={styles.shadowLabel}>4:45PM</span>
+              </div>
+              <input
+                type="range"
+                min="6" max="17" step="0.1"
+                value={shadowSettings.time}
+                onChange={(e) => setShadowSettings(prev => ({ ...prev, time: parseFloat(e.target.value) }))}
+                className={styles.shadowSlider}
+              />
+              <input
+                type="text"
+                value={`${Math.floor(shadowSettings.time)}:${Math.round((shadowSettings.time % 1) * 60).toString().padStart(2, '0')}`}
+                className={styles.shadowInput}
+                readOnly
+              />
+            </div>
+            <div className={styles.shadowRow}>
+              <label>Date</label>
+              <div className={styles.shadowSliderRow}>
+                <span className={styles.shadowLabel}>J F M A M J J A S O N D</span>
+              </div>
+              <input
+                type="range"
+                min="1" max="12" step="0.01"
+                value={shadowSettings.date}
+                onChange={(e) => setShadowSettings(prev => ({ ...prev, date: parseFloat(e.target.value) }))}
+                className={styles.shadowSlider}
+              />
+              <input
+                type="text"
+                value={`${Math.floor(shadowSettings.date)}/${Math.round((shadowSettings.date % 1) * 30).toString().padStart(2, '0')}`}
+                className={styles.shadowInput}
+                readOnly
+              />
+            </div>
+            <div className={styles.shadowRow}>
+              <label>Light</label>
+              <input
+                type="range"
+                min="0" max="100"
+                value={shadowSettings.light}
+                onChange={(e) => setShadowSettings(prev => ({ ...prev, light: parseInt(e.target.value) }))}
+                className={styles.shadowSlider}
+              />
+              <input
+                type="number"
+                value={shadowSettings.light}
+                onChange={(e) => setShadowSettings(prev => ({ ...prev, light: parseInt(e.target.value) || 0 }))}
+                className={styles.shadowInput}
+              />
+            </div>
+            <div className={styles.shadowRow}>
+              <label>Dark</label>
+              <input
+                type="range"
+                min="0" max="100"
+                value={shadowSettings.dark}
+                onChange={(e) => setShadowSettings(prev => ({ ...prev, dark: parseInt(e.target.value) }))}
+                className={styles.shadowSlider}
+              />
+              <input
+                type="number"
+                value={shadowSettings.dark}
+                onChange={(e) => setShadowSettings(prev => ({ ...prev, dark: parseInt(e.target.value) || 0 }))}
+                className={styles.shadowInput}
+              />
+            </div>
+            <div className={styles.shadowCheckbox}>
+              <input
+                type="checkbox"
+                id="useSunForShading"
+                checked={shadowSettings.useSunForShading}
+                onChange={(e) => setShadowSettings(prev => ({ ...prev, useSunForShading: e.target.checked }))}
+              />
+              <label htmlFor="useSunForShading">Use sun for shading</label>
+            </div>
+            <div className={styles.shadowDisplay}>
+              <label>Display:</label>
+              <div className={styles.shadowCheckbox}>
+                <input
+                  type="checkbox"
+                  id="displayOnFaces"
+                  checked={shadowSettings.displayOnFaces}
+                  onChange={(e) => setShadowSettings(prev => ({ ...prev, displayOnFaces: e.target.checked }))}
+                />
+                <label htmlFor="displayOnFaces">On faces</label>
+              </div>
+              <div className={styles.shadowCheckbox}>
+                <input
+                  type="checkbox"
+                  id="displayOnGround"
+                  checked={shadowSettings.displayOnGround}
+                  onChange={(e) => setShadowSettings(prev => ({ ...prev, displayOnGround: e.target.checked }))}
+                />
+                <label htmlFor="displayOnGround">On ground</label>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 

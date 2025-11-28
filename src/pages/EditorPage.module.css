@@ -2800,3 +2800,234 @@
   border-radius: 4px;
   width: fit-content;
 }
+
+/* ===== CUSTOM MODELING TRAY ===== */
+.customModelingTray {
+  position: fixed;
+  right: 0;
+  top: 56px;
+  width: 220px;
+  height: calc(100vh - 56px);
+  background: #f0f0f0;
+  border-left: 1px solid #ccc;
+  overflow-y: auto;
+  z-index: 200;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 11px;
+}
+
+.trayHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  background: linear-gradient(180deg, #e8e8e8 0%, #d0d0d0 100%);
+  border-bottom: 1px solid #b0b0b0;
+  font-weight: 500;
+  color: #333;
+}
+
+.trayCloseBtn {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: #666;
+  padding: 0 4px;
+}
+
+.trayCloseBtn:hover {
+  color: #333;
+}
+
+.traySection {
+  border-bottom: 1px solid #ccc;
+}
+
+.traySectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: linear-gradient(180deg, #e0e0e0 0%, #c8c8c8 100%);
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+  color: #333;
+}
+
+.traySectionHeader:hover {
+  background: linear-gradient(180deg, #d8d8d8 0%, #c0c0c0 100%);
+}
+
+.trayArrow {
+  font-size: 8px;
+  color: #666;
+}
+
+.traySectionContent {
+  padding: 8px;
+  background: #f5f5f5;
+}
+
+.trayInfoText {
+  margin: 0;
+  color: #666;
+  font-style: italic;
+}
+
+/* Materials Section */
+.materialPreview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: white;
+  border: 1px solid #ccc;
+  margin-bottom: 8px;
+}
+
+.materialSwatch {
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(135deg, #b8d4e8 0%, #e8e8e8 100%);
+  border: 1px solid #999;
+}
+
+.materialTabs {
+  display: flex;
+  margin-bottom: 8px;
+}
+
+.materialTab {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid #999;
+  background: #e0e0e0;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.materialTab.active {
+  background: white;
+  border-bottom-color: white;
+}
+
+.materialToolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.materialToolBtn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid #999;
+  background: #f0f0f0;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.materialToolBtn:hover {
+  background: #e0e0e0;
+}
+
+.materialSelect {
+  flex: 1;
+  padding: 2px 4px;
+  border: 1px solid #999;
+  background: white;
+  font-size: 11px;
+}
+
+.materialGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.materialThumbnail {
+  aspect-ratio: 1;
+  border: 1px solid #999;
+  cursor: pointer;
+}
+
+.materialThumbnail:hover {
+  border-color: #3B82F6;
+  box-shadow: 0 0 0 1px #3B82F6;
+}
+
+/* Shadows Section */
+.shadowRow {
+  margin-bottom: 8px;
+}
+
+.shadowRow label {
+  display: block;
+  margin-bottom: 2px;
+  color: #333;
+}
+
+.shadowSliderRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: #666;
+  margin-bottom: 2px;
+}
+
+.shadowLabel {
+  font-size: 9px;
+}
+
+.shadowSlider {
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.shadowInput {
+  width: 50px;
+  padding: 2px 4px;
+  border: 1px solid #999;
+  font-size: 11px;
+  text-align: right;
+}
+
+.shadowSelect {
+  width: 100%;
+  padding: 2px 4px;
+  border: 1px solid #999;
+  font-size: 11px;
+}
+
+.shadowCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.shadowCheckbox input[type="checkbox"] {
+  margin: 0;
+}
+
+.shadowCheckbox label {
+  margin: 0;
+  cursor: pointer;
+}
+
+.shadowDisplay {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #ddd;
+}
+
+.shadowDisplay > label {
+  margin-bottom: 4px;
+}
