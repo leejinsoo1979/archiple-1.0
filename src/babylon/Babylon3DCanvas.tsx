@@ -3081,6 +3081,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
                       screenPosition: { x: screenPos.x, y: screenPos.y - 80 }
                     });
                     setSelectedFloor(null);
+                    setSelectedCeiling(null);
                   }
                 }
               }
