@@ -45,6 +45,13 @@ const CustomModelingPage: React.FC = () => {
   const groundPickerRef = useRef<Mesh | null>(null);
   const meshCounterRef = useRef<number>(0);
 
+  // Pan state for custom pan tool handling
+  const panStateRef = useRef<{
+    isPanning: boolean;
+    lastX: number;
+    lastY: number;
+  }>({ isPanning: false, lastX: 0, lastY: 0 });
+
   // Drawing state ref for cross-render persistence
   const drawingStateRef = useRef<DrawingState>({
     isDrawing: false,
@@ -482,19 +489,27 @@ const CustomModelingPage: React.FC = () => {
     const camera = cameraRef.current;
     if (!scene || !camera) return;
 
-    // Camera control: Middle mouse always works, Left mouse only when orbit/pan/zoom tool is active
+    // Camera control: Middle mouse always works, Left mouse only for orbit/zoom (not pan - we handle that manually)
     const pointersInput = camera.inputs.attached.pointers as { buttons?: number[] };
     if (pointersInput) {
-      if (activeTool === 'orbit' || activeTool === 'pan' || activeTool === 'zoom') {
-        pointersInput.buttons = [0, 1]; // Left and middle mouse for camera navigation tools
+      if (activeTool === 'orbit' || activeTool === 'zoom') {
+        pointersInput.buttons = [0, 1]; // Left and middle mouse for orbit/zoom
       } else {
-        pointersInput.buttons = [1]; // Only middle mouse for other tools
+        pointersInput.buttons = [1]; // Only middle mouse for other tools (including pan)
       }
     }
 
     const handlePointerDown = (evt: PointerEvent) => {
+      // Handle pan tool manually (camera panning, not rotation)
+      if (activeTool === 'pan' && evt.button === 0) {
+        panStateRef.current.isPanning = true;
+        panStateRef.current.lastX = evt.clientX;
+        panStateRef.current.lastY = evt.clientY;
+        return;
+      }
+
       // Skip if using camera navigation tools (camera handles these)
-      if (activeTool === 'orbit' || activeTool === 'pan' || activeTool === 'zoom') {
+      if (activeTool === 'orbit' || activeTool === 'zoom') {
         return;
       }
       if (evt.button !== 0) return;
@@ -558,7 +573,25 @@ const CustomModelingPage: React.FC = () => {
       }
     };
 
-    const handlePointerMove = () => {
+    const handlePointerMove = (evt: PointerEvent) => {
+      // Handle pan tool - move camera target
+      if (activeTool === 'pan' && panStateRef.current.isPanning) {
+        const deltaX = evt.clientX - panStateRef.current.lastX;
+        const deltaY = evt.clientY - panStateRef.current.lastY;
+        panStateRef.current.lastX = evt.clientX;
+        panStateRef.current.lastY = evt.clientY;
+
+        // Calculate pan direction based on camera orientation
+        const panSpeed = camera.radius * 0.002;
+        const right = camera.getDirection(new Vector3(1, 0, 0));
+        const up = camera.getDirection(new Vector3(0, 1, 0));
+
+        // Move camera target (negative because we want to pan in opposite direction of drag)
+        camera.target.addInPlace(right.scale(-deltaX * panSpeed));
+        camera.target.addInPlace(up.scale(deltaY * panSpeed));
+        return;
+      }
+
       const state = drawingStateRef.current;
       if (!state.isDrawing || !state.startPoint) return;
 
@@ -584,6 +617,12 @@ const CustomModelingPage: React.FC = () => {
     };
 
     const handlePointerUp = (evt: PointerEvent) => {
+      // Reset pan state
+      if (activeTool === 'pan') {
+        panStateRef.current.isPanning = false;
+        return;
+      }
+
       if (evt.button !== 0) return;
 
       const state = drawingStateRef.current;
