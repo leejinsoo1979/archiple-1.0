@@ -43,6 +43,8 @@ const CustomModelingPage: React.FC = () => {
   const highlightLayerRef = useRef<HighlightLayer | null>(null);
   const groundPickerRef = useRef<Mesh | null>(null);
   const meshCounterRef = useRef<number>(0);
+  const originMarkerRef = useRef<Mesh | null>(null);
+  const endpointMarkersRef = useRef<Mesh[]>([]);
 
   // Pan state for custom pan tool handling
   const panStateRef = useRef<{
@@ -84,7 +86,10 @@ const CustomModelingPage: React.FC = () => {
     return saved || '#6366F1';
   });
 
-  // Get ground point with grid snapping
+  // Snap threshold for origin and endpoints
+  const SNAP_THRESHOLD = 0.5;
+
+  // Get ground point with grid snapping and magnetic snap to origin
   const getGroundPoint = useCallback((scene: Scene, pointerX: number, pointerY: number): Vector3 | null => {
     const pickResult = scene.pick(pointerX, pointerY, (mesh) => mesh.name === 'groundPicker');
     if (pickResult?.hit && pickResult.pickedPoint) {
@@ -93,6 +98,23 @@ const CustomModelingPage: React.FC = () => {
         0,
         Math.round(pickResult.pickedPoint.z * 2) / 2
       );
+
+      // Magnetic snap to origin (0,0,0)
+      const distanceToOrigin = snapped.length();
+      if (distanceToOrigin < SNAP_THRESHOLD) {
+        return Vector3.Zero();
+      }
+
+      // Also check for snap to existing endpoints
+      for (const marker of endpointMarkersRef.current) {
+        if (marker && !marker.isDisposed()) {
+          const dist = Vector3.Distance(snapped, marker.position);
+          if (dist < SNAP_THRESHOLD) {
+            return marker.position.clone();
+          }
+        }
+      }
+
       return snapped;
     }
     return null;
@@ -196,6 +218,65 @@ const CustomModelingPage: React.FC = () => {
 
     return face;
   }, [selectedColor]);
+
+  // Create green endpoint marker at a position
+  const createEndpointMarker = useCallback((scene: Scene, position: Vector3): Mesh => {
+    const marker = MeshBuilder.CreateSphere(`endpoint_${Date.now()}_${Math.random()}`, {
+      diameter: 0.12,
+      segments: 8,
+    }, scene);
+    marker.position = position.clone();
+    marker.position.y = 0.06; // Slightly above ground
+
+    const markerMat = new StandardMaterial(`endpointMat_${Date.now()}`, scene);
+    markerMat.diffuseColor = new Color3(0.2, 0.9, 0.2); // Green
+    markerMat.emissiveColor = new Color3(0.1, 0.4, 0.1); // Slight glow
+    markerMat.specularColor = new Color3(0.5, 0.5, 0.5);
+    marker.material = markerMat;
+    marker.isPickable = false;
+
+    endpointMarkersRef.current.push(marker);
+    return marker;
+  }, []);
+
+  // Create endpoint markers for line (start and end points)
+  const createLineEndpoints = useCallback((scene: Scene, start: Vector3, end: Vector3) => {
+    // Check if markers already exist at these positions
+    const existingPositions = endpointMarkersRef.current
+      .filter(m => m && !m.isDisposed())
+      .map(m => m.position);
+
+    const startExists = existingPositions.some(p => Vector3.Distance(p, new Vector3(start.x, 0.06, start.z)) < 0.1);
+    const endExists = existingPositions.some(p => Vector3.Distance(p, new Vector3(end.x, 0.06, end.z)) < 0.1);
+
+    if (!startExists) {
+      createEndpointMarker(scene, start);
+    }
+    if (!endExists) {
+      createEndpointMarker(scene, end);
+    }
+  }, [createEndpointMarker]);
+
+  // Create endpoint markers for rectangle (4 corners)
+  const createRectangleEndpoints = useCallback((scene: Scene, start: Vector3, end: Vector3) => {
+    const corners = [
+      new Vector3(start.x, 0, start.z),
+      new Vector3(end.x, 0, start.z),
+      new Vector3(end.x, 0, end.z),
+      new Vector3(start.x, 0, end.z),
+    ];
+
+    const existingPositions = endpointMarkersRef.current
+      .filter(m => m && !m.isDisposed())
+      .map(m => new Vector3(m.position.x, 0, m.position.z));
+
+    corners.forEach(corner => {
+      const exists = existingPositions.some(p => Vector3.Distance(p, corner) < 0.1);
+      if (!exists) {
+        createEndpointMarker(scene, corner);
+      }
+    });
+  }, [createEndpointMarker]);
 
   // Push/Pull functionality
   const applyPushPull = useCallback((mesh: Mesh, height: number): Mesh | null => {
@@ -399,6 +480,23 @@ const CustomModelingPage: React.FC = () => {
     zAxisNeg.color = new Color3(0.2, 0.3, 0.5);
     zAxisNeg.isPickable = false;
 
+    // Origin marker - green sphere at (0,0,0) for snap indication
+    const originMarker = MeshBuilder.CreateSphere('originMarker', {
+      diameter: 0.15,
+      segments: 16,
+    }, scene);
+    originMarker.position = new Vector3(0, 0.075, 0);
+    const originMat = new StandardMaterial('originMat', scene);
+    originMat.diffuseColor = new Color3(0.2, 0.9, 0.2); // Green
+    originMat.emissiveColor = new Color3(0.1, 0.5, 0.1); // Slight glow
+    originMat.specularColor = new Color3(0.5, 0.5, 0.5);
+    originMarker.material = originMat;
+    originMarker.isPickable = false;
+    originMarkerRef.current = originMarker;
+
+    // Add origin to endpoint markers list for snap detection
+    endpointMarkersRef.current.push(originMarker);
+
     // Highlight layer
     highlightLayerRef.current = new HighlightLayer('highlight', scene);
 
@@ -491,9 +589,32 @@ const CustomModelingPage: React.FC = () => {
       if (activeTool === 'line' || activeTool === 'rectangle') {
         const point = getGroundPoint(scene, scene.pointerX, scene.pointerY);
         if (point) {
-          state.isDrawing = true;
-          state.startPoint = point;
-          state.currentPoint = point;
+          if (!state.isDrawing) {
+            // First click: Start drawing
+            state.isDrawing = true;
+            state.startPoint = point;
+            state.currentPoint = point;
+          } else {
+            // Second click: Finalize the shape
+            if (state.startPoint && state.currentPoint) {
+              if (activeTool === 'line') {
+                if (Vector3.Distance(state.startPoint, state.currentPoint) > 0.1) {
+                  finalizeLine(scene, state.startPoint, state.currentPoint);
+                }
+              } else if (activeTool === 'rectangle') {
+                finalizeRectangle(scene, state.startPoint, state.currentPoint);
+              }
+            }
+            // Cleanup preview
+            if (state.previewMesh) {
+              state.previewMesh.dispose();
+              state.previewMesh = null;
+            }
+            // Reset state
+            state.isDrawing = false;
+            state.startPoint = null;
+            state.currentPoint = null;
+          }
         }
       } else if (activeTool === 'pushpull') {
         const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
@@ -597,16 +718,17 @@ const CustomModelingPage: React.FC = () => {
 
       if (evt.button !== 0) return;
 
+      // Line and rectangle use click-click (SketchUp style), not drag
+      // So don't finalize on mouse up for those tools
+      if (activeTool === 'line' || activeTool === 'rectangle') {
+        return;
+      }
+
       const state = drawingStateRef.current;
       if (!state.isDrawing) return;
 
-      if (activeTool === 'line' && state.startPoint && state.currentPoint) {
-        if (Vector3.Distance(state.startPoint, state.currentPoint) > 0.1) {
-          finalizeLine(scene, state.startPoint, state.currentPoint);
-        }
-      } else if (activeTool === 'rectangle' && state.startPoint && state.currentPoint) {
-        finalizeRectangle(scene, state.startPoint, state.currentPoint);
-      } else if (activeTool === 'pushpull') {
+      // Push/pull is still drag-based
+      if (activeTool === 'pushpull') {
         const deltaY = (state.startPoint!.y - scene.pointerY) * 0.05;
         const targetMesh = (state as DrawingState & { targetMesh?: Mesh }).targetMesh;
         if (targetMesh && Math.abs(deltaY) > 0.1) {
@@ -615,17 +737,17 @@ const CustomModelingPage: React.FC = () => {
             selectMesh(solid);
           }
         }
-      }
 
-      if (state.previewMesh) {
-        state.previewMesh.dispose();
-        state.previewMesh = null;
-      }
+        if (state.previewMesh) {
+          state.previewMesh.dispose();
+          state.previewMesh = null;
+        }
 
-      state.isDrawing = false;
-      state.startPoint = null;
-      state.currentPoint = null;
-      (state as DrawingState & { targetMesh?: Mesh }).targetMesh = undefined;
+        state.isDrawing = false;
+        state.startPoint = null;
+        state.currentPoint = null;
+        (state as DrawingState & { targetMesh?: Mesh }).targetMesh = undefined;
+      }
     };
 
     const canvas = canvasRef.current;
@@ -642,7 +764,7 @@ const CustomModelingPage: React.FC = () => {
         canvas.removeEventListener('pointerup', handlePointerUp);
       }
     };
-  }, [activeTool, selectedColor, getGroundPoint, updatePreviewLine, updatePreviewRectangle, finalizeLine, finalizeRectangle, applyPushPull, zoomExtents]);
+  }, [activeTool, selectedColor, getGroundPoint, updatePreviewLine, updatePreviewRectangle, finalizeLine, finalizeRectangle, applyPushPull, zoomExtents, createLineEndpoints, createRectangleEndpoints]);
 
   // Keyboard shortcuts
   useEffect(() => {
