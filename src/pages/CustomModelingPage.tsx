@@ -253,7 +253,7 @@ const CustomModelingPage: React.FC = () => {
     scene.clearColor = new Color4(0.95, 0.95, 0.95, 1);
     sceneRef.current = scene;
 
-    // Camera
+    // Camera - SketchUp style controls
     const camera = new ArcRotateCamera(
       'camera',
       -Math.PI / 4,
@@ -262,11 +262,36 @@ const CustomModelingPage: React.FC = () => {
       Vector3.Zero(),
       scene
     );
+
+    // SketchUp-style camera: middle-drag=orbit, shift+middle=pan, scroll=zoom
     camera.attachControl(canvas, true);
-    camera.wheelPrecision = 10;
-    camera.panningSensibility = 100;
-    camera.lowerRadiusLimit = 2;
-    camera.upperRadiusLimit = 100;
+
+    // Configure camera inputs for SketchUp behavior
+    const pointerInput = camera.inputs.attached.pointers as {
+      buttons?: number[];
+      angularSensibilityX?: number;
+      angularSensibilityY?: number;
+      panningSensibility?: number;
+    };
+
+    // Only middle mouse button (1) controls camera rotation
+    // Left (0) is for tools, Right (2) is disabled for camera
+    if (pointerInput) {
+      pointerInput.buttons = [1]; // Middle mouse only for orbit
+      pointerInput.angularSensibilityX = 500; // SketchUp-like sensitivity
+      pointerInput.angularSensibilityY = 500;
+      pointerInput.panningSensibility = 50; // Pan with Shift+Middle
+    }
+
+    camera.wheelPrecision = 15; // Scroll zoom sensitivity
+    camera.pinchPrecision = 50;
+    camera.lowerRadiusLimit = 1;
+    camera.upperRadiusLimit = 500;
+    camera.lowerBetaLimit = 0.1; // Prevent flipping under ground
+    camera.upperBetaLimit = Math.PI - 0.1; // Prevent flipping over
+    camera.inertia = 0.7; // Smooth camera movement like SketchUp
+    camera.panningInertia = 0.7;
+
     cameraRef.current = camera;
 
     // Lights
@@ -396,16 +421,11 @@ const CustomModelingPage: React.FC = () => {
     const camera = cameraRef.current;
     if (!scene || !camera) return;
 
-    const isDrawingTool = ['line', 'rectangle', 'circle', 'polygon', 'arc'].includes(activeTool);
-
-    // Adjust camera controls based on tool
+    // SketchUp-style: Middle mouse always controls camera (orbit/pan)
+    // Left mouse is always for tools, never for camera
     const pointersInput = camera.inputs.attached.pointers as { buttons?: number[] };
-    if (isDrawingTool) {
-      // Only allow middle/right mouse for camera when drawing
-      if (pointersInput) pointersInput.buttons = [1, 2];
-    } else {
-      // Allow all mouse buttons for camera
-      if (pointersInput) pointersInput.buttons = [0, 1, 2];
+    if (pointersInput) {
+      pointersInput.buttons = [1]; // Only middle mouse for camera
     }
 
     const handlePointerDown = (evt: PointerEvent) => {
@@ -537,17 +557,23 @@ const CustomModelingPage: React.FC = () => {
     };
   }, [activeTool, getGroundPoint, updatePreviewLine, updatePreviewRectangle, finalizeLine, finalizeRectangle, applyPushPull, zoomExtents]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts - SketchUp style
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't trigger shortcuts when typing in inputs
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-      switch (e.key.toLowerCase()) {
+      const key = e.key.toLowerCase();
+
+      // SketchUp keyboard shortcuts
+      switch (key) {
+        // Selection & Basic
         case ' ':
           e.preventDefault();
           setActiveTool('select');
           break;
+
+        // Drawing Tools
         case 'l':
           setActiveTool('line');
           break;
@@ -558,8 +584,18 @@ const CustomModelingPage: React.FC = () => {
           setActiveTool('circle');
           break;
         case 'a':
-          setActiveTool('arc');
+          if (!e.ctrlKey && !e.metaKey) {
+            setActiveTool('arc');
+          }
           break;
+        case '2':
+          setActiveTool('arc2pt');
+          break;
+        case '3':
+          setActiveTool('arc3pt');
+          break;
+
+        // Modification Tools
         case 'p':
           setActiveTool('pushpull');
           break;
@@ -577,19 +613,29 @@ const CustomModelingPage: React.FC = () => {
         case 'f':
           setActiveTool('offset');
           break;
-        case 'b':
-          setActiveTool('paint');
-          break;
+
+        // Construction Tools
         case 't':
           setActiveTool('tape');
           break;
+        case 'd':
+          setActiveTool('dimension');
+          break;
+
+        // Component & Group
+        case 'g':
+          setActiveTool('makeComponent');
+          break;
+
+        // Paint & Erase
+        case 'b':
+          setActiveTool('paint');
+          break;
         case 'e':
           setActiveTool('eraser');
-          if (selectedMesh) {
-            selectedMesh.dispose();
-            deselectMesh();
-          }
           break;
+
+        // Camera/Navigation
         case 'o':
           setActiveTool('orbit');
           break;
@@ -598,20 +644,31 @@ const CustomModelingPage: React.FC = () => {
           break;
         case 'z':
           if (e.shiftKey) {
+            // Shift+Z = Zoom Extents
+            e.preventDefault();
             zoomExtents();
-          } else {
+          } else if (!e.ctrlKey && !e.metaKey) {
             setActiveTool('zoom');
           }
           break;
+
+        // Section & Views
+        case 'k':
+          setActiveTool('section');
+          break;
+
+        // Delete
         case 'delete':
         case 'backspace':
+          e.preventDefault();
           if (selectedMesh) {
             selectedMesh.dispose();
             deselectMesh();
           }
           break;
+
+        // Escape - Cancel current operation
         case 'escape':
-          // Cancel drawing
           const state = drawingStateRef.current;
           if (state.previewMesh) {
             state.previewMesh.dispose();
@@ -621,6 +678,7 @@ const CustomModelingPage: React.FC = () => {
           state.startPoint = null;
           state.currentPoint = null;
           deselectMesh();
+          setActiveTool('select');
           break;
       }
     };

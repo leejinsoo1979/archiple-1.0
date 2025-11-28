@@ -154,11 +154,12 @@
 
 /* Left Vertical Toolbar - SketchUp Large Tool Set Style (2 columns) */
 .leftToolbar {
-  width: 76px;
+  width: 88px;
+  /* 2 * 38 + gap + padding */
   background: #f0f0f0;
   border-right: 1px solid #c8c8c8;
   display: grid;
-  grid-template-columns: repeat(2, 34px);
+  grid-template-columns: repeat(2, 38px);
   gap: 2px;
   padding: 4px;
   align-content: start;
@@ -177,16 +178,16 @@
 }
 
 .verticalTool {
-  width: 34px;
-  height: 34px;
-  border: 1px solid #808080;
-  border-radius: 2px;
-  background: #f0f0f0;
+  width: 38px;
+  height: 26px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.1s ease;
+  transition: opacity 0.1s ease;
   padding: 0;
   overflow: hidden;
 }
@@ -198,18 +199,16 @@
   background-size: 200% 1900%;
   /* 2 cols, 19 rows */
   background-repeat: no-repeat;
-  filter: contrast(1.1);
+  background-position: center;
+  filter: contrast(1.05);
 }
 
 .verticalTool:hover {
-  border-color: #404040;
-  box-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
+  opacity: 0.8;
   z-index: 1;
 }
 
 .verticalTool.active {
-  background: #d0d0d0;
-  border-color: #000000;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
