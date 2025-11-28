@@ -3028,67 +3028,19 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           }
         }
 
-        // Check if clicked on floor (for selection)
+        // Check if clicked on floor (for toolbar selection state only - no blue outline)
         const meshName = picked.name.toLowerCase();
         const isFloor = (meshName.includes('floor') || meshName.startsWith('room_')) && !meshName.includes('hotspot');
 
         if (isFloor && !playMode) {
           const floorMesh = picked as Mesh;
+          selectedFloorMeshRef.current = floorMesh;
 
-          // Clear previous selection
-          if (selectedFloorOutlineRef.current) {
-            selectedFloorOutlineRef.current.dispose();
-            selectedFloorOutlineRef.current = null;
-          }
-
-          // Use polygon points from metadata, fallback to bounding box
+          // Get screen position for toolbar
           const boundingInfo = floorMesh.getBoundingInfo();
           const min = boundingInfo.boundingBox.minimumWorld;
           const max = boundingInfo.boundingBox.maximumWorld;
           const floorY = (min.y + max.y) / 2 + 0.02;
-
-          let outlinePoints: Vector3[] = [];
-
-          if (floorMesh.metadata?.polygonPoints) {
-            // Use actual polygon shape
-            const polyPoints = floorMesh.metadata.polygonPoints as { x: number; y: number; z: number }[];
-            polyPoints.forEach(p => {
-              outlinePoints.push(new Vector3(p.x, floorY, p.z));
-            });
-            outlinePoints.push(outlinePoints[0].clone()); // Close the loop
-          } else {
-            // Fallback to bounding box
-            outlinePoints = [
-              new Vector3(min.x, floorY, min.z),
-              new Vector3(max.x, floorY, min.z),
-              new Vector3(max.x, floorY, max.z),
-              new Vector3(min.x, floorY, max.z),
-              new Vector3(min.x, floorY, min.z)
-            ];
-          }
-
-          const selectionOutline = MeshBuilder.CreateTube('floorSelectionOutline', {
-            path: outlinePoints,
-            radius: 0.04,
-            tessellation: 8,
-            cap: Mesh.NO_CAP,
-            updatable: false
-          }, scene);
-
-          // Blue theme color material
-          const outlineMat = new StandardMaterial('floorSelectionMat', scene);
-          outlineMat.emissiveColor = new Color3(0.2, 0.5, 1);
-          outlineMat.disableLighting = true;
-          outlineMat.disableDepthWrite = true;
-          outlineMat.depthFunction = Constants.ALWAYS;
-          selectionOutline.material = outlineMat;
-          selectionOutline.renderingGroupId = 3;
-          selectionOutline.isPickable = false;
-
-          selectedFloorOutlineRef.current = selectionOutline;
-          selectedFloorMeshRef.current = floorMesh;
-
-          // Get screen position for toolbar
           const floorCenter = new Vector3((min.x + max.x) / 2, floorY, (min.z + max.z) / 2);
           const camera = arcCameraRef.current;
           const engine = engineRef.current;
@@ -3112,10 +3064,6 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           }
         } else if (!isFloor && !playMode) {
           // Clicked elsewhere - clear selection
-          if (selectedFloorOutlineRef.current) {
-            selectedFloorOutlineRef.current.dispose();
-            selectedFloorOutlineRef.current = null;
-          }
           selectedFloorMeshRef.current = null;
           setSelectedFloor(null);
         }
