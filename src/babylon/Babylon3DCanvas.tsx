@@ -385,6 +385,13 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
     screenPosition: { x: number; y: number };
   } | null>(null);
 
+  // Wall selection state
+  const [selectedWall, setSelectedWall] = useState<{
+    mesh: Mesh;
+    wallId: string;
+    screenPosition: { x: number; y: number };
+  } | null>(null);
+
   // Camera settings from Zustand store
   const cameraSettings = useCameraSettingsStore();
 
@@ -2972,9 +2979,9 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
                 if (isClickedFloor) {
                   // Floor: create polygon
-                  const shape2D = faceOverlayVerts.map(v => new Vector2(v.x, v.z));
+                  const shape3D = faceOverlayVerts.map(v => new Vector3(v.x, 0, v.z));
                   faceOverlay = MeshBuilder.CreatePolygon('clickFaceOverlay', {
-                    shape: shape2D,
+                    shape: shape3D,
                     depth: 0.001,
                     sideOrientation: Mesh.DOUBLESIDE
                   }, scene, earcut);
@@ -3014,6 +3021,29 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
                 }
 
                 clickFaceOverlayRef.current = faceOverlay;
+
+                // Set wall toolbar position if wall clicked
+                if (isClickedWall) {
+                  const center = faceOverlay.getBoundingInfo().boundingBox.centerWorld;
+                  const camera = arcCameraRef.current;
+                  const engine = engineRef.current;
+                  if (camera && engine) {
+                    const screenPos = Vector3.Project(
+                      center,
+                      Matrix.Identity(),
+                      scene.getTransformMatrix(),
+                      camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight())
+                    );
+
+                    const wallId = clickedMesh.name;
+                    setSelectedWall({
+                      mesh: clickedMesh,
+                      wallId,
+                      screenPosition: { x: screenPos.x, y: screenPos.y - 80 }
+                    });
+                    setSelectedFloor(null);
+                  }
+                }
               }
             }
           }
@@ -3026,6 +3056,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
             clickFaceOverlayRef.current.dispose();
             clickFaceOverlayRef.current = null;
           }
+          setSelectedWall(null);
         }
 
         // Check if clicked on floor (for toolbar selection state only - no blue outline)
@@ -3035,6 +3066,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         if (isFloor && !playMode) {
           const floorMesh = picked as Mesh;
           selectedFloorMeshRef.current = floorMesh;
+          setSelectedWall(null);
 
           // Get screen position for toolbar
           const boundingInfo = floorMesh.getBoundingInfo();
@@ -3062,8 +3094,8 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
               screenPosition: { x: screenPos.x, y: screenPos.y + 50 }
             });
           }
-        } else if (!isFloor && !playMode) {
-          // Clicked elsewhere - clear selection
+        } else if (!isFloor && !playMode && !isClickedWall) {
+          // Clicked elsewhere (not wall, not floor) - clear selection
           selectedFloorMeshRef.current = null;
           setSelectedFloor(null);
         }
@@ -4746,6 +4778,74 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
         tabIndex={0}
         style={{ outline: 'none' }}
       />
+      {/* Wall Editor Toolbar */}
+      {selectedWall && !playMode && (
+        <div
+          style={{
+            position: 'absolute',
+            left: selectedWall.screenPosition.x,
+            top: selectedWall.screenPosition.y,
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '8px',
+            pointerEvents: 'auto',
+            zIndex: 100,
+          }}
+        >
+          {/* Wall Editor Button */}
+          <button
+            style={{
+              background: '#333',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '8px 16px',
+              fontSize: '14px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            }}
+            onClick={() => {
+              // TODO: Open wall editor
+              console.log('Open wall editor for:', selectedWall.wallId);
+            }}
+          >
+            Wall Editor
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" />
+            </svg>
+          </button>
+          {/* Toolbar Icons */}
+          <div
+            style={{
+              background: '#333',
+              borderRadius: '6px',
+              padding: '6px 8px',
+              display: 'flex',
+              gap: '4px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            }}
+          >
+            {/* Drag handle */}
+            <div style={{ padding: '6px', color: '#888', cursor: 'grab' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+              </svg>
+            </div>
+            {/* Edit */}
+            <button style={{ background: 'transparent', border: 'none', padding: '6px', color: 'white', cursor: 'pointer', borderRadius: '4px' }} title="Edit">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
       {/* Floor Editor Toolbar */}
       {selectedFloor && !playMode && (
         <div
