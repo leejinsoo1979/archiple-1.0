@@ -999,7 +999,7 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       hemisphericLight.specular = new Color3(0.1, 0.1, 0.1);
 
       // 2. Main directional light (sun) with shadows
-      const azimuth = sunSettings?.azimuth ?? 45;
+      const azimuth = sunSettings?.azimuth ?? 225; // Sun from opposite direction
       const altitude = sunSettings?.altitude ?? 45;
       const intensity = sunSettings?.intensity ?? 2.5; // Increased for stronger shadows
 
@@ -1007,10 +1007,10 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
       const azimuthRad = (azimuth * Math.PI) / 180;
       const altitudeRad = (altitude * Math.PI) / 180;
 
-      // Light direction = opposite of sun position (pointing DOWN toward scene)
-      const dirX = -Math.cos(altitudeRad) * Math.sin(azimuthRad);
+      // Light direction = from sun toward scene (pointing DOWN and INTO the building)
+      const dirX = Math.cos(altitudeRad) * Math.sin(azimuthRad);
       const dirY = -Math.sin(altitudeRad);
-      const dirZ = -Math.cos(altitudeRad) * Math.cos(azimuthRad);
+      const dirZ = Math.cos(altitudeRad) * Math.cos(azimuthRad);
 
       // DirectionalLight: first param is DIRECTION, not position
       const sunLight = new DirectionalLight('sunLight', new Vector3(dirX, dirY, dirZ), scene);
@@ -3120,6 +3120,18 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
           selectedFloorMeshRef.current = null;
           setSelectedFloor(null);
         }
+      } else if (!playMode) {
+        // Clicked on background (no mesh hit) - clear all selections and glow
+        if (clickFaceOverlayRef.current) {
+          if (highlightLayerRef.current) {
+            highlightLayerRef.current.removeMesh(clickFaceOverlayRef.current);
+          }
+          clickFaceOverlayRef.current.dispose();
+          clickFaceOverlayRef.current = null;
+        }
+        selectedFloorMeshRef.current = null;
+        setSelectedFloor(null);
+        setSelectedWall(null);
       }
     };
 
