@@ -35,10 +35,10 @@ interface DrawingState {
   points: Vector3[];
 }
 
-// Rectangle modifier state
-interface RectModifiers {
+// Shape modifier state (used for rectangle, circle, polygon)
+interface ShapeModifiers {
   drawFromCenter: boolean;  // Option key
-  lockSquare: boolean;      // Shift key
+  lockSquare: boolean;      // Shift key (square for rect, perfect circle, equal-sided polygon)
   axisLock: 'none' | 'red' | 'green' | 'blue' | 'parallel';  // Arrow keys
 }
 
@@ -72,8 +72,8 @@ const CustomModelingPage: React.FC = () => {
     points: [],
   });
 
-  // Rectangle modifiers ref
-  const rectModifiersRef = useRef<RectModifiers>({
+  // Shape modifiers ref (used for rectangle, circle, polygon)
+  const shapeModifiersRef = useRef<ShapeModifiers>({
     drawFromCenter: false,
     lockSquare: false,
     axisLock: 'none',
@@ -84,8 +84,8 @@ const CustomModelingPage: React.FC = () => {
   const [showMeasurementInput, setShowMeasurementInput] = useState(false);
   const measurementInputRef = useRef<HTMLInputElement>(null);
 
-  // Rectangle modifiers state for UI display (mirrors ref for rendering)
-  const [rectModifiersUI, setRectModifiersUI] = useState<RectModifiers>({
+  // Shape modifiers state for UI display (mirrors ref for rendering)
+  const [shapeModifiersUI, setShapeModifiersUI] = useState<ShapeModifiers>({
     drawFromCenter: false,
     lockSquare: false,
     axisLock: 'none',
@@ -165,7 +165,7 @@ const CustomModelingPage: React.FC = () => {
   // Create/update preview rectangle with modifier support
   const updatePreviewRectangle = useCallback((scene: Scene, start: Vector3, end: Vector3) => {
     const state = drawingStateRef.current;
-    const mods = rectModifiersRef.current;
+    const mods = shapeModifiersRef.current;
 
     if (state.previewMesh) {
       state.previewMesh.dispose();
@@ -252,7 +252,7 @@ const CustomModelingPage: React.FC = () => {
 
   // Finalize rectangle as face geometry with modifier support
   const finalizeRectangle = useCallback((scene: Scene, start: Vector3, end: Vector3): Mesh | null => {
-    const mods = rectModifiersRef.current;
+    const mods = shapeModifiersRef.current;
 
     let width = Math.abs(end.x - start.x);
     let depth = Math.abs(end.z - start.z);
@@ -312,10 +312,239 @@ const CustomModelingPage: React.FC = () => {
       lockSquare: false,
       axisLock: 'none' as const,
     };
-    rectModifiersRef.current = resetMods;
-    setRectModifiersUI(resetMods);
+    shapeModifiersRef.current = resetMods;
+    setShapeModifiersUI(resetMods);
 
     return face;
+  }, [selectedColor]);
+
+  // Create/update preview circle with modifier support
+  const updatePreviewCircle = useCallback((scene: Scene, start: Vector3, end: Vector3) => {
+    const state = drawingStateRef.current;
+    const mods = shapeModifiersRef.current;
+
+    if (state.previewMesh) {
+      state.previewMesh.dispose();
+    }
+
+    // Calculate radius from start to end point
+    const dx = end.x - start.x;
+    const dz = end.z - start.z;
+    let radius = Math.sqrt(dx * dx + dz * dz);
+
+    if (radius > 0.05) {
+      let centerX: number, centerZ: number;
+
+      // Option key: Draw from center (start point is center)
+      if (mods.drawFromCenter) {
+        centerX = start.x;
+        centerZ = start.z;
+      } else {
+        // Normal mode: start point is edge, radius determines size
+        // Center is at start point, radius extends to end point
+        centerX = start.x;
+        centerZ = start.z;
+      }
+
+      // Create disc mesh for preview
+      const disc = MeshBuilder.CreateDisc('previewCircle', {
+        radius: radius,
+        tessellation: 48
+      }, scene);
+      disc.rotation.x = Math.PI / 2; // Rotate to be horizontal
+      disc.position = new Vector3(centerX, 0.01, centerZ);
+
+      const mat = new StandardMaterial('previewCircleMat', scene);
+
+      // Change color based on modifiers
+      if (mods.drawFromCenter && mods.lockSquare) {
+        mat.diffuseColor = new Color3(0.9, 0.5, 0.9); // Purple for both
+      } else if (mods.drawFromCenter) {
+        mat.diffuseColor = new Color3(0.9, 0.6, 0.4); // Orange for center
+      } else if (mods.lockSquare) {
+        mat.diffuseColor = new Color3(0.4, 0.9, 0.5); // Green for locked
+      } else {
+        mat.diffuseColor = new Color3(0.4, 0.5, 0.9); // Blue default
+      }
+      mat.alpha = 0.4;
+      disc.material = mat;
+      disc.isPickable = false;
+
+      // Enable edge rendering for preview outline
+      disc.enableEdgesRendering();
+      disc.edgesWidth = 2.0;
+      disc.edgesColor = new Color4(0.4, 0.6, 1, 1);
+
+      state.previewMesh = disc;
+    }
+  }, []);
+
+  // Finalize circle as face geometry with modifier support
+  const finalizeCircle = useCallback((scene: Scene, start: Vector3, end: Vector3): Mesh | null => {
+    const mods = shapeModifiersRef.current;
+
+    const dx = end.x - start.x;
+    const dz = end.z - start.z;
+    let radius = Math.sqrt(dx * dx + dz * dz);
+
+    if (radius < 0.1) return null;
+
+    let centerX: number, centerZ: number;
+
+    if (mods.drawFromCenter) {
+      centerX = start.x;
+      centerZ = start.z;
+    } else {
+      centerX = start.x;
+      centerZ = start.z;
+    }
+
+    meshCounterRef.current++;
+    const disc = MeshBuilder.CreateDisc(`Circle_${meshCounterRef.current}`, {
+      radius: radius,
+      tessellation: 48
+    }, scene);
+    disc.rotation.x = Math.PI / 2;
+    disc.position = new Vector3(centerX, 0.01, centerZ);
+
+    const faceMat = new StandardMaterial(`circleMat_${meshCounterRef.current}`, scene);
+    faceMat.diffuseColor = Color3.FromHexString(selectedColor);
+    faceMat.specularColor = new Color3(0.2, 0.2, 0.2);
+    disc.material = faceMat;
+    disc.enableEdgesRendering();
+    disc.edgesWidth = 1.0;
+    disc.edgesColor = new Color4(0.3, 0.3, 0.3, 1);
+
+    // Store metadata
+    (disc as any).faceData = {
+      type: 'circle',
+      centerX,
+      centerZ,
+      radius,
+      originalY: 0.01,
+    };
+
+    // Reset modifiers after finalizing
+    const resetMods = {
+      drawFromCenter: false,
+      lockSquare: false,
+      axisLock: 'none' as const,
+    };
+    shapeModifiersRef.current = resetMods;
+    setShapeModifiersUI(resetMods);
+
+    return disc;
+  }, [selectedColor]);
+
+  // Create/update preview polygon with modifier support
+  const updatePreviewPolygon = useCallback((scene: Scene, start: Vector3, end: Vector3, sides: number = 6) => {
+    const state = drawingStateRef.current;
+    const mods = shapeModifiersRef.current;
+
+    if (state.previewMesh) {
+      state.previewMesh.dispose();
+    }
+
+    const dx = end.x - start.x;
+    const dz = end.z - start.z;
+    let radius = Math.sqrt(dx * dx + dz * dz);
+
+    if (radius > 0.05) {
+      let centerX: number, centerZ: number;
+
+      if (mods.drawFromCenter) {
+        centerX = start.x;
+        centerZ = start.z;
+      } else {
+        centerX = start.x;
+        centerZ = start.z;
+      }
+
+      // Create polygon using disc with fewer tessellations
+      const polygon = MeshBuilder.CreateDisc('previewPolygon', {
+        radius: radius,
+        tessellation: sides
+      }, scene);
+      polygon.rotation.x = Math.PI / 2;
+      polygon.position = new Vector3(centerX, 0.01, centerZ);
+
+      const mat = new StandardMaterial('previewPolygonMat', scene);
+
+      if (mods.drawFromCenter && mods.lockSquare) {
+        mat.diffuseColor = new Color3(0.9, 0.5, 0.9);
+      } else if (mods.drawFromCenter) {
+        mat.diffuseColor = new Color3(0.9, 0.6, 0.4);
+      } else if (mods.lockSquare) {
+        mat.diffuseColor = new Color3(0.4, 0.9, 0.5);
+      } else {
+        mat.diffuseColor = new Color3(0.4, 0.5, 0.9);
+      }
+      mat.alpha = 0.4;
+      polygon.material = mat;
+      polygon.isPickable = false;
+
+      polygon.enableEdgesRendering();
+      polygon.edgesWidth = 2.0;
+      polygon.edgesColor = new Color4(0.4, 0.6, 1, 1);
+
+      state.previewMesh = polygon;
+    }
+  }, []);
+
+  // Finalize polygon as face geometry with modifier support
+  const finalizePolygon = useCallback((scene: Scene, start: Vector3, end: Vector3, sides: number = 6): Mesh | null => {
+    const mods = shapeModifiersRef.current;
+
+    const dx = end.x - start.x;
+    const dz = end.z - start.z;
+    let radius = Math.sqrt(dx * dx + dz * dz);
+
+    if (radius < 0.1) return null;
+
+    let centerX: number, centerZ: number;
+
+    if (mods.drawFromCenter) {
+      centerX = start.x;
+      centerZ = start.z;
+    } else {
+      centerX = start.x;
+      centerZ = start.z;
+    }
+
+    meshCounterRef.current++;
+    const polygon = MeshBuilder.CreateDisc(`Polygon_${meshCounterRef.current}`, {
+      radius: radius,
+      tessellation: sides
+    }, scene);
+    polygon.rotation.x = Math.PI / 2;
+    polygon.position = new Vector3(centerX, 0.01, centerZ);
+
+    const faceMat = new StandardMaterial(`polygonMat_${meshCounterRef.current}`, scene);
+    faceMat.diffuseColor = Color3.FromHexString(selectedColor);
+    faceMat.specularColor = new Color3(0.2, 0.2, 0.2);
+    polygon.material = faceMat;
+    polygon.enableEdgesRendering();
+    polygon.edgesWidth = 1.0;
+    polygon.edgesColor = new Color4(0.3, 0.3, 0.3, 1);
+
+    (polygon as any).faceData = {
+      type: 'polygon',
+      centerX,
+      centerZ,
+      radius,
+      sides,
+      originalY: 0.01,
+    };
+
+    const resetMods = {
+      drawFromCenter: false,
+      lockSquare: false,
+      axisLock: 'none' as const,
+    };
+    shapeModifiersRef.current = resetMods;
+    setShapeModifiersUI(resetMods);
+
+    return polygon;
   }, [selectedColor]);
 
   // Add snap points for line (start and end points)
@@ -703,7 +932,7 @@ const CustomModelingPage: React.FC = () => {
 
       const state = drawingStateRef.current;
 
-      if (activeTool === 'line' || activeTool === 'rectangle') {
+      if (activeTool === 'line' || activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon') {
         const point = getGroundPoint(scene, scene.pointerX, scene.pointerY);
         if (point) {
           if (!state.isDrawing) {
@@ -724,6 +953,10 @@ const CustomModelingPage: React.FC = () => {
                 if (rectResult) {
                   addRectangleSnapPoints(state.startPoint, state.currentPoint);
                 }
+              } else if (activeTool === 'circle') {
+                finalizeCircle(scene, state.startPoint, state.currentPoint);
+              } else if (activeTool === 'polygon') {
+                finalizePolygon(scene, state.startPoint, state.currentPoint, 6);
               }
             }
             // Cleanup preview
@@ -827,7 +1060,7 @@ const CustomModelingPage: React.FC = () => {
       }
 
       // Show/hide snap indicator for drawing tools (SketchUp style)
-      if (activeTool === 'line' || activeTool === 'rectangle') {
+      if (activeTool === 'line' || activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon') {
         const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) => mesh.name === 'groundPicker');
         if (pickResult?.hit && pickResult.pickedPoint) {
           const snappedPoint = new Vector3(
@@ -864,6 +1097,18 @@ const CustomModelingPage: React.FC = () => {
           state.currentPoint = point;
           updatePreviewRectangle(scene, state.startPoint, point);
         }
+      } else if (activeTool === 'circle') {
+        const point = getGroundPoint(scene, scene.pointerX, scene.pointerY);
+        if (point) {
+          state.currentPoint = point;
+          updatePreviewCircle(scene, state.startPoint, point);
+        }
+      } else if (activeTool === 'polygon') {
+        const point = getGroundPoint(scene, scene.pointerX, scene.pointerY);
+        if (point) {
+          state.currentPoint = point;
+          updatePreviewPolygon(scene, state.startPoint, point, 6);
+        }
       } else if (activeTool === 'pushpull') {
         const deltaY = (state.startPoint.y - scene.pointerY) * 0.05;
         const targetMesh = (state as DrawingState & { targetMesh?: Mesh }).targetMesh;
@@ -882,9 +1127,9 @@ const CustomModelingPage: React.FC = () => {
 
       if (evt.button !== 0) return;
 
-      // Line, rectangle, and push/pull use click-click (SketchUp style), not drag
+      // Line, rectangle, circle, polygon, and push/pull use click-click (SketchUp style), not drag
       // So don't finalize on mouse up for those tools
-      if (activeTool === 'line' || activeTool === 'rectangle' || activeTool === 'pushpull') {
+      if (activeTool === 'line' || activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon' || activeTool === 'pushpull') {
         return;
       }
     };
@@ -903,7 +1148,7 @@ const CustomModelingPage: React.FC = () => {
         canvas.removeEventListener('pointerup', handlePointerUp);
       }
     };
-  }, [activeTool, selectedColor, getGroundPoint, updatePreviewLine, updatePreviewRectangle, finalizeLine, finalizeRectangle, applyPushPull, zoomExtents, addLineSnapPoints, addRectangleSnapPoints, showSnapIndicator, hideSnapIndicator, findNearestSnapPoint]);
+  }, [activeTool, selectedColor, getGroundPoint, updatePreviewLine, updatePreviewRectangle, updatePreviewCircle, updatePreviewPolygon, finalizeLine, finalizeRectangle, finalizeCircle, finalizePolygon, applyPushPull, zoomExtents, addLineSnapPoints, addRectangleSnapPoints, showSnapIndicator, hideSnapIndicator, findNearestSnapPoint]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -912,49 +1157,49 @@ const CustomModelingPage: React.FC = () => {
 
       const key = e.key.toLowerCase();
 
-      // Rectangle modifiers (only when rectangle tool is active and drawing)
-      if (activeTool === 'rectangle') {
+      // Shape modifiers (for rectangle, circle, and polygon tools)
+      if (activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon') {
         // Option/Alt key: Toggle draw from center
         if (e.key === 'Alt') {
           e.preventDefault();
-          const newValue = !rectModifiersRef.current.drawFromCenter;
-          rectModifiersRef.current.drawFromCenter = newValue;
-          setRectModifiersUI(prev => ({ ...prev, drawFromCenter: newValue }));
+          const newValue = !shapeModifiersRef.current.drawFromCenter;
+          shapeModifiersRef.current.drawFromCenter = newValue;
+          setShapeModifiersUI(prev => ({ ...prev, drawFromCenter: newValue }));
           return;
         }
-        // Shift key: Lock to square (while held)
+        // Shift key: Lock to square/circle (while held)
         if (e.key === 'Shift') {
-          rectModifiersRef.current.lockSquare = true;
-          setRectModifiersUI(prev => ({ ...prev, lockSquare: true }));
+          shapeModifiersRef.current.lockSquare = true;
+          setShapeModifiersUI(prev => ({ ...prev, lockSquare: true }));
           return;
         }
         // Arrow keys: Axis lock
         if (e.key === 'ArrowRight') {
           e.preventDefault();
-          const newValue = rectModifiersRef.current.axisLock === 'red' ? 'none' : 'red';
-          rectModifiersRef.current.axisLock = newValue;
-          setRectModifiersUI(prev => ({ ...prev, axisLock: newValue }));
+          const newValue = shapeModifiersRef.current.axisLock === 'red' ? 'none' : 'red';
+          shapeModifiersRef.current.axisLock = newValue;
+          setShapeModifiersUI(prev => ({ ...prev, axisLock: newValue }));
           return;
         }
         if (e.key === 'ArrowLeft') {
           e.preventDefault();
-          const newValue = rectModifiersRef.current.axisLock === 'green' ? 'none' : 'green';
-          rectModifiersRef.current.axisLock = newValue;
-          setRectModifiersUI(prev => ({ ...prev, axisLock: newValue }));
+          const newValue = shapeModifiersRef.current.axisLock === 'green' ? 'none' : 'green';
+          shapeModifiersRef.current.axisLock = newValue;
+          setShapeModifiersUI(prev => ({ ...prev, axisLock: newValue }));
           return;
         }
         if (e.key === 'ArrowUp') {
           e.preventDefault();
-          const newValue = rectModifiersRef.current.axisLock === 'blue' ? 'none' : 'blue';
-          rectModifiersRef.current.axisLock = newValue;
-          setRectModifiersUI(prev => ({ ...prev, axisLock: newValue }));
+          const newValue = shapeModifiersRef.current.axisLock === 'blue' ? 'none' : 'blue';
+          shapeModifiersRef.current.axisLock = newValue;
+          setShapeModifiersUI(prev => ({ ...prev, axisLock: newValue }));
           return;
         }
         if (e.key === 'ArrowDown') {
           e.preventDefault();
-          const newValue = rectModifiersRef.current.axisLock === 'parallel' ? 'none' : 'parallel';
-          rectModifiersRef.current.axisLock = newValue;
-          setRectModifiersUI(prev => ({ ...prev, axisLock: newValue }));
+          const newValue = shapeModifiersRef.current.axisLock === 'parallel' ? 'none' : 'parallel';
+          shapeModifiersRef.current.axisLock = newValue;
+          setShapeModifiersUI(prev => ({ ...prev, axisLock: newValue }));
           return;
         }
       }
@@ -1046,8 +1291,8 @@ const CustomModelingPage: React.FC = () => {
             lockSquare: false,
             axisLock: 'none' as const,
           };
-          rectModifiersRef.current = resetMods;
-          setRectModifiersUI(resetMods);
+          shapeModifiersRef.current = resetMods;
+          setShapeModifiersUI(resetMods);
           deselectMesh();
           setActiveTool('select');
           break;
@@ -1055,10 +1300,10 @@ const CustomModelingPage: React.FC = () => {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      // Release Shift key: Unlock square
-      if (e.key === 'Shift' && activeTool === 'rectangle') {
-        rectModifiersRef.current.lockSquare = false;
-        setRectModifiersUI(prev => ({ ...prev, lockSquare: false }));
+      // Release Shift key: Unlock shape constraint
+      if (e.key === 'Shift' && (activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon')) {
+        shapeModifiersRef.current.lockSquare = false;
+        setShapeModifiersUI(prev => ({ ...prev, lockSquare: false }));
       }
     };
 
@@ -1669,25 +1914,27 @@ const CustomModelingPage: React.FC = () => {
               <span>Selected: {selectedMesh.name}</span>
             </div>
           )}
-          {/* Rectangle Modifiers Indicator */}
-          {activeTool === 'rectangle' && (rectModifiersUI.drawFromCenter || rectModifiersUI.lockSquare || rectModifiersUI.axisLock !== 'none') && (
+          {/* Shape Modifiers Indicator (Rectangle, Circle, Polygon) */}
+          {(activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon') && (shapeModifiersUI.drawFromCenter || shapeModifiersUI.lockSquare || shapeModifiersUI.axisLock !== 'none') && (
             <div className={styles.modifierIndicators}>
-              {rectModifiersUI.drawFromCenter && (
+              {shapeModifiersUI.drawFromCenter && (
                 <span className={styles.modifierBadge} style={{ background: '#f97316' }}>⌥ Center</span>
               )}
-              {rectModifiersUI.lockSquare && (
-                <span className={styles.modifierBadge} style={{ background: '#22c55e' }}>⇧ Square</span>
+              {shapeModifiersUI.lockSquare && (
+                <span className={styles.modifierBadge} style={{ background: '#22c55e' }}>
+                  ⇧ {activeTool === 'rectangle' ? 'Square' : activeTool === 'circle' ? 'Circle' : 'Regular'}
+                </span>
               )}
-              {rectModifiersUI.axisLock === 'red' && (
+              {shapeModifiersUI.axisLock === 'red' && (
                 <span className={styles.modifierBadge} style={{ background: '#ef4444' }}>→ Red Axis</span>
               )}
-              {rectModifiersUI.axisLock === 'green' && (
+              {shapeModifiersUI.axisLock === 'green' && (
                 <span className={styles.modifierBadge} style={{ background: '#22c55e' }}>← Green Axis</span>
               )}
-              {rectModifiersUI.axisLock === 'blue' && (
+              {shapeModifiersUI.axisLock === 'blue' && (
                 <span className={styles.modifierBadge} style={{ background: '#3b82f6' }}>↑ Blue Axis</span>
               )}
-              {rectModifiersUI.axisLock === 'parallel' && (
+              {shapeModifiersUI.axisLock === 'parallel' && (
                 <span className={styles.modifierBadge} style={{ background: '#a855f7' }}>↓ Parallel</span>
               )}
             </div>
