@@ -2385,10 +2385,14 @@ const CustomModelingPage: React.FC = () => {
     innerMat.backFaceCulling = false;
     innerFace.material = innerMat;
     innerFace.isPickable = true;
+    // Store shape data for push/pull polygon extrusion
+    const innerShape = offsetVertices.map(v => ({ x: v.x - center.x, z: v.z - center.z }));
     innerFace.metadata = {
       type: 'face',
       isPolygon: true,
-      vertices: offsetVertices.length
+      vertices: offsetVertices.length,
+      shape: innerShape,
+      holes: []
     };
 
     // Create ring faces (trapezoid segments between original and offset edges)
@@ -2431,10 +2435,21 @@ const CustomModelingPage: React.FC = () => {
       ringMat.backFaceCulling = false;
       ringFace.material = ringMat;
       ringFace.isPickable = true;
+      // Calculate ring face center for shape metadata
+      const ringCenterX = (orig1.x + orig2.x + offs2.x + offs1.x) / 4;
+      const ringCenterZ = (orig1.z + orig2.z + offs2.z + offs1.z) / 4;
+      const ringShape = [
+        { x: orig1.x - ringCenterX, z: orig1.z - ringCenterZ },
+        { x: orig2.x - ringCenterX, z: orig2.z - ringCenterZ },
+        { x: offs2.x - ringCenterX, z: offs2.z - ringCenterZ },
+        { x: offs1.x - ringCenterX, z: offs1.z - ringCenterZ },
+      ];
       ringFace.metadata = {
         type: 'face',
         isPolygon: true,
-        vertices: 4
+        vertices: 4,
+        shape: ringShape,
+        holes: []
       };
 
       // Create connecting edge (between original and offset vertex)
