@@ -100,6 +100,8 @@ const CustomModelingPage: React.FC = () => {
     lastExtrudeDistance: number;     // For double-click repeat
     lastClickTime: number;           // For double-click detection
     lastClickFace: Mesh | null;      // For double-click on same face
+    axisLocked: boolean;             // Shift key locks the axis direction
+    lockedDistance: number;          // Distance when axis was locked
   }>({
     baseFace: null,
     baseFaceNormal: null,
@@ -110,32 +112,40 @@ const CustomModelingPage: React.FC = () => {
     lastExtrudeDistance: 0,
     lastClickTime: 0,
     lastClickFace: null,
+    axisLocked: false,
+    lockedDistance: 0,
   });
 
   // Selection system state for SketchUp-style multi-selection
-  const selectionStateRef = useRef<{
-    selectedIds: Set<string>;           // Currently selected mesh IDs
-    isDragging: boolean;                 // Box selection in progress
-    dragStartX: number;                  // Box selection start screen X
-    dragStartY: number;                  // Box selection start screen Y
-    dragCurrentX: number;                // Box selection current screen X
-    dragCurrentY: number;                // Box selection current screen Y
-    lastClickId: string | null;          // For double/triple click detection
-    lastClickTime: number;               // Last click timestamp
-    clickCount: number;                  // Click count for multi-click detection
-    selectionBoxElement: HTMLDivElement | null;  // Visual selection box element
+  const selectionManagerRef = useRef<SelectionManager | null>(null);
+  const [selectionState, setSelectionState] = useState<{
+    selectedIds: string[];
+    contextMenu: { x: number; y: number } | null;
   }>({
-    selectedIds: new Set(),
-    isDragging: false,
-    dragStartX: 0,
-    dragStartY: 0,
-    dragCurrentX: 0,
-    dragCurrentY: 0,
-    lastClickId: null,
-    lastClickTime: 0,
-    clickCount: 0,
-    selectionBoxElement: null,
+    selectedIds: [],
+    contextMenu: null,
   });
+
+  const selectionBoxRef = useRef<{
+    startX: number;
+    startY: number;
+    isDragging: boolean;
+    element: HTMLDivElement | null;
+  }>({
+    startX: 0,
+    startY: 0,
+    isDragging: false,
+    element: null,
+  });
+
+  // Initialize SelectionManager
+  useEffect(() => {
+    if (sceneRef.current && !selectionManagerRef.current) {
+      selectionManagerRef.current = new SelectionManager(sceneRef.current, (ids) => {
+        setSelectionState(prev => ({ ...prev, selectedIds: ids }));
+      });
+    }
+  }, []);
 
   // HUD overlay refs for Drawing Cursor System
   const hudTextureRef = useRef<AdvancedDynamicTexture | null>(null);
@@ -734,23 +744,31 @@ const CustomModelingPage: React.FC = () => {
       originalY: 0.01,
     };
 
-    // Create edge lines (SketchUp style - black edges around shapes)
+    // Create individual edge lines (SketchUp style - each edge separately selectable)
     const halfW = width / 2;
     const halfD = depth / 2;
     const edgeY = 0.015; // Slightly above face to prevent z-fighting
     const corners = [
-      new Vector3(centerX - halfW, edgeY, centerZ - halfD),
-      new Vector3(centerX + halfW, edgeY, centerZ - halfD),
-      new Vector3(centerX + halfW, edgeY, centerZ + halfD),
-      new Vector3(centerX - halfW, edgeY, centerZ + halfD),
-      new Vector3(centerX - halfW, edgeY, centerZ - halfD), // Close the loop
+      new Vector3(centerX - halfW, edgeY, centerZ - halfD), // 0: bottom-left
+      new Vector3(centerX + halfW, edgeY, centerZ - halfD), // 1: bottom-right
+      new Vector3(centerX + halfW, edgeY, centerZ + halfD), // 2: top-right
+      new Vector3(centerX - halfW, edgeY, centerZ + halfD), // 3: top-left
     ];
 
-    const edgeLines = MeshBuilder.CreateLines(`Edge_${meshCounterRef.current}`, {
-      points: corners,
-    }, scene);
-    edgeLines.color = new Color3(0, 0, 0); // Black edges
-    edgeLines.metadata = { type: 'edge', parentFace: face.id };
+    const edgeIds: string[] = [];
+    const edgePairs = [[0, 1], [1, 2], [2, 3], [3, 0]]; // 4 edges
+    edgePairs.forEach((pair, idx) => {
+      const edge = MeshBuilder.CreateLines(`Edge_${meshCounterRef.current}_${idx}`, {
+        points: [corners[pair[0]], corners[pair[1]]],
+      }, scene);
+      edge.color = new Color3(0, 0, 0);
+      edge.isPickable = true;
+      edge.metadata = { type: 'edge', parentFaceId: face.id };
+      edgeIds.push(edge.id);
+    });
+
+    // Store edge references in face metadata
+    face.metadata.edgeIds = edgeIds;
 
     // Reset modifiers after finalizing
     const resetMods = {
@@ -867,6 +885,33 @@ const CustomModelingPage: React.FC = () => {
       originalY: 0.01,
     };
 
+    // Create edge line (circular outline - single selectable edge)
+    const edgeY = 0.015;
+    const segments = 48;
+    const circlePoints: Vector3[] = [];
+    for (let i = 0; i <= segments; i++) {
+      const angle = (i / segments) * Math.PI * 2;
+      circlePoints.push(new Vector3(
+        centerX + Math.cos(angle) * radius,
+        edgeY,
+        centerZ + Math.sin(angle) * radius
+      ));
+    }
+
+    const edgeLines = MeshBuilder.CreateLines(`CircleEdge_${meshCounterRef.current}`, {
+      points: circlePoints,
+    }, scene);
+    edgeLines.color = new Color3(0, 0, 0);
+    edgeLines.isPickable = true;
+    edgeLines.metadata = { type: 'edge', parentFaceId: disc.id };
+
+    // Store edge reference in face metadata
+    disc.metadata = {
+      ...(disc as any).faceData,
+      type: 'face',
+      edgeIds: [edgeLines.id],
+    };
+
     // Reset modifiers after finalizing
     const resetMods = {
       drawFromCenter: false,
@@ -903,45 +948,87 @@ const CustomModelingPage: React.FC = () => {
         centerZ = start.z;
       }
 
-      // Create polygon using disc with fewer tessellations
-      const polygon = MeshBuilder.CreateDisc('previewPolygon', {
-        radius: radius,
-        tessellation: sides
+      // Calculate angle for orientation (vertex to cursor)
+      let angle = Math.atan2(dz, dx);
+
+      // Axis snapping (tolerance ~5 degrees = 0.087 radians)
+      const snapTolerance = 0.087;
+      const PI = Math.PI;
+      const TWO_PI = PI * 2;
+
+      // Normalize angle to [0, 2PI)
+      let normalizedAngle = angle;
+      if (normalizedAngle < 0) normalizedAngle += TWO_PI;
+
+      // Snap to 0 (East / +X)
+      if (normalizedAngle < snapTolerance || normalizedAngle > TWO_PI - snapTolerance) {
+        angle = 0;
+      }
+      // Snap to 90 (North / +Z) - Note: atan2(z, x) means +Z is 90 deg
+      else if (Math.abs(normalizedAngle - PI / 2) < snapTolerance) {
+        angle = PI / 2;
+      }
+      // Snap to 180 (West / -X)
+      else if (Math.abs(normalizedAngle - PI) < snapTolerance) {
+        angle = PI;
+      }
+      // Snap to 270 (South / -Z)
+      else if (Math.abs(normalizedAngle - 3 * PI / 2) < snapTolerance) {
+        angle = 3 * PI / 2;
+      }
+
+      // Create polygon wireframe using lines
+      const points: Vector3[] = [];
+      for (let i = 0; i <= sides; i++) {
+        const theta = (i / sides) * 2 * Math.PI;
+        // Create points in XZ plane (Y=0), rotated by -angle
+        // We apply rotation manually to points because CreateLines doesn't support rotation property easily on creation
+        // Actually, we can just create it aligned and rotate the mesh like before.
+        points.push(new Vector3(
+          Math.cos(theta) * radius,
+          0,
+          Math.sin(theta) * radius
+        ));
+      }
+
+      const polygon = MeshBuilder.CreateLines('previewPolygon', {
+        points: points,
+        updatable: false
       }, scene);
 
-      // Calculate angle for orientation (vertex to cursor)
-      // Babylon's CreateDisc creates vertex 0 at +X
-      // We want to rotate around Y (which is Z in local space after X rotation)
-      const angle = Math.atan2(dz, dx);
+      // Apply rotation to align vertex with cursor (or snapped axis)
+      // CreateLines creates points in local space. We rotate the whole mesh.
+      // Points were created starting at angle 0 (+X).
+      // We want vertex 0 to point to 'angle'.
+      // In Babylon (Y-up), rotation.y rotates around vertical axis.
+      // But we are drawing on ground... wait, previous code used rotation.x = PI/2 for Disc.
+      // CreateLines is already 3D lines. If we generate points with Y=0, they are on the ground.
+      // So we just need rotation.y (yaw) to rotate around vertical axis.
+      // Previous Disc was in XY plane and rotated X to lie flat.
+      // Lines are already in XZ plane.
 
-      polygon.rotation.x = Math.PI / 2;
-      // Apply rotation to align vertex with cursor
-      // Note: We might need to adjust by offset depending on tessellation, 
-      // but usually vertex 0 is at 0 radians.
-      // -angle because Babylon uses left-handed system and we are looking down?
-      // Let's try -angle first as per plan.
-      polygon.rotation.z = -angle;
+      // So, rotation.y = -angle (left-handed system, positive angle is CCW from top? No, Babylon is left handed)
+      // atan2(z, x) gives angle CCW from +X.
+      // Babylon rotation.y: +rotation is clockwise? No, standard is CCW about +Y.
+      // Let's stick to -angle which worked for the Disc (after X rotation).
+      // For lines on ground (Y=0), rotation.y should be -angle.
 
+      polygon.rotation.y = -angle;
       polygon.position = new Vector3(centerX, 0.01, centerZ);
 
-      const mat = new StandardMaterial('previewPolygonMat', scene);
-
+      // Set color based on modifiers
+      let color: Color3;
       if (mods.drawFromCenter && mods.lockSquare) {
-        mat.diffuseColor = new Color3(0.9, 0.5, 0.9);
+        color = new Color3(0.9, 0.5, 0.9);
       } else if (mods.drawFromCenter) {
-        mat.diffuseColor = new Color3(0.9, 0.6, 0.4);
+        color = new Color3(0.9, 0.6, 0.4);
       } else if (mods.lockSquare) {
-        mat.diffuseColor = new Color3(0.4, 0.9, 0.5);
+        color = new Color3(0.4, 0.9, 0.5);
       } else {
-        mat.diffuseColor = new Color3(0.4, 0.5, 0.9);
+        color = new Color3(0.4, 0.5, 0.9);
       }
-      mat.alpha = 0.4;
-      polygon.material = mat;
+      polygon.color = color;
       polygon.isPickable = false;
-
-      polygon.enableEdgesRendering();
-      polygon.edgesWidth = 2.0;
-      polygon.edgesColor = new Color4(0.4, 0.6, 1, 1);
 
       state.previewMesh = polygon;
     }
@@ -974,7 +1061,33 @@ const CustomModelingPage: React.FC = () => {
     }, scene);
 
     // Calculate angle for orientation
-    const angle = Math.atan2(dz, dx);
+    let angle = Math.atan2(dz, dx);
+
+    // Axis snapping (tolerance ~5 degrees = 0.087 radians)
+    const snapTolerance = 0.087;
+    const PI = Math.PI;
+    const TWO_PI = PI * 2;
+
+    // Normalize angle to [0, 2PI)
+    let normalizedAngle = angle;
+    if (normalizedAngle < 0) normalizedAngle += TWO_PI;
+
+    // Snap to 0 (East / +X)
+    if (normalizedAngle < snapTolerance || normalizedAngle > TWO_PI - snapTolerance) {
+      angle = 0;
+    }
+    // Snap to 90 (North / +Z)
+    else if (Math.abs(normalizedAngle - PI / 2) < snapTolerance) {
+      angle = PI / 2;
+    }
+    // Snap to 180 (West / -X)
+    else if (Math.abs(normalizedAngle - PI) < snapTolerance) {
+      angle = PI;
+    }
+    // Snap to 270 (South / -Z)
+    else if (Math.abs(normalizedAngle - 3 * PI / 2) < snapTolerance) {
+      angle = 3 * PI / 2;
+    }
 
     polygon.rotation.x = Math.PI / 2;
     polygon.rotation.z = -angle;
@@ -986,14 +1099,41 @@ const CustomModelingPage: React.FC = () => {
     faceMat.specularColor = new Color3(0.2, 0.2, 0.2);
     polygon.material = faceMat;
 
-    (polygon as any).faceData = {
-      type: 'polygon',
+    polygon.metadata = {
+      type: 'face',
       centerX,
       centerZ,
       radius,
       sides,
       originalY: 0.01,
+      edgeIds: [] as string[],
     };
+
+    // Create individual edge lines (each edge separately selectable)
+    const edgeY = 0.015;
+    const vertices: Vector3[] = [];
+    for (let i = 0; i < sides; i++) {
+      const vertexAngle = angle + (i / sides) * Math.PI * 2;
+      vertices.push(new Vector3(
+        centerX + Math.cos(vertexAngle) * radius,
+        edgeY,
+        centerZ + Math.sin(vertexAngle) * radius
+      ));
+    }
+
+    const edgeIds: string[] = [];
+    for (let i = 0; i < sides; i++) {
+      const nextIdx = (i + 1) % sides;
+      const edge = MeshBuilder.CreateLines(`PolygonEdge_${meshCounterRef.current}_${i}`, {
+        points: [vertices[i], vertices[nextIdx]],
+      }, scene);
+      edge.color = new Color3(0, 0, 0);
+      edge.isPickable = true;
+      edge.metadata = { type: 'edge', parentFaceId: polygon.id };
+      edgeIds.push(edge.id);
+    }
+
+    polygon.metadata.edgeIds = edgeIds;
 
     const resetMods = {
       drawFromCenter: false,
@@ -1300,69 +1440,126 @@ const CustomModelingPage: React.FC = () => {
 
   // ==================== SELECTION SYSTEM ====================
 
-  // Add mesh to selection
-  const addToSelection = useCallback((mesh: Mesh) => {
-    const selState = selectionStateRef.current;
-    if (!mesh.id || selState.selectedIds.has(mesh.id)) return;
-
-    selState.selectedIds.add(mesh.id);
-    if (highlightLayerRef.current) {
-      highlightLayerRef.current.addMesh(mesh, Color3.FromHexString('#6366f1'));
-    }
-  }, []);
-
-  // Remove mesh from selection
-  const removeFromSelection = useCallback((mesh: Mesh) => {
-    const selState = selectionStateRef.current;
-    if (!mesh.id || !selState.selectedIds.has(mesh.id)) return;
-
-    selState.selectedIds.delete(mesh.id);
-    if (highlightLayerRef.current) {
-      highlightLayerRef.current.removeMesh(mesh);
-    }
-  }, []);
-
-  // Clear all selection
-  const clearSelection = useCallback(() => {
-    const scene = sceneRef.current;
-    const selState = selectionStateRef.current;
-    if (!scene) return;
-
-    selState.selectedIds.forEach(id => {
-      const mesh = scene.getMeshById(id);
-      if (mesh && highlightLayerRef.current) {
-        highlightLayerRef.current.removeMesh(mesh);
+  // Selection helpers
+  const handleSelectionClick = useCallback((pickResult: any, event: PointerEvent) => {
+    const manager = selectionManagerRef.current;
+    if (!manager || !pickResult.hit || !pickResult.pickedMesh) {
+      // Clicked on empty space -> Clear selection (unless modifier)
+      if (!event.shiftKey && !event.ctrlKey && !event.metaKey) {
+        manager?.clear();
       }
-    });
+      return;
+    }
 
-    selState.selectedIds.clear();
-    setSelectedMesh(null);
-    setMeshProperties(null);
-    if (gizmoManagerRef.current) {
-      gizmoManagerRef.current.attachToMesh(null);
+    const meshId = pickResult.pickedMesh.id;
+    const isShift = event.shiftKey;
+    const isCtrl = event.ctrlKey || event.metaKey; // Command on Mac
+
+    // SketchUp Logic:
+    // None: Replace
+    // Shift: Toggle
+    // Ctrl: Add
+    // Shift+Ctrl: Subtract
+
+    if (isShift && isCtrl) {
+      manager.select(meshId, 'subtract');
+    } else if (isCtrl) {
+      manager.select(meshId, 'add');
+    } else if (isShift) {
+      manager.select(meshId, 'toggle');
+    } else {
+      manager.select(meshId, 'replace');
     }
   }, []);
 
-  // Toggle mesh selection
-  const toggleSelection = useCallback((mesh: Mesh) => {
-    const selState = selectionStateRef.current;
-    if (selState.selectedIds.has(mesh.id)) {
-      removeFromSelection(mesh);
-    } else {
-      addToSelection(mesh);
-    }
-  }, [addToSelection, removeFromSelection]);
+  const handleDoubleClick = useCallback((pickResult: any) => {
+    const manager = selectionManagerRef.current;
+    if (!manager || !pickResult.hit || !pickResult.pickedMesh) return;
 
-  // Select single mesh (clears previous selection)
-  const selectSingle = useCallback((mesh: Mesh) => {
-    clearSelection();
-    addToSelection(mesh);
-    setSelectedMesh(mesh);
-    if (gizmoManagerRef.current) {
-      gizmoManagerRef.current.attachToMesh(mesh);
+    const mesh = pickResult.pickedMesh;
+    const type = mesh.metadata?.type;
+
+    if (type === 'face') {
+      // Face double-click: Select face + bounding edges
+      const connected = manager.getConnectedGeometry(mesh.id, 'face-edges');
+      manager.selectIds(connected, 'add');
+    } else if (type === 'edge') {
+      // Edge double-click: Select edge + connected faces
+      const connected = manager.getConnectedGeometry(mesh.id, 'edge-faces');
+      manager.selectIds(connected, 'add');
     }
-    updateMeshProperties(mesh);
-  }, [clearSelection, addToSelection]);
+  }, []);
+
+  const handleTripleClick = useCallback((pickResult: any) => {
+    const manager = selectionManagerRef.current;
+    if (!manager || !pickResult.hit || !pickResult.pickedMesh) return;
+
+    // Triple-click: Select all connected geometry
+    const connected = manager.getConnectedGeometry(pickResult.pickedMesh.id, 'all');
+    manager.selectIds(connected, 'add');
+  }, []);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    if (selectionState.selectedIds.length > 0) {
+      setSelectionState(prev => ({
+        ...prev,
+        contextMenu: { x: e.clientX, y: e.clientY }
+      }));
+    }
+  }, [selectionState.selectedIds]);
+
+  const handleContextMenuAction = useCallback((action: string) => {
+    const manager = selectionManagerRef.current;
+    if (!manager) return;
+
+    switch (action) {
+      case 'invert':
+        // Get all selectable mesh IDs
+        const allIds: string[] = [];
+        sceneRef.current?.meshes.forEach(m => {
+          if (m.isPickable && m.metadata) allIds.push(m.id);
+        });
+        manager.invertSelection(allIds);
+        break;
+      case 'connected-faces':
+        const newFaces = new Set<string>();
+        selectionState.selectedIds.forEach(id => {
+          const connected = manager.getConnectedGeometry(id, 'edge-faces');
+          connected.forEach(cid => newFaces.add(cid));
+        });
+        manager.selectIds(Array.from(newFaces), 'add');
+        break;
+      case 'all-connected':
+        const allConnected = new Set<string>();
+        selectionState.selectedIds.forEach(id => {
+          const connected = manager.getConnectedGeometry(id, 'all');
+          connected.forEach(cid => allConnected.add(cid));
+        });
+        manager.selectIds(Array.from(allConnected), 'add');
+        break;
+      case 'bounding-edges':
+        const edges = new Set<string>();
+        selectionState.selectedIds.forEach(id => {
+          const connected = manager.getConnectedGeometry(id, 'face-edges');
+          connected.forEach(cid => edges.add(cid));
+        });
+        manager.selectIds(Array.from(edges), 'add');
+        break;
+      case 'same-material':
+        // Implementation for same material
+        break;
+      case 'delete':
+        // Implementation for delete
+        selectionState.selectedIds.forEach(id => {
+          const mesh = sceneRef.current?.getMeshByID(id);
+          if (mesh) mesh.dispose();
+        });
+        manager.clear();
+        break;
+    }
+    setSelectionState(prev => ({ ...prev, contextMenu: null }));
+  }, [selectionState.selectedIds]);
 
   // Get connected entities for double/triple click
   const getConnectedMeshes = useCallback((mesh: Mesh, deep: boolean = false): Mesh[] => {
@@ -1401,15 +1598,50 @@ const CustomModelingPage: React.FC = () => {
 
   // Handle double-click: select face + bounding edges, or edge + connected faces
   const handleDoubleClick = useCallback((mesh: Mesh) => {
-    clearSelection();
-    const connected = getConnectedMeshes(mesh, false);
-    connected.forEach(m => addToSelection(m));
+    const scene = sceneRef.current;
+    if (!scene) return;
 
-    // Set first mesh as primary selection
-    if (connected.length > 0) {
-      setSelectedMesh(connected[0]);
+    clearSelection();
+
+    // If clicking on edge, select the parent face and all its edges
+    if (mesh.metadata?.type === 'edge' && mesh.metadata?.parentFaceId) {
+      const parentFace = scene.getMeshById(mesh.metadata.parentFaceId) as Mesh;
+      if (parentFace) {
+        addToSelection(parentFace);
+        // Select all edges of the face
+        const edgeIds = parentFace.metadata?.edgeIds as string[] || [];
+        edgeIds.forEach(edgeId => {
+          const edge = scene.getMeshById(edgeId) as Mesh;
+          if (edge) addToSelection(edge);
+        });
+        setSelectedMesh(parentFace);
+        if (gizmoManagerRef.current) {
+          gizmoManagerRef.current.attachToMesh(parentFace);
+        }
+      }
+    }
+    // If clicking on face, select the face and all its edges
+    else if (mesh.metadata?.type === 'face') {
+      addToSelection(mesh);
+      const edgeIds = mesh.metadata?.edgeIds as string[] || [];
+      edgeIds.forEach(edgeId => {
+        const edge = scene.getMeshById(edgeId) as Mesh;
+        if (edge) addToSelection(edge);
+      });
+      setSelectedMesh(mesh);
       if (gizmoManagerRef.current) {
-        gizmoManagerRef.current.attachToMesh(connected[0]);
+        gizmoManagerRef.current.attachToMesh(mesh);
+      }
+    }
+    // Otherwise, select connected meshes
+    else {
+      const connected = getConnectedMeshes(mesh, false);
+      connected.forEach(m => addToSelection(m));
+      if (connected.length > 0) {
+        setSelectedMesh(connected[0]);
+        if (gizmoManagerRef.current) {
+          gizmoManagerRef.current.attachToMesh(connected[0]);
+        }
       }
     }
   }, [clearSelection, getConnectedMeshes, addToSelection]);
@@ -2068,6 +2300,8 @@ const CustomModelingPage: React.FC = () => {
           ppState.baseFaceCenter = null;
           ppState.baseClickPoint = null;
           ppState.isExtruding = false;
+          ppState.axisLocked = false;
+          ppState.lockedDistance = 0;
           ppState.lastClickTime = now;
         }
       } else if (activeTool === 'select') {
@@ -2212,13 +2446,25 @@ const CustomModelingPage: React.FC = () => {
 
         if (ppState.isExtruding && ppState.baseFace && ppState.baseFaceNormal && ppState.baseFaceCenter) {
           // Currently extruding - update preview and measurement
-          const distance = calculateExtrudeDistance(
+          let distance = calculateExtrudeDistance(
             scene,
             ppState.baseFaceCenter,
             ppState.baseFaceNormal,
             scene.pointerX,
             scene.pointerY
           );
+
+          // Shift key: Lock axis direction
+          if (ppState.axisLocked) {
+            // When first locking, store current distance
+            if (ppState.lockedDistance === 0 && distance !== 0) {
+              ppState.lockedDistance = distance;
+            }
+            // Keep the same sign (direction) as locked distance
+            if (ppState.lockedDistance !== 0) {
+              distance = Math.sign(ppState.lockedDistance) * Math.abs(distance);
+            }
+          }
 
           // Update preview mesh
           updatePushPullPreview(scene, ppState.baseFace, distance, ppState.baseFaceNormal);
@@ -2423,6 +2669,17 @@ const CustomModelingPage: React.FC = () => {
 
       const key = e.key.toLowerCase();
 
+      // Push/Pull tool: Shift locks the axis direction
+      if (activeTool === 'pushpull' && e.key === 'Shift') {
+        const ppState = pushPullStateRef.current;
+        if (ppState.isExtruding && !ppState.axisLocked) {
+          e.preventDefault();
+          ppState.axisLocked = true;
+          // Lock at current distance - will be calculated in pointer move
+        }
+        return;
+      }
+
       // Line tool modifiers
       if (activeTool === 'line') {
         // Shift key: Lock current inference (while held)
@@ -2624,6 +2881,11 @@ const CustomModelingPage: React.FC = () => {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      // Release Shift key: Unlock push/pull axis
+      if (e.key === 'Shift' && activeTool === 'pushpull') {
+        pushPullStateRef.current.axisLocked = false;
+        pushPullStateRef.current.lockedDistance = 0;
+      }
       // Release Shift key: Unlock shape constraint (rectangle/circle/polygon)
       if (e.key === 'Shift' && (activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon')) {
         shapeModifiersRef.current.lockSquare = false;
@@ -3448,6 +3710,8 @@ const CustomModelingPage: React.FC = () => {
                       ppState.baseFaceCenter = null;
                       ppState.baseClickPoint = null;
                       ppState.isExtruding = false;
+                      ppState.axisLocked = false;
+                      ppState.lockedDistance = 0;
 
                       setMeasurementInput('');
                     }
