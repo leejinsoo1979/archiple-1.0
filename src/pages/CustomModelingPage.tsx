@@ -2064,49 +2064,92 @@ const CustomModelingPage: React.FC = () => {
     }
 
     const { width, depth } = face.metadata;
-    // IMPORTANT: Use absolute position for child faces of solids
-    const baseCenter = face.getAbsolutePosition().clone();
-
-    meshCounterRef.current++;
-    const solidId = meshCounterRef.current;
-
+    const parentSolid = face.metadata.parentSolid as Mesh | undefined;
     const normalizedNormal = faceNormal.normalize();
     const absX = Math.abs(normalizedNormal.x);
     const absY = Math.abs(normalizedNormal.y);
     const absZ = Math.abs(normalizedNormal.z);
-    const extrudeLength = Math.abs(distance);
+    const isPush = distance < 0;
 
-    // Determine extrusion axis and box dimensions in WORLD coordinates
-    // NO ROTATION on solid - all faces positioned directly in world space
+    meshCounterRef.current++;
+    const solidId = meshCounterRef.current;
+
     let boxWidth: number, boxHeight: number, boxDepth: number;
+    let solidPosition: Vector3;
 
-    if (absY > absX && absY > absZ) {
-      // Y-axis face - extrude in Y direction
-      boxWidth = width;      // X dimension
-      boxHeight = extrudeLength;  // Y dimension (extrusion)
-      boxDepth = depth;      // Z dimension
-    } else if (absX > absZ) {
-      // X-axis face - extrude in X direction
-      boxWidth = extrudeLength;   // X dimension (extrusion)
-      boxHeight = depth;     // Y dimension (original face's "depth" is vertical)
-      boxDepth = width;      // Z dimension (original face's "width")
+    // Check if pushing into an existing solid - need to create REMAINING solid
+    if (isPush && parentSolid && !parentSolid.isDisposed() && parentSolid.metadata) {
+      // PUSH on existing solid: Create the remaining solid after push
+      const parentMeta = parentSolid.metadata;
+      const parentPos = parentSolid.position.clone();
+      const pushAmount = Math.abs(distance);
+
+      // Get original solid dimensions
+      const origWidth = parentMeta.width;
+      const origHeight = parentMeta.height;
+      const origDepth = parentMeta.depth;
+
+      // Calculate new dimensions - shrink in the direction of push
+      if (absY > absX && absY > absZ) {
+        // Pushing Y-axis face
+        const newHeight = origHeight - pushAmount;
+        if (newHeight <= 0.001) return null; // Would be completely pushed through
+        boxWidth = origWidth;
+        boxHeight = newHeight;
+        boxDepth = origDepth;
+        // Shift position: if pushing top face down, center moves down by pushAmount/2
+        // if pushing bottom face up, center moves up by pushAmount/2
+        const shift = normalizedNormal.scale(-pushAmount / 2);
+        solidPosition = parentPos.add(shift);
+      } else if (absX > absZ) {
+        // Pushing X-axis face
+        const newWidth = origWidth - pushAmount;
+        if (newWidth <= 0.001) return null;
+        boxWidth = newWidth;
+        boxHeight = origHeight;
+        boxDepth = origDepth;
+        const shift = normalizedNormal.scale(-pushAmount / 2);
+        solidPosition = parentPos.add(shift);
+      } else {
+        // Pushing Z-axis face
+        const newDepth = origDepth - pushAmount;
+        if (newDepth <= 0.001) return null;
+        boxWidth = origWidth;
+        boxHeight = origHeight;
+        boxDepth = newDepth;
+        const shift = normalizedNormal.scale(-pushAmount / 2);
+        solidPosition = parentPos.add(shift);
+      }
     } else {
-      // Z-axis face - extrude in Z direction
-      boxWidth = width;      // X dimension
-      boxHeight = depth;     // Y dimension (original face's "depth" is vertical)
-      boxDepth = extrudeLength;   // Z dimension (extrusion)
+      // PULL (or push on free face): Create extruded solid
+      const baseCenter = face.getAbsolutePosition().clone();
+      const extrudeLength = Math.abs(distance);
+
+      if (absY > absX && absY > absZ) {
+        boxWidth = width;
+        boxHeight = extrudeLength;
+        boxDepth = depth;
+      } else if (absX > absZ) {
+        boxWidth = extrudeLength;
+        boxHeight = depth;
+        boxDepth = width;
+      } else {
+        boxWidth = width;
+        boxHeight = depth;
+        boxDepth = extrudeLength;
+      }
+
+      const offset = normalizedNormal.scale(distance / 2);
+      solidPosition = baseCenter.add(offset);
     }
 
     const hw = boxWidth / 2;
     const hh = boxHeight / 2;
     const hd = boxDepth / 2;
 
-    // Calculate solid center position based on face normal direction
-    const offset = normalizedNormal.scale(distance / 2);
-
     // Create parent container (empty mesh as transform node) - NO ROTATION
     const solid = new Mesh(`Solid_${solidId}`, scene);
-    solid.position = baseCenter.add(offset);
+    solid.position = solidPosition;
     solid.isPickable = false;
 
     solid.metadata = {
@@ -2244,9 +2287,18 @@ const CustomModelingPage: React.FC = () => {
       }
     });
 
-    // Dispose the original face and all its children (edges)
-    face.getChildMeshes().forEach(child => child.dispose());
-    face.dispose();
+    // Dispose the original face and parent solid if pushing into existing solid
+    // parentSolid already defined at top of function
+    if (parentSolid && !parentSolid.isDisposed()) {
+      // Face belongs to an existing solid - dispose entire parent solid
+      // This handles both pull (extending) and push (cutting into) cases
+      parentSolid.getChildMeshes().forEach(child => child.dispose());
+      parentSolid.dispose();
+    } else {
+      // Free-standing face (e.g., ground rectangle) - just dispose the face
+      face.getChildMeshes().forEach(child => child.dispose());
+      face.dispose();
+    }
 
     // IMPORTANT: Dispose preview mesh to prevent ghost duplicates
     if (pushPullStateRef.current.previewMesh) {
@@ -2586,6 +2638,7 @@ const CustomModelingPage: React.FC = () => {
   ) => {
     const state = pushPullStateRef.current;
     const { width, depth } = face.metadata;
+    const parentSolid = face.metadata.parentSolid as Mesh | undefined;
 
     // Dispose old preview
     if (state.previewMesh) {
@@ -2595,31 +2648,75 @@ const CustomModelingPage: React.FC = () => {
 
     if (Math.abs(distance) < 0.001) return;
 
-    const absDistance = Math.abs(distance);
     const normalizedNormal = faceNormal.normalize();
     const absX = Math.abs(normalizedNormal.x);
     const absY = Math.abs(normalizedNormal.y);
     const absZ = Math.abs(normalizedNormal.z);
+    const isPush = distance < 0;
 
-    // Determine box dimensions based on face normal - NO ROTATION
-    // Same logic as applyPushPull
     let boxWidth: number, boxHeight: number, boxDepth: number;
+    let previewPosition: Vector3;
 
-    if (absY > absX && absY > absZ) {
-      // Y-axis face - extrude in Y direction
-      boxWidth = width;
-      boxHeight = absDistance;
-      boxDepth = depth;
-    } else if (absX > absZ) {
-      // X-axis face - extrude in X direction
-      boxWidth = absDistance;
-      boxHeight = depth;
-      boxDepth = width;
+    // Check if pushing into an existing solid - show REMAINING solid preview
+    if (isPush && parentSolid && !parentSolid.isDisposed() && parentSolid.metadata) {
+      const parentMeta = parentSolid.metadata;
+      const parentPos = parentSolid.position.clone();
+      const pushAmount = Math.abs(distance);
+
+      const origWidth = parentMeta.width;
+      const origHeight = parentMeta.height;
+      const origDepth = parentMeta.depth;
+
+      if (absY > absX && absY > absZ) {
+        const newHeight = origHeight - pushAmount;
+        if (newHeight <= 0.001) return;
+        boxWidth = origWidth;
+        boxHeight = newHeight;
+        boxDepth = origDepth;
+        const shift = normalizedNormal.scale(-pushAmount / 2);
+        previewPosition = parentPos.add(shift);
+      } else if (absX > absZ) {
+        const newWidth = origWidth - pushAmount;
+        if (newWidth <= 0.001) return;
+        boxWidth = newWidth;
+        boxHeight = origHeight;
+        boxDepth = origDepth;
+        const shift = normalizedNormal.scale(-pushAmount / 2);
+        previewPosition = parentPos.add(shift);
+      } else {
+        const newDepth = origDepth - pushAmount;
+        if (newDepth <= 0.001) return;
+        boxWidth = origWidth;
+        boxHeight = origHeight;
+        boxDepth = newDepth;
+        const shift = normalizedNormal.scale(-pushAmount / 2);
+        previewPosition = parentPos.add(shift);
+      }
     } else {
-      // Z-axis face - extrude in Z direction
-      boxWidth = width;
-      boxHeight = depth;
-      boxDepth = absDistance;
+      // PULL (or push on free face): Show extruded solid preview
+      const absDistance = Math.abs(distance);
+
+      if (absY > absX && absY > absZ) {
+        boxWidth = width;
+        boxHeight = absDistance;
+        boxDepth = depth;
+      } else if (absX > absZ) {
+        boxWidth = absDistance;
+        boxHeight = depth;
+        boxDepth = width;
+      } else {
+        boxWidth = width;
+        boxHeight = depth;
+        boxDepth = absDistance;
+      }
+
+      const faceAbsPos = face.getAbsolutePosition();
+      const extrudeDir = normalizedNormal.scale(distance / 2);
+      previewPosition = new Vector3(
+        faceAbsPos.x + extrudeDir.x,
+        faceAbsPos.y + extrudeDir.y,
+        faceAbsPos.z + extrudeDir.z
+      );
     }
 
     // Create preview box with correct dimensions (no rotation needed)
@@ -2629,14 +2726,7 @@ const CustomModelingPage: React.FC = () => {
       depth: boxDepth,
     }, scene);
 
-    // Position using face's absolute position + half the extrude direction
-    const faceAbsPos = face.getAbsolutePosition();
-    const extrudeDir = normalizedNormal.scale(distance / 2);
-    preview.position = new Vector3(
-      faceAbsPos.x + extrudeDir.x,
-      faceAbsPos.y + extrudeDir.y,
-      faceAbsPos.z + extrudeDir.z
-    );
+    preview.position = previewPosition;
 
     // NO ROTATION - dimensions already correct for world-aligned box
 
@@ -4422,6 +4512,7 @@ const CustomModelingPage: React.FC = () => {
 
             // Only update if hovering different face
             if (hoveredFaceRef.current !== hoveredMesh) {
+              console.log('[PushPull] Hover detected face:', { name: hoveredMesh.name, id: hoveredMesh.id, metadata: hoveredMesh.metadata });
               // Restore previous face's original material
               if (hoveredFaceRef.current && hoveredFaceOriginalMaterialRef.current) {
                 hoveredFaceRef.current.material = hoveredFaceOriginalMaterialRef.current;
