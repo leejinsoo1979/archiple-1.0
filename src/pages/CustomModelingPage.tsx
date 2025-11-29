@@ -2378,18 +2378,60 @@ const CustomModelingPage: React.FC = () => {
       vertices: offsetVertices.length
     };
 
-    // Create connecting edges between original and offset face
-    for (let i = 0; i < vertices.length; i++) {
-      const orig = vertices[i];
-      const offs = offsetVertices[i];
+    // Create ring faces (trapezoid segments between original and offset edges)
+    // Each segment: orig[i], orig[i+1], offset[i+1], offset[i]
+    for (let i = 0; i < n; i++) {
+      const nextI = (i + 1) % n;
+      const orig1 = vertices[i];
+      const orig2 = vertices[nextI];
+      const offs1 = offsetVertices[i];
+      const offs2 = offsetVertices[nextI];
 
-      const edgeLine = MeshBuilder.CreateLines(`OffsetEdge_${offsetId}_${i}`, {
-        points: [orig, offs],
+      meshCounterRef.current++;
+      const ringId = meshCounterRef.current;
+
+      // Build quad face (2 triangles)
+      const ringPositions = [
+        orig1.x, yPos, orig1.z,  // 0
+        orig2.x, yPos, orig2.z,  // 1
+        offs2.x, yPos, offs2.z,  // 2
+        offs1.x, yPos, offs1.z,  // 3
+      ];
+      const ringIndices = [0, 1, 2, 0, 2, 3];  // Two triangles
+      const ringNormals = [
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+      ];
+
+      const ringFace = new Mesh(`OffsetRing_${ringId}`, scene);
+      const ringVertexData = new (window as any).BABYLON.VertexData();
+      ringVertexData.positions = ringPositions;
+      ringVertexData.indices = ringIndices;
+      ringVertexData.normals = ringNormals;
+      ringVertexData.applyToMesh(ringFace);
+
+      const ringMat = new StandardMaterial(`OffsetRingMat_${ringId}`, scene);
+      ringMat.diffuseColor = Color3.FromHexString(selectedColor);
+      ringMat.specularColor = new Color3(0.2, 0.2, 0.2);
+      ringMat.backFaceCulling = false;
+      ringFace.material = ringMat;
+      ringFace.isPickable = true;
+      ringFace.metadata = {
+        type: 'face',
+        isPolygon: true,
+        vertices: 4
+      };
+
+      // Create connecting edge (between original and offset vertex)
+      const connectEdge = MeshBuilder.CreateLines(`OffsetConnect_${ringId}`, {
+        points: [new Vector3(orig1.x, yPos, orig1.z), new Vector3(offs1.x, yPos, offs1.z)],
         updatable: false
       }, scene);
-      edgeLine.color = new Color3(0.15, 0.15, 0.15);
-      edgeLine.isPickable = true;
-      edgeLine.metadata = { type: 'edge' };
+      connectEdge.color = new Color3(0.15, 0.15, 0.15);
+      connectEdge.isPickable = true;
+      connectEdge.metadata = { type: 'edge' };
     }
 
     // Create inner face edges
@@ -2405,6 +2447,10 @@ const CustomModelingPage: React.FC = () => {
       innerEdge.isPickable = true;
       innerEdge.metadata = { type: 'edge' };
     }
+
+    // Delete the original face and its edges
+    face.getChildMeshes().forEach(child => child.dispose());
+    face.dispose();
 
     // Store last offset distance
     offsetStateRef.current.lastOffsetDistance = distance;
