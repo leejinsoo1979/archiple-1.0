@@ -727,17 +727,30 @@ const CustomModelingPage: React.FC = () => {
     faceMat.backFaceCulling = false;
     face.material = faceMat;
 
-    // Enable edge rendering for thin outline
-    face.enableEdgesRendering();
-    face.edgesWidth = 2.0;
-    face.edgesColor = new Color4(0.2, 0.2, 0.2, 1);
-
     face.metadata = {
       type: 'face',
       width,
       depth,
       originalY: 0.01,
     };
+
+    // Create edge lines (SketchUp style - black edges around shapes)
+    const halfW = width / 2;
+    const halfD = depth / 2;
+    const edgeY = 0.015; // Slightly above face to prevent z-fighting
+    const corners = [
+      new Vector3(centerX - halfW, edgeY, centerZ - halfD),
+      new Vector3(centerX + halfW, edgeY, centerZ - halfD),
+      new Vector3(centerX + halfW, edgeY, centerZ + halfD),
+      new Vector3(centerX - halfW, edgeY, centerZ + halfD),
+      new Vector3(centerX - halfW, edgeY, centerZ - halfD), // Close the loop
+    ];
+
+    const edgeLines = MeshBuilder.CreateLines(`Edge_${meshCounterRef.current}`, {
+      points: corners,
+    }, scene);
+    edgeLines.color = new Color3(0, 0, 0); // Black edges
+    edgeLines.metadata = { type: 'edge', parentFace: face.id };
 
     // Reset modifiers after finalizing
     const resetMods = {
@@ -844,9 +857,6 @@ const CustomModelingPage: React.FC = () => {
     faceMat.diffuseColor = Color3.FromHexString(selectedColor);
     faceMat.specularColor = new Color3(0.2, 0.2, 0.2);
     disc.material = faceMat;
-    disc.enableEdgesRendering();
-    disc.edgesWidth = 1.0;
-    disc.edgesColor = new Color4(0.3, 0.3, 0.3, 1);
 
     // Store metadata
     (disc as any).faceData = {
@@ -898,7 +908,20 @@ const CustomModelingPage: React.FC = () => {
         radius: radius,
         tessellation: sides
       }, scene);
+
+      // Calculate angle for orientation (vertex to cursor)
+      // Babylon's CreateDisc creates vertex 0 at +X
+      // We want to rotate around Y (which is Z in local space after X rotation)
+      const angle = Math.atan2(dz, dx);
+
       polygon.rotation.x = Math.PI / 2;
+      // Apply rotation to align vertex with cursor
+      // Note: We might need to adjust by offset depending on tessellation, 
+      // but usually vertex 0 is at 0 radians.
+      // -angle because Babylon uses left-handed system and we are looking down?
+      // Let's try -angle first as per plan.
+      polygon.rotation.z = -angle;
+
       polygon.position = new Vector3(centerX, 0.01, centerZ);
 
       const mat = new StandardMaterial('previewPolygonMat', scene);
@@ -949,16 +972,19 @@ const CustomModelingPage: React.FC = () => {
       radius: radius,
       tessellation: sides
     }, scene);
+
+    // Calculate angle for orientation
+    const angle = Math.atan2(dz, dx);
+
     polygon.rotation.x = Math.PI / 2;
+    polygon.rotation.z = -angle;
+
     polygon.position = new Vector3(centerX, 0.01, centerZ);
 
     const faceMat = new StandardMaterial(`polygonMat_${meshCounterRef.current}`, scene);
     faceMat.diffuseColor = Color3.FromHexString(selectedColor);
     faceMat.specularColor = new Color3(0.2, 0.2, 0.2);
     polygon.material = faceMat;
-    polygon.enableEdgesRendering();
-    polygon.edgesWidth = 1.0;
-    polygon.edgesColor = new Color4(0.3, 0.3, 0.3, 1);
 
     (polygon as any).faceData = {
       type: 'polygon',
@@ -1097,11 +1123,6 @@ const CustomModelingPage: React.FC = () => {
     solidMat.diffuseColor = Color3.FromHexString(selectedColor);
     solidMat.specularColor = new Color3(0.2, 0.2, 0.2);
     solid.material = solidMat;
-
-    // Enable edge rendering
-    solid.enableEdgesRendering();
-    solid.edgesWidth = 1.5;
-    solid.edgesColor = new Color4(0.15, 0.15, 0.15, 1);
 
     // Mark as solid with metadata
     solid.metadata = {
@@ -1991,12 +2012,9 @@ const CustomModelingPage: React.FC = () => {
             if (isDoubleClick && ppState.lastExtrudeDistance !== 0) {
               // Double-click: Apply previous extrusion distance
               const faceNormal = new Vector3(0, 1, 0);  // Ground face normal
-              const solid = applyPushPull(face, ppState.lastExtrudeDistance, faceNormal);
-              if (solid) {
-                selectMesh(solid);
-                // Update measurement display
-                setMeasurementValue(Math.abs(ppState.lastExtrudeDistance * 1000).toFixed(0));
-              }
+              applyPushPull(face, ppState.lastExtrudeDistance, faceNormal);
+              // Update measurement display
+              setMeasurementValue(Math.abs(ppState.lastExtrudeDistance * 1000).toFixed(0));
             } else {
               // First click: Start extrusion mode
               ppState.baseFace = face;
@@ -2004,11 +2022,6 @@ const CustomModelingPage: React.FC = () => {
               ppState.baseFaceCenter = face.position.clone();
               ppState.baseClickPoint = new Vector3(scene.pointerX, scene.pointerY, 0);
               ppState.isExtruding = true;
-
-              // Highlight selected face
-              if (highlightLayerRef.current) {
-                highlightLayerRef.current.addMesh(face, new Color3(0.2, 0.5, 1));
-              }
             }
 
             ppState.lastClickTime = now;
@@ -2030,7 +2043,8 @@ const CustomModelingPage: React.FC = () => {
               // Apply extrusion
               const solid = applyPushPull(ppState.baseFace, distance, ppState.baseFaceNormal);
               if (solid) {
-                selectMesh(solid);
+                // Store last extrusion distance for double-click repeat
+                ppState.lastExtrudeDistance = distance;
                 // Update measurement display
                 setMeasurementValue(Math.abs(distance * 1000).toFixed(0));
               }
@@ -2057,13 +2071,63 @@ const CustomModelingPage: React.FC = () => {
           ppState.lastClickTime = now;
         }
       } else if (activeTool === 'select') {
+        const selState = selectionStateRef.current;
+        const now = Date.now();
+
+        // Pick mesh under cursor
         const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
-          mesh.isPickable && mesh.name !== 'ground' && mesh.name !== 'groundPicker'
+          mesh.isPickable && mesh.name !== 'ground' && mesh.name !== 'groundPicker' &&
+          !mesh.name.includes('Axis') && !mesh.name.includes('preview')
         );
+
         if (pickResult?.hit && pickResult.pickedMesh) {
-          selectMesh(pickResult.pickedMesh as Mesh);
+          const mesh = pickResult.pickedMesh as Mesh;
+
+          // Check for double/triple click (same mesh within 300ms)
+          const isSameMesh = selState.lastClickId === mesh.id;
+          const timeDiff = now - selState.lastClickTime;
+
+          if (isSameMesh && timeDiff < 300) {
+            selState.clickCount++;
+            if (selState.clickCount === 2) {
+              handleDoubleClick(mesh);
+            } else if (selState.clickCount >= 3) {
+              handleTripleClick(mesh);
+              selState.clickCount = 0;
+            }
+          } else {
+            selState.clickCount = 1;
+
+            // Modifier keys
+            const isShift = evt.shiftKey;
+            const isCtrl = evt.ctrlKey || evt.metaKey;
+
+            if (isShift && isCtrl) {
+              removeFromSelection(mesh);
+            } else if (isShift) {
+              toggleSelection(mesh);
+            } else if (isCtrl) {
+              addToSelection(mesh);
+              setSelectedMesh(mesh);
+              if (gizmoManagerRef.current) {
+                gizmoManagerRef.current.attachToMesh(mesh);
+              }
+            } else {
+              selectSingle(mesh);
+            }
+          }
+
+          selState.lastClickId = mesh.id;
+          selState.lastClickTime = now;
         } else {
-          deselectMesh();
+          // Empty space - start box selection
+          selState.isDragging = true;
+          selState.dragStartX = evt.clientX;
+          selState.dragStartY = evt.clientY;
+          selState.dragCurrentX = evt.clientX;
+          selState.dragCurrentY = evt.clientY;
+          selState.lastClickId = null;
+          selState.clickCount = 0;
         }
       } else if (activeTool === 'eraser') {
         const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
@@ -2261,6 +2325,22 @@ const CustomModelingPage: React.FC = () => {
           targetMesh.position.y = 0.01 + deltaY * 0.5;
         }
       }
+
+      // Select tool - update box selection during drag
+      if (activeTool === 'select') {
+        const selState = selectionStateRef.current;
+        if (selState.isDragging) {
+          selState.dragCurrentX = evt.clientX;
+          selState.dragCurrentY = evt.clientY;
+          updateSelectionBox(
+            selState.dragStartX,
+            selState.dragStartY,
+            selState.dragCurrentX,
+            selState.dragCurrentY,
+            true
+          );
+        }
+      }
     };
 
     const handlePointerUp = (evt: PointerEvent) => {
@@ -2271,6 +2351,47 @@ const CustomModelingPage: React.FC = () => {
       }
 
       if (evt.button !== 0) return;
+
+      // Select tool - finalize box selection
+      if (activeTool === 'select') {
+        const selState = selectionStateRef.current;
+        if (selState.isDragging) {
+          // Determine selection mode from modifier keys
+          const isShift = evt.shiftKey;
+          const isCtrl = evt.ctrlKey || evt.metaKey;
+          let mode: 'replace' | 'add' | 'toggle' | 'subtract' = 'replace';
+          if (isShift && isCtrl) {
+            mode = 'subtract';
+          } else if (isShift) {
+            mode = 'toggle';
+          } else if (isCtrl) {
+            mode = 'add';
+          }
+
+          // Only perform box selection if dragged more than 5 pixels
+          const dx = selState.dragCurrentX - selState.dragStartX;
+          const dy = selState.dragCurrentY - selState.dragStartY;
+          if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+            performBoxSelection(
+              selState.dragStartX,
+              selState.dragStartY,
+              selState.dragCurrentX,
+              selState.dragCurrentY,
+              mode
+            );
+          } else {
+            // Clicked on empty space without dragging - clear selection (unless modifier held)
+            if (!isShift && !isCtrl) {
+              clearSelection();
+            }
+          }
+
+          // Hide selection box and reset state
+          selState.isDragging = false;
+          updateSelectionBox(0, 0, 0, 0, false);
+        }
+        return;
+      }
 
       // Line, rectangle, circle, polygon, and push/pull use click-click (SketchUp style), not drag
       // So don't finalize on mouse up for those tools
@@ -2293,7 +2414,7 @@ const CustomModelingPage: React.FC = () => {
         canvas.removeEventListener('pointerup', handlePointerUp);
       }
     };
-  }, [activeTool, selectedColor, getGroundPoint, updatePreviewLine, updatePreviewRectangle, updatePreviewCircle, updatePreviewPolygon, finalizeLine, finalizeRectangle, finalizeCircle, finalizePolygon, applyPushPull, zoomExtents, addLineSnapPoints, addRectangleSnapPoints, showSnapIndicator, hideSnapIndicator, findNearestSnapPoint, updatePushPullPreview, calculateExtrudeDistance]);
+  }, [activeTool, selectedColor, getGroundPoint, updatePreviewLine, updatePreviewRectangle, updatePreviewCircle, updatePreviewPolygon, finalizeLine, finalizeRectangle, finalizeCircle, finalizePolygon, applyPushPull, zoomExtents, addLineSnapPoints, addRectangleSnapPoints, showSnapIndicator, hideSnapIndicator, findNearestSnapPoint, updatePushPullPreview, calculateExtrudeDistance, addToSelection, removeFromSelection, toggleSelection, selectSingle, handleDoubleClick, handleTripleClick, clearSelection, performBoxSelection, updateSelectionBox]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -2397,7 +2518,13 @@ const CustomModelingPage: React.FC = () => {
           setActiveTool('circle');
           break;
         case 'a':
-          if (!e.ctrlKey && !e.metaKey) setActiveTool('arc');
+          if (e.ctrlKey || e.metaKey) {
+            // Ctrl+A: Select all
+            e.preventDefault();
+            selectAll();
+          } else {
+            setActiveTool('arc');
+          }
           break;
         case 'p':
           setActiveTool('pushpull');
@@ -2415,7 +2542,13 @@ const CustomModelingPage: React.FC = () => {
           setActiveTool('offset');
           break;
         case 't':
-          setActiveTool('tape');
+          if (e.ctrlKey || e.metaKey) {
+            // Ctrl+T: Deselect all
+            e.preventDefault();
+            clearSelection();
+          } else {
+            setActiveTool('tape');
+          }
           break;
         case 'd':
           setActiveTool('dimension');
@@ -2484,6 +2617,7 @@ const CustomModelingPage: React.FC = () => {
           setLineInferenceUI(resetLineInf);
           setLineMeasurement(0);
           deselectMesh();
+          clearSelection();  // Clear multi-selection
           setActiveTool('select');
           break;
       }
@@ -2508,7 +2642,7 @@ const CustomModelingPage: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [selectedMesh, zoomExtents, activeTool]);
+  }, [selectedMesh, zoomExtents, activeTool, selectAll, clearSelection]);
 
   const selectMesh = (mesh: Mesh) => {
     if (highlightLayerRef.current && selectedMesh) {
@@ -3289,6 +3423,35 @@ const CustomModelingPage: React.FC = () => {
                     state.currentPoint = null;
                   }
                   setMeasurementInput('');
+                }
+                // Push/Pull: Apply entered distance
+                if (activeTool === 'pushpull' && scene) {
+                  const ppState = pushPullStateRef.current;
+                  if (ppState.isExtruding && ppState.baseFace && ppState.baseFaceNormal) {
+                    // Parse input as mm, convert to units
+                    const inputValue = parseFloat(measurementInput);
+                    if (!isNaN(inputValue) && inputValue !== 0) {
+                      const distance = inputValue / 1000;  // mm to units
+                      // Apply extrusion with exact distance
+                      applyPushPull(ppState.baseFace, distance, ppState.baseFaceNormal);
+                      ppState.lastExtrudeDistance = distance;
+
+                      // Clean up preview
+                      if (ppState.previewMesh) {
+                        ppState.previewMesh.dispose();
+                        ppState.previewMesh = null;
+                      }
+
+                      // Reset state
+                      ppState.baseFace = null;
+                      ppState.baseFaceNormal = null;
+                      ppState.baseFaceCenter = null;
+                      ppState.baseClickPoint = null;
+                      ppState.isExtruding = false;
+
+                      setMeasurementInput('');
+                    }
+                  }
                 }
               } else if (e.key === 'Escape') {
                 setMeasurementInput('');
