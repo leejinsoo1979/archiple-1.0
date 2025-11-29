@@ -157,13 +157,18 @@ const CustomModelingPage: React.FC = () => {
     return saved || '#6366F1';
   });
 
-  // Snap threshold for origin and endpoints - larger = more magnetic
-  const SNAP_THRESHOLD = 0.8;
+  // Base snap threshold for origin and endpoints - will be scaled by camera distance
+  // This makes snap feel consistent regardless of zoom level (like screen-space snapping)
+  const SNAP_THRESHOLD_BASE = 0.03;  // 3% of camera radius
 
   // Unit conversion: 1 unit in 3D = 1000mm (1 meter)
   // So if user types 500mm, it becomes 0.5 units
   const MM_TO_UNIT = 0.001;
   const UNIT_TO_MM = 1000;
+
+  // Grid snap resolution: 0.1 units = 100mm for finer diagonal angle control
+  // This allows diagonal lines at many more angles (not just 45° multiples)
+  const GRID_SNAP = 0.1;
 
   // Current measurement state for display
   const [currentMeasurement, setCurrentMeasurement] = useState<{
@@ -176,28 +181,42 @@ const CustomModelingPage: React.FC = () => {
   const measureInputRef = useRef<HTMLInputElement>(null);
 
   // Get ground point with grid snapping and magnetic snap to origin
+  // Uses dynamic threshold based on camera distance for consistent snap feel
   const getGroundPoint = useCallback((scene: Scene, pointerX: number, pointerY: number): Vector3 | null => {
     const pickResult = scene.pick(pointerX, pointerY, (mesh) => mesh.name === 'groundPicker');
     if (pickResult?.hit && pickResult.pickedPoint) {
-      const snapped = new Vector3(
-        Math.round(pickResult.pickedPoint.x),
+      // Get raw point for snap detection
+      const rawPoint = new Vector3(
+        pickResult.pickedPoint.x,
         0,
-        Math.round(pickResult.pickedPoint.z)
+        pickResult.pickedPoint.z
       );
 
-      // Magnetic snap to origin (0,0,0)
-      const distanceToOrigin = snapped.length();
-      if (distanceToOrigin < SNAP_THRESHOLD) {
+      // Dynamic snap threshold based on camera distance
+      const camera = cameraRef.current;
+      const snapThreshold = camera ? Math.max(camera.radius * SNAP_THRESHOLD_BASE, 0.5) : 1.5;
+
+      // Priority 1: Magnetic snap to origin (0,0,0)
+      const distanceToOrigin = rawPoint.length();
+      if (distanceToOrigin < snapThreshold) {
         return Vector3.Zero();
       }
 
-      // Also check for snap to existing snap points (vertices/corners)
+      // Priority 2: Snap to existing snap points (endpoints, vertices, corners)
       for (const snapPoint of snapPointsRef.current) {
-        const dist = Vector3.Distance(snapped, snapPoint);
-        if (dist < SNAP_THRESHOLD) {
+        const dist = Vector3.Distance(rawPoint, snapPoint);
+        if (dist < snapThreshold) {
           return snapPoint.clone();
         }
       }
+
+      // Priority 3: Grid snap with fine resolution (0.1 units = 100mm)
+      // This allows finer diagonal angles, not just 45° multiples
+      const snapped = new Vector3(
+        Math.round(pickResult.pickedPoint.x / GRID_SNAP) * GRID_SNAP,
+        0,
+        Math.round(pickResult.pickedPoint.z / GRID_SNAP) * GRID_SNAP
+      );
 
       return snapped;
     }
@@ -935,19 +954,24 @@ const CustomModelingPage: React.FC = () => {
     }
   }, []);
 
-  // Find nearest snap point to a position
+  // Find nearest snap point to a position (uses dynamic threshold based on camera distance)
   const findNearestSnapPoint = useCallback((position: Vector3): Vector3 | null => {
-    let nearest: Vector3 | null = null;
-    let minDist = SNAP_THRESHOLD;
+    const camera = cameraRef.current;
+    // Dynamic threshold: scales with camera distance for consistent "screen feel"
+    // When zoomed out (large radius), larger threshold; when zoomed in, smaller threshold
+    const snapThreshold = camera ? Math.max(camera.radius * SNAP_THRESHOLD_BASE, 0.5) : 1.5;
 
-    // Check origin first
+    let nearest: Vector3 | null = null;
+    let minDist = snapThreshold;
+
+    // Check origin first (highest priority snap point)
     const distToOrigin = Vector3.Distance(position, Vector3.Zero());
     if (distToOrigin < minDist) {
       minDist = distToOrigin;
       nearest = Vector3.Zero();
     }
 
-    // Check all snap points
+    // Check all snap points (endpoints, vertices, etc.)
     for (const snapPoint of snapPointsRef.current) {
       const dist = Vector3.Distance(position, snapPoint);
       if (dist < minDist) {
@@ -1483,15 +1507,19 @@ const CustomModelingPage: React.FC = () => {
 
       // Show/hide snap indicator for drawing tools (SketchUp style)
       // Also save active snap point for use in click handling
+      // IMPORTANT: Use RAW coordinates for snap detection, not pre-rounded coordinates
+      // This ensures snap works like a magnet based on actual cursor proximity
       if (activeTool === 'line' || activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon') {
         const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) => mesh.name === 'groundPicker');
         if (pickResult?.hit && pickResult.pickedPoint) {
-          const snappedPoint = new Vector3(
-            Math.round(pickResult.pickedPoint.x),
+          // Use RAW coordinates for snap detection (not rounded)
+          // This makes snap feel magnetic - cursor pulls to nearby points
+          const rawPoint = new Vector3(
+            pickResult.pickedPoint.x,
             0,
-            Math.round(pickResult.pickedPoint.z)
+            pickResult.pickedPoint.z
           );
-          const nearestSnap = findNearestSnapPoint(snappedPoint);
+          const nearestSnap = findNearestSnapPoint(rawPoint);
           if (nearestSnap) {
             activeSnapPointRef.current = nearestSnap.clone();  // Save for click handling
             showSnapIndicator(nearestSnap);
