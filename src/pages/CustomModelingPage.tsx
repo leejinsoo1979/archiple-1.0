@@ -24,6 +24,8 @@ import {
   LinesMesh,
   Ray,  // Required for scene.pick() to work
   Matrix,
+  Material,
+  DynamicTexture,
 } from '@babylonjs/core';
 // Side-effect import for scene.pick() to work
 import '@babylonjs/core/Culling/ray';
@@ -72,6 +74,8 @@ const CustomModelingPage: React.FC = () => {
   const snapPointsRef = useRef<Vector3[]>([]);  // Store snap point positions (not meshes)
   const activeSnapPointRef = useRef<Vector3 | null>(null);  // Currently active snap point for click handling
   const hoveredFaceRef = useRef<Mesh | null>(null);  // Currently hovered face for push/pull highlight
+  const hoveredFaceOriginalMaterialRef = useRef<Material | null>(null);  // Store original material
+  const dottedHoverMaterialRef = useRef<StandardMaterial | null>(null);  // Dotted pattern material
 
   // Push/Pull state ref for SketchUp-style extrusion
   const pushPullStateRef = useRef<{
@@ -1382,6 +1386,32 @@ const CustomModelingPage: React.FC = () => {
     // Highlight layer
     highlightLayerRef.current = new HighlightLayer('highlight', scene);
 
+    // Create dotted hover material for push/pull tool (SketchUp-style)
+    const dottedTexture = new DynamicTexture('dottedTexture', 64, scene, false);
+    const ctx = dottedTexture.getContext();
+    // Fill with face color (light gray)
+    ctx.fillStyle = '#e8e8e8';
+    ctx.fillRect(0, 0, 64, 64);
+    // Draw dense blue dots pattern
+    ctx.fillStyle = '#4488ff';
+    const dotSize = 2;
+    const spacing = 6;
+    for (let x = 0; x < 64; x += spacing) {
+      for (let y = 0; y < 64; y += spacing) {
+        ctx.beginPath();
+        ctx.arc(x + spacing/2, y + spacing/2, dotSize, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    dottedTexture.update();
+
+    const dottedMaterial = new StandardMaterial('dottedHoverMaterial', scene);
+    dottedMaterial.diffuseTexture = dottedTexture;
+    dottedMaterial.diffuseTexture.uScale = 10;  // Repeat pattern
+    dottedMaterial.diffuseTexture.vScale = 10;
+    dottedMaterial.specularColor = new Color3(0, 0, 0);  // No specular
+    dottedHoverMaterialRef.current = dottedMaterial;
+
     // Gizmo manager
     const utilLayer = new UtilityLayerRenderer(scene);
     const gizmoManager = new GizmoManager(scene, 1, utilLayer);
@@ -1485,10 +1515,11 @@ const CustomModelingPage: React.FC = () => {
     const camera = cameraRef.current;
     if (!scene || !camera) return;
 
-    // Clear pushpull face highlight when switching away from pushpull tool
-    if (activeTool !== 'pushpull' && hoveredFaceRef.current && highlightLayerRef.current) {
-      highlightLayerRef.current.removeMesh(hoveredFaceRef.current);
+    // Restore face material when switching away from pushpull tool
+    if (activeTool !== 'pushpull' && hoveredFaceRef.current && hoveredFaceOriginalMaterialRef.current) {
+      hoveredFaceRef.current.material = hoveredFaceOriginalMaterialRef.current;
       hoveredFaceRef.current = null;
+      hoveredFaceOriginalMaterialRef.current = null;
     }
 
     // Camera control: Middle mouse always works, Left mouse only for orbit/zoom (not pan - we handle that manually)
@@ -1795,29 +1826,31 @@ const CustomModelingPage: React.FC = () => {
           // Update measurement display (convert to mm)
           setMeasurementValue(Math.abs(distance * 1000).toFixed(0));
         } else {
-          // Not extruding - highlight faces on hover (SketchUp-style)
+          // Not extruding - show dotted pattern on hovered face (SketchUp-style)
           const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) => {
             return mesh.metadata?.type === 'face';
           });
 
-          if (pickResult?.hit && pickResult.pickedMesh && highlightLayerRef.current) {
+          if (pickResult?.hit && pickResult.pickedMesh && dottedHoverMaterialRef.current) {
             const hoveredMesh = pickResult.pickedMesh as Mesh;
 
             // Only update if hovering different face
             if (hoveredFaceRef.current !== hoveredMesh) {
-              // Remove previous highlight
-              if (hoveredFaceRef.current) {
-                highlightLayerRef.current.removeMesh(hoveredFaceRef.current);
+              // Restore previous face's original material
+              if (hoveredFaceRef.current && hoveredFaceOriginalMaterialRef.current) {
+                hoveredFaceRef.current.material = hoveredFaceOriginalMaterialRef.current;
               }
-              // Add new highlight (blue like SketchUp)
-              highlightLayerRef.current.addMesh(hoveredMesh, new Color3(0.4, 0.6, 1));
+              // Store original material and apply dotted pattern
+              hoveredFaceOriginalMaterialRef.current = hoveredMesh.material;
+              hoveredMesh.material = dottedHoverMaterialRef.current;
               hoveredFaceRef.current = hoveredMesh;
             }
           } else {
-            // Not hovering over a face - clear highlight
-            if (hoveredFaceRef.current && highlightLayerRef.current) {
-              highlightLayerRef.current.removeMesh(hoveredFaceRef.current);
+            // Not hovering over a face - restore original material
+            if (hoveredFaceRef.current && hoveredFaceOriginalMaterialRef.current) {
+              hoveredFaceRef.current.material = hoveredFaceOriginalMaterialRef.current;
               hoveredFaceRef.current = null;
+              hoveredFaceOriginalMaterialRef.current = null;
             }
           }
         }
