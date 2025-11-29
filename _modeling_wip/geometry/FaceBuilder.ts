@@ -18,9 +18,8 @@ import {
   Color3,
 } from '@babylonjs/core';
 import type { GeometryId } from '../types';
+import type { EdgeLoop, PlaneEquation } from './WingedEdge';
 import {
-  EdgeLoop,
-  PlaneEquation,
   calculatePolygonNormal,
   allPointsCoplanar,
   isLoopCCW,

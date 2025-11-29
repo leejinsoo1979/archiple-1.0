@@ -23,7 +23,7 @@ import {
   HighlightLayer,
   LinesMesh,
 } from '@babylonjs/core';
-import { AdvancedDynamicTexture, Ellipse } from '@babylonjs/gui';
+import { AdvancedDynamicTexture, Ellipse, Control } from '@babylonjs/gui';
 
 type ToolType = 'select' | 'eraser' | 'line' | 'arc' | 'rectangle' | 'circle' | 'polygon' | 'pushpull' | 'rotate' | 'move' | 'scale' | 'offset' | 'tape' | 'text' | 'paint' | 'orbit' | 'pan' | 'zoom' | 'zoomExtents' | 'makeComponent' | 'freehand' | 'rotatedRect' | 'arc2pt' | 'arc3pt' | 'pie' | 'followMe' | 'outerShell' | 'dimension' | 'protractor' | 'text3d' | 'axes' | 'section' | 'solidTools' | 'zoomWindow' | 'zoomPrevious' | 'lookAround' | 'walk' | 'tag' | 'positionCamera' | 'flip';
 
@@ -1169,7 +1169,7 @@ const CustomModelingPage: React.FC = () => {
     const hudTexture = AdvancedDynamicTexture.CreateFullscreenUI('HUD', true, scene);
     hudTextureRef.current = hudTexture;
 
-    // Pointer circle - 16px diameter, blue color
+    // Pointer circle - 16px diameter, blue color (positioned at cursor tip)
     const pointerCircle = new Ellipse('pointerCircle');
     pointerCircle.width = '16px';
     pointerCircle.height = '16px';
@@ -1177,6 +1177,11 @@ const CustomModelingPage: React.FC = () => {
     pointerCircle.thickness = 2;
     pointerCircle.background = 'rgba(0, 122, 255, 0.3)';
     pointerCircle.isVisible = false; // Hidden by default, shown for drawing tools
+    // Position from top-left corner of canvas
+    pointerCircle.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+    pointerCircle.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+    // Don't block mouse events
+    pointerCircle.isHitTestVisible = false;
     hudTexture.addControl(pointerCircle);
     pointerCircleRef.current = pointerCircle;
 
@@ -1245,10 +1250,11 @@ const CustomModelingPage: React.FC = () => {
       const screenX = scene.pointerX;
       const screenY = scene.pointerY;
 
-      // Update HUD circle position (centered on cursor)
-      // Note: Babylon.GUI positions are relative to canvas, so we use left/top
-      pointerCircle.left = screenX;
-      pointerCircle.top = screenY;
+      // Update HUD circle position - offset to appear at cursor tip (pencil point)
+      // The pencil cursor hotspot is at bottom-left, so offset circle to that position
+      // Offset by half the circle size to center it on the cursor tip
+      pointerCircle.left = screenX - 8;  // Center horizontally on cursor
+      pointerCircle.top = screenY - 8;   // Center vertically on cursor
     });
 
     return () => {

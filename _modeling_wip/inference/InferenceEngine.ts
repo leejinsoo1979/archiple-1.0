@@ -8,8 +8,8 @@
  * - Shape inferences: Square, Golden Section, Half/Quarter circle
  */
 
-import { Vector3, Scene, Color3 } from '@babylonjs/core';
-import type {
+import { Vector3, Scene, Ray, PickingInfo, AbstractMesh, Color3 } from '@babylonjs/core';
+import {
   Inference,
   InferenceState,
   InferenceLockAxis,
@@ -17,8 +17,8 @@ import type {
   PointInferenceType,
   LinearInferenceType,
   GeometryId,
+  INFERENCE_COLORS
 } from '../types';
-import { INFERENCE_COLORS } from '../types';
 import { useGeometryStore } from '../stores/geometryStore';
 
 // Inference priority weights (higher = more important)
