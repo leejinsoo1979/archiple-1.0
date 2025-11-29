@@ -133,6 +133,9 @@ const CustomModelingPage: React.FC = () => {
   // Line measurement display state
   const [lineMeasurement, setLineMeasurement] = useState<number>(0);  // in mm
 
+  // Drawing state for UI (mirrors ref for re-rendering)
+  const [isDrawing, setIsDrawing] = useState(false);
+
   const [activeTool, setActiveTool] = useState<ToolType>('select');
   const [selectedMesh, setSelectedMesh] = useState<Mesh | null>(null);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
@@ -945,28 +948,32 @@ const CustomModelingPage: React.FC = () => {
   }, []);
 
   // Show snap indicator - create/move 3D mesh to snap position (magnetic snap visual)
+  // This creates a prominent visual at the SNAP POINT so user knows where click will land
   const showSnapIndicator = useCallback((position: Vector3) => {
     const scene = sceneRef.current;
     if (!scene) return;
 
     // Create snap indicator mesh if it doesn't exist
     if (!snapIndicatorRef.current) {
-      // Create a bright green disc at ground level
-      const disc = MeshBuilder.CreateDisc('snapIndicator', {
-        radius: 0.15,
+      // Create a larger, more visible snap indicator
+      // Using a torus (ring) for better visibility against any background
+      const torus = MeshBuilder.CreateTorus('snapIndicator', {
+        diameter: 0.5,        // Larger - 500mm diameter
+        thickness: 0.08,      // Ring thickness
         tessellation: 32,
       }, scene);
-      disc.rotation.x = Math.PI / 2;  // Lay flat on ground
-      disc.position.y = 0.02;  // Slightly above ground to avoid z-fighting
-      disc.isPickable = false;
+      torus.rotation.x = Math.PI / 2;  // Lay flat on ground
+      torus.position.y = 0.02;  // Slightly above ground to avoid z-fighting
+      torus.isPickable = false;
 
       const mat = new StandardMaterial('snapIndicatorMat', scene);
-      mat.diffuseColor = new Color3(0, 1, 0.5);  // Bright green
-      mat.emissiveColor = new Color3(0, 0.8, 0.4);  // Glow effect
-      mat.alpha = 0.9;
-      disc.material = mat;
+      mat.diffuseColor = new Color3(0, 1, 0);  // Bright green
+      mat.emissiveColor = new Color3(0, 1, 0.3);  // Strong glow
+      mat.alpha = 1.0;  // Fully opaque
+      mat.backFaceCulling = false;  // Visible from both sides
+      torus.material = mat;
 
-      snapIndicatorRef.current = disc;
+      snapIndicatorRef.current = torus;
     }
 
     // Move to snap position and show
@@ -1389,6 +1396,7 @@ const CustomModelingPage: React.FC = () => {
           if (!state.isDrawing) {
             // First click: Start drawing
             state.isDrawing = true;
+            setIsDrawing(true);  // Update state for UI re-render
             // Use last endpoint for continuous mode, or clicked point
             if (lineInf.continuousMode && lineInf.lastEndpoint) {
               state.startPoint = lineInf.lastEndpoint.clone();
@@ -1423,6 +1431,7 @@ const CustomModelingPage: React.FC = () => {
               state.previewMesh = null;
             }
             state.isDrawing = false;
+            setIsDrawing(false);  // Update state for UI re-render
             state.startPoint = null;
             state.currentPoint = null;
           }
@@ -1435,6 +1444,7 @@ const CustomModelingPage: React.FC = () => {
           if (!state.isDrawing) {
             // First click: Start drawing
             state.isDrawing = true;
+            setIsDrawing(true);  // Update state for UI re-render
             state.startPoint = point;
             state.currentPoint = point;
           } else {
@@ -1458,6 +1468,7 @@ const CustomModelingPage: React.FC = () => {
             }
             // Reset state
             state.isDrawing = false;
+            setIsDrawing(false);  // Update state for UI re-render
             state.startPoint = null;
             state.currentPoint = null;
           }
@@ -2576,13 +2587,13 @@ const CustomModelingPage: React.FC = () => {
         </div>
         <div className={styles.statusRight}>
           {/* Line tool measurement display */}
-          {activeTool === 'line' && drawingStateRef.current.isDrawing && lineMeasurement > 0 && (
+          {activeTool === 'line' && isDrawing && lineMeasurement > 0 && (
             <span className={styles.measureDisplay}>
               Length: {Math.round(lineMeasurement)} mm
             </span>
           )}
           {/* Real-time measurement display */}
-          {(activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon') && drawingStateRef.current.isDrawing && (
+          {(activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon') && isDrawing && (
             <span className={styles.measureDisplay}>
               {activeTool === 'rectangle'
                 ? `${Math.round(currentMeasurement.width)} x ${Math.round(currentMeasurement.height)} mm`
