@@ -2,8 +2,10 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LuRotate3D, LuPencilLine, LuArrowUpFromLine, LuSquareSquare, LuScaling } from 'react-icons/lu';
 import { BiMove } from 'react-icons/bi';
-import { FaTape, FaHandPaper } from 'react-icons/fa';
+import { FaTape } from 'react-icons/fa';
+import { IoHandRightOutline } from 'react-icons/io5';
 import { GrRotateRight } from 'react-icons/gr';
+import { BsEraser } from 'react-icons/bs';
 import styles from './CustomModelingPage.module.css';
 import {
   Engine,
@@ -31,6 +33,13 @@ interface DrawingState {
   currentPoint: Vector3 | null;
   previewMesh: Mesh | LinesMesh | null;
   points: Vector3[];
+}
+
+// Rectangle modifier state
+interface RectModifiers {
+  drawFromCenter: boolean;  // Option key
+  lockSquare: boolean;      // Shift key
+  axisLock: 'none' | 'red' | 'green' | 'blue' | 'parallel';  // Arrow keys
 }
 
 const CustomModelingPage: React.FC = () => {
@@ -63,6 +72,25 @@ const CustomModelingPage: React.FC = () => {
     points: [],
   });
 
+  // Rectangle modifiers ref
+  const rectModifiersRef = useRef<RectModifiers>({
+    drawFromCenter: false,
+    lockSquare: false,
+    axisLock: 'none',
+  });
+
+  // Measurement input state for rectangle dimensions
+  const [measurementInput, setMeasurementInput] = useState<string>('');
+  const [showMeasurementInput, setShowMeasurementInput] = useState(false);
+  const measurementInputRef = useRef<HTMLInputElement>(null);
+
+  // Rectangle modifiers state for UI display (mirrors ref for rendering)
+  const [rectModifiersUI, setRectModifiersUI] = useState<RectModifiers>({
+    drawFromCenter: false,
+    lockSquare: false,
+    axisLock: 'none',
+  });
+
   const [activeTool, setActiveTool] = useState<ToolType>('select');
   const [selectedMesh, setSelectedMesh] = useState<Mesh | null>(null);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
@@ -87,8 +115,8 @@ const CustomModelingPage: React.FC = () => {
     return saved || '#6366F1';
   });
 
-  // Snap threshold for origin and endpoints
-  const SNAP_THRESHOLD = 0.5;
+  // Snap threshold for origin and endpoints - larger = more magnetic
+  const SNAP_THRESHOLD = 0.8;
 
   // Get ground point with grid snapping and magnetic snap to origin
   const getGroundPoint = useCallback((scene: Scene, pointerX: number, pointerY: number): Vector3 | null => {
@@ -134,19 +162,58 @@ const CustomModelingPage: React.FC = () => {
     state.previewMesh = line;
   }, []);
 
-  // Create/update preview rectangle
+  // Create/update preview rectangle with modifier support
   const updatePreviewRectangle = useCallback((scene: Scene, start: Vector3, end: Vector3) => {
     const state = drawingStateRef.current;
+    const mods = rectModifiersRef.current;
+
     if (state.previewMesh) {
       state.previewMesh.dispose();
     }
-    const width = Math.abs(end.x - start.x);
-    const depth = Math.abs(end.z - start.z);
+
+    let width = Math.abs(end.x - start.x);
+    let depth = Math.abs(end.z - start.z);
+
+    // Shift key: Lock to square (use larger dimension)
+    if (mods.lockSquare) {
+      const maxDim = Math.max(width, depth);
+      width = maxDim;
+      depth = maxDim;
+    }
+
     if (width > 0.01 && depth > 0.01) {
+      let centerX: number, centerZ: number;
+
+      // Option key: Draw from center
+      if (mods.drawFromCenter) {
+        // Start point is center, end point determines size
+        centerX = start.x;
+        centerZ = start.z;
+        // Double the dimensions since we're drawing from center
+        width = width * 2;
+        depth = depth * 2;
+      } else {
+        // Normal corner-to-corner drawing
+        const signX = end.x >= start.x ? 1 : -1;
+        const signZ = end.z >= start.z ? 1 : -1;
+        centerX = start.x + (signX * width / 2);
+        centerZ = start.z + (signZ * depth / 2);
+      }
+
       const rect = MeshBuilder.CreateGround('previewRect', { width, height: depth }, scene);
-      rect.position = new Vector3((start.x + end.x) / 2, 0.01, (start.z + end.z) / 2);
+      rect.position = new Vector3(centerX, 0.01, centerZ);
       const mat = new StandardMaterial('previewMat', scene);
-      mat.diffuseColor = new Color3(0.4, 0.5, 0.9);
+
+      // Change color based on modifiers
+      if (mods.drawFromCenter && mods.lockSquare) {
+        mat.diffuseColor = new Color3(0.9, 0.5, 0.9); // Purple for both
+      } else if (mods.drawFromCenter) {
+        mat.diffuseColor = new Color3(0.9, 0.6, 0.4); // Orange for center
+      } else if (mods.lockSquare) {
+        mat.diffuseColor = new Color3(0.4, 0.9, 0.5); // Green for square
+      } else {
+        mat.diffuseColor = new Color3(0.4, 0.5, 0.9); // Blue default
+      }
       mat.alpha = 0.4;
       rect.material = mat;
       rect.isPickable = false;
@@ -183,19 +250,43 @@ const CustomModelingPage: React.FC = () => {
     return edge;
   }, []);
 
-  // Finalize rectangle as face geometry
+  // Finalize rectangle as face geometry with modifier support
   const finalizeRectangle = useCallback((scene: Scene, start: Vector3, end: Vector3): Mesh | null => {
-    const width = Math.abs(end.x - start.x);
-    const depth = Math.abs(end.z - start.z);
+    const mods = rectModifiersRef.current;
+
+    let width = Math.abs(end.x - start.x);
+    let depth = Math.abs(end.z - start.z);
+
+    // Shift key: Lock to square
+    if (mods.lockSquare) {
+      const maxDim = Math.max(width, depth);
+      width = maxDim;
+      depth = maxDim;
+    }
 
     if (width < 0.1 || depth < 0.1) return null;
+
+    let centerX: number, centerZ: number;
+
+    // Option key: Draw from center
+    if (mods.drawFromCenter) {
+      centerX = start.x;
+      centerZ = start.z;
+      width = width * 2;
+      depth = depth * 2;
+    } else {
+      const signX = end.x >= start.x ? 1 : -1;
+      const signZ = end.z >= start.z ? 1 : -1;
+      centerX = start.x + (signX * width / 2);
+      centerZ = start.z + (signZ * depth / 2);
+    }
 
     meshCounterRef.current++;
     const face = MeshBuilder.CreateGround(`Face_${meshCounterRef.current}`, {
       width,
       height: depth,
     }, scene);
-    face.position = new Vector3((start.x + end.x) / 2, 0.01, (start.z + end.z) / 2);
+    face.position = new Vector3(centerX, 0.01, centerZ);
 
     const faceMat = new StandardMaterial(`faceMat_${meshCounterRef.current}`, scene);
     faceMat.diffuseColor = Color3.FromHexString(selectedColor);
@@ -214,6 +305,15 @@ const CustomModelingPage: React.FC = () => {
       depth,
       originalY: 0.01,
     };
+
+    // Reset modifiers after finalizing
+    const resetMods = {
+      drawFromCenter: false,
+      lockSquare: false,
+      axisLock: 'none' as const,
+    };
+    rectModifiersRef.current = resetMods;
+    setRectModifiersUI(resetMods);
 
     return face;
   }, [selectedColor]);
@@ -255,7 +355,7 @@ const CustomModelingPage: React.FC = () => {
   const showSnapIndicator = useCallback((position: Vector3) => {
     const indicator = snapIndicatorRef.current;
     if (indicator) {
-      indicator.position = new Vector3(position.x, 0.06, position.z);
+      indicator.position = new Vector3(position.x, 0.12, position.z);
       indicator.isVisible = true;
     }
   }, []);
@@ -494,30 +594,21 @@ const CustomModelingPage: React.FC = () => {
     zAxisNeg.color = new Color3(0.2, 0.3, 0.5);
     zAxisNeg.isPickable = false;
 
-    // Origin marker - green sphere at (0,0,0) - always visible
-    const originMarker = MeshBuilder.CreateSphere('originMarker', {
-      diameter: 0.15,
-      segments: 16,
-    }, scene);
-    originMarker.position = new Vector3(0, 0.075, 0);
-    const originMat = new StandardMaterial('originMat', scene);
-    originMat.diffuseColor = new Color3(0.2, 0.9, 0.2); // Green
-    originMat.emissiveColor = new Color3(0.1, 0.5, 0.1); // Slight glow
-    originMat.specularColor = new Color3(0.5, 0.5, 0.5);
-    originMarker.material = originMat;
-    originMarker.isPickable = false;
-    originMarkerRef.current = originMarker;
+    // Origin marker - no longer used, snap indicator will show when hovering near origin
+    // Keeping the ref for backward compatibility but not creating visible marker
+    originMarkerRef.current = null;
 
     // Snap indicator - hidden by default, shown when hovering near snap points with drawing tools
     const snapIndicator = MeshBuilder.CreateSphere('snapIndicator', {
-      diameter: 0.12,
-      segments: 8,
+      diameter: 0.35,
+      segments: 24,
     }, scene);
-    snapIndicator.position = new Vector3(0, 0.06, 0);
+    snapIndicator.position = new Vector3(0, 0.15, 0);
     const snapMat = new StandardMaterial('snapMat', scene);
-    snapMat.diffuseColor = new Color3(0.2, 0.9, 0.2); // Green
-    snapMat.emissiveColor = new Color3(0.1, 0.5, 0.1); // Slight glow
-    snapMat.specularColor = new Color3(0.5, 0.5, 0.5);
+    snapMat.diffuseColor = new Color3(0, 1.0, 0.4); // Bright cyan-green
+    snapMat.emissiveColor = new Color3(0.2, 1.0, 0.5); // Strong neon glow
+    snapMat.specularColor = new Color3(1, 1, 1);
+    snapMat.alpha = 0.95;
     snapIndicator.material = snapMat;
     snapIndicator.isPickable = false;
     snapIndicator.isVisible = false; // Hidden by default
@@ -821,6 +912,53 @@ const CustomModelingPage: React.FC = () => {
 
       const key = e.key.toLowerCase();
 
+      // Rectangle modifiers (only when rectangle tool is active and drawing)
+      if (activeTool === 'rectangle') {
+        // Option/Alt key: Toggle draw from center
+        if (e.key === 'Alt') {
+          e.preventDefault();
+          const newValue = !rectModifiersRef.current.drawFromCenter;
+          rectModifiersRef.current.drawFromCenter = newValue;
+          setRectModifiersUI(prev => ({ ...prev, drawFromCenter: newValue }));
+          return;
+        }
+        // Shift key: Lock to square (while held)
+        if (e.key === 'Shift') {
+          rectModifiersRef.current.lockSquare = true;
+          setRectModifiersUI(prev => ({ ...prev, lockSquare: true }));
+          return;
+        }
+        // Arrow keys: Axis lock
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          const newValue = rectModifiersRef.current.axisLock === 'red' ? 'none' : 'red';
+          rectModifiersRef.current.axisLock = newValue;
+          setRectModifiersUI(prev => ({ ...prev, axisLock: newValue }));
+          return;
+        }
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          const newValue = rectModifiersRef.current.axisLock === 'green' ? 'none' : 'green';
+          rectModifiersRef.current.axisLock = newValue;
+          setRectModifiersUI(prev => ({ ...prev, axisLock: newValue }));
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          const newValue = rectModifiersRef.current.axisLock === 'blue' ? 'none' : 'blue';
+          rectModifiersRef.current.axisLock = newValue;
+          setRectModifiersUI(prev => ({ ...prev, axisLock: newValue }));
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          const newValue = rectModifiersRef.current.axisLock === 'parallel' ? 'none' : 'parallel';
+          rectModifiersRef.current.axisLock = newValue;
+          setRectModifiersUI(prev => ({ ...prev, axisLock: newValue }));
+          return;
+        }
+      }
+
       switch (key) {
         case ' ':
           e.preventDefault();
@@ -902,15 +1040,35 @@ const CustomModelingPage: React.FC = () => {
           state.isDrawing = false;
           state.startPoint = null;
           state.currentPoint = null;
+          // Reset rectangle modifiers
+          const resetMods = {
+            drawFromCenter: false,
+            lockSquare: false,
+            axisLock: 'none' as const,
+          };
+          rectModifiersRef.current = resetMods;
+          setRectModifiersUI(resetMods);
           deselectMesh();
           setActiveTool('select');
           break;
       }
     };
 
+    const handleKeyUp = (e: KeyboardEvent) => {
+      // Release Shift key: Unlock square
+      if (e.key === 'Shift' && activeTool === 'rectangle') {
+        rectModifiersRef.current.lockSquare = false;
+        setRectModifiersUI(prev => ({ ...prev, lockSquare: false }));
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedMesh, zoomExtents]);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [selectedMesh, zoomExtents, activeTool]);
 
   const selectMesh = (mesh: Mesh) => {
     if (highlightLayerRef.current && selectedMesh) {
@@ -1017,9 +1175,9 @@ const CustomModelingPage: React.FC = () => {
     { id: 'select', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M5 3L5 19L9 15L12 21L14 20L11 14L17 14L5 3Z" fill="currentColor"/></svg>, title: 'Select (Space)' },
     { id: 'makeComponent', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>, title: 'Make Component (G)' },
     { id: 'paint', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M19 6L17 4L7 14V17H10L20 7L19 6Z" fill="currentColor" opacity="0.3"/><path d="M19 6L17 4L7 14V17H10L20 7L19 6ZM4 20H20" stroke="currentColor" strokeWidth="1.5"/></svg>, title: 'Paint (B)' },
-    { id: 'eraser', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M18 5L9 14L5 17H10L19 8L18 5Z" fill="currentColor" opacity="0.3"/><path d="M18 5L9 14L5 17H10L19 8L18 5Z" stroke="currentColor" strokeWidth="1.5"/></svg>, title: 'Eraser (E)' },
     { type: 'divider' },
     { id: 'line', icon: <LuPencilLine size={18} />, title: 'Line (L)' },
+    { id: 'eraser', icon: <BsEraser size={18} />, title: 'Eraser (E)' },
     { id: 'freehand', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M4 17C8 15 10 8 14 10C18 12 16 17 20 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>, title: 'Freehand' },
     { id: 'rectangle', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="12" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.2"/></svg>, title: 'Rectangle (R)' },
     { id: 'circle', icon: <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.2"/></svg>, title: 'Circle (C)' },
@@ -1037,7 +1195,7 @@ const CustomModelingPage: React.FC = () => {
     { id: 'protractor', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M2 20h20M2 20A10 10 0 0 1 12 10a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="20" x2="12" y2="10" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="20" x2="5" y2="12" stroke="currentColor" strokeWidth="1"/><line x1="12" y1="20" x2="19" y2="12" stroke="currentColor" strokeWidth="1"/></svg>, title: 'Protractor' },
     { type: 'divider' },
     { id: 'orbit', icon: <LuRotate3D size={18} />, title: 'Orbit (O)' },
-    { id: 'pan', icon: <FaHandPaper size={18} />, title: 'Pan (H)' },
+    { id: 'pan', icon: <IoHandRightOutline size={18} />, title: 'Pan (H)' },
     { id: 'zoom', icon: <svg viewBox="0 0 24 24" fill="none"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="1.5"/><line x1="14" y1="14" x2="20" y2="20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/><line x1="10" y1="7" x2="10" y2="13" stroke="currentColor" strokeWidth="1.5"/><line x1="7" y1="10" x2="13" y2="10" stroke="currentColor" strokeWidth="1.5"/></svg>, title: 'Zoom (Z)' },
     { id: 'zoomExtents', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 1"/><path d="M4 8V4H8M16 4H20V8M20 16V20H16M8 20H4V16" stroke="currentColor" strokeWidth="1.5"/></svg>, title: 'Zoom Extents (Shift+Z)' },
     { type: 'divider' },
@@ -1165,7 +1323,7 @@ const CustomModelingPage: React.FC = () => {
               <LuRotate3D size={16} />
             </button>
             <button className={`${styles.topToolBtn} ${activeTool === 'pan' ? styles.active : ''}`} onClick={() => setActiveTool('pan')} title="Pan">
-              <FaHandPaper size={16} />
+              <IoHandRightOutline size={16} />
             </button>
             <button className={`${styles.topToolBtn}`} onClick={zoomExtents} title="Zoom Extents">
               <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 1"/><path d="M4 8V4H8M16 4H20V8M20 16V20H16M8 20H4V16" stroke="currentColor" strokeWidth="1.5"/></svg>
@@ -1509,6 +1667,29 @@ const CustomModelingPage: React.FC = () => {
           {selectedMesh && (
             <div className={styles.statusItem}>
               <span>Selected: {selectedMesh.name}</span>
+            </div>
+          )}
+          {/* Rectangle Modifiers Indicator */}
+          {activeTool === 'rectangle' && (rectModifiersUI.drawFromCenter || rectModifiersUI.lockSquare || rectModifiersUI.axisLock !== 'none') && (
+            <div className={styles.modifierIndicators}>
+              {rectModifiersUI.drawFromCenter && (
+                <span className={styles.modifierBadge} style={{ background: '#f97316' }}>⌥ Center</span>
+              )}
+              {rectModifiersUI.lockSquare && (
+                <span className={styles.modifierBadge} style={{ background: '#22c55e' }}>⇧ Square</span>
+              )}
+              {rectModifiersUI.axisLock === 'red' && (
+                <span className={styles.modifierBadge} style={{ background: '#ef4444' }}>→ Red Axis</span>
+              )}
+              {rectModifiersUI.axisLock === 'green' && (
+                <span className={styles.modifierBadge} style={{ background: '#22c55e' }}>← Green Axis</span>
+              )}
+              {rectModifiersUI.axisLock === 'blue' && (
+                <span className={styles.modifierBadge} style={{ background: '#3b82f6' }}>↑ Blue Axis</span>
+              )}
+              {rectModifiersUI.axisLock === 'parallel' && (
+                <span className={styles.modifierBadge} style={{ background: '#a855f7' }}>↓ Parallel</span>
+              )}
             </div>
           )}
         </div>
