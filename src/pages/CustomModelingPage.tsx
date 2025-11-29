@@ -42,6 +42,16 @@ interface ShapeModifiers {
   axisLock: 'none' | 'red' | 'green' | 'blue' | 'parallel';  // Arrow keys
 }
 
+// Line tool inference state
+interface LineInference {
+  axisColor: 'red' | 'green' | 'blue' | 'magenta' | 'black';  // Current line color based on axis
+  axisLock: 'none' | 'red' | 'green' | 'blue';  // Arrow key axis lock
+  inferenceLocked: boolean;  // Shift key inference lock
+  inferenceType: 'none' | 'endpoint' | 'midpoint' | 'on-edge' | 'on-axis' | 'perpendicular' | 'parallel';
+  continuousMode: boolean;  // After finalizing, start next line from endpoint
+  lastEndpoint: Vector3 | null;  // For continuous drawing
+}
+
 const CustomModelingPage: React.FC = () => {
   const navigate = useNavigate();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -79,6 +89,16 @@ const CustomModelingPage: React.FC = () => {
     axisLock: 'none',
   });
 
+  // Line inference ref (used for line tool)
+  const lineInferenceRef = useRef<LineInference>({
+    axisColor: 'black',
+    axisLock: 'none',
+    inferenceLocked: false,
+    inferenceType: 'none',
+    continuousMode: true,  // SketchUp default is continuous
+    lastEndpoint: null,
+  });
+
   // Measurement input state for rectangle dimensions
   const [measurementInput, setMeasurementInput] = useState<string>('');
   const [showMeasurementInput, setShowMeasurementInput] = useState(false);
@@ -90,6 +110,19 @@ const CustomModelingPage: React.FC = () => {
     lockSquare: false,
     axisLock: 'none',
   });
+
+  // Line inference state for UI display (mirrors ref for rendering)
+  const [lineInferenceUI, setLineInferenceUI] = useState<LineInference>({
+    axisColor: 'black',
+    axisLock: 'none',
+    inferenceLocked: false,
+    inferenceType: 'none',
+    continuousMode: true,
+    lastEndpoint: null,
+  });
+
+  // Line measurement display state
+  const [lineMeasurement, setLineMeasurement] = useState<number>(0);  // in mm
 
   const [activeTool, setActiveTool] = useState<ToolType>('select');
   const [selectedMesh, setSelectedMesh] = useState<Mesh | null>(null);
@@ -138,9 +171,9 @@ const CustomModelingPage: React.FC = () => {
     const pickResult = scene.pick(pointerX, pointerY, (mesh) => mesh.name === 'groundPicker');
     if (pickResult?.hit && pickResult.pickedPoint) {
       const snapped = new Vector3(
-        Math.round(pickResult.pickedPoint.x * 2) / 2,
+        Math.round(pickResult.pickedPoint.x),
         0,
-        Math.round(pickResult.pickedPoint.z * 2) / 2
+        Math.round(pickResult.pickedPoint.z)
       );
 
       // Magnetic snap to origin (0,0,0)
@@ -255,23 +288,165 @@ const CustomModelingPage: React.FC = () => {
         updatePreviewPolygon(scene, start, endPoint, currentMeasurement.sides || 6);
         setCurrentMeasurement(prev => ({ ...prev, width: 0, height: parsed.radius || 0 }));
       }
+    } else if (activeTool === 'line' && parsed.width !== undefined && state.currentPoint) {
+      // For line tool, parsed.width is used as length (reusing the same parsing logic)
+      const lengthUnits = parsed.width * MM_TO_UNIT;
+
+      // Get the current direction from start to current point
+      const currentEnd = state.currentPoint;
+      const direction = currentEnd.subtract(start);
+      const currentLength = direction.length();
+
+      let endPoint: Vector3;
+      // If no direction yet, default to positive X (red) axis
+      if (currentLength < 0.01) {
+        endPoint = new Vector3(start.x + lengthUnits, start.y, start.z);
+      } else {
+        // Normalize and apply new length
+        const normalizedDir = direction.normalize();
+        endPoint = start.add(normalizedDir.scale(lengthUnits));
+      }
+      state.currentPoint = endPoint;
+
+      // Create/update preview line inline (avoid circular dep with updatePreviewLine)
+      if (state.previewMesh) {
+        state.previewMesh.dispose();
+      }
+      const line = MeshBuilder.CreateLines('previewLine', {
+        points: [start, endPoint],
+        updatable: false,
+      }, scene);
+      line.color = new Color3(0.5, 0.5, 0.5);  // Gray for typed input
+      line.isPickable = false;
+      state.previewMesh = line;
+
+      setLineMeasurement(parsed.width);
     }
   }, [activeTool, parseMeasurementInput, currentMeasurement.sides]);
 
-  // Create/update preview line
+  // Detect axis alignment and return appropriate color
+  const detectLineAxis = useCallback((start: Vector3, end: Vector3): { color: 'red' | 'green' | 'blue' | 'magenta' | 'black'; type: LineInference['inferenceType'] } => {
+    const lineInf = lineInferenceRef.current;
+
+    // If axis is locked by arrow key, force that axis
+    if (lineInf.axisLock !== 'none') {
+      return { color: lineInf.axisLock, type: 'on-axis' };
+    }
+
+    const dx = Math.abs(end.x - start.x);
+    const dy = Math.abs(end.y - start.y);
+    const dz = Math.abs(end.z - start.z);
+    const length = Vector3.Distance(start, end);
+
+    if (length < 0.01) {
+      return { color: 'black', type: 'none' };
+    }
+
+    // Tolerance for axis alignment (within ~5 degrees)
+    const tolerance = 0.1;
+    const xRatio = dx / length;
+    const yRatio = dy / length;
+    const zRatio = dz / length;
+
+    // Check if aligned with X axis (red) - in ground plane, X is red
+    if (xRatio > (1 - tolerance) && zRatio < tolerance && yRatio < tolerance) {
+      return { color: 'red', type: 'on-axis' };
+    }
+    // Check if aligned with Z axis (green) - in ground plane, Z is green
+    if (zRatio > (1 - tolerance) && xRatio < tolerance && yRatio < tolerance) {
+      return { color: 'green', type: 'on-axis' };
+    }
+    // Check if aligned with Y axis (blue) - vertical
+    if (yRatio > (1 - tolerance) && xRatio < tolerance && zRatio < tolerance) {
+      return { color: 'blue', type: 'on-axis' };
+    }
+
+    // Check for parallel/perpendicular to existing edges (magenta)
+    // For now, check if parallel to any axis combination
+    const is45Degree = Math.abs(xRatio - zRatio) < tolerance && yRatio < tolerance;
+    if (is45Degree) {
+      return { color: 'magenta', type: 'parallel' };
+    }
+
+    return { color: 'black', type: 'none' };
+  }, []);
+
+  // Apply axis lock constraint to endpoint
+  const applyAxisLock = useCallback((start: Vector3, end: Vector3, axisLock: 'none' | 'red' | 'green' | 'blue'): Vector3 => {
+    if (axisLock === 'none') return end;
+
+    const constrainedEnd = end.clone();
+    switch (axisLock) {
+      case 'red':  // X axis - keep only X movement
+        constrainedEnd.z = start.z;
+        constrainedEnd.y = start.y;
+        break;
+      case 'green':  // Z axis - keep only Z movement
+        constrainedEnd.x = start.x;
+        constrainedEnd.y = start.y;
+        break;
+      case 'blue':  // Y axis - keep only Y movement
+        constrainedEnd.x = start.x;
+        constrainedEnd.z = start.z;
+        break;
+    }
+    return constrainedEnd;
+  }, []);
+
+  // Create/update preview line with axis-colored display
   const updatePreviewLine = useCallback((scene: Scene, start: Vector3, end: Vector3) => {
     const state = drawingStateRef.current;
+    const lineInf = lineInferenceRef.current;
+
     if (state.previewMesh) {
       state.previewMesh.dispose();
     }
+
+    // Apply axis lock if active
+    const constrainedEnd = applyAxisLock(start, end, lineInf.axisLock);
+
+    // Detect axis alignment and get color
+    const { color: axisColor, type: inferenceType } = detectLineAxis(start, constrainedEnd);
+
+    // Update inference state
+    lineInf.axisColor = axisColor;
+    lineInf.inferenceType = inferenceType;
+    setLineInferenceUI(prev => ({ ...prev, axisColor, inferenceType }));
+
+    // Create line with appropriate color
     const line = MeshBuilder.CreateLines('previewLine', {
-      points: [start, end],
+      points: [start, constrainedEnd],
       updatable: false,
     }, scene);
-    line.color = new Color3(0.4, 0.6, 1);
+
+    // Set color based on axis
+    switch (axisColor) {
+      case 'red':
+        line.color = new Color3(0.9, 0.2, 0.2);  // Red - X axis
+        break;
+      case 'green':
+        line.color = new Color3(0.2, 0.8, 0.2);  // Green - Z axis
+        break;
+      case 'blue':
+        line.color = new Color3(0.3, 0.5, 1);    // Blue - Y axis
+        break;
+      case 'magenta':
+        line.color = new Color3(0.9, 0.3, 0.9);  // Magenta - parallel/perpendicular
+        break;
+      default:
+        line.color = new Color3(0.3, 0.3, 0.3);  // Black - no inference
+    }
+
     line.isPickable = false;
     state.previewMesh = line;
-  }, []);
+
+    // Update current point to constrained end
+    state.currentPoint = constrainedEnd;
+
+    // Calculate and update line length in mm
+    const length = Vector3.Distance(start, constrainedEnd);
+    setLineMeasurement(Math.round(length * UNIT_TO_MM));
+  }, [detectLineAxis, applyAxisLock]);
 
   // Create/update preview rectangle with modifier support
   const updatePreviewRectangle = useCallback((scene: Scene, start: Vector3, end: Vector3) => {
@@ -338,28 +513,60 @@ const CustomModelingPage: React.FC = () => {
     }
   }, []);
 
-  // Finalize line as geometry
-  const finalizeLine = useCallback((scene: Scene, start: Vector3, end: Vector3) => {
+  // Finalize line as geometry with axis color
+  const finalizeLine = useCallback((scene: Scene, start: Vector3, end: Vector3): Mesh => {
+    const lineInf = lineInferenceRef.current;
+
+    // Apply axis lock constraint
+    const constrainedEnd = applyAxisLock(start, end, lineInf.axisLock);
+
     meshCounterRef.current++;
     const edgeMat = new StandardMaterial(`edgeMat_${meshCounterRef.current}`, scene);
-    edgeMat.diffuseColor = new Color3(0.3, 0.3, 0.3);
 
-    const length = Vector3.Distance(start, end);
+    // Set edge color based on current axis color
+    switch (lineInf.axisColor) {
+      case 'red':
+        edgeMat.diffuseColor = new Color3(0.9, 0.2, 0.2);
+        break;
+      case 'green':
+        edgeMat.diffuseColor = new Color3(0.2, 0.8, 0.2);
+        break;
+      case 'blue':
+        edgeMat.diffuseColor = new Color3(0.3, 0.5, 1);
+        break;
+      case 'magenta':
+        edgeMat.diffuseColor = new Color3(0.9, 0.3, 0.9);
+        break;
+      default:
+        edgeMat.diffuseColor = new Color3(0.3, 0.3, 0.3);
+    }
+
+    const length = Vector3.Distance(start, constrainedEnd);
     const edge = MeshBuilder.CreateBox(`Edge_${meshCounterRef.current}`, {
       width: length,
       height: 0.02,
       depth: 0.02,
     }, scene);
 
-    const midPoint = start.add(end).scale(0.5);
+    const midPoint = start.add(constrainedEnd).scale(0.5);
     edge.position = new Vector3(midPoint.x, 0.01, midPoint.z);
 
-    const angle = Math.atan2(end.z - start.z, end.x - start.x);
+    const angle = Math.atan2(constrainedEnd.z - start.z, constrainedEnd.x - start.x);
     edge.rotation.y = -angle;
 
     edge.material = edgeMat;
+
+    // Store the endpoint for continuous drawing mode
+    lineInf.lastEndpoint = constrainedEnd.clone();
+    setLineInferenceUI(prev => ({ ...prev, lastEndpoint: constrainedEnd.clone() }));
+
+    // Reset axis lock after finalizing (but keep continuous mode)
+    lineInf.axisLock = 'none';
+    lineInf.inferenceLocked = false;
+    setLineInferenceUI(prev => ({ ...prev, axisLock: 'none', inferenceLocked: false }));
+
     return edge;
-  }, []);
+  }, [applyAxisLock]);
 
   // Finalize rectangle as face geometry with modifier support
   const finalizeRectangle = useCallback((scene: Scene, start: Vector3, end: Vector3): Mesh | null => {
@@ -1043,7 +1250,53 @@ const CustomModelingPage: React.FC = () => {
 
       const state = drawingStateRef.current;
 
-      if (activeTool === 'line' || activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon') {
+      // Line tool with continuous drawing mode
+      if (activeTool === 'line') {
+        const lineInf = lineInferenceRef.current;
+        const point = getGroundPoint(scene, scene.pointerX, scene.pointerY);
+        if (point) {
+          if (!state.isDrawing) {
+            // First click: Start drawing
+            state.isDrawing = true;
+            // Use last endpoint for continuous mode, or clicked point
+            if (lineInf.continuousMode && lineInf.lastEndpoint) {
+              state.startPoint = lineInf.lastEndpoint.clone();
+            } else {
+              state.startPoint = point;
+            }
+            state.currentPoint = point;
+          } else {
+            // Second click: Finalize line and continue
+            if (state.startPoint && state.currentPoint) {
+              if (Vector3.Distance(state.startPoint, state.currentPoint) > 0.1) {
+                finalizeLine(scene, state.startPoint, state.currentPoint);
+                addLineSnapPoints(state.startPoint, state.currentPoint);
+
+                // Continuous mode: Start next line from endpoint
+                if (lineInf.continuousMode) {
+                  // Cleanup preview but stay in drawing mode
+                  if (state.previewMesh) {
+                    state.previewMesh.dispose();
+                    state.previewMesh = null;
+                  }
+                  // Start new line from last endpoint
+                  state.startPoint = lineInf.lastEndpoint?.clone() || state.currentPoint.clone();
+                  state.currentPoint = point;
+                  return;  // Stay in drawing mode
+                }
+              }
+            }
+            // Non-continuous mode: Reset completely
+            if (state.previewMesh) {
+              state.previewMesh.dispose();
+              state.previewMesh = null;
+            }
+            state.isDrawing = false;
+            state.startPoint = null;
+            state.currentPoint = null;
+          }
+        }
+      } else if (activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon') {
         const point = getGroundPoint(scene, scene.pointerX, scene.pointerY);
         if (point) {
           if (!state.isDrawing) {
@@ -1054,12 +1307,7 @@ const CustomModelingPage: React.FC = () => {
           } else {
             // Second click: Finalize the shape
             if (state.startPoint && state.currentPoint) {
-              if (activeTool === 'line') {
-                if (Vector3.Distance(state.startPoint, state.currentPoint) > 0.1) {
-                  finalizeLine(scene, state.startPoint, state.currentPoint);
-                  addLineSnapPoints(state.startPoint, state.currentPoint);
-                }
-              } else if (activeTool === 'rectangle') {
+              if (activeTool === 'rectangle') {
                 const rectResult = finalizeRectangle(scene, state.startPoint, state.currentPoint);
                 if (rectResult) {
                   addRectangleSnapPoints(state.startPoint, state.currentPoint);
@@ -1175,9 +1423,9 @@ const CustomModelingPage: React.FC = () => {
         const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) => mesh.name === 'groundPicker');
         if (pickResult?.hit && pickResult.pickedPoint) {
           const snappedPoint = new Vector3(
-            Math.round(pickResult.pickedPoint.x * 2) / 2,
+            Math.round(pickResult.pickedPoint.x),
             0,
-            Math.round(pickResult.pickedPoint.z * 2) / 2
+            Math.round(pickResult.pickedPoint.z)
           );
           const nearestSnap = findNearestSnapPoint(snappedPoint);
           if (nearestSnap) {
@@ -1292,6 +1540,39 @@ const CustomModelingPage: React.FC = () => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
       const key = e.key.toLowerCase();
+
+      // Line tool modifiers
+      if (activeTool === 'line') {
+        // Shift key: Lock current inference (while held)
+        if (e.key === 'Shift') {
+          e.preventDefault();
+          lineInferenceRef.current.inferenceLocked = true;
+          setLineInferenceUI(prev => ({ ...prev, inferenceLocked: true }));
+          return;
+        }
+        // Arrow keys: Axis lock (SketchUp style: Right=Red/X, Left=Green/Z, Up/Down=Blue/Y)
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          const newValue = lineInferenceRef.current.axisLock === 'red' ? 'none' : 'red';
+          lineInferenceRef.current.axisLock = newValue;
+          setLineInferenceUI(prev => ({ ...prev, axisLock: newValue }));
+          return;
+        }
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          const newValue = lineInferenceRef.current.axisLock === 'green' ? 'none' : 'green';
+          lineInferenceRef.current.axisLock = newValue;
+          setLineInferenceUI(prev => ({ ...prev, axisLock: newValue }));
+          return;
+        }
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          const newValue = lineInferenceRef.current.axisLock === 'blue' ? 'none' : 'blue';
+          lineInferenceRef.current.axisLock = newValue;
+          setLineInferenceUI(prev => ({ ...prev, axisLock: newValue }));
+          return;
+        }
+      }
 
       // Shape modifiers (for rectangle, circle, and polygon tools)
       if (activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon') {
@@ -1421,7 +1702,7 @@ const CustomModelingPage: React.FC = () => {
           state.isDrawing = false;
           state.startPoint = null;
           state.currentPoint = null;
-          // Reset rectangle modifiers
+          // Reset shape modifiers (rectangle/circle/polygon)
           const resetMods = {
             drawFromCenter: false,
             lockSquare: false,
@@ -1429,6 +1710,18 @@ const CustomModelingPage: React.FC = () => {
           };
           shapeModifiersRef.current = resetMods;
           setShapeModifiersUI(resetMods);
+          // Reset line inference (line tool)
+          const resetLineInf: LineInference = {
+            axisColor: 'black',
+            axisLock: 'none',
+            inferenceLocked: false,
+            inferenceType: 'none',
+            continuousMode: true,
+            lastEndpoint: null,
+          };
+          lineInferenceRef.current = resetLineInf;
+          setLineInferenceUI(resetLineInf);
+          setLineMeasurement(0);
           deselectMesh();
           setActiveTool('select');
           break;
@@ -1436,10 +1729,15 @@ const CustomModelingPage: React.FC = () => {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      // Release Shift key: Unlock shape constraint
+      // Release Shift key: Unlock shape constraint (rectangle/circle/polygon)
       if (e.key === 'Shift' && (activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon')) {
         shapeModifiersRef.current.lockSquare = false;
         setShapeModifiersUI(prev => ({ ...prev, lockSquare: false }));
+      }
+      // Release Shift key: Unlock inference lock (line tool)
+      if (e.key === 'Shift' && activeTool === 'line') {
+        lineInferenceRef.current.inferenceLocked = false;
+        setLineInferenceUI(prev => ({ ...prev, inferenceLocked: false }));
       }
     };
 
@@ -2075,8 +2373,66 @@ const CustomModelingPage: React.FC = () => {
               )}
             </div>
           )}
+          {/* Line Tool Inference Indicators */}
+          {activeTool === 'line' && (
+            <div className={styles.modifierIndicators}>
+              {/* Axis Color Indicator */}
+              {lineInferenceUI.axisColor !== 'black' && (
+                <span
+                  className={styles.modifierBadge}
+                  style={{
+                    background: lineInferenceUI.axisColor === 'red' ? '#ef4444' :
+                                lineInferenceUI.axisColor === 'green' ? '#22c55e' :
+                                lineInferenceUI.axisColor === 'blue' ? '#3b82f6' :
+                                lineInferenceUI.axisColor === 'magenta' ? '#d946ef' : '#6b7280'
+                  }}
+                >
+                  {lineInferenceUI.axisColor === 'red' ? 'Red Axis' :
+                   lineInferenceUI.axisColor === 'green' ? 'Green Axis' :
+                   lineInferenceUI.axisColor === 'blue' ? 'Blue Axis' :
+                   lineInferenceUI.axisColor === 'magenta' ? 'Parallel' : ''}
+                </span>
+              )}
+              {/* Axis Lock Indicator */}
+              {lineInferenceUI.axisLock !== 'none' && (
+                <span
+                  className={styles.modifierBadge}
+                  style={{
+                    background: lineInferenceUI.axisLock === 'red' ? '#ef4444' :
+                                lineInferenceUI.axisLock === 'green' ? '#22c55e' : '#3b82f6'
+                  }}
+                >
+                  🔒 {lineInferenceUI.axisLock === 'red' ? '→' : lineInferenceUI.axisLock === 'green' ? '←' : '↑'} Locked
+                </span>
+              )}
+              {/* Inference Lock Indicator */}
+              {lineInferenceUI.inferenceLocked && (
+                <span className={styles.modifierBadge} style={{ background: '#f97316' }}>⇧ Inference Lock</span>
+              )}
+              {/* Inference Type Indicator */}
+              {lineInferenceUI.inferenceType !== 'none' && (
+                <span className={styles.modifierBadge} style={{ background: '#8b5cf6' }}>
+                  {lineInferenceUI.inferenceType === 'endpoint' ? '⦿ Endpoint' :
+                   lineInferenceUI.inferenceType === 'midpoint' ? '◎ Midpoint' :
+                   lineInferenceUI.inferenceType === 'on-axis' ? '— On Axis' :
+                   lineInferenceUI.inferenceType === 'perpendicular' ? '⊥ Perpendicular' :
+                   lineInferenceUI.inferenceType === 'parallel' ? '∥ Parallel' : ''}
+                </span>
+              )}
+              {/* Continuous Mode Indicator */}
+              {lineInferenceUI.continuousMode && lineInferenceUI.lastEndpoint && (
+                <span className={styles.modifierBadge} style={{ background: '#06b6d4' }}>⟳ Continuous</span>
+              )}
+            </div>
+          )}
         </div>
         <div className={styles.statusRight}>
+          {/* Line tool measurement display */}
+          {activeTool === 'line' && drawingStateRef.current.isDrawing && lineMeasurement > 0 && (
+            <span className={styles.measureDisplay}>
+              Length: {Math.round(lineMeasurement)} mm
+            </span>
+          )}
           {/* Real-time measurement display */}
           {(activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon') && drawingStateRef.current.isDrawing && (
             <span className={styles.measureDisplay}>
@@ -2092,6 +2448,7 @@ const CustomModelingPage: React.FC = () => {
             ref={measureInputRef}
             className={styles.measureInput}
             placeholder={
+              activeTool === 'line' ? '길이 (mm)' :
               activeTool === 'rectangle' ? '길이, 너비 (mm)' :
               activeTool === 'circle' ? '반지름 (mm)' :
               activeTool === 'polygon' ? '반지름 (mm) 또는 6s' :
@@ -2106,21 +2463,53 @@ const CustomModelingPage: React.FC = () => {
                 const state = drawingStateRef.current;
                 const scene = sceneRef.current;
                 if (state.isDrawing && state.startPoint && state.currentPoint && scene) {
-                  if (activeTool === 'rectangle') {
+                  if (activeTool === 'line') {
+                    // Line tool with continuous drawing mode
+                    finalizeLine(scene, state.startPoint, state.currentPoint);
+                    // Cleanup preview
+                    if (state.previewMesh) {
+                      state.previewMesh.dispose();
+                      state.previewMesh = null;
+                    }
+                    // Continuous mode: start next line from endpoint
+                    const lineInf = lineInferenceRef.current;
+                    if (lineInf.continuousMode && lineInf.lastEndpoint) {
+                      state.startPoint = lineInf.lastEndpoint.clone();
+                      state.isDrawing = true;
+                    } else {
+                      state.isDrawing = false;
+                      state.startPoint = null;
+                    }
+                    state.currentPoint = null;
+                    setLineMeasurement(0);
+                  } else if (activeTool === 'rectangle') {
                     finalizeRectangle(scene, state.startPoint, state.currentPoint);
+                    if (state.previewMesh) {
+                      state.previewMesh.dispose();
+                      state.previewMesh = null;
+                    }
+                    state.isDrawing = false;
+                    state.startPoint = null;
+                    state.currentPoint = null;
                   } else if (activeTool === 'circle') {
                     finalizeCircle(scene, state.startPoint, state.currentPoint);
+                    if (state.previewMesh) {
+                      state.previewMesh.dispose();
+                      state.previewMesh = null;
+                    }
+                    state.isDrawing = false;
+                    state.startPoint = null;
+                    state.currentPoint = null;
                   } else if (activeTool === 'polygon') {
                     finalizePolygon(scene, state.startPoint, state.currentPoint, currentMeasurement.sides || 6);
+                    if (state.previewMesh) {
+                      state.previewMesh.dispose();
+                      state.previewMesh = null;
+                    }
+                    state.isDrawing = false;
+                    state.startPoint = null;
+                    state.currentPoint = null;
                   }
-                  // Cleanup
-                  if (state.previewMesh) {
-                    state.previewMesh.dispose();
-                    state.previewMesh = null;
-                  }
-                  state.isDrawing = false;
-                  state.startPoint = null;
-                  state.currentPoint = null;
                   setMeasurementInput('');
                 }
               } else if (e.key === 'Escape') {
