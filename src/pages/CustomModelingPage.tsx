@@ -167,9 +167,8 @@ const CustomModelingPage: React.FC = () => {
   const MM_TO_UNIT = 0.001;
   const UNIT_TO_MM = 1000;
 
-  // Grid snap resolution: 0.01 units = 10mm for very fine control
-  // Nearly free-form drawing while maintaining minimal precision
-  const GRID_SNAP = 0.01;
+  // Grid snap resolution: 0.001 units = 1mm precision
+  const GRID_SNAP = 0.001;
 
   // Current measurement state for display
   const [currentMeasurement, setCurrentMeasurement] = useState<{
@@ -194,8 +193,9 @@ const CustomModelingPage: React.FC = () => {
       );
 
       // Dynamic snap threshold based on camera distance
+      // Minimum of 1.0 world units ensures snap works even when zoomed in close
       const camera = cameraRef.current;
-      const snapThreshold = camera ? Math.max(camera.radius * SNAP_THRESHOLD_BASE, 0.5) : 1.5;
+      const snapThreshold = camera ? Math.max(camera.radius * SNAP_THRESHOLD_BASE, 1.0) : 2.0;
 
       // Priority 1: Magnetic snap to origin (0,0,0)
       const distanceToOrigin = rawPoint.length();
@@ -1100,6 +1100,9 @@ const CustomModelingPage: React.FC = () => {
     );
 
     camera.attachControl(canvas, true);
+
+    // Disable keyboard input from camera - we handle arrow keys ourselves for axis locking
+    camera.inputs.removeByType("ArcRotateCameraKeyboardMoveInput");
 
     const pointerInput = camera.inputs.attached.pointers as {
       buttons?: number[];
