@@ -2186,28 +2186,17 @@ const CustomModelingPage: React.FC = () => {
 
         // Handle Click Selection
         if (pickInfo.hit && pickInfo.pickedMesh) {
-          // Check for double/triple click
-          // Note: We need to track click timing manually or use Babylon's OnDoublePickTrigger
-          // For now, let's use a simple timestamp check
-          const now = Date.now();
-          // We can use a ref to store last click info
-          // Re-using selectionBoxRef for convenience or add a new ref
-
-          // Let's assume single click for now, advanced click logic can be refined
-          handleSelectionClick(pickInfo, evt);
+          const mesh = pickInfo.pickedMesh as Mesh;
+          // Skip ground/helper meshes
+          if (mesh.name !== 'ground' && mesh.name !== 'groundPicker' && !mesh.name.startsWith('snap')) {
+            selectMesh(mesh);
+          }
         } else {
           // Clicked empty space
-          if (!evt.shiftKey && !evt.ctrlKey && !evt.metaKey) {
-            selectionManagerRef.current?.clear();
-          }
+          deselectMesh();
         }
 
-        // Start box selection (always, unless we clicked a gizmo - handled by gizmo manager)
-        // If we clicked a mesh, we might still want to drag-box if we move mouse immediately?
-        // SketchUp: Click selects. Drag starts box.
-        // In Select tool, dragging on a mesh usually does nothing or starts box if not on geometry.
-        // Let's allow box selection start anywhere for now.
-
+        // Start box selection
         boxState.isDragging = true;
         boxState.startX = scene.pointerX;
         boxState.startY = scene.pointerY;
