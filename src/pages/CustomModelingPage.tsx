@@ -1325,13 +1325,8 @@ const CustomModelingPage: React.FC = () => {
       edge.metadata = { type: 'edge', parentSolid: solid };
     });
 
-    // Dispose the original face and its edges
-    if (face.metadata?.edgeIds) {
-      face.metadata.edgeIds.forEach((edgeId: string) => {
-        const edgeMesh = scene.getMeshById(edgeId);
-        if (edgeMesh) edgeMesh.dispose();
-      });
-    }
+    // Dispose the original face and all its children (edges)
+    face.getChildMeshes().forEach(child => child.dispose());
     face.dispose();
 
     // Store last extrusion distance
@@ -2231,7 +2226,13 @@ const CustomModelingPage: React.FC = () => {
         const lineInf = lineInferenceRef.current;
         // Use active snap point if available, otherwise get ground point
         const rawPoint = getGroundPoint(scene, scene.pointerX, scene.pointerY);
-        const point = activeSnapPointRef.current ? activeSnapPointRef.current.clone() : rawPoint;
+        // IMPORTANT: Force Y=0 for snap points to ensure drawing on ground plane
+        let point: Vector3 | null = null;
+        if (activeSnapPointRef.current) {
+          point = new Vector3(activeSnapPointRef.current.x, 0, activeSnapPointRef.current.z);
+        } else {
+          point = rawPoint;
+        }
         if (point) {
           if (!state.isDrawing) {
             // First click: Start drawing
@@ -2279,14 +2280,13 @@ const CustomModelingPage: React.FC = () => {
       } else if (activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon') {
         // Use active snap point if available, otherwise get ground point
         const rawPoint = getGroundPoint(scene, scene.pointerX, scene.pointerY);
-        const point = activeSnapPointRef.current ? activeSnapPointRef.current.clone() : rawPoint;
-        // DEBUG: Log clicked point values
-        console.log('[CLICK DEBUG]', {
-          hasActiveSnap: !!activeSnapPointRef.current,
-          activeSnap: activeSnapPointRef.current ? { x: activeSnapPointRef.current.x, y: activeSnapPointRef.current.y, z: activeSnapPointRef.current.z } : null,
-          rawPoint: rawPoint ? { x: rawPoint.x, y: rawPoint.y, z: rawPoint.z } : null,
-          point: point ? { x: point.x, y: point.y, z: point.z } : null,
-        });
+        // IMPORTANT: Force Y=0 for snap points to ensure drawing on ground plane
+        let point: Vector3 | null = null;
+        if (activeSnapPointRef.current) {
+          point = new Vector3(activeSnapPointRef.current.x, 0, activeSnapPointRef.current.z);
+        } else {
+          point = rawPoint;
+        }
         if (point) {
           if (!state.isDrawing) {
             // First click: Start drawing
@@ -2465,10 +2465,6 @@ const CustomModelingPage: React.FC = () => {
           );
           const nearestSnap = findNearestSnapPoint(rawPoint);
           if (nearestSnap) {
-            // DEBUG: Log snap point values
-            if (nearestSnap.y !== 0) {
-              console.warn('[SNAP BUG] Snap point has non-zero Y:', nearestSnap.x, nearestSnap.y, nearestSnap.z);
-            }
             activeSnapPointRef.current = nearestSnap.clone();  // Save for click handling
             showSnapIndicator(nearestSnap);
           } else {
@@ -2561,9 +2557,13 @@ const CustomModelingPage: React.FC = () => {
       if (!state.isDrawing || !state.startPoint) return;
 
       // Use active snap point if available for drawing previews
-      const getSnappedPoint = () => {
+      // IMPORTANT: Force Y=0 for snap points to ensure drawing on ground plane
+      const getSnappedPoint = (): Vector3 | null => {
         const rawPoint = getGroundPoint(scene, scene.pointerX, scene.pointerY);
-        return activeSnapPointRef.current ? activeSnapPointRef.current.clone() : rawPoint;
+        if (activeSnapPointRef.current) {
+          return new Vector3(activeSnapPointRef.current.x, 0, activeSnapPointRef.current.z);
+        }
+        return rawPoint;
       };
 
       if (activeTool === 'line') {
@@ -3672,7 +3672,7 @@ const CustomModelingPage: React.FC = () => {
                 </div>
 
                 <div className="custom-color-picker">
-                  <HexColorPicker
+                  <IroColorPicker
                     color={selectedColor}
                     onChange={(newColor) => {
                       setSelectedColor(newColor);
