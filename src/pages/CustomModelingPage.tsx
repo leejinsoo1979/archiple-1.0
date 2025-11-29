@@ -903,20 +903,21 @@ const CustomModelingPage: React.FC = () => {
     });
   }, []);
 
-  // Show snap indicator at position
-  const showSnapIndicator = useCallback((position: Vector3) => {
-    const indicator = snapIndicatorRef.current;
-    if (indicator) {
-      indicator.position = new Vector3(position.x, 0.02, position.z);
-      indicator.isVisible = true;
+  // Show snap indicator - change HUD pointer circle to green
+  const showSnapIndicator = useCallback((_position: Vector3) => {
+    const pointerCircle = pointerCircleRef.current;
+    if (pointerCircle) {
+      pointerCircle.color = 'rgba(0, 255, 136, 0.9)';  // Bright green when snapped
+      pointerCircle.background = 'rgba(0, 255, 136, 0.4)';
     }
   }, []);
 
-  // Hide snap indicator
+  // Hide snap indicator - reset HUD pointer circle to blue
   const hideSnapIndicator = useCallback(() => {
-    const indicator = snapIndicatorRef.current;
-    if (indicator) {
-      indicator.isVisible = false;
+    const pointerCircle = pointerCircleRef.current;
+    if (pointerCircle) {
+      pointerCircle.color = 'rgba(0, 122, 255, 0.9)';  // Default blue
+      pointerCircle.background = 'rgba(0, 122, 255, 0.3)';
     }
   }, []);
 
@@ -1150,20 +1151,8 @@ const CustomModelingPage: React.FC = () => {
     // Keeping the ref for backward compatibility but not creating visible marker
     originMarkerRef.current = null;
 
-    // Snap indicator - hidden by default, shown when hovering near snap points with drawing tools
-    const snapIndicator = MeshBuilder.CreateSphere('snapIndicator', {
-      diameter: 0.12,
-      segments: 16,
-    }, scene);
-    snapIndicator.position = new Vector3(0, 0.02, 0);
-    const snapMat = new StandardMaterial('snapMat', scene);
-    snapMat.diffuseColor = new Color3(0.1, 0.1, 0.1); // Black
-    snapMat.emissiveColor = new Color3(0, 0, 0);
-    snapMat.specularColor = new Color3(0, 0, 0);
-    snapIndicator.material = snapMat;
-    snapIndicator.isPickable = false;
-    snapIndicator.isVisible = false; // Hidden by default
-    snapIndicatorRef.current = snapIndicator;
+    // Snap indicator removed - using HUD pointer circle color change instead
+    snapIndicatorRef.current = null;
 
     // HUD overlay for Drawing Cursor System
     const hudTexture = AdvancedDynamicTexture.CreateFullscreenUI('HUD', true, scene);
@@ -1198,16 +1187,6 @@ const CustomModelingPage: React.FC = () => {
     gizmoManagerRef.current = gizmoManager;
 
     engine.runRenderLoop(() => {
-      // Keep snap indicator same screen size regardless of zoom
-      const indicator = snapIndicatorRef.current;
-      if (indicator && camera) {
-        const scale = camera.radius * 0.03; // Scale based on camera distance
-        indicator.scaling.setAll(scale);
-        // Adjust y position based on scale to keep it just above ground
-        if (indicator.isVisible) {
-          indicator.position.y = scale * 0.5;
-        }
-      }
       scene.render();
     });
 
