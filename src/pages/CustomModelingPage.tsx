@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LuRotate3D, LuPencilLine, LuArrowUpFromLine, LuSquareSquare, LuScaling } from 'react-icons/lu';
+import { LuRotate3D, LuPencilLine, LuSquareSquare, LuScaling } from 'react-icons/lu';
 import { BiMove } from 'react-icons/bi';
 import { FaTape } from 'react-icons/fa';
 import { IoHandRightOutline } from 'react-icons/io5';
@@ -25,7 +25,6 @@ import {
   Ray,  // Required for scene.pick() to work
   Matrix,
   Material,
-  DynamicTexture,
 } from '@babylonjs/core';
 // Side-effect import for scene.pick() to work
 import '@babylonjs/core/Culling/ray';
@@ -58,6 +57,19 @@ interface LineInference {
   continuousMode: boolean;  // After finalizing, start next line from endpoint
   lastEndpoint: Vector3 | null;  // For continuous drawing
 }
+
+const PushPullIcon = ({ size = 18, className = '' }: { size?: number, className?: string }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 1024 1024"
+    fill="currentColor"
+    className={className}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M614.4 460.8l330.24 192.256a25.6 25.6 0 0 1 0 44.288l-419.7376 244.3264a25.6 25.6 0 0 1-25.8048 0L79.36 697.344a25.6 25.6 0 0 1 0-44.288L409.6 460.8512v118.4256l-164.7104 95.8976L512 830.6176l267.1104-155.4944-164.7616-95.8464V460.8z m-93.3376-379.3408l152.6272 152.6272a12.8 12.8 0 0 1-9.0112 21.8624H563.2V665.6H460.8V255.9488H359.3728a12.8 12.8 0 0 1-9.0624-21.8624l152.6272-152.6272a12.8 12.8 0 0 1 18.1248 0z" />
+  </svg>
+);
 
 const CustomModelingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -98,6 +110,31 @@ const CustomModelingPage: React.FC = () => {
     lastExtrudeDistance: 0,
     lastClickTime: 0,
     lastClickFace: null,
+  });
+
+  // Selection system state for SketchUp-style multi-selection
+  const selectionStateRef = useRef<{
+    selectedIds: Set<string>;           // Currently selected mesh IDs
+    isDragging: boolean;                 // Box selection in progress
+    dragStartX: number;                  // Box selection start screen X
+    dragStartY: number;                  // Box selection start screen Y
+    dragCurrentX: number;                // Box selection current screen X
+    dragCurrentY: number;                // Box selection current screen Y
+    lastClickId: string | null;          // For double/triple click detection
+    lastClickTime: number;               // Last click timestamp
+    clickCount: number;                  // Click count for multi-click detection
+    selectionBoxElement: HTMLDivElement | null;  // Visual selection box element
+  }>({
+    selectedIds: new Set(),
+    isDragging: false,
+    dragStartX: 0,
+    dragStartY: 0,
+    dragCurrentX: 0,
+    dragCurrentY: 0,
+    lastClickId: null,
+    lastClickTime: 0,
+    clickCount: 0,
+    selectionBoxElement: null,
   });
 
   // HUD overlay refs for Drawing Cursor System
@@ -1240,6 +1277,324 @@ const CustomModelingPage: React.FC = () => {
     camera.beta = target.beta;
   }, []);
 
+  // ==================== SELECTION SYSTEM ====================
+
+  // Add mesh to selection
+  const addToSelection = useCallback((mesh: Mesh) => {
+    const selState = selectionStateRef.current;
+    if (!mesh.id || selState.selectedIds.has(mesh.id)) return;
+
+    selState.selectedIds.add(mesh.id);
+    if (highlightLayerRef.current) {
+      highlightLayerRef.current.addMesh(mesh, Color3.FromHexString('#6366f1'));
+    }
+  }, []);
+
+  // Remove mesh from selection
+  const removeFromSelection = useCallback((mesh: Mesh) => {
+    const selState = selectionStateRef.current;
+    if (!mesh.id || !selState.selectedIds.has(mesh.id)) return;
+
+    selState.selectedIds.delete(mesh.id);
+    if (highlightLayerRef.current) {
+      highlightLayerRef.current.removeMesh(mesh);
+    }
+  }, []);
+
+  // Clear all selection
+  const clearSelection = useCallback(() => {
+    const scene = sceneRef.current;
+    const selState = selectionStateRef.current;
+    if (!scene) return;
+
+    selState.selectedIds.forEach(id => {
+      const mesh = scene.getMeshById(id);
+      if (mesh && highlightLayerRef.current) {
+        highlightLayerRef.current.removeMesh(mesh);
+      }
+    });
+
+    selState.selectedIds.clear();
+    setSelectedMesh(null);
+    setMeshProperties(null);
+    if (gizmoManagerRef.current) {
+      gizmoManagerRef.current.attachToMesh(null);
+    }
+  }, []);
+
+  // Toggle mesh selection
+  const toggleSelection = useCallback((mesh: Mesh) => {
+    const selState = selectionStateRef.current;
+    if (selState.selectedIds.has(mesh.id)) {
+      removeFromSelection(mesh);
+    } else {
+      addToSelection(mesh);
+    }
+  }, [addToSelection, removeFromSelection]);
+
+  // Select single mesh (clears previous selection)
+  const selectSingle = useCallback((mesh: Mesh) => {
+    clearSelection();
+    addToSelection(mesh);
+    setSelectedMesh(mesh);
+    if (gizmoManagerRef.current) {
+      gizmoManagerRef.current.attachToMesh(mesh);
+    }
+    updateMeshProperties(mesh);
+  }, [clearSelection, addToSelection]);
+
+  // Get connected entities for double/triple click
+  const getConnectedMeshes = useCallback((mesh: Mesh, deep: boolean = false): Mesh[] => {
+    const scene = sceneRef.current;
+    if (!scene) return [];
+
+    const connected: Mesh[] = [];
+    const visited = new Set<string>();
+    const toVisit: Mesh[] = [mesh];
+
+    while (toVisit.length > 0) {
+      const current = toVisit.pop()!;
+      if (visited.has(current.id)) continue;
+      visited.add(current.id);
+      connected.push(current);
+
+      if (!deep && connected.length > 1) continue;  // For double-click, only immediate connections
+
+      // Find adjacent meshes (sharing edges/vertices)
+      // For now, simplified: find meshes with overlapping bounding boxes
+      const currentBB = current.getBoundingInfo().boundingBox;
+      scene.meshes.forEach(other => {
+        if (other === current || visited.has(other.id)) return;
+        if (!other.isPickable || other.name.includes('ground') || other.name.includes('preview')) return;
+
+        const otherBB = other.getBoundingInfo().boundingBox;
+        // Check if bounding boxes touch or overlap
+        if (currentBB.intersectsMinMax(otherBB.minimumWorld, otherBB.maximumWorld)) {
+          toVisit.push(other as Mesh);
+        }
+      });
+    }
+
+    return connected;
+  }, []);
+
+  // Handle double-click: select face + bounding edges, or edge + connected faces
+  const handleDoubleClick = useCallback((mesh: Mesh) => {
+    clearSelection();
+    const connected = getConnectedMeshes(mesh, false);
+    connected.forEach(m => addToSelection(m));
+
+    // Set first mesh as primary selection
+    if (connected.length > 0) {
+      setSelectedMesh(connected[0]);
+      if (gizmoManagerRef.current) {
+        gizmoManagerRef.current.attachToMesh(connected[0]);
+      }
+    }
+  }, [clearSelection, getConnectedMeshes, addToSelection]);
+
+  // Handle triple-click: select all connected geometry
+  const handleTripleClick = useCallback((mesh: Mesh) => {
+    clearSelection();
+    const connected = getConnectedMeshes(mesh, true);
+    connected.forEach(m => addToSelection(m));
+
+    if (connected.length > 0) {
+      setSelectedMesh(connected[0]);
+      if (gizmoManagerRef.current) {
+        gizmoManagerRef.current.attachToMesh(connected[0]);
+      }
+    }
+  }, [clearSelection, getConnectedMeshes, addToSelection]);
+
+  // Check if mesh is within box selection (window or crossing mode)
+  const isMeshInSelectionBox = useCallback((
+    mesh: Mesh,
+    x1: number, y1: number,
+    x2: number, y2: number,
+    isWindowSelect: boolean  // true = fully contained, false = crossing
+  ): boolean => {
+    const scene = sceneRef.current;
+    const camera = cameraRef.current;
+    if (!scene || !camera) return false;
+
+    const engine = scene.getEngine();
+    const bb = mesh.getBoundingInfo().boundingBox;
+
+    // Get all 8 corners of bounding box
+    const corners = [
+      new Vector3(bb.minimumWorld.x, bb.minimumWorld.y, bb.minimumWorld.z),
+      new Vector3(bb.maximumWorld.x, bb.minimumWorld.y, bb.minimumWorld.z),
+      new Vector3(bb.minimumWorld.x, bb.maximumWorld.y, bb.minimumWorld.z),
+      new Vector3(bb.maximumWorld.x, bb.maximumWorld.y, bb.minimumWorld.z),
+      new Vector3(bb.minimumWorld.x, bb.minimumWorld.y, bb.maximumWorld.z),
+      new Vector3(bb.maximumWorld.x, bb.minimumWorld.y, bb.maximumWorld.z),
+      new Vector3(bb.minimumWorld.x, bb.maximumWorld.y, bb.maximumWorld.z),
+      new Vector3(bb.maximumWorld.x, bb.maximumWorld.y, bb.maximumWorld.z),
+    ];
+
+    // Project corners to screen space
+    const screenCorners = corners.map(corner =>
+      Vector3.Project(
+        corner,
+        Matrix.Identity(),
+        scene.getTransformMatrix(),
+        camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight())
+      )
+    );
+
+    // Normalize box coordinates
+    const boxLeft = Math.min(x1, x2);
+    const boxRight = Math.max(x1, x2);
+    const boxTop = Math.min(y1, y2);
+    const boxBottom = Math.max(y1, y2);
+
+    if (isWindowSelect) {
+      // Window select: ALL corners must be inside box
+      return screenCorners.every(corner =>
+        corner.x >= boxLeft && corner.x <= boxRight &&
+        corner.y >= boxTop && corner.y <= boxBottom
+      );
+    } else {
+      // Crossing select: ANY corner inside box, or box intersects mesh bounds
+      const anyInside = screenCorners.some(corner =>
+        corner.x >= boxLeft && corner.x <= boxRight &&
+        corner.y >= boxTop && corner.y <= boxBottom
+      );
+
+      if (anyInside) return true;
+
+      // Also check if selection box is inside mesh bounds (for large meshes)
+      const meshScreenMin = {
+        x: Math.min(...screenCorners.map(c => c.x)),
+        y: Math.min(...screenCorners.map(c => c.y))
+      };
+      const meshScreenMax = {
+        x: Math.max(...screenCorners.map(c => c.x)),
+        y: Math.max(...screenCorners.map(c => c.y))
+      };
+
+      // Check for intersection
+      return !(boxRight < meshScreenMin.x || boxLeft > meshScreenMax.x ||
+        boxBottom < meshScreenMin.y || boxTop > meshScreenMax.y);
+    }
+  }, []);
+
+  // Perform box selection
+  const performBoxSelection = useCallback((
+    x1: number, y1: number,
+    x2: number, y2: number,
+    mode: 'replace' | 'add' | 'toggle' | 'subtract'
+  ) => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    // Determine window vs crossing based on drag direction
+    // Left-to-right = window (must be fully inside)
+    // Right-to-left = crossing (just touching is enough)
+    const isWindowSelect = x2 > x1;
+
+    // Get all selectable meshes
+    const selectableMeshes = scene.meshes.filter(m =>
+      m.isPickable &&
+      !m.name.includes('ground') &&
+      !m.name.includes('Axis') &&
+      !m.name.includes('preview') &&
+      !m.name.includes('snapIndicator')
+    ) as Mesh[];
+
+    // Find meshes in selection box
+    const meshesInBox = selectableMeshes.filter(mesh =>
+      isMeshInSelectionBox(mesh, x1, y1, x2, y2, isWindowSelect)
+    );
+
+    // Apply selection based on mode
+    if (mode === 'replace') {
+      clearSelection();
+      meshesInBox.forEach(m => addToSelection(m));
+    } else if (mode === 'add') {
+      meshesInBox.forEach(m => addToSelection(m));
+    } else if (mode === 'toggle') {
+      meshesInBox.forEach(m => toggleSelection(m));
+    } else if (mode === 'subtract') {
+      meshesInBox.forEach(m => removeFromSelection(m));
+    }
+
+    // Update primary selection (first selected)
+    const selState = selectionStateRef.current;
+    if (selState.selectedIds.size > 0) {
+      const firstId = Array.from(selState.selectedIds)[0];
+      const firstMesh = scene.getMeshById(firstId) as Mesh;
+      if (firstMesh) {
+        setSelectedMesh(firstMesh);
+        if (gizmoManagerRef.current) {
+          gizmoManagerRef.current.attachToMesh(firstMesh);
+        }
+      }
+    }
+  }, [clearSelection, addToSelection, toggleSelection, removeFromSelection, isMeshInSelectionBox]);
+
+  // Create/update visual selection box
+  const updateSelectionBox = useCallback((x1: number, y1: number, x2: number, y2: number, visible: boolean) => {
+    const selState = selectionStateRef.current;
+
+    if (!visible) {
+      if (selState.selectionBoxElement) {
+        selState.selectionBoxElement.style.display = 'none';
+      }
+      return;
+    }
+
+    // Create selection box element if not exists
+    if (!selState.selectionBoxElement) {
+      const box = document.createElement('div');
+      box.style.position = 'fixed';
+      box.style.pointerEvents = 'none';
+      box.style.zIndex = '9999';
+      document.body.appendChild(box);
+      selState.selectionBoxElement = box;
+    }
+
+    const box = selState.selectionBoxElement;
+    const isWindowSelect = x2 > x1;
+
+    // Different styles for window vs crossing
+    if (isWindowSelect) {
+      // Window select: solid blue border, transparent fill
+      box.style.border = '1px solid #3b82f6';
+      box.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+    } else {
+      // Crossing select: dashed green border, transparent fill
+      box.style.border = '1px dashed #22c55e';
+      box.style.backgroundColor = 'rgba(34, 197, 94, 0.1)';
+    }
+
+    // Position box
+    box.style.left = `${Math.min(x1, x2)}px`;
+    box.style.top = `${Math.min(y1, y2)}px`;
+    box.style.width = `${Math.abs(x2 - x1)}px`;
+    box.style.height = `${Math.abs(y2 - y1)}px`;
+    box.style.display = 'block';
+  }, []);
+
+  // Select all meshes
+  const selectAll = useCallback(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    clearSelection();
+    scene.meshes.forEach(mesh => {
+      if (mesh.isPickable &&
+        !mesh.name.includes('ground') &&
+        !mesh.name.includes('Axis') &&
+        !mesh.name.includes('preview')) {
+        addToSelection(mesh as Mesh);
+      }
+    });
+  }, [clearSelection, addToSelection]);
+
+  // ==================== END SELECTION SYSTEM ====================
+
   // Initialize Babylon.js scene
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -1386,31 +1741,12 @@ const CustomModelingPage: React.FC = () => {
     // Highlight layer
     highlightLayerRef.current = new HighlightLayer('highlight', scene);
 
-    // Create dotted hover material for push/pull tool (SketchUp-style)
-    const dottedTexture = new DynamicTexture('dottedTexture', 64, scene, false);
-    const ctx = dottedTexture.getContext();
-    // Fill with face color (light gray)
-    ctx.fillStyle = '#e8e8e8';
-    ctx.fillRect(0, 0, 64, 64);
-    // Draw dense blue dots pattern
-    ctx.fillStyle = '#4488ff';
-    const dotSize = 2;
-    const spacing = 6;
-    for (let x = 0; x < 64; x += spacing) {
-      for (let y = 0; y < 64; y += spacing) {
-        ctx.beginPath();
-        ctx.arc(x + spacing/2, y + spacing/2, dotSize, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    dottedTexture.update();
-
-    const dottedMaterial = new StandardMaterial('dottedHoverMaterial', scene);
-    dottedMaterial.diffuseTexture = dottedTexture;
-    dottedMaterial.diffuseTexture.uScale = 10;  // Repeat pattern
-    dottedMaterial.diffuseTexture.vScale = 10;
-    dottedMaterial.specularColor = new Color3(0, 0, 0);  // No specular
-    dottedHoverMaterialRef.current = dottedMaterial;
+    // Create hover highlight material for push/pull tool (blue tint)
+    const hoverMaterial = new StandardMaterial('hoverHighlightMaterial', scene);
+    hoverMaterial.diffuseColor = new Color3(0.6, 0.75, 1.0);  // Light blue tint
+    hoverMaterial.specularColor = new Color3(0, 0, 0);  // No specular
+    hoverMaterial.alpha = 0.85;  // Slightly transparent
+    dottedHoverMaterialRef.current = hoverMaterial;
 
     // Gizmo manager
     const utilLayer = new UtilityLayerRenderer(scene);
@@ -2287,34 +2623,34 @@ const CustomModelingPage: React.FC = () => {
 
   // Tool definitions with SVG icons
   const tools = [
-    { id: 'select', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M5 3L5 19L9 15L12 21L14 20L11 14L17 14L5 3Z" fill="currentColor"/></svg>, title: 'Select (Space)' },
-    { id: 'makeComponent', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>, title: 'Make Component (G)' },
-    { id: 'paint', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M19 6L17 4L7 14V17H10L20 7L19 6Z" fill="currentColor" opacity="0.3"/><path d="M19 6L17 4L7 14V17H10L20 7L19 6ZM4 20H20" stroke="currentColor" strokeWidth="1.5"/></svg>, title: 'Paint (B)' },
+    { id: 'select', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M5 3L5 19L9 15L12 21L14 20L11 14L17 14L5 3Z" fill="currentColor" /></svg>, title: 'Select (Space)' },
+    { id: 'makeComponent', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" /><circle cx="12" cy="12" r="3" fill="currentColor" /></svg>, title: 'Make Component (G)' },
+    { id: 'paint', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M19 6L17 4L7 14V17H10L20 7L19 6Z" fill="currentColor" opacity="0.3" /><path d="M19 6L17 4L7 14V17H10L20 7L19 6ZM4 20H20" stroke="currentColor" strokeWidth="1.5" /></svg>, title: 'Paint (B)' },
     { type: 'divider' },
     { id: 'line', icon: <LuPencilLine size={18} />, title: 'Line (L)' },
     { id: 'eraser', icon: <BsEraser size={18} />, title: 'Eraser (E)' },
-    { id: 'freehand', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M4 17C8 15 10 8 14 10C18 12 16 17 20 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>, title: 'Freehand' },
-    { id: 'rectangle', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="12" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.2"/></svg>, title: 'Rectangle (R)' },
-    { id: 'circle', icon: <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.2"/></svg>, title: 'Circle (C)' },
-    { id: 'polygon', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M12 4L20 9V15L12 20L4 15V9L12 4Z" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.2"/></svg>, title: 'Polygon' },
-    { id: 'arc', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M4 18C4 10 10 4 18 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>, title: 'Arc (A)' },
+    { id: 'freehand', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M4 17C8 15 10 8 14 10C18 12 16 17 20 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>, title: 'Freehand' },
+    { id: 'rectangle', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="12" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.2" /></svg>, title: 'Rectangle (R)' },
+    { id: 'circle', icon: <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.2" /></svg>, title: 'Circle (C)' },
+    { id: 'polygon', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M12 4L20 9V15L12 20L4 15V9L12 4Z" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.2" /></svg>, title: 'Polygon' },
+    { id: 'arc', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M4 18C4 10 10 4 18 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>, title: 'Arc (A)' },
     { type: 'divider' },
     { id: 'move', icon: <BiMove size={18} />, title: 'Move (M)' },
-    { id: 'pushpull', icon: <LuArrowUpFromLine size={18} />, title: 'Push/Pull (P)' },
+    { id: 'pushpull', icon: <PushPullIcon size={18} />, title: 'Push/Pull (P)' },
     { id: 'rotate', icon: <GrRotateRight size={18} />, title: 'Rotate (Q)' },
     { id: 'scale', icon: <LuScaling size={18} />, title: 'Scale (S)' },
     { id: 'offset', icon: <LuSquareSquare size={18} />, title: 'Offset (F)' },
     { type: 'divider' },
     { id: 'tape', icon: <FaTape size={18} />, title: 'Tape Measure (T)' },
-    { id: 'dimension', icon: <svg viewBox="0 0 24 24" fill="none"><line x1="4" y1="18" x2="20" y2="18" stroke="currentColor" strokeWidth="1.5"/><line x1="4" y1="15" x2="4" y2="21" stroke="currentColor" strokeWidth="1.5"/><line x1="20" y1="15" x2="20" y2="21" stroke="currentColor" strokeWidth="1.5"/><text x="12" y="14" fontSize="8" textAnchor="middle" fill="currentColor">2.5m</text></svg>, title: 'Dimension' },
-    { id: 'protractor', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M2 20h20M2 20A10 10 0 0 1 12 10a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="20" x2="12" y2="10" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="20" x2="5" y2="12" stroke="currentColor" strokeWidth="1"/><line x1="12" y1="20" x2="19" y2="12" stroke="currentColor" strokeWidth="1"/></svg>, title: 'Protractor' },
+    { id: 'dimension', icon: <svg viewBox="0 0 24 24" fill="none"><line x1="4" y1="18" x2="20" y2="18" stroke="currentColor" strokeWidth="1.5" /><line x1="4" y1="15" x2="4" y2="21" stroke="currentColor" strokeWidth="1.5" /><line x1="20" y1="15" x2="20" y2="21" stroke="currentColor" strokeWidth="1.5" /><text x="12" y="14" fontSize="8" textAnchor="middle" fill="currentColor">2.5m</text></svg>, title: 'Dimension' },
+    { id: 'protractor', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M2 20h20M2 20A10 10 0 0 1 12 10a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="1.5" /><line x1="12" y1="20" x2="12" y2="10" stroke="currentColor" strokeWidth="1.5" /><line x1="12" y1="20" x2="5" y2="12" stroke="currentColor" strokeWidth="1" /><line x1="12" y1="20" x2="19" y2="12" stroke="currentColor" strokeWidth="1" /></svg>, title: 'Protractor' },
     { type: 'divider' },
     { id: 'orbit', icon: <LuRotate3D size={18} />, title: 'Orbit (O)' },
     { id: 'pan', icon: <IoHandRightOutline size={18} />, title: 'Pan (H)' },
-    { id: 'zoom', icon: <svg viewBox="0 0 24 24" fill="none"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="1.5"/><line x1="14" y1="14" x2="20" y2="20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/><line x1="10" y1="7" x2="10" y2="13" stroke="currentColor" strokeWidth="1.5"/><line x1="7" y1="10" x2="13" y2="10" stroke="currentColor" strokeWidth="1.5"/></svg>, title: 'Zoom (Z)' },
-    { id: 'zoomExtents', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 1"/><path d="M4 8V4H8M16 4H20V8M20 16V20H16M8 20H4V16" stroke="currentColor" strokeWidth="1.5"/></svg>, title: 'Zoom Extents (Shift+Z)' },
+    { id: 'zoom', icon: <svg viewBox="0 0 24 24" fill="none"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="1.5" /><line x1="14" y1="14" x2="20" y2="20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /><line x1="10" y1="7" x2="10" y2="13" stroke="currentColor" strokeWidth="1.5" /><line x1="7" y1="10" x2="13" y2="10" stroke="currentColor" strokeWidth="1.5" /></svg>, title: 'Zoom (Z)' },
+    { id: 'zoomExtents', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 1" /><path d="M4 8V4H8M16 4H20V8M20 16V20H16M8 20H4V16" stroke="currentColor" strokeWidth="1.5" /></svg>, title: 'Zoom Extents (Shift+Z)' },
     { type: 'divider' },
-    { id: 'section', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="8" width="16" height="8" fill="currentColor" opacity="0.2" stroke="currentColor" strokeWidth="1.5"/><line x1="4" y1="12" x2="20" y2="12" stroke="#f97316" strokeWidth="2"/></svg>, title: 'Section Plane' },
+    { id: 'section', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="8" width="16" height="8" fill="currentColor" opacity="0.2" stroke="currentColor" strokeWidth="1.5" /><line x1="4" y1="12" x2="20" y2="12" stroke="#f97316" strokeWidth="2" /></svg>, title: 'Section Plane' },
     { id: 'text', icon: <svg viewBox="0 0 24 24" fill="none"><text x="12" y="17" fontSize="14" textAnchor="middle" fill="currentColor" fontWeight="bold">T</text></svg>, title: 'Text' },
   ];
 
@@ -2341,40 +2677,40 @@ const CustomModelingPage: React.FC = () => {
           <button className={styles.themeToggle} onClick={toggleTheme} title={themeMode === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
             {themeMode === 'dark' ? (
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="5"/>
-                <line x1="12" y1="1" x2="12" y2="3"/>
-                <line x1="12" y1="21" x2="12" y2="23"/>
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
-                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-                <line x1="1" y1="12" x2="3" y2="12"/>
-                <line x1="21" y1="12" x2="23" y2="12"/>
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
-                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                <circle cx="12" cy="12" r="5" />
+                <line x1="12" y1="1" x2="12" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="23" />
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                <line x1="1" y1="12" x2="3" y2="12" />
+                <line x1="21" y1="12" x2="23" y2="12" />
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
               </svg>
             ) : (
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+                <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
               </svg>
             )}
           </button>
           <button className={`${styles.headerBtn} ${styles.headerBtnGhost}`}>
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
             Undo
           </button>
           <button className={`${styles.headerBtn} ${styles.headerBtnPrimary}`}>
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+              <path d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
             </svg>
             Export
           </button>
           <div className={styles.headerDivider} />
           <button className={styles.exitBtn} onClick={() => navigate('/editor')} title="Exit to Editor">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
-              <polyline points="16 17 21 12 16 7"/>
-              <line x1="21" y1="12" x2="9" y2="12"/>
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
           </button>
         </div>
@@ -2409,7 +2745,7 @@ const CustomModelingPage: React.FC = () => {
           {/* Floating Top Toolbar */}
           <div className={styles.topToolbar}>
             <button className={`${styles.topToolBtn} ${activeTool === 'select' ? styles.active : ''}`} onClick={() => setActiveTool('select')} title="Select">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M5 3L5 19L9 15L12 21L14 20L11 14L17 14L5 3Z" fill="currentColor"/></svg>
+              <svg viewBox="0 0 24 24" fill="none"><path d="M5 3L5 19L9 15L12 21L14 20L11 14L17 14L5 3Z" fill="currentColor" /></svg>
             </button>
             <button className={`${styles.topToolBtn} ${activeTool === 'move' ? styles.active : ''}`} onClick={() => setActiveTool('move')} title="Move">
               <BiMove size={16} />
@@ -2425,13 +2761,13 @@ const CustomModelingPage: React.FC = () => {
               <LuPencilLine size={16} />
             </button>
             <button className={`${styles.topToolBtn} ${activeTool === 'rectangle' ? styles.active : ''}`} onClick={() => setActiveTool('rectangle')} title="Rectangle">
-              <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="12" stroke="currentColor" strokeWidth="1.5"/></svg>
+              <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="12" stroke="currentColor" strokeWidth="1.5" /></svg>
             </button>
             <button className={`${styles.topToolBtn} ${activeTool === 'circle' ? styles.active : ''}`} onClick={() => setActiveTool('circle')} title="Circle">
-              <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5"/></svg>
+              <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5" /></svg>
             </button>
             <button className={`${styles.topToolBtn} ${activeTool === 'pushpull' ? styles.active : ''}`} onClick={() => setActiveTool('pushpull')} title="Push/Pull">
-              <LuArrowUpFromLine size={16} />
+              <PushPullIcon size={16} />
             </button>
             <div className={styles.topToolDivider} />
             <button className={`${styles.topToolBtn} ${activeTool === 'orbit' ? styles.active : ''}`} onClick={() => setActiveTool('orbit')} title="Orbit">
@@ -2441,54 +2777,54 @@ const CustomModelingPage: React.FC = () => {
               <IoHandRightOutline size={16} />
             </button>
             <button className={`${styles.topToolBtn}`} onClick={zoomExtents} title="Zoom Extents">
-              <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 1"/><path d="M4 8V4H8M16 4H20V8M20 16V20H16M8 20H4V16" stroke="currentColor" strokeWidth="1.5"/></svg>
+              <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 1" /><path d="M4 8V4H8M16 4H20V8M20 16V20H16M8 20H4V16" stroke="currentColor" strokeWidth="1.5" /></svg>
             </button>
             <div className={styles.topToolDivider} />
             {/* Camera View Presets - SketchUp style house icons */}
             <button className={styles.topToolBtn} onClick={() => setCameraView('iso')} title="Isometric View">
               <svg viewBox="0 0 24 24" fill="none">
                 {/* 3D isometric house */}
-                <path d="M12 3L4 8V12L12 17L20 12V8L12 3Z" fill="#9CA3AF" stroke="#6B7280" strokeWidth="1"/>
-                <path d="M4 12V18L12 23V17L4 12Z" fill="#D1D5DB" stroke="#6B7280" strokeWidth="1"/>
-                <path d="M20 12V18L12 23V17L20 12Z" fill="#E5E7EB" stroke="#6B7280" strokeWidth="1"/>
-                <path d="M4 8L12 13L20 8" stroke="#6B7280" strokeWidth="1"/>
+                <path d="M12 3L4 8V12L12 17L20 12V8L12 3Z" fill="#9CA3AF" stroke="#6B7280" strokeWidth="1" />
+                <path d="M4 12V18L12 23V17L4 12Z" fill="#D1D5DB" stroke="#6B7280" strokeWidth="1" />
+                <path d="M20 12V18L12 23V17L20 12Z" fill="#E5E7EB" stroke="#6B7280" strokeWidth="1" />
+                <path d="M4 8L12 13L20 8" stroke="#6B7280" strokeWidth="1" />
               </svg>
             </button>
             <button className={styles.topToolBtn} onClick={() => setCameraView('front')} title="Front View">
               <svg viewBox="0 0 24 24" fill="none">
                 {/* Front view house - darker/filled */}
-                <path d="M12 3L4 9V11L12 17L20 11V9L12 3Z" fill="#6B7280" stroke="#4B5563" strokeWidth="1"/>
-                <path d="M4 11V20H20V11L12 17L4 11Z" fill="#9CA3AF" stroke="#4B5563" strokeWidth="1"/>
-                <rect x="10" y="14" width="4" height="6" fill="#4B5563"/>
+                <path d="M12 3L4 9V11L12 17L20 11V9L12 3Z" fill="#6B7280" stroke="#4B5563" strokeWidth="1" />
+                <path d="M4 11V20H20V11L12 17L4 11Z" fill="#9CA3AF" stroke="#4B5563" strokeWidth="1" />
+                <rect x="10" y="14" width="4" height="6" fill="#4B5563" />
               </svg>
             </button>
             <button className={styles.topToolBtn} onClick={() => setCameraView('top')} title="Top View">
               <svg viewBox="0 0 24 24" fill="none">
                 {/* Top view - roof from above */}
-                <path d="M12 4L3 12H6V20H18V12H21L12 4Z" fill="#E5E7EB" stroke="#6B7280" strokeWidth="1"/>
-                <path d="M12 4L3 12H21L12 4Z" fill="#D1D5DB" stroke="#6B7280" strokeWidth="1"/>
-                <line x1="12" y1="4" x2="12" y2="12" stroke="#6B7280" strokeWidth="1"/>
+                <path d="M12 4L3 12H6V20H18V12H21L12 4Z" fill="#E5E7EB" stroke="#6B7280" strokeWidth="1" />
+                <path d="M12 4L3 12H21L12 4Z" fill="#D1D5DB" stroke="#6B7280" strokeWidth="1" />
+                <line x1="12" y1="4" x2="12" y2="12" stroke="#6B7280" strokeWidth="1" />
               </svg>
             </button>
             <button className={styles.topToolBtn} onClick={() => setCameraView('right')} title="Right View">
               <svg viewBox="0 0 24 24" fill="none">
                 {/* Right side view */}
-                <path d="M5 20V11L12 5L19 11V20H5Z" fill="#E5E7EB" stroke="#6B7280" strokeWidth="1"/>
-                <path d="M5 11L12 5L19 11" fill="#D1D5DB" stroke="#6B7280" strokeWidth="1"/>
+                <path d="M5 20V11L12 5L19 11V20H5Z" fill="#E5E7EB" stroke="#6B7280" strokeWidth="1" />
+                <path d="M5 11L12 5L19 11" fill="#D1D5DB" stroke="#6B7280" strokeWidth="1" />
               </svg>
             </button>
             <button className={styles.topToolBtn} onClick={() => setCameraView('back')} title="Back View">
               <svg viewBox="0 0 24 24" fill="none">
                 {/* Back view - outline style */}
-                <path d="M4 20V11L12 4L20 11V20H4Z" fill="none" stroke="#9CA3AF" strokeWidth="1.5"/>
-                <path d="M4 11L12 4L20 11" fill="none" stroke="#9CA3AF" strokeWidth="1.5"/>
+                <path d="M4 20V11L12 4L20 11V20H4Z" fill="none" stroke="#9CA3AF" strokeWidth="1.5" />
+                <path d="M4 11L12 4L20 11" fill="none" stroke="#9CA3AF" strokeWidth="1.5" />
               </svg>
             </button>
             <button className={styles.topToolBtn} onClick={() => setCameraView('left')} title="Left View">
               <svg viewBox="0 0 24 24" fill="none">
                 {/* Left view - simple outline */}
-                <path d="M5 20V11L12 5L19 11V20H5Z" fill="none" stroke="#6B7280" strokeWidth="1.5"/>
-                <path d="M5 11L12 5L19 11" fill="none" stroke="#6B7280" strokeWidth="1.5"/>
+                <path d="M5 20V11L12 5L19 11V20H5Z" fill="none" stroke="#6B7280" strokeWidth="1.5" />
+                <path d="M5 11L12 5L19 11" fill="none" stroke="#6B7280" strokeWidth="1.5" />
               </svg>
             </button>
           </div>
@@ -2497,17 +2833,17 @@ const CustomModelingPage: React.FC = () => {
           <div className={`${styles.viewControls} ${rightPanelCollapsed ? styles.viewControlsCollapsed : ''}`}>
             <button className={styles.viewBtn} onClick={zoomExtents} title="Fit All">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
               </svg>
             </button>
             <button className={styles.viewBtn} title="Top View">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="4" y="8" width="16" height="12" rx="1"/>
+                <rect x="4" y="8" width="16" height="12" rx="1" />
               </svg>
             </button>
             <button className={styles.viewBtn} title="Front View">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="4" y="4" width="16" height="16" rx="1"/>
+                <rect x="4" y="4" width="16" height="16" rx="1" />
               </svg>
             </button>
           </div>
@@ -2519,7 +2855,7 @@ const CustomModelingPage: React.FC = () => {
           onClick={() => setRightPanelCollapsed(!rightPanelCollapsed)}
         >
           <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
-            {rightPanelCollapsed ? <path d="M15 19l-7-7 7-7"/> : <path d="M9 5l7 7-7 7"/>}
+            {rightPanelCollapsed ? <path d="M15 19l-7-7 7-7" /> : <path d="M9 5l7 7-7 7" />}
           </svg>
         </button>
 
@@ -2564,9 +2900,9 @@ const CustomModelingPage: React.FC = () => {
                   ) : (
                     <div className={styles.emptyState}>
                       <svg className={styles.emptyIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
                       </svg>
-                      <div className={styles.emptyText}>No object selected.<br/>Click to select.</div>
+                      <div className={styles.emptyText}>No object selected.<br />Click to select.</div>
                     </div>
                   )}
                 </div>
@@ -2724,41 +3060,41 @@ const CustomModelingPage: React.FC = () => {
                 <div className={styles.primitivesGrid}>
                   <button className={styles.primitiveBtn} onClick={() => addPrimitive('cube')}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                      <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
                     </svg>
                     <span>Cube</span>
                   </button>
                   <button className={styles.primitiveBtn} onClick={() => addPrimitive('sphere')}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <circle cx="12" cy="12" r="9"/>
-                      <ellipse cx="12" cy="12" rx="9" ry="4"/>
+                      <circle cx="12" cy="12" r="9" />
+                      <ellipse cx="12" cy="12" rx="9" ry="4" />
                     </svg>
                     <span>Sphere</span>
                   </button>
                   <button className={styles.primitiveBtn} onClick={() => addPrimitive('cylinder')}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <ellipse cx="12" cy="6" rx="8" ry="3"/>
-                      <path d="M4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/>
+                      <ellipse cx="12" cy="6" rx="8" ry="3" />
+                      <path d="M4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6" />
                     </svg>
                     <span>Cylinder</span>
                   </button>
                   <button className={styles.primitiveBtn} onClick={() => addPrimitive('cone')}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path d="M12 3L4 19h16L12 3z"/>
-                      <ellipse cx="12" cy="19" rx="8" ry="2"/>
+                      <path d="M12 3L4 19h16L12 3z" />
+                      <ellipse cx="12" cy="19" rx="8" ry="2" />
                     </svg>
                     <span>Cone</span>
                   </button>
                   <button className={styles.primitiveBtn} onClick={() => addPrimitive('torus')}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <ellipse cx="12" cy="12" rx="9" ry="4"/>
-                      <ellipse cx="12" cy="12" rx="3" ry="1.5"/>
+                      <ellipse cx="12" cy="12" rx="9" ry="4" />
+                      <ellipse cx="12" cy="12" rx="3" ry="1.5" />
                     </svg>
                     <span>Torus</span>
                   </button>
                   <button className={styles.primitiveBtn} onClick={() => addPrimitive('plane')}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path d="M4 18L12 22L20 18L12 14L4 18Z"/>
+                      <path d="M4 18L12 22L20 18L12 14L4 18Z" />
                     </svg>
                     <span>Plane</span>
                   </button>
@@ -2818,15 +3154,15 @@ const CustomModelingPage: React.FC = () => {
                   className={styles.modifierBadge}
                   style={{
                     background: lineInferenceUI.axisColor === 'red' ? '#ef4444' :
-                                lineInferenceUI.axisColor === 'green' ? '#22c55e' :
-                                lineInferenceUI.axisColor === 'blue' ? '#3b82f6' :
-                                lineInferenceUI.axisColor === 'magenta' ? '#d946ef' : '#6b7280'
+                      lineInferenceUI.axisColor === 'green' ? '#22c55e' :
+                        lineInferenceUI.axisColor === 'blue' ? '#3b82f6' :
+                          lineInferenceUI.axisColor === 'magenta' ? '#d946ef' : '#6b7280'
                   }}
                 >
                   {lineInferenceUI.axisColor === 'red' ? 'Red Axis' :
-                   lineInferenceUI.axisColor === 'green' ? 'Green Axis' :
-                   lineInferenceUI.axisColor === 'blue' ? 'Blue Axis' :
-                   lineInferenceUI.axisColor === 'magenta' ? 'Parallel' : ''}
+                    lineInferenceUI.axisColor === 'green' ? 'Green Axis' :
+                      lineInferenceUI.axisColor === 'blue' ? 'Blue Axis' :
+                        lineInferenceUI.axisColor === 'magenta' ? 'Parallel' : ''}
                 </span>
               )}
               {/* Axis Lock Indicator */}
@@ -2835,7 +3171,7 @@ const CustomModelingPage: React.FC = () => {
                   className={styles.modifierBadge}
                   style={{
                     background: lineInferenceUI.axisLock === 'red' ? '#ef4444' :
-                                lineInferenceUI.axisLock === 'green' ? '#22c55e' : '#3b82f6'
+                      lineInferenceUI.axisLock === 'green' ? '#22c55e' : '#3b82f6'
                   }}
                 >
                   🔒 {lineInferenceUI.axisLock === 'red' ? '→' : lineInferenceUI.axisLock === 'green' ? '←' : '↑'} Locked
@@ -2849,10 +3185,10 @@ const CustomModelingPage: React.FC = () => {
               {lineInferenceUI.inferenceType !== 'none' && (
                 <span className={styles.modifierBadge} style={{ background: '#8b5cf6' }}>
                   {lineInferenceUI.inferenceType === 'endpoint' ? '⦿ Endpoint' :
-                   lineInferenceUI.inferenceType === 'midpoint' ? '◎ Midpoint' :
-                   lineInferenceUI.inferenceType === 'on-axis' ? '— On Axis' :
-                   lineInferenceUI.inferenceType === 'perpendicular' ? '⊥ Perpendicular' :
-                   lineInferenceUI.inferenceType === 'parallel' ? '∥ Parallel' : ''}
+                    lineInferenceUI.inferenceType === 'midpoint' ? '◎ Midpoint' :
+                      lineInferenceUI.inferenceType === 'on-axis' ? '— On Axis' :
+                        lineInferenceUI.inferenceType === 'perpendicular' ? '⊥ Perpendicular' :
+                          lineInferenceUI.inferenceType === 'parallel' ? '∥ Parallel' : ''}
                 </span>
               )}
               {/* Continuous Mode Indicator */}
@@ -2875,8 +3211,8 @@ const CustomModelingPage: React.FC = () => {
               {activeTool === 'rectangle'
                 ? `${Math.round(currentMeasurement.width)} x ${Math.round(currentMeasurement.height)} mm`
                 : activeTool === 'circle'
-                ? `반지름: ${Math.round(currentMeasurement.height)} mm`
-                : `반지름: ${Math.round(currentMeasurement.height)} mm, ${currentMeasurement.sides || 6}각형`
+                  ? `반지름: ${Math.round(currentMeasurement.height)} mm`
+                  : `반지름: ${Math.round(currentMeasurement.height)} mm, ${currentMeasurement.sides || 6}각형`
               }
             </span>
           )}
@@ -2891,10 +3227,10 @@ const CustomModelingPage: React.FC = () => {
             className={styles.measureInput}
             placeholder={
               activeTool === 'line' ? '길이 (mm)' :
-              activeTool === 'rectangle' ? '길이, 너비 (mm)' :
-              activeTool === 'circle' ? '반지름 (mm)' :
-              activeTool === 'polygon' ? '반지름 (mm) 또는 6s' :
-              '측정값'
+                activeTool === 'rectangle' ? '길이, 너비 (mm)' :
+                  activeTool === 'circle' ? '반지름 (mm)' :
+                    activeTool === 'polygon' ? '반지름 (mm) 또는 6s' :
+                      '측정값'
             }
             value={measurementInput}
             onChange={(e) => setMeasurementInput(e.target.value)}
