@@ -422,9 +422,13 @@ const CustomModelingPage: React.FC = () => {
     lineInf.inferenceType = inferenceType;
     setLineInferenceUI(prev => ({ ...prev, axisColor, inferenceType }));
 
-    // Create line with appropriate color
+    // Create line with appropriate color (flat on ground plane at Y=0.01)
+    const linePoints = [
+      new Vector3(start.x, 0.01, start.z),
+      new Vector3(constrainedEnd.x, 0.01, constrainedEnd.z)
+    ];
     const line = MeshBuilder.CreateLines('previewLine', {
-      points: [start, constrainedEnd],
+      points: linePoints,
       updatable: false,
     }, scene);
 
@@ -522,7 +526,7 @@ const CustomModelingPage: React.FC = () => {
     }
   }, []);
 
-  // Finalize line as geometry with axis color
+  // Finalize line as edge geometry with axis color (SketchUp style - flat line on ground)
   const finalizeLine = useCallback((scene: Scene, start: Vector3, end: Vector3): Mesh => {
     const lineInf = lineInferenceRef.current;
 
@@ -530,40 +534,46 @@ const CustomModelingPage: React.FC = () => {
     const constrainedEnd = applyAxisLock(start, end, lineInf.axisLock);
 
     meshCounterRef.current++;
-    const edgeMat = new StandardMaterial(`edgeMat_${meshCounterRef.current}`, scene);
 
     // Set edge color based on current axis color
+    let lineColor: Color3;
     switch (lineInf.axisColor) {
       case 'red':
-        edgeMat.diffuseColor = new Color3(0.9, 0.2, 0.2);
+        lineColor = new Color3(0.9, 0.2, 0.2);
         break;
       case 'green':
-        edgeMat.diffuseColor = new Color3(0.2, 0.8, 0.2);
+        lineColor = new Color3(0.2, 0.8, 0.2);
         break;
       case 'blue':
-        edgeMat.diffuseColor = new Color3(0.3, 0.5, 1);
+        lineColor = new Color3(0.3, 0.5, 1);
         break;
       case 'magenta':
-        edgeMat.diffuseColor = new Color3(0.9, 0.3, 0.9);
+        lineColor = new Color3(0.9, 0.3, 0.9);
         break;
       default:
-        edgeMat.diffuseColor = new Color3(0.3, 0.3, 0.3);
+        lineColor = new Color3(0.1, 0.1, 0.1);  // Dark gray/black for no inference
     }
 
-    const length = Vector3.Distance(start, constrainedEnd);
-    const edge = MeshBuilder.CreateBox(`Edge_${meshCounterRef.current}`, {
-      width: length,
-      height: 0.1,  // Increased from 0.02 for better visibility
-      depth: 0.1,   // Increased from 0.02 for better visibility
+    // Create flat line on ground plane (Y=0.01 to avoid z-fighting)
+    const linePoints = [
+      new Vector3(start.x, 0.01, start.z),
+      new Vector3(constrainedEnd.x, 0.01, constrainedEnd.z)
+    ];
+
+    const edge = MeshBuilder.CreateLines(`Edge_${meshCounterRef.current}`, {
+      points: linePoints,
+      updatable: false
     }, scene);
 
-    const midPoint = start.add(constrainedEnd).scale(0.5);
-    edge.position = new Vector3(midPoint.x, 0.05, midPoint.z);  // Raised to half height
+    edge.color = lineColor;
+    edge.isPickable = true;
 
-    const angle = Math.atan2(constrainedEnd.z - start.z, constrainedEnd.x - start.x);
-    edge.rotation.y = -angle;
-
-    edge.material = edgeMat;
+    // Store edge metadata for future operations
+    edge.metadata = {
+      type: 'edge',
+      startPoint: start.clone(),
+      endPoint: constrainedEnd.clone()
+    };
 
     // Store the endpoint for continuous drawing mode
     lineInf.lastEndpoint = constrainedEnd.clone();
@@ -574,7 +584,7 @@ const CustomModelingPage: React.FC = () => {
     lineInf.inferenceLocked = false;
     setLineInferenceUI(prev => ({ ...prev, axisLock: 'none', inferenceLocked: false }));
 
-    return edge;
+    return edge as unknown as Mesh;
   }, [applyAxisLock]);
 
   // Finalize rectangle as face geometry with modifier support
