@@ -118,6 +118,21 @@ const CustomModelingPage: React.FC = () => {
   // Snap threshold for origin and endpoints - larger = more magnetic
   const SNAP_THRESHOLD = 0.8;
 
+  // Unit conversion: 1 unit in 3D = 1000mm (1 meter)
+  // So if user types 500mm, it becomes 0.5 units
+  const MM_TO_UNIT = 0.001;
+  const UNIT_TO_MM = 1000;
+
+  // Current measurement state for display
+  const [currentMeasurement, setCurrentMeasurement] = useState<{
+    width: number;   // in mm
+    height: number;  // in mm (or radius for circle/polygon)
+    sides?: number;  // for polygon
+  }>({ width: 0, height: 0 });
+
+  // Measurement input ref for direct keyboard capture
+  const measureInputRef = useRef<HTMLInputElement>(null);
+
   // Get ground point with grid snapping and magnetic snap to origin
   const getGroundPoint = useCallback((scene: Scene, pointerX: number, pointerY: number): Vector3 | null => {
     const pickResult = scene.pick(pointerX, pointerY, (mesh) => mesh.name === 'groundPicker');
@@ -146,6 +161,102 @@ const CustomModelingPage: React.FC = () => {
     }
     return null;
   }, []);
+
+  // Parse measurement input (supports "1000, 500" or "1000" formats, default mm)
+  const parseMeasurementInput = useCallback((input: string): { width?: number; height?: number; radius?: number; sides?: number } => {
+    const trimmed = input.trim();
+    if (!trimmed) return {};
+
+    // Handle sides count for polygon (e.g., "6s" or "8S")
+    const sidesMatch = trimmed.match(/(\d+)\s*[sS]/);
+    if (sidesMatch) {
+      return { sides: parseInt(sidesMatch[1], 10) };
+    }
+
+    // Split by comma for width, height
+    const parts = trimmed.split(',').map(p => p.trim());
+
+    // Parse single value (could be just unit value)
+    const parseValue = (val: string): number => {
+      // Remove any unit suffix and parse
+      const numMatch = val.match(/^(-?\d+\.?\d*)\s*(mm|cm|m)?$/i);
+      if (numMatch) {
+        const num = parseFloat(numMatch[1]);
+        const unit = (numMatch[2] || 'mm').toLowerCase();
+        // Convert to mm
+        switch (unit) {
+          case 'm': return num * 1000;
+          case 'cm': return num * 10;
+          default: return num; // mm
+        }
+      }
+      return NaN;
+    };
+
+    if (parts.length === 1) {
+      const value = parseValue(parts[0]);
+      if (!isNaN(value)) {
+        return { radius: value, width: value, height: value };
+      }
+    } else if (parts.length === 2) {
+      const width = parseValue(parts[0]);
+      const height = parseValue(parts[1]);
+      return {
+        width: isNaN(width) ? undefined : width,
+        height: isNaN(height) ? undefined : height,
+      };
+    }
+    return {};
+  }, []);
+
+  // Apply measurement input to current drawing
+  const applyMeasurementInput = useCallback((input: string) => {
+    const scene = sceneRef.current;
+    const state = drawingStateRef.current;
+    if (!scene || !state.isDrawing || !state.startPoint) return;
+
+    const parsed = parseMeasurementInput(input);
+    if (Object.keys(parsed).length === 0) return;
+
+    const start = state.startPoint;
+    const mods = shapeModifiersRef.current;
+
+    if (activeTool === 'rectangle' && parsed.width !== undefined) {
+      const widthUnits = (parsed.width || 0) * MM_TO_UNIT;
+      const heightUnits = (parsed.height || parsed.width || 0) * MM_TO_UNIT;
+
+      let endX: number, endZ: number;
+      if (mods.drawFromCenter) {
+        endX = start.x + widthUnits / 2;
+        endZ = start.z + heightUnits / 2;
+      } else {
+        endX = start.x + widthUnits;
+        endZ = start.z + heightUnits;
+      }
+
+      const endPoint = new Vector3(endX, 0, endZ);
+      state.currentPoint = endPoint;
+      updatePreviewRectangle(scene, start, endPoint);
+      setCurrentMeasurement({ width: parsed.width || 0, height: parsed.height || parsed.width || 0 });
+    } else if (activeTool === 'circle' && parsed.radius !== undefined) {
+      const radiusUnits = parsed.radius * MM_TO_UNIT;
+      const endPoint = new Vector3(start.x + radiusUnits, 0, start.z);
+      state.currentPoint = endPoint;
+      updatePreviewCircle(scene, start, endPoint);
+      setCurrentMeasurement({ width: 0, height: parsed.radius });
+    } else if (activeTool === 'polygon') {
+      if (parsed.sides !== undefined) {
+        // Just update sides, will need to redraw polygon
+        setCurrentMeasurement(prev => ({ ...prev, sides: parsed.sides }));
+      } else if (parsed.radius !== undefined) {
+        const radiusUnits = parsed.radius * MM_TO_UNIT;
+        const endPoint = new Vector3(start.x + radiusUnits, 0, start.z);
+        state.currentPoint = endPoint;
+        updatePreviewPolygon(scene, start, endPoint, currentMeasurement.sides || 6);
+        setCurrentMeasurement(prev => ({ ...prev, width: 0, height: parsed.radius || 0 }));
+      }
+    }
+  }, [activeTool, parseMeasurementInput, currentMeasurement.sides]);
 
   // Create/update preview line
   const updatePreviewLine = useCallback((scene: Scene, start: Vector3, end: Vector3) => {
@@ -1096,18 +1207,43 @@ const CustomModelingPage: React.FC = () => {
         if (point) {
           state.currentPoint = point;
           updatePreviewRectangle(scene, state.startPoint, point);
+          // Update measurement display (convert units to mm)
+          const mods = shapeModifiersRef.current;
+          let w = Math.abs(point.x - state.startPoint.x);
+          let h = Math.abs(point.z - state.startPoint.z);
+          if (mods.lockSquare) {
+            const maxDim = Math.max(w, h);
+            w = maxDim;
+            h = maxDim;
+          }
+          if (mods.drawFromCenter) {
+            w *= 2;
+            h *= 2;
+          }
+          setCurrentMeasurement({ width: Math.round(w * UNIT_TO_MM), height: Math.round(h * UNIT_TO_MM) });
         }
       } else if (activeTool === 'circle') {
         const point = getGroundPoint(scene, scene.pointerX, scene.pointerY);
         if (point) {
           state.currentPoint = point;
           updatePreviewCircle(scene, state.startPoint, point);
+          // Update measurement display (convert radius to mm)
+          const dx = point.x - state.startPoint.x;
+          const dz = point.z - state.startPoint.z;
+          const radius = Math.sqrt(dx * dx + dz * dz);
+          setCurrentMeasurement({ width: 0, height: Math.round(radius * UNIT_TO_MM) });
         }
       } else if (activeTool === 'polygon') {
         const point = getGroundPoint(scene, scene.pointerX, scene.pointerY);
         if (point) {
           state.currentPoint = point;
-          updatePreviewPolygon(scene, state.startPoint, point, 6);
+          const sides = currentMeasurement.sides || 6;
+          updatePreviewPolygon(scene, state.startPoint, point, sides);
+          // Update measurement display (convert radius to mm)
+          const dx = point.x - state.startPoint.x;
+          const dz = point.z - state.startPoint.z;
+          const radius = Math.sqrt(dx * dx + dz * dz);
+          setCurrentMeasurement(prev => ({ ...prev, width: 0, height: Math.round(radius * UNIT_TO_MM) }));
         }
       } else if (activeTool === 'pushpull') {
         const deltaY = (state.startPoint.y - scene.pointerY) * 0.05;
@@ -1941,7 +2077,59 @@ const CustomModelingPage: React.FC = () => {
           )}
         </div>
         <div className={styles.statusRight}>
-          <input className={styles.measureInput} placeholder="Measurements" />
+          {/* Real-time measurement display */}
+          {(activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon') && drawingStateRef.current.isDrawing && (
+            <span className={styles.measureDisplay}>
+              {activeTool === 'rectangle'
+                ? `${Math.round(currentMeasurement.width)} x ${Math.round(currentMeasurement.height)} mm`
+                : activeTool === 'circle'
+                ? `반지름: ${Math.round(currentMeasurement.height)} mm`
+                : `반지름: ${Math.round(currentMeasurement.height)} mm, ${currentMeasurement.sides || 6}각형`
+              }
+            </span>
+          )}
+          <input
+            ref={measureInputRef}
+            className={styles.measureInput}
+            placeholder={
+              activeTool === 'rectangle' ? '길이, 너비 (mm)' :
+              activeTool === 'circle' ? '반지름 (mm)' :
+              activeTool === 'polygon' ? '반지름 (mm) 또는 6s' :
+              '측정값'
+            }
+            value={measurementInput}
+            onChange={(e) => setMeasurementInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                applyMeasurementInput(measurementInput);
+                // If drawing, finalize the shape
+                const state = drawingStateRef.current;
+                const scene = sceneRef.current;
+                if (state.isDrawing && state.startPoint && state.currentPoint && scene) {
+                  if (activeTool === 'rectangle') {
+                    finalizeRectangle(scene, state.startPoint, state.currentPoint);
+                  } else if (activeTool === 'circle') {
+                    finalizeCircle(scene, state.startPoint, state.currentPoint);
+                  } else if (activeTool === 'polygon') {
+                    finalizePolygon(scene, state.startPoint, state.currentPoint, currentMeasurement.sides || 6);
+                  }
+                  // Cleanup
+                  if (state.previewMesh) {
+                    state.previewMesh.dispose();
+                    state.previewMesh = null;
+                  }
+                  state.isDrawing = false;
+                  state.startPoint = null;
+                  state.currentPoint = null;
+                  setMeasurementInput('');
+                }
+              } else if (e.key === 'Escape') {
+                setMeasurementInput('');
+                measureInputRef.current?.blur();
+              }
+              e.stopPropagation();
+            }}
+          />
         </div>
       </div>
     </div>

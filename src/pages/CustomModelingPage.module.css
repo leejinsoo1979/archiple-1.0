@@ -685,6 +685,20 @@
   border-color: var(--cm-accent);
 }
 
+.measureDisplay {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  margin-right: 8px;
+  background: var(--cm-accent);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  letter-spacing: 0.3px;
+}
+
 /* Rectangle Modifier Indicators */
 .modifierIndicators {
   display: flex;
