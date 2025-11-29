@@ -1917,8 +1917,19 @@ const CustomModelingPage: React.FC = () => {
     return nearest;
   }, []);
 
+  // Helper: Check if polygon vertices are clockwise (in XZ plane, looking from +Y)
+  const isPolygonClockwise = (vertices: Vector3[]): boolean => {
+    let sum = 0;
+    for (let i = 0; i < vertices.length; i++) {
+      const v1 = vertices[i];
+      const v2 = vertices[(i + 1) % vertices.length];
+      sum += (v2.x - v1.x) * (v2.z + v1.z);
+    }
+    return sum > 0;
+  };
+
   // Push/Pull for polygon faces with holes (donut shapes)
-  // Uses ExtrudePolygon to create proper donut-shaped solid
+  // Uses ExtrudePolygon - shape must be CCW, holes must be CW
   const applyPushPullPolygon = useCallback((face: Mesh, distance: number, faceNormal: Vector3, scene: Scene): Mesh | null => {
     const { shape, holes } = face.metadata;
     const baseCenter = face.getAbsolutePosition().clone();
@@ -1931,16 +1942,31 @@ const CustomModelingPage: React.FC = () => {
     (window as any).earcut = earcut;
 
     // Convert stored shape data back to Vector3 arrays
-    const outerShape = shape.map((p: { x: number; z: number }) => new Vector3(p.x, 0, p.z));
-    const innerHoles = holes.map((hole: Array<{ x: number; z: number }>) =>
+    let outerShape = shape.map((p: { x: number; z: number }) => new Vector3(p.x, 0, p.z));
+    let innerHoles = holes.map((hole: Array<{ x: number; z: number }>) =>
       hole.map((p: { x: number; z: number }) => new Vector3(p.x, 0, p.z))
     );
 
-    console.log('ExtrudePolygon - outerShape:', outerShape.map((v: Vector3) => `(${v.x.toFixed(3)}, ${v.z.toFixed(3)})`));
-    console.log('ExtrudePolygon - innerHoles:', innerHoles.map((hole: Vector3[]) => hole.map((v: Vector3) => `(${v.x.toFixed(3)}, ${v.z.toFixed(3)})`)));
+    // CRITICAL: Ensure correct winding order for ExtrudePolygon
+    // Shape must be CCW (counter-clockwise), holes must be CW (clockwise)
+    if (isPolygonClockwise(outerShape)) {
+      outerShape = outerShape.slice().reverse();
+      console.log('Reversed outerShape to CCW');
+    }
+    innerHoles = innerHoles.map((hole: Vector3[]) => {
+      if (!isPolygonClockwise(hole)) {
+        console.log('Reversed hole to CW');
+        return hole.slice().reverse();
+      }
+      return hole;
+    });
+
+    console.log('ExtrudePolygon - outerShape (CCW):', outerShape.map((v: Vector3) => `(${v.x.toFixed(3)}, ${v.z.toFixed(3)})`));
+    console.log('ExtrudePolygon - innerHoles (CW):', innerHoles.map((hole: Vector3[]) => hole.map((v: Vector3) => `(${v.x.toFixed(3)}, ${v.z.toFixed(3)})`)));
+    console.log('ExtrudePolygon - baseCenter:', baseCenter, 'height:', height);
 
     try {
-      // Use ExtrudePolygon to create proper donut solid in one call
+      // Use ExtrudePolygon to create proper donut solid
       const extrudedMesh = MeshBuilder.ExtrudePolygon(
         `Solid_${solidId}`,
         {
@@ -1952,11 +1978,11 @@ const CustomModelingPage: React.FC = () => {
         scene
       );
 
-      // ExtrudePolygon creates mesh at Y=0 going down to Y=-depth
-      // Position it so bottom is at face level and top is at face level + height
+      // ExtrudePolygon creates mesh at local Y=0 going down to Y=-depth
+      // Position so bottom is at original face level, top is at face level + height
       extrudedMesh.position = new Vector3(baseCenter.x, baseCenter.y + height, baseCenter.z);
 
-      // Apply material
+      // Apply material with selected color
       const mat = new StandardMaterial(`SolidMat_${solidId}`, scene);
       mat.diffuseColor = Color3.FromHexString(selectedColor);
       mat.specularColor = new Color3(0.2, 0.2, 0.2);
@@ -1971,7 +1997,7 @@ const CustomModelingPage: React.FC = () => {
         holes: holes
       };
 
-      // Create edges for visual clarity
+      // Create visible edges for all boundaries
       const createEdge = (ep1: Vector3, ep2: Vector3, idx: string) => {
         const edge = MeshBuilder.CreateTube(`Edge_${solidId}_${idx}`, {
           path: [ep1, ep2],
@@ -1988,7 +2014,7 @@ const CustomModelingPage: React.FC = () => {
         edge.metadata = { type: 'edge', parentSolid: extrudedMesh };
       };
 
-      // Outer edges (Y=0 is top, Y=-height is bottom relative to mesh)
+      // Outer edges (Y=0 is top, Y=-height is bottom in local coords)
       for (let i = 0; i < outerShape.length; i++) {
         const p1 = outerShape[i];
         const p2 = outerShape[(i + 1) % outerShape.length];
@@ -1997,7 +2023,7 @@ const CustomModelingPage: React.FC = () => {
         createEdge(new Vector3(p1.x, 0, p1.z), new Vector3(p1.x, -height, p1.z), `outer_vert_${i}`);
       }
 
-      // Inner edges (around hole)
+      // Inner edges (around each hole)
       for (let h = 0; h < innerHoles.length; h++) {
         const hole = innerHoles[h];
         for (let i = 0; i < hole.length; i++) {
@@ -2009,13 +2035,13 @@ const CustomModelingPage: React.FC = () => {
         }
       }
 
-      // Dispose original face and its children
+      // Dispose original face and its edge children
       face.getChildMeshes().forEach(child => child.dispose());
       face.dispose();
 
       extrudedMesh.computeWorldMatrix(true);
 
-      console.log(`Created extruded polygon solid, height=${height}`);
+      console.log(`Push/Pull: Created extruded polygon solid at (${extrudedMesh.position.x.toFixed(3)}, ${extrudedMesh.position.y.toFixed(3)}, ${extrudedMesh.position.z.toFixed(3)}), height=${height.toFixed(3)}`);
       return extrudedMesh;
     } catch (e) {
       console.error('Failed to create polygon solid:', e);
@@ -2233,7 +2259,7 @@ const CustomModelingPage: React.FC = () => {
     if (!positions || positions.length < 9) return null;
 
     // Extract unique vertices in world space
-    const vertices: Vector3[] = [];
+    const rawVertices: Vector3[] = [];
     const seen = new Set<string>();
     for (let i = 0; i < positions.length; i += 3) {
       const key = `${positions[i].toFixed(4)},${positions[i+1].toFixed(4)},${positions[i+2].toFixed(4)}`;
@@ -2243,15 +2269,23 @@ const CustomModelingPage: React.FC = () => {
           new Vector3(positions[i], positions[i+1], positions[i+2]),
           face.getWorldMatrix()
         );
-        vertices.push(worldPos);
+        rawVertices.push(worldPos);
       }
     }
 
-    if (vertices.length < 3) return null;
+    if (rawVertices.length < 3) return null;
 
     // Calculate face center and Y position
-    const center = vertices.reduce((acc, v) => acc.add(v), Vector3.Zero()).scale(1 / vertices.length);
+    const center = rawVertices.reduce((acc, v) => acc.add(v), Vector3.Zero()).scale(1 / rawVertices.length);
     const yPos = center.y;
+
+    // IMPORTANT: Sort vertices by angle from center (counter-clockwise order)
+    // This ensures correct polygon perimeter order for offset calculation
+    const vertices = [...rawVertices].sort((a, b) => {
+      const angleA = Math.atan2(a.z - center.z, a.x - center.x);
+      const angleB = Math.atan2(b.z - center.z, b.x - center.x);
+      return angleA - angleB;
+    });
     const n = vertices.length;
 
     // Helper: get perpendicular that points inward (toward center)
@@ -3979,7 +4013,7 @@ const CustomModelingPage: React.FC = () => {
             // Get face vertices from positions buffer
             const positions = face.getVerticesData('position');
             if (positions && positions.length >= 9) {
-              const vertices: Vector3[] = [];
+              const rawVertices: Vector3[] = [];
               // Get unique vertices (assume triangulated quad face = 6 indices, 4 unique vertices)
               const seen = new Set<string>();
               for (let i = 0; i < positions.length; i += 3) {
@@ -3990,12 +4024,19 @@ const CustomModelingPage: React.FC = () => {
                     new Vector3(positions[i], positions[i+1], positions[i+2]),
                     face.getWorldMatrix()
                   );
-                  vertices.push(worldPos);
+                  rawVertices.push(worldPos);
                 }
               }
 
               // Calculate face center
-              const center = vertices.reduce((acc, v) => acc.add(v), Vector3.Zero()).scale(1 / vertices.length);
+              const center = rawVertices.reduce((acc, v) => acc.add(v), Vector3.Zero()).scale(1 / rawVertices.length);
+
+              // IMPORTANT: Sort vertices by angle from center (counter-clockwise order)
+              const vertices = [...rawVertices].sort((a, b) => {
+                const angleA = Math.atan2(a.z - center.z, a.x - center.x);
+                const angleB = Math.atan2(b.z - center.z, b.x - center.x);
+                return angleA - angleB;
+              });
 
               // Check for double-click - apply last offset distance
               if (isDoubleClick && osState.lastOffsetDistance !== 0) {
