@@ -4789,6 +4789,60 @@ const CustomModelingPage: React.FC = () => {
         }
       }
 
+      // Offset tool: dimension input while offsetting
+      if (activeTool === 'offset') {
+        const osState = offsetStateRef.current;
+        if (osState.isOffsetting && osState.baseFace) {
+          // Numbers, period, minus for dimension input
+          if (/^[0-9]$/.test(e.key) || e.key === '.' || e.key === '-') {
+            e.preventDefault();
+            measurementInputValueRef.current += e.key;
+            setMeasurementInput(measurementInputValueRef.current);
+            return;
+          }
+          // Backspace to delete last character
+          if (e.key === 'Backspace' && measurementInputValueRef.current.length > 0) {
+            e.preventDefault();
+            measurementInputValueRef.current = measurementInputValueRef.current.slice(0, -1);
+            setMeasurementInput(measurementInputValueRef.current);
+            return;
+          }
+          // Enter to apply offset distance
+          const osInputValue = measurementInputValueRef.current;
+          if (e.key === 'Enter' && osInputValue.length > 0) {
+            e.preventDefault();
+            const scene = sceneRef.current;
+            if (!scene) return;
+
+            const distanceMm = parseFloat(osInputValue);
+            if (!isNaN(distanceMm)) {
+              const distanceUnits = distanceMm * MM_TO_UNIT;  // Convert mm to units
+
+              // Cleanup preview mesh
+              if (osState.previewMesh) {
+                osState.previewMesh.dispose();
+                osState.previewMesh = null;
+              }
+
+              // Apply the offset
+              applyOffset(osState.baseFace, distanceUnits);
+
+              // Store last distance for double-click repeat
+              osState.lastOffsetDistance = distanceUnits;
+
+              // Reset offset state
+              osState.isOffsetting = false;
+              osState.baseFace = null;
+              osState.baseVertices = [];
+              osState.baseCenter = null;
+            }
+            measurementInputValueRef.current = '';
+            setMeasurementInput('');
+            return;
+          }
+        }
+      }
+
       // Push/Pull tool: Shift locks the axis direction
       if (activeTool === 'pushpull' && e.key === 'Shift') {
         const ppState = pushPullStateRef.current;
