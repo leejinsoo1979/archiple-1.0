@@ -1315,11 +1315,10 @@ const CustomModelingPage: React.FC = () => {
       face.position.z + extrudeDir.z / 2
     );
 
-    // Semi-transparent solid material (not wireframe)
+    // Solid preview material
     const previewMat = new StandardMaterial('pushPullPreviewMat', scene);
     previewMat.diffuseColor = new Color3(0.5, 0.7, 1);
-    previewMat.specularColor = new Color3(0, 0, 0);
-    previewMat.alpha = 0.5;
+    previewMat.specularColor = new Color3(0.1, 0.1, 0.1);
     preview.material = previewMat;
 
     preview.isPickable = false;
@@ -1440,6 +1439,16 @@ const CustomModelingPage: React.FC = () => {
   }, []);
 
   // ==================== SELECTION SYSTEM ====================
+
+  // Clear all selection
+  const clearSelection = useCallback(() => {
+    selectionManagerRef.current?.clear();
+    setSelectedMesh(null);
+    setMeshProperties(null);
+    if (gizmoManagerRef.current) {
+      gizmoManagerRef.current.attachToMesh(null);
+    }
+  }, []);
 
   // Selection helpers
   const handleSelectionClick = useCallback((pickResult: any, event: PointerEvent) => {
@@ -1596,70 +1605,6 @@ const CustomModelingPage: React.FC = () => {
 
     return connected;
   }, []);
-
-  // Handle double-click: select face + bounding edges, or edge + connected faces
-  const handleDoubleClick = useCallback((mesh: Mesh) => {
-    const scene = sceneRef.current;
-    if (!scene) return;
-
-    clearSelection();
-
-    // If clicking on edge, select the parent face and all its edges
-    if (mesh.metadata?.type === 'edge' && mesh.metadata?.parentFaceId) {
-      const parentFace = scene.getMeshById(mesh.metadata.parentFaceId) as Mesh;
-      if (parentFace) {
-        addToSelection(parentFace);
-        // Select all edges of the face
-        const edgeIds = parentFace.metadata?.edgeIds as string[] || [];
-        edgeIds.forEach(edgeId => {
-          const edge = scene.getMeshById(edgeId) as Mesh;
-          if (edge) addToSelection(edge);
-        });
-        setSelectedMesh(parentFace);
-        if (gizmoManagerRef.current) {
-          gizmoManagerRef.current.attachToMesh(parentFace);
-        }
-      }
-    }
-    // If clicking on face, select the face and all its edges
-    else if (mesh.metadata?.type === 'face') {
-      addToSelection(mesh);
-      const edgeIds = mesh.metadata?.edgeIds as string[] || [];
-      edgeIds.forEach(edgeId => {
-        const edge = scene.getMeshById(edgeId) as Mesh;
-        if (edge) addToSelection(edge);
-      });
-      setSelectedMesh(mesh);
-      if (gizmoManagerRef.current) {
-        gizmoManagerRef.current.attachToMesh(mesh);
-      }
-    }
-    // Otherwise, select connected meshes
-    else {
-      const connected = getConnectedMeshes(mesh, false);
-      connected.forEach(m => addToSelection(m));
-      if (connected.length > 0) {
-        setSelectedMesh(connected[0]);
-        if (gizmoManagerRef.current) {
-          gizmoManagerRef.current.attachToMesh(connected[0]);
-        }
-      }
-    }
-  }, [clearSelection, getConnectedMeshes, addToSelection]);
-
-  // Handle triple-click: select all connected geometry
-  const handleTripleClick = useCallback((mesh: Mesh) => {
-    clearSelection();
-    const connected = getConnectedMeshes(mesh, true);
-    connected.forEach(m => addToSelection(m));
-
-    if (connected.length > 0) {
-      setSelectedMesh(connected[0]);
-      if (gizmoManagerRef.current) {
-        gizmoManagerRef.current.attachToMesh(connected[0]);
-      }
-    }
-  }, [clearSelection, getConnectedMeshes, addToSelection]);
 
   // Check if mesh is within box selection (window or crossing mode)
   const isMeshInSelectionBox = useCallback((
@@ -2649,13 +2594,11 @@ const CustomModelingPage: React.FC = () => {
       } else if (activeTool === 'select') {
         const boxState = selectionBoxRef.current;
         if (boxState.isDragging) {
-          boxState.currentX = scene.pointerX;
-          boxState.currentY = scene.pointerY;
           updateSelectionBox(
             boxState.startX,
             boxState.startY,
-            boxState.currentX,
-            boxState.currentY,
+            scene.pointerX,
+            scene.pointerY,
             true
           );
         }
@@ -2781,20 +2724,21 @@ const CustomModelingPage: React.FC = () => {
 
           if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
             performBoxSelection(
-              selState.dragStartY,
-              selState.dragCurrentX,
-              selState.dragCurrentY,
+              boxState.startX,
+              boxState.startY,
+              currentX,
+              currentY,
               mode
             );
           } else {
             // Clicked on empty space without dragging - clear selection (unless modifier held)
             if (!isShift && !isCtrl) {
-              clearSelection();
+              selectionManagerRef.current?.clear();
             }
           }
 
           // Hide selection box and reset state
-          selState.isDragging = false;
+          boxState.isDragging = false;
           updateSelectionBox(0, 0, 0, 0, false);
         }
         return;
@@ -2821,7 +2765,7 @@ const CustomModelingPage: React.FC = () => {
         canvas.removeEventListener('pointerup', handlePointerUp);
       }
     };
-  }, [activeTool, selectedColor, getGroundPoint, updatePreviewLine, updatePreviewRectangle, updatePreviewCircle, updatePreviewPolygon, finalizeLine, finalizeRectangle, finalizeCircle, finalizePolygon, applyPushPull, zoomExtents, addLineSnapPoints, addRectangleSnapPoints, showSnapIndicator, hideSnapIndicator, findNearestSnapPoint, updatePushPullPreview, calculateExtrudeDistance, addToSelection, removeFromSelection, toggleSelection, selectSingle, handleDoubleClick, handleTripleClick, clearSelection, performBoxSelection, updateSelectionBox]);
+  }, [activeTool, selectedColor, getGroundPoint, updatePreviewLine, updatePreviewRectangle, updatePreviewCircle, updatePreviewPolygon, finalizeLine, finalizeRectangle, finalizeCircle, finalizePolygon, applyPushPull, zoomExtents, addLineSnapPoints, addRectangleSnapPoints, showSnapIndicator, hideSnapIndicator, findNearestSnapPoint, updatePushPullPreview, calculateExtrudeDistance, handleSelectionClick, handleDoubleClick, handleTripleClick, clearSelection, performBoxSelection, updateSelectionBox]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -3887,6 +3831,23 @@ const CustomModelingPage: React.FC = () => {
           />
         </div>
       </div>
+      {selectionState.contextMenu && (
+        <ModelingContextMenu
+          x={selectionState.contextMenu.x}
+          y={selectionState.contextMenu.y}
+          onClose={() => setSelectionState(prev => ({ ...prev, contextMenu: null }))}
+          onAction={handleContextMenuAction}
+          selectionCount={selectionState.selectedIds.length}
+          hasFaces={selectionState.selectedIds.some(id => sceneRef.current?.getMeshByID(id)?.metadata?.type === 'face')}
+          hasEdges={selectionState.selectedIds.some(id => sceneRef.current?.getMeshByID(id)?.metadata?.type === 'edge')}
+        />
+      )}
+
+      {/* Right-click handler for context menu */}
+      <div
+        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+        onContextMenu={handleContextMenu}
+      />
     </div>
   );
 };
