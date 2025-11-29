@@ -29,6 +29,7 @@ import {
 // Side-effect import for scene.pick() to work
 import '@babylonjs/core/Culling/ray';
 import { AdvancedDynamicTexture, Ellipse, Control } from '@babylonjs/gui';
+import { SelectionManager } from './modeling/SelectionManager';
 
 type ToolType = 'select' | 'eraser' | 'line' | 'arc' | 'rectangle' | 'circle' | 'polygon' | 'pushpull' | 'rotate' | 'move' | 'scale' | 'offset' | 'tape' | 'text' | 'paint' | 'orbit' | 'pan' | 'zoom' | 'zoomExtents' | 'makeComponent' | 'freehand' | 'rotatedRect' | 'arc2pt' | 'arc3pt' | 'pie' | 'followMe' | 'outerShell' | 'dimension' | 'protractor' | 'text3d' | 'axes' | 'section' | 'solidTools' | 'zoomWindow' | 'zoomPrevious' | 'lookAround' | 'walk' | 'tag' | 'positionCamera' | 'flip';
 
@@ -1314,11 +1315,11 @@ const CustomModelingPage: React.FC = () => {
       face.position.z + extrudeDir.z / 2
     );
 
-    // Wireframe material
+    // Semi-transparent solid material (not wireframe)
     const previewMat = new StandardMaterial('pushPullPreviewMat', scene);
-    previewMat.diffuseColor = new Color3(0.3, 0.6, 1);
-    previewMat.alpha = 0.3;
-    previewMat.wireframe = true;
+    previewMat.diffuseColor = new Color3(0.5, 0.7, 1);
+    previewMat.specularColor = new Color3(0, 0, 0);
+    previewMat.alpha = 0.5;
     preview.material = previewMat;
 
     preview.isPickable = false;
@@ -2121,20 +2122,165 @@ const CustomModelingPage: React.FC = () => {
       }
     }
 
+    // Update visual selection box
+    const updateSelectionBox = useCallback((startX: number, startY: number, currentX: number, currentY: number, visible: boolean) => {
+      const boxState = selectionBoxRef.current;
+
+      if (!visible) {
+        if (boxState.element) {
+          boxState.element.remove();
+          boxState.element = null;
+        }
+        return;
+      }
+
+      if (!boxState.element) {
+        const box = document.createElement('div');
+        box.className = styles.selectionBox;
+        canvasRef.current?.parentElement?.appendChild(box);
+        boxState.element = box;
+      }
+
+      const width = Math.abs(currentX - startX);
+      const height = Math.abs(currentY - startY);
+      const left = Math.min(currentX, startX);
+      const top = Math.min(currentY, startY);
+
+      if (boxState.element) {
+        boxState.element.style.left = `${left}px`;
+        boxState.element.style.top = `${top}px`;
+        boxState.element.style.width = `${width}px`;
+        boxState.element.style.height = `${height}px`;
+
+        const isCrossing = currentX < startX;
+        boxState.element.className = `${styles.selectionBox} ${isCrossing ? styles.selectionBoxCrossing : styles.selectionBoxWindow}`;
+      }
+    }, []);
+
+    // Perform box selection logic
+    const performBoxSelection = useCallback((startX: number, startY: number, endX: number, endY: number, mode: 'replace' | 'add' | 'subtract' | 'toggle') => {
+      const scene = sceneRef.current;
+      const manager = selectionManagerRef.current;
+      if (!scene || !manager) return;
+
+      const isCrossing = endX < startX; // Right-to-Left
+
+      const minX = Math.min(startX, endX);
+      const maxX = Math.max(startX, endX);
+      const minY = Math.min(startY, endY);
+      const maxY = Math.max(startY, endY);
+
+      const pickedIds: string[] = [];
+
+      scene.meshes.forEach(mesh => {
+        if (!mesh.isPickable || !mesh.isVisible || !mesh.metadata) return;
+        if (mesh.metadata.type !== 'face' && mesh.metadata.type !== 'edge') return;
+
+        const boundingInfo = mesh.getBoundingInfo();
+        const vectors = boundingInfo.boundingBox.vectorsWorld;
+
+        let allInside = true;
+        let anyInside = false;
+
+        for (const v of vectors) {
+          const screenPos = Vector3.Project(
+            v,
+            Matrix.Identity(),
+            scene.getTransformMatrix(),
+            cameraRef.current!.viewport.toGlobal(engineRef.current!.getRenderWidth(), engineRef.current!.getRenderHeight())
+          );
+
+          const x = screenPos.x;
+          const y = screenPos.y;
+
+          if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
+            anyInside = true;
+          } else {
+            allInside = false;
+          }
+        }
+
+        if (isCrossing) {
+          if (anyInside) pickedIds.push(mesh.id);
+        } else {
+          if (allInside) pickedIds.push(mesh.id);
+        }
+      });
+
+      manager.selectIds(pickedIds, mode);
+    }, []);
+
     const handlePointerDown = (evt: PointerEvent) => {
-      // Handle pan tool manually (camera panning, not rotation)
-      if (activeTool === 'pan' && evt.button === 0) {
+      // Close context menu on any click
+      if (selectionState.contextMenu) {
+        setSelectionState(prev => ({ ...prev, contextMenu: null }));
+      }
+
+      // Right click handling
+      if (evt.button === 2) {
+        // If clicking on a mesh that is NOT selected, select it (exclusive)
+        // If clicking on a mesh that IS selected, keep selection (context menu will open)
+        const pickInfo = scene.pick(scene.pointerX, scene.pointerY);
+        if (pickInfo.hit && pickInfo.pickedMesh) {
+          const manager = selectionManagerRef.current;
+          if (manager && !manager.isSelected(pickInfo.pickedMesh.id)) {
+            manager.select(pickInfo.pickedMesh.id, 'replace');
+          }
+        }
+        return;
+      }
+
+      if (evt.button !== 0) return;
+
+      // Handle Pan tool (middle mouse or specific tool)
+      if (activeTool === 'pan' || evt.button === 1) {
         panStateRef.current.isPanning = true;
         panStateRef.current.lastX = evt.clientX;
         panStateRef.current.lastY = evt.clientY;
         return;
       }
 
+      const pickInfo = scene.pick(scene.pointerX, scene.pointerY);
+
+      // Handle Select Tool (Box Selection & Click)
+      if (activeTool === 'select') {
+        const boxState = selectionBoxRef.current;
+
+        // Handle Click Selection
+        if (pickInfo.hit && pickInfo.pickedMesh) {
+          // Check for double/triple click
+          // Note: We need to track click timing manually or use Babylon's OnDoublePickTrigger
+          // For now, let's use a simple timestamp check
+          const now = Date.now();
+          // We can use a ref to store last click info
+          // Re-using selectionBoxRef for convenience or add a new ref
+
+          // Let's assume single click for now, advanced click logic can be refined
+          handleSelectionClick(pickInfo, evt);
+        } else {
+          // Clicked empty space
+          if (!evt.shiftKey && !evt.ctrlKey && !evt.metaKey) {
+            selectionManagerRef.current?.clear();
+          }
+        }
+
+        // Start box selection (always, unless we clicked a gizmo - handled by gizmo manager)
+        // If we clicked a mesh, we might still want to drag-box if we move mouse immediately?
+        // SketchUp: Click selects. Drag starts box.
+        // In Select tool, dragging on a mesh usually does nothing or starts box if not on geometry.
+        // Let's allow box selection start anywhere for now.
+
+        boxState.isDragging = true;
+        boxState.startX = scene.pointerX;
+        boxState.startY = scene.pointerY;
+
+        return;
+      }
       // Skip if using camera navigation tools (camera handles these)
       if (activeTool === 'orbit' || activeTool === 'zoom') {
         return;
       }
-      if (evt.button !== 0) return;
+      // if (evt.button !== 0) return; // This check is now done earlier for left click
 
       const state = drawingStateRef.current;
 
@@ -2500,6 +2646,19 @@ const CustomModelingPage: React.FC = () => {
             }
           }
         }
+      } else if (activeTool === 'select') {
+        const boxState = selectionBoxRef.current;
+        if (boxState.isDragging) {
+          boxState.currentX = scene.pointerX;
+          boxState.currentY = scene.pointerY;
+          updateSelectionBox(
+            boxState.startX,
+            boxState.startY,
+            boxState.currentX,
+            boxState.currentY,
+            true
+          );
+        }
       } else {
         // Hide snap indicator when not using other tools
         activeSnapPointRef.current = null;
@@ -2573,25 +2732,24 @@ const CustomModelingPage: React.FC = () => {
       }
 
       // Select tool - update box selection during drag
-      if (activeTool === 'select') {
-        const selState = selectionStateRef.current;
-        if (selState.isDragging) {
-          selState.dragCurrentX = evt.clientX;
-          selState.dragCurrentY = evt.clientY;
-          updateSelectionBox(
-            selState.dragStartX,
-            selState.dragStartY,
-            selState.dragCurrentX,
-            selState.dragCurrentY,
-            true
-          );
-        }
-      }
+      // This block is now handled by the `else if (activeTool === 'select')` above.
+      // if (activeTool === 'select') {
+      //   const boxState = selectionBoxRef.current;
+      //   if (boxState.isDragging) {
+      //     updateSelectionBox(
+      //       boxState.startX,
+      //       boxState.startY,
+      //       scene.pointerX,
+      //       scene.pointerY,
+      //       true
+      //     );
+      //   }
+      // }
     };
 
     const handlePointerUp = (evt: PointerEvent) => {
       // Reset pan state
-      if (activeTool === 'pan') {
+      if (activeTool === 'pan' || evt.button === 1) { // Also reset if middle mouse was used for pan
         panStateRef.current.isPanning = false;
         return;
       }
@@ -2600,12 +2758,13 @@ const CustomModelingPage: React.FC = () => {
 
       // Select tool - finalize box selection
       if (activeTool === 'select') {
-        const selState = selectionStateRef.current;
-        if (selState.isDragging) {
+        const boxState = selectionBoxRef.current;
+        if (boxState.isDragging) {
           // Determine selection mode from modifier keys
           const isShift = evt.shiftKey;
           const isCtrl = evt.ctrlKey || evt.metaKey;
           let mode: 'replace' | 'add' | 'toggle' | 'subtract' = 'replace';
+
           if (isShift && isCtrl) {
             mode = 'subtract';
           } else if (isShift) {
@@ -2615,11 +2774,13 @@ const CustomModelingPage: React.FC = () => {
           }
 
           // Only perform box selection if dragged more than 5 pixels
-          const dx = selState.dragCurrentX - selState.dragStartX;
-          const dy = selState.dragCurrentY - selState.dragStartY;
+          const currentX = scene.pointerX;
+          const currentY = scene.pointerY;
+          const dx = currentX - boxState.startX;
+          const dy = currentY - boxState.startY;
+
           if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
             performBoxSelection(
-              selState.dragStartX,
               selState.dragStartY,
               selState.dragCurrentX,
               selState.dragCurrentY,
