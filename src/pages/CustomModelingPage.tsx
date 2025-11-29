@@ -2077,51 +2077,69 @@ const CustomModelingPage: React.FC = () => {
     let boxWidth: number, boxHeight: number, boxDepth: number;
     let solidPosition: Vector3;
 
-    // Check if pushing into an existing solid - need to create REMAINING solid
-    if (isPush && parentSolid && !parentSolid.isDisposed() && parentSolid.metadata) {
-      // PUSH on existing solid: Create the remaining solid after push
+    // Check if operating on an existing solid's face
+    if (parentSolid && !parentSolid.isDisposed() && parentSolid.metadata) {
       const parentMeta = parentSolid.metadata;
       const parentPos = parentSolid.position.clone();
-      const pushAmount = Math.abs(distance);
+      const changeAmount = Math.abs(distance);
 
       // Get original solid dimensions
       const origWidth = parentMeta.width;
       const origHeight = parentMeta.height;
       const origDepth = parentMeta.depth;
 
-      // Calculate new dimensions - shrink in the direction of push
-      if (absY > absX && absY > absZ) {
-        // Pushing Y-axis face
-        const newHeight = origHeight - pushAmount;
-        if (newHeight <= 0.001) return null; // Would be completely pushed through
-        boxWidth = origWidth;
-        boxHeight = newHeight;
-        boxDepth = origDepth;
-        // Shift position: if pushing top face down, center moves down by pushAmount/2
-        // if pushing bottom face up, center moves up by pushAmount/2
-        const shift = normalizedNormal.scale(-pushAmount / 2);
-        solidPosition = parentPos.add(shift);
-      } else if (absX > absZ) {
-        // Pushing X-axis face
-        const newWidth = origWidth - pushAmount;
-        if (newWidth <= 0.001) return null;
-        boxWidth = newWidth;
-        boxHeight = origHeight;
-        boxDepth = origDepth;
-        const shift = normalizedNormal.scale(-pushAmount / 2);
-        solidPosition = parentPos.add(shift);
+      if (isPush) {
+        // PUSH on existing solid: Create SHRUNK solid
+        if (absY > absX && absY > absZ) {
+          const newHeight = origHeight - changeAmount;
+          if (newHeight <= 0.001) return null;
+          boxWidth = origWidth;
+          boxHeight = newHeight;
+          boxDepth = origDepth;
+          const shift = normalizedNormal.scale(-changeAmount / 2);
+          solidPosition = parentPos.add(shift);
+        } else if (absX > absZ) {
+          const newWidth = origWidth - changeAmount;
+          if (newWidth <= 0.001) return null;
+          boxWidth = newWidth;
+          boxHeight = origHeight;
+          boxDepth = origDepth;
+          const shift = normalizedNormal.scale(-changeAmount / 2);
+          solidPosition = parentPos.add(shift);
+        } else {
+          const newDepth = origDepth - changeAmount;
+          if (newDepth <= 0.001) return null;
+          boxWidth = origWidth;
+          boxHeight = origHeight;
+          boxDepth = newDepth;
+          const shift = normalizedNormal.scale(-changeAmount / 2);
+          solidPosition = parentPos.add(shift);
+        }
       } else {
-        // Pushing Z-axis face
-        const newDepth = origDepth - pushAmount;
-        if (newDepth <= 0.001) return null;
-        boxWidth = origWidth;
-        boxHeight = origHeight;
-        boxDepth = newDepth;
-        const shift = normalizedNormal.scale(-pushAmount / 2);
-        solidPosition = parentPos.add(shift);
+        // PULL on existing solid: Create EXTENDED solid (original + pull)
+        if (absY > absX && absY > absZ) {
+          boxWidth = origWidth;
+          boxHeight = origHeight + changeAmount;
+          boxDepth = origDepth;
+          // Shift center in direction of pull by half the pull amount
+          const shift = normalizedNormal.scale(changeAmount / 2);
+          solidPosition = parentPos.add(shift);
+        } else if (absX > absZ) {
+          boxWidth = origWidth + changeAmount;
+          boxHeight = origHeight;
+          boxDepth = origDepth;
+          const shift = normalizedNormal.scale(changeAmount / 2);
+          solidPosition = parentPos.add(shift);
+        } else {
+          boxWidth = origWidth;
+          boxHeight = origHeight;
+          boxDepth = origDepth + changeAmount;
+          const shift = normalizedNormal.scale(changeAmount / 2);
+          solidPosition = parentPos.add(shift);
+        }
       }
     } else {
-      // PULL (or push on free face): Create extruded solid
+      // Free face (no parent solid): Create extruded solid
       const baseCenter = face.getAbsolutePosition().clone();
       const extrudeLength = Math.abs(distance);
 
@@ -2669,43 +2687,67 @@ const CustomModelingPage: React.FC = () => {
     let boxWidth: number, boxHeight: number, boxDepth: number;
     let previewPosition: Vector3;
 
-    // Check if pushing into an existing solid - show REMAINING solid preview
-    if (isPush && parentSolid && !parentSolid.isDisposed() && parentSolid.metadata) {
+    // Check if operating on an existing solid's face
+    if (parentSolid && !parentSolid.isDisposed() && parentSolid.metadata) {
       const parentMeta = parentSolid.metadata;
       const parentPos = parentSolid.position.clone();
-      const pushAmount = Math.abs(distance);
+      const changeAmount = Math.abs(distance);
 
       const origWidth = parentMeta.width;
       const origHeight = parentMeta.height;
       const origDepth = parentMeta.depth;
 
-      if (absY > absX && absY > absZ) {
-        const newHeight = origHeight - pushAmount;
-        if (newHeight <= 0.001) return;
-        boxWidth = origWidth;
-        boxHeight = newHeight;
-        boxDepth = origDepth;
-        const shift = normalizedNormal.scale(-pushAmount / 2);
-        previewPosition = parentPos.add(shift);
-      } else if (absX > absZ) {
-        const newWidth = origWidth - pushAmount;
-        if (newWidth <= 0.001) return;
-        boxWidth = newWidth;
-        boxHeight = origHeight;
-        boxDepth = origDepth;
-        const shift = normalizedNormal.scale(-pushAmount / 2);
-        previewPosition = parentPos.add(shift);
+      if (isPush) {
+        // PUSH: Show SHRUNK solid preview
+        if (absY > absX && absY > absZ) {
+          const newHeight = origHeight - changeAmount;
+          if (newHeight <= 0.001) return;
+          boxWidth = origWidth;
+          boxHeight = newHeight;
+          boxDepth = origDepth;
+          const shift = normalizedNormal.scale(-changeAmount / 2);
+          previewPosition = parentPos.add(shift);
+        } else if (absX > absZ) {
+          const newWidth = origWidth - changeAmount;
+          if (newWidth <= 0.001) return;
+          boxWidth = newWidth;
+          boxHeight = origHeight;
+          boxDepth = origDepth;
+          const shift = normalizedNormal.scale(-changeAmount / 2);
+          previewPosition = parentPos.add(shift);
+        } else {
+          const newDepth = origDepth - changeAmount;
+          if (newDepth <= 0.001) return;
+          boxWidth = origWidth;
+          boxHeight = origHeight;
+          boxDepth = newDepth;
+          const shift = normalizedNormal.scale(-changeAmount / 2);
+          previewPosition = parentPos.add(shift);
+        }
       } else {
-        const newDepth = origDepth - pushAmount;
-        if (newDepth <= 0.001) return;
-        boxWidth = origWidth;
-        boxHeight = origHeight;
-        boxDepth = newDepth;
-        const shift = normalizedNormal.scale(-pushAmount / 2);
-        previewPosition = parentPos.add(shift);
+        // PULL: Show EXTENDED solid preview (original + pull)
+        if (absY > absX && absY > absZ) {
+          boxWidth = origWidth;
+          boxHeight = origHeight + changeAmount;
+          boxDepth = origDepth;
+          const shift = normalizedNormal.scale(changeAmount / 2);
+          previewPosition = parentPos.add(shift);
+        } else if (absX > absZ) {
+          boxWidth = origWidth + changeAmount;
+          boxHeight = origHeight;
+          boxDepth = origDepth;
+          const shift = normalizedNormal.scale(changeAmount / 2);
+          previewPosition = parentPos.add(shift);
+        } else {
+          boxWidth = origWidth;
+          boxHeight = origHeight;
+          boxDepth = origDepth + changeAmount;
+          const shift = normalizedNormal.scale(changeAmount / 2);
+          previewPosition = parentPos.add(shift);
+        }
       }
     } else {
-      // PULL (or push on free face): Show extruded solid preview
+      // Free face: Show extruded solid preview
       const absDistance = Math.abs(distance);
 
       if (absY > absX && absY > absZ) {
