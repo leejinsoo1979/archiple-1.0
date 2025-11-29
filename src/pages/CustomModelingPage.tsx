@@ -23,6 +23,7 @@ import {
   HighlightLayer,
   LinesMesh,
   Ray,  // Required for scene.pick() to work
+  Matrix,
 } from '@babylonjs/core';
 // Side-effect import for scene.pick() to work
 import '@babylonjs/core/Culling/ray';
@@ -70,6 +71,7 @@ const CustomModelingPage: React.FC = () => {
   const snapIndicatorRef = useRef<Mesh | null>(null);
   const snapPointsRef = useRef<Vector3[]>([]);  // Store snap point positions (not meshes)
   const activeSnapPointRef = useRef<Vector3 | null>(null);  // Currently active snap point for click handling
+  const hoveredFaceRef = useRef<Mesh | null>(null);  // Currently hovered face for push/pull highlight
 
   // HUD overlay refs for Drawing Cursor System
   const hudTextureRef = useRef<AdvancedDynamicTexture | null>(null);
@@ -947,41 +949,46 @@ const CustomModelingPage: React.FC = () => {
     });
   }, []);
 
-  // Show snap indicator - create/move 3D mesh to snap position (magnetic snap visual)
-  // This creates a prominent visual at the SNAP POINT so user knows where click will land
+  // Snap indicator ref for GUI element (screen-space, fixed size)
+  const snapDotRef = useRef<Ellipse | null>(null);
+
+  // Show snap indicator - GUI dot at screen position (fixed size, doesn't scale with zoom)
   const showSnapIndicator = useCallback((position: Vector3) => {
     const scene = sceneRef.current;
-    if (!scene) return;
+    const guiTexture = guiTextureRef.current;
+    if (!scene || !guiTexture) return;
 
-    // Create snap indicator mesh if it doesn't exist
-    if (!snapIndicatorRef.current) {
-      // Create a larger, more visible snap indicator
-      // Using a torus (ring) for better visibility against any background
-      const torus = MeshBuilder.CreateTorus('snapIndicator', {
-        diameter: 0.5,        // Larger - 500mm diameter
-        thickness: 0.08,      // Ring thickness
-        tessellation: 32,
-      }, scene);
-      torus.rotation.x = Math.PI / 2;  // Lay flat on ground
-      torus.position.y = 0.02;  // Slightly above ground to avoid z-fighting
-      torus.isPickable = false;
-
-      const mat = new StandardMaterial('snapIndicatorMat', scene);
-      mat.diffuseColor = new Color3(0, 1, 0);  // Bright green
-      mat.emissiveColor = new Color3(0, 1, 0.3);  // Strong glow
-      mat.alpha = 1.0;  // Fully opaque
-      mat.backFaceCulling = false;  // Visible from both sides
-      torus.material = mat;
-
-      snapIndicatorRef.current = torus;
+    // Create snap dot GUI element if it doesn't exist
+    if (!snapDotRef.current) {
+      const dot = new Ellipse('snapDot');
+      dot.width = '10px';
+      dot.height = '10px';
+      dot.color = '#90EE90';  // Light green border
+      dot.thickness = 2;
+      dot.background = '#FFFFFF';  // White fill
+      dot.isVisible = false;
+      guiTexture.addControl(dot);
+      snapDotRef.current = dot;
     }
 
-    // Move to snap position and show
-    snapIndicatorRef.current.position.x = position.x;
-    snapIndicatorRef.current.position.z = position.z;
-    snapIndicatorRef.current.setEnabled(true);
+    // Convert 3D position to screen coordinates
+    const engine = scene.getEngine();
+    const camera = cameraRef.current;
+    if (!camera) return;
 
-    // Also change HUD color as secondary feedback
+    const screenPos = Vector3.Project(
+      new Vector3(position.x, 0, position.z),
+      Matrix.Identity(),
+      scene.getTransformMatrix(),
+      camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight())
+    );
+
+    // Position the dot at screen coordinates
+    snapDotRef.current.left = screenPos.x - engine.getRenderWidth() / 2;
+    snapDotRef.current.top = screenPos.y - engine.getRenderHeight() / 2;
+    snapDotRef.current.isVisible = true;
+
+    // Also change HUD cursor color
     const pointerCircle = pointerCircleRef.current;
     if (pointerCircle) {
       pointerCircle.color = 'rgba(0, 255, 136, 0.9)';
@@ -989,10 +996,10 @@ const CustomModelingPage: React.FC = () => {
     }
   }, []);
 
-  // Hide snap indicator - hide 3D mesh
+  // Hide snap indicator - hide GUI dot
   const hideSnapIndicator = useCallback(() => {
-    if (snapIndicatorRef.current) {
-      snapIndicatorRef.current.setEnabled(false);
+    if (snapDotRef.current) {
+      snapDotRef.current.isVisible = false;
     }
 
     // Reset HUD color
@@ -1242,8 +1249,8 @@ const CustomModelingPage: React.FC = () => {
     // Keeping the ref for backward compatibility but not creating visible marker
     originMarkerRef.current = null;
 
-    // Snap indicator removed - using HUD pointer circle color change instead
-    snapIndicatorRef.current = null;
+    // Snap indicator - GUI dot created on demand in showSnapIndicator
+    snapDotRef.current = null;
 
     // HUD overlay for Drawing Cursor System
     const hudTexture = AdvancedDynamicTexture.CreateFullscreenUI('HUD', true, scene);
@@ -1358,6 +1365,12 @@ const CustomModelingPage: React.FC = () => {
     const scene = sceneRef.current;
     const camera = cameraRef.current;
     if (!scene || !camera) return;
+
+    // Clear pushpull face highlight when switching away from pushpull tool
+    if (activeTool !== 'pushpull' && hoveredFaceRef.current && highlightLayerRef.current) {
+      highlightLayerRef.current.removeMesh(hoveredFaceRef.current);
+      hoveredFaceRef.current = null;
+    }
 
     // Camera control: Middle mouse always works, Left mouse only for orbit/zoom (not pan - we handle that manually)
     const pointersInput = camera.inputs.attached.pointers as { buttons?: number[] };
@@ -1588,8 +1601,38 @@ const CustomModelingPage: React.FC = () => {
           activeSnapPointRef.current = null;
           hideSnapIndicator();
         }
+      } else if (activeTool === 'pushpull') {
+        // Push/pull tool: highlight face on hover (SketchUp-style)
+        activeSnapPointRef.current = null;
+        hideSnapIndicator();
+
+        // Pick faces to highlight
+        const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) => {
+          return mesh.metadata?.type === 'face';
+        });
+
+        if (pickResult?.hit && pickResult.pickedMesh && highlightLayerRef.current) {
+          const hoveredMesh = pickResult.pickedMesh as Mesh;
+
+          // Only update if hovering different face
+          if (hoveredFaceRef.current !== hoveredMesh) {
+            // Remove previous highlight
+            if (hoveredFaceRef.current) {
+              highlightLayerRef.current.removeMesh(hoveredFaceRef.current);
+            }
+            // Add new highlight (blue like SketchUp)
+            highlightLayerRef.current.addMesh(hoveredMesh, new Color3(0.4, 0.6, 1));
+            hoveredFaceRef.current = hoveredMesh;
+          }
+        } else {
+          // Not hovering over a face - clear highlight
+          if (hoveredFaceRef.current && highlightLayerRef.current) {
+            highlightLayerRef.current.removeMesh(hoveredFaceRef.current);
+            hoveredFaceRef.current = null;
+          }
+        }
       } else {
-        // Hide snap indicator when not using drawing tools
+        // Hide snap indicator when not using other tools
         activeSnapPointRef.current = null;
         hideSnapIndicator();
       }
