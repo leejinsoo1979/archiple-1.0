@@ -2706,21 +2706,24 @@ const CustomModelingPage: React.FC = () => {
 
       // SketchUp-style dimension input: type numbers while drawing
       if (isDrawingTool && drawState.isDrawing && drawState.startPoint) {
-        // Use ref for current value (state might be stale in closure)
-        const inputValue = measurementInputValueRef.current;
-
         // Numbers, comma, period, minus for dimension input
         if (/^[0-9]$/.test(e.key) || e.key === ',' || e.key === '.' || e.key === '-') {
           e.preventDefault();
-          setMeasurementInput(prev => prev + e.key);
+          // Update ref immediately for synchronous access
+          measurementInputValueRef.current += e.key;
+          setMeasurementInput(measurementInputValueRef.current);
           return;
         }
         // Backspace to delete last character from input
-        if (e.key === 'Backspace' && inputValue.length > 0) {
+        if (e.key === 'Backspace' && measurementInputValueRef.current.length > 0) {
           e.preventDefault();
-          setMeasurementInput(prev => prev.slice(0, -1));
+          // Update ref immediately for synchronous access
+          measurementInputValueRef.current = measurementInputValueRef.current.slice(0, -1);
+          setMeasurementInput(measurementInputValueRef.current);
           return;
         }
+        // Use ref for current value (always up-to-date)
+        const inputValue = measurementInputValueRef.current;
         // Enter to apply dimensions and finalize
         if (e.key === 'Enter' && inputValue.length > 0) {
           e.preventDefault();
@@ -2847,6 +2850,7 @@ const CustomModelingPage: React.FC = () => {
             }
           }
 
+          measurementInputValueRef.current = '';
           setMeasurementInput('');
           return;
         }
@@ -2856,21 +2860,24 @@ const CustomModelingPage: React.FC = () => {
       if (activeTool === 'pushpull') {
         const ppState = pushPullStateRef.current;
         if (ppState.isExtruding && ppState.baseFace && ppState.baseFaceNormal) {
-          // Use ref for current value (state might be stale in closure)
-          const ppInputValue = measurementInputValueRef.current;
-
           // Numbers, period, minus for dimension input
           if (/^[0-9]$/.test(e.key) || e.key === '.' || e.key === '-') {
             e.preventDefault();
-            setMeasurementInput(prev => prev + e.key);
+            // Update ref immediately for synchronous access
+            measurementInputValueRef.current += e.key;
+            setMeasurementInput(measurementInputValueRef.current);
             return;
           }
           // Backspace to delete last character
-          if (e.key === 'Backspace' && ppInputValue.length > 0) {
+          if (e.key === 'Backspace' && measurementInputValueRef.current.length > 0) {
             e.preventDefault();
-            setMeasurementInput(prev => prev.slice(0, -1));
+            // Update ref immediately for synchronous access
+            measurementInputValueRef.current = measurementInputValueRef.current.slice(0, -1);
+            setMeasurementInput(measurementInputValueRef.current);
             return;
           }
+          // Use ref for current value (always up-to-date)
+          const ppInputValue = measurementInputValueRef.current;
           // Enter to apply extrusion distance
           if (e.key === 'Enter' && ppInputValue.length > 0) {
             e.preventDefault();
@@ -2902,6 +2909,7 @@ const CustomModelingPage: React.FC = () => {
               ppState.axisLocked = false;
               ppState.lockedDistance = 0;
             }
+            measurementInputValueRef.current = '';
             setMeasurementInput('');
             return;
           }
@@ -3112,6 +3120,7 @@ const CustomModelingPage: React.FC = () => {
           lineInferenceRef.current = resetLineInf;
           setLineInferenceUI(resetLineInf);
           setLineMeasurement(0);
+          measurementInputValueRef.current = '';
           setMeasurementInput('');  // Clear dimension input
           deselectMesh();
           clearSelection();  // Clear multi-selection
@@ -3268,7 +3277,6 @@ const CustomModelingPage: React.FC = () => {
   const tools = [
     { id: 'select', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M5 3L5 19L9 15L12 21L14 20L11 14L17 14L5 3Z" fill="currentColor" /></svg>, title: 'Select (Space)' },
     { id: 'makeComponent', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" /><circle cx="12" cy="12" r="3" fill="currentColor" /></svg>, title: 'Make Component (G)' },
-    { id: 'paint', icon: <BsPaintBucket size={18} />, title: 'Paint (B)' },
     { type: 'divider' },
     { id: 'line', icon: <LuPencilLine size={18} />, title: 'Line (L)' },
     { id: 'eraser', icon: <BsEraser size={18} />, title: 'Eraser (E)' },
@@ -3278,6 +3286,7 @@ const CustomModelingPage: React.FC = () => {
     { id: 'polygon', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M12 4L20 9V15L12 20L4 15V9L12 4Z" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.2" /></svg>, title: 'Polygon' },
     { id: 'arc', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M4 18C4 10 10 4 18 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>, title: 'Arc (A)' },
     { type: 'divider' },
+    { id: 'paint', icon: <BsPaintBucket size={18} />, title: 'Paint (B)' },
     { id: 'move', icon: <BiMove size={18} />, title: 'Move (M)' },
     { id: 'pushpull', icon: <PushPullIcon size={18} />, title: 'Push/Pull (P)' },
     { id: 'rotate', icon: <GrRotateRight size={18} />, title: 'Rotate (Q)' },
