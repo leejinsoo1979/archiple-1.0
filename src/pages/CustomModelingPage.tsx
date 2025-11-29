@@ -5,7 +5,7 @@ import { BiMove } from 'react-icons/bi';
 import { FaTape } from 'react-icons/fa';
 import { IoHandRightOutline } from 'react-icons/io5';
 import { GrRotateRight } from 'react-icons/gr';
-import { BsEraser } from 'react-icons/bs';
+import { BsEraser, BsPaintBucket } from 'react-icons/bs';
 import styles from './CustomModelingPage.module.css';
 import {
   Engine,
@@ -261,6 +261,11 @@ const CustomModelingPage: React.FC = () => {
 
   // Measurement input ref for direct keyboard capture
   const measureInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync measurementInput state to ref for keyboard handler access
+  useEffect(() => {
+    measurementInputValueRef.current = measurementInput;
+  }, [measurementInput]);
 
   // Get ground point with grid snapping and magnetic snap to origin
   // Uses dynamic threshold based on camera distance for consistent snap feel
@@ -2701,6 +2706,9 @@ const CustomModelingPage: React.FC = () => {
 
       // SketchUp-style dimension input: type numbers while drawing
       if (isDrawingTool && drawState.isDrawing && drawState.startPoint) {
+        // Use ref for current value (state might be stale in closure)
+        const inputValue = measurementInputValueRef.current;
+
         // Numbers, comma, period, minus for dimension input
         if (/^[0-9]$/.test(e.key) || e.key === ',' || e.key === '.' || e.key === '-') {
           e.preventDefault();
@@ -2708,13 +2716,13 @@ const CustomModelingPage: React.FC = () => {
           return;
         }
         // Backspace to delete last character from input
-        if (e.key === 'Backspace' && measurementInput.length > 0) {
+        if (e.key === 'Backspace' && inputValue.length > 0) {
           e.preventDefault();
           setMeasurementInput(prev => prev.slice(0, -1));
           return;
         }
         // Enter to apply dimensions and finalize
-        if (e.key === 'Enter' && measurementInput.length > 0) {
+        if (e.key === 'Enter' && inputValue.length > 0) {
           e.preventDefault();
           const scene = sceneRef.current;
           if (!scene || !drawState.startPoint) return;
@@ -2723,7 +2731,7 @@ const CustomModelingPage: React.FC = () => {
 
           if (activeTool === 'line') {
             // Line: single number = length in mm
-            const lengthMm = parseFloat(measurementInput);
+            const lengthMm = parseFloat(inputValue);
             if (!isNaN(lengthMm) && lengthMm > 0) {
               const lengthUnits = lengthMm * MM_TO_UNIT;
               let endPoint: Vector3;
@@ -2758,7 +2766,7 @@ const CustomModelingPage: React.FC = () => {
             }
           } else if (activeTool === 'rectangle') {
             // Rectangle: "width,height" or "size" for square
-            const parts = measurementInput.split(',');
+            const parts = inputValue.split(',');
             const widthMm = parseFloat(parts[0]);
             const heightMm = parts.length > 1 ? parseFloat(parts[1]) : widthMm;
 
@@ -2793,7 +2801,7 @@ const CustomModelingPage: React.FC = () => {
             }
           } else if (activeTool === 'circle') {
             // Circle: single number = radius in mm
-            const radiusMm = parseFloat(measurementInput);
+            const radiusMm = parseFloat(inputValue);
             if (!isNaN(radiusMm) && radiusMm > 0) {
               const radiusUnits = radiusMm * MM_TO_UNIT;
               const endPoint = new Vector3(start.x + radiusUnits, 0, start.z);
@@ -2811,7 +2819,7 @@ const CustomModelingPage: React.FC = () => {
             }
           } else if (activeTool === 'polygon') {
             // Polygon: "radius" or "sides,radius"
-            const parts = measurementInput.split(',');
+            const parts = inputValue.split(',');
             let sides = currentMeasurement.sides || 6;
             let radiusMm: number;
 
@@ -2848,6 +2856,9 @@ const CustomModelingPage: React.FC = () => {
       if (activeTool === 'pushpull') {
         const ppState = pushPullStateRef.current;
         if (ppState.isExtruding && ppState.baseFace && ppState.baseFaceNormal) {
+          // Use ref for current value (state might be stale in closure)
+          const ppInputValue = measurementInputValueRef.current;
+
           // Numbers, period, minus for dimension input
           if (/^[0-9]$/.test(e.key) || e.key === '.' || e.key === '-') {
             e.preventDefault();
@@ -2855,18 +2866,18 @@ const CustomModelingPage: React.FC = () => {
             return;
           }
           // Backspace to delete last character
-          if (e.key === 'Backspace' && measurementInput.length > 0) {
+          if (e.key === 'Backspace' && ppInputValue.length > 0) {
             e.preventDefault();
             setMeasurementInput(prev => prev.slice(0, -1));
             return;
           }
           // Enter to apply extrusion distance
-          if (e.key === 'Enter' && measurementInput.length > 0) {
+          if (e.key === 'Enter' && ppInputValue.length > 0) {
             e.preventDefault();
             const scene = sceneRef.current;
             if (!scene) return;
 
-            const distanceMm = parseFloat(measurementInput);
+            const distanceMm = parseFloat(ppInputValue);
             if (!isNaN(distanceMm)) {
               const distanceUnits = distanceMm * MM_TO_UNIT;  // Convert mm to units
 
@@ -3133,7 +3144,7 @@ const CustomModelingPage: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [selectedMesh, zoomExtents, activeTool, selectAll, clearSelection, measurementInput, finalizeLine, finalizeRectangle, finalizeCircle, finalizePolygon, currentMeasurement.sides, applyPushPull]);
+  }, [selectedMesh, zoomExtents, activeTool, selectAll, clearSelection, finalizeLine, finalizeRectangle, finalizeCircle, finalizePolygon, currentMeasurement.sides, applyPushPull]);
 
   const selectMesh = (mesh: Mesh) => {
     if (highlightLayerRef.current && selectedMesh) {
@@ -3257,7 +3268,7 @@ const CustomModelingPage: React.FC = () => {
   const tools = [
     { id: 'select', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M5 3L5 19L9 15L12 21L14 20L11 14L17 14L5 3Z" fill="currentColor" /></svg>, title: 'Select (Space)' },
     { id: 'makeComponent', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" /><circle cx="12" cy="12" r="3" fill="currentColor" /></svg>, title: 'Make Component (G)' },
-    { id: 'paint', icon: <svg viewBox="0 0 24 24" fill="none"><path d="M19 6L17 4L7 14V17H10L20 7L19 6Z" fill="currentColor" opacity="0.3" /><path d="M19 6L17 4L7 14V17H10L20 7L19 6ZM4 20H20" stroke="currentColor" strokeWidth="1.5" /></svg>, title: 'Paint (B)' },
+    { id: 'paint', icon: <BsPaintBucket size={18} />, title: 'Paint (B)' },
     { type: 'divider' },
     { id: 'line', icon: <LuPencilLine size={18} />, title: 'Line (L)' },
     { id: 'eraser', icon: <BsEraser size={18} />, title: 'Eraser (E)' },
