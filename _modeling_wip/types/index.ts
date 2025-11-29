@@ -34,10 +34,11 @@ export interface Edge {
   createdAt: number;
 }
 
-/** Face defined by ordered edges */
+/** Face defined by ordered edges with optional inner loops (holes) */
 export interface Face {
   id: GeometryId;
-  edgeIds: GeometryId[];
+  edgeIds: GeometryId[];           // Outer boundary loop
+  innerLoopEdgeIds?: GeometryId[][]; // Inner loops (holes) - each array is one hole
   normal: Vector3;
   material?: string;
   isHidden: boolean;
@@ -302,4 +303,102 @@ export function parseCoordinates(input: string): CoordinateInput | null {
   }
 
   return null;
+}
+
+/** Parsed dimensions input (for rectangles) */
+export interface DimensionsInput {
+  width: number;   // in mm
+  height: number;  // in mm
+}
+
+/**
+ * Parse dimensions input for rectangles
+ * Formats: "1000,500", "1000;500", "1000x500", "1m,500mm", "1000 500"
+ * Returns dimensions in mm
+ */
+export function parseDimensions(input: string): DimensionsInput | null {
+  const trimmed = input.trim().toLowerCase();
+
+  // Match two values separated by comma, semicolon, x, or space
+  // Each value can have optional unit
+  const match = trimmed.match(
+    /^(-?\d+\.?\d*)\s*(mm|m|cm|in|ft|'|")?\s*[,;x\s]\s*(-?\d+\.?\d*)\s*(mm|m|cm|in|ft|'|")?$/
+  );
+
+  if (!match) return null;
+
+  const value1 = parseFloat(match[1]);
+  const unit1 = match[2] || 'mm';
+  const value2 = parseFloat(match[3]);
+  const unit2 = match[4] || 'mm';
+
+  // Convert to mm
+  const convertToMm = (value: number, unit: string): number => {
+    switch (unit) {
+      case 'm': return value * 1000;
+      case 'cm': return value * 10;
+      case 'in':
+      case '"': return value * 25.4;
+      case 'ft':
+      case "'": return value * 304.8;
+      default: return value;
+    }
+  };
+
+  const width = convertToMm(value1, unit1);
+  const height = convertToMm(value2, unit2);
+
+  if (width <= 0 || height <= 0) return null;
+
+  return { width, height };
+}
+
+/**
+ * Parse sides input for circles/polygons
+ * Formats: "6s", "6 sides", "24", "12s" (interpreted as sides when used with circle/polygon)
+ * Returns number of sides (minimum 3)
+ */
+export function parseSides(input: string): number | null {
+  const trimmed = input.trim().toLowerCase();
+
+  // Match number with optional 's' or 'sides' suffix
+  const match = trimmed.match(/^(\d+)\s*(s|sides?)?$/);
+
+  if (!match) return null;
+
+  const sides = parseInt(match[1], 10);
+
+  // Minimum 3 sides for polygon, maximum 999
+  if (isNaN(sides) || sides < 3 || sides > 999) return null;
+
+  return sides;
+}
+
+/**
+ * Parse radius input for circles
+ * Formats: "500", "1m", "2ft" (interpreted as radius)
+ * Returns radius in mm
+ */
+export function parseRadius(input: string): number | null {
+  return parseLength(input);
+}
+
+/**
+ * Parse angle input for protractor/rotations
+ * Formats: "45", "45°", "45deg", "-90"
+ * Returns angle in degrees
+ */
+export function parseAngle(input: string): number | null {
+  const trimmed = input.trim().toLowerCase();
+
+  // Match number with optional degree symbol or 'deg' suffix
+  const match = trimmed.match(/^(-?\d+\.?\d*)\s*(°|deg|degrees)?$/);
+
+  if (!match) return null;
+
+  const angle = parseFloat(match[1]);
+
+  if (isNaN(angle)) return null;
+
+  return angle;
 }

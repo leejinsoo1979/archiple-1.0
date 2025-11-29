@@ -16,6 +16,7 @@
     "@babylonjs/loaders": "^8.37.0",
     "@babylonjs/materials": "^8.37.0",
     "@google/generative-ai": "^0.24.1",
+    "@jaames/iro": "^5.5.2",
     "@react-oauth/google": "^0.12.2",
     "@types/earcut": "^3.0.0",
     "@types/leaflet": "^1.9.21",

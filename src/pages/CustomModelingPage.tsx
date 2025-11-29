@@ -7,13 +7,18 @@ import { IoHandRightOutline } from 'react-icons/io5';
 import { GrRotateRight } from 'react-icons/gr';
 import { BsEraser, BsPaintBucket } from 'react-icons/bs';
 import { IroColorPicker } from './components/IroColorPicker';
+import { ShadowControls } from './components/ShadowControls';
+import { ModelingContextMenu } from './components/ModelingContextMenu';
 import styles from './CustomModelingPage.module.css';
 import {
   Engine,
   Scene,
   ArcRotateCamera,
+  Camera,
   Vector3,
   HemisphericLight,
+  DirectionalLight,
+  ShadowGenerator,
   MeshBuilder,
   Color3,
   Color4,
@@ -30,8 +35,11 @@ import {
 } from '@babylonjs/core';
 // Side-effect import for scene.pick() to work
 import '@babylonjs/core/Culling/ray';
+import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import { AdvancedDynamicTexture, Ellipse, Control } from '@babylonjs/gui';
 import { SelectionManager } from './modeling/SelectionManager';
+import earcut from 'earcut';
+
 
 type ToolType = 'select' | 'eraser' | 'line' | 'arc' | 'rectangle' | 'circle' | 'polygon' | 'pushpull' | 'rotate' | 'move' | 'scale' | 'offset' | 'tape' | 'text' | 'paint' | 'orbit' | 'pan' | 'zoom' | 'zoomExtents' | 'makeComponent' | 'freehand' | 'rotatedRect' | 'arc2pt' | 'arc3pt' | 'pie' | 'followMe' | 'outerShell' | 'dimension' | 'protractor' | 'text3d' | 'axes' | 'section' | 'solidTools' | 'zoomWindow' | 'zoomPrevious' | 'lookAround' | 'walk' | 'tag' | 'positionCamera' | 'flip';
 
@@ -86,8 +94,13 @@ const CustomModelingPage: React.FC = () => {
   const meshCounterRef = useRef<number>(0);
   const originMarkerRef = useRef<Mesh | null>(null);
   const snapIndicatorRef = useRef<Mesh | null>(null);
-  const snapPointsRef = useRef<Vector3[]>([]);  // Store snap point positions (not meshes)
-  const activeSnapPointRef = useRef<Vector3 | null>(null);  // Currently active snap point for click handling
+  // Snap point with type information for different visual feedback
+  interface SnapPointData {
+    position: Vector3;
+    type: 'endpoint' | 'midpoint' | 'origin' | 'onedge';
+  }
+  const snapPointsRef = useRef<SnapPointData[]>([]);  // Store snap point positions with type
+  const activeSnapPointRef = useRef<SnapPointData | null>(null);  // Currently active snap point for click handling
   const hoveredFaceRef = useRef<Mesh | null>(null);  // Currently hovered face for push/pull highlight
   const hoveredFaceOriginalMaterialRef = useRef<Material | null>(null);  // Store original material
   const dottedHoverMaterialRef = useRef<StandardMaterial | null>(null);  // Dotted pattern material
@@ -117,6 +130,27 @@ const CustomModelingPage: React.FC = () => {
     lastClickFace: null,
     axisLocked: false,
     lockedDistance: 0,
+  });
+
+  // Offset tool state ref for SketchUp-style face offset
+  const offsetStateRef = useRef<{
+    baseFace: Mesh | null;           // Selected face to offset
+    baseVertices: Vector3[];         // Original face vertices
+    baseCenter: Vector3 | null;      // Face center point
+    baseClickY: number;              // Initial click Y position
+    isOffsetting: boolean;           // Currently in offset mode
+    previewMesh: Mesh | null;        // Preview mesh during drag
+    lastOffsetDistance: number;      // For double-click repeat
+    lastClickTime: number;           // For double-click detection
+  }>({
+    baseFace: null,
+    baseVertices: [],
+    baseCenter: null,
+    baseClickY: 0,
+    isOffsetting: false,
+    previewMesh: null,
+    lastOffsetDistance: 0,
+    lastClickTime: 0,
   });
 
   // Selection system state for SketchUp-style multi-selection
@@ -224,8 +258,11 @@ const CustomModelingPage: React.FC = () => {
 
   const [activeTool, setActiveTool] = useState<ToolType>('select');
   const [selectedMesh, setSelectedMesh] = useState<Mesh | null>(null);
+  const selectedMeshRef = useRef<Mesh | null>(null);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<'info' | 'materials' | 'components'>('info');
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [cameraMode, setCameraMode] = useState<'perspective' | 'orthographic' | 'twoPoint'>('perspective');
   const [selectedColor, setSelectedColor] = useState('#E5E7EB');
   const [meshProperties, setMeshProperties] = useState<{
     name: string;
@@ -249,6 +286,14 @@ const CustomModelingPage: React.FC = () => {
     const saved = localStorage.getItem('themeColor');
     return saved || '#3FAEA7'; // Default teal color
   });
+
+  // Shadow system state
+  const [shadowEnabled, setShadowEnabled] = useState(false);
+  const [sunTime, setSunTime] = useState(10); // 0-24 hours (10 AM default)
+  const [sunAzimuth, setSunAzimuth] = useState(180); // 0-360 degrees (South default)
+  const sunLightRef = useRef<DirectionalLight | null>(null);
+  const shadowGeneratorRef = useRef<ShadowGenerator | null>(null);
+  const shadowEnabledRef = useRef(false); // For observer closure
 
   // Base snap threshold for origin and endpoints - will be scaled by camera distance
   // This makes snap feel consistent regardless of zoom level (like screen-space snapping)
@@ -278,6 +323,128 @@ const CustomModelingPage: React.FC = () => {
     measurementInputValueRef.current = measurementInput;
   }, [measurementInput]);
 
+  // Sync selectedMesh state to ref for event handler access
+  useEffect(() => {
+    selectedMeshRef.current = selectedMesh;
+  }, [selectedMesh]);
+
+  // Close dropdown menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (activeMenu && !(e.target as HTMLElement).closest(`.${styles.menuDropdown}`)) {
+        setActiveMenu(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [activeMenu]);
+
+  // Handle camera mode switching (Orthographic vs Perspective)
+  useEffect(() => {
+    const camera = cameraRef.current;
+    const canvas = canvasRef.current;
+    if (!camera || !canvas) return;
+
+    if (cameraMode === 'orthographic') {
+      // Switch to orthographic mode
+      camera.mode = Camera.ORTHOGRAPHIC_CAMERA;
+      // Calculate orthographic bounds based on current zoom (radius)
+      const aspectRatio = canvas.width / canvas.height;
+      const orthoSize = camera.radius * 0.5;
+      camera.orthoLeft = -orthoSize * aspectRatio;
+      camera.orthoRight = orthoSize * aspectRatio;
+      camera.orthoBottom = -orthoSize;
+      camera.orthoTop = orthoSize;
+    } else {
+      // Switch to perspective mode
+      camera.mode = Camera.PERSPECTIVE_CAMERA;
+    }
+  }, [cameraMode]);
+
+  // Calculate sun position from time and azimuth
+  const calculateSunDirection = useCallback((time: number, azimuth: number): Vector3 => {
+    // Time: 0-24 hours, convert to altitude angle
+    // Noon (12) = highest point, midnight (0/24) = lowest
+    // Altitude: 0° at sunrise/sunset (6am, 6pm), 90° at noon
+    const solarNoon = 12;
+    const hourAngle = (time - solarNoon) * 15; // 15 degrees per hour
+    const altitudeAngle = Math.max(0, 90 - Math.abs(hourAngle)); // Simplified altitude
+
+    // Convert angles to radians
+    const altRad = (altitudeAngle * Math.PI) / 180;
+    const azRad = (azimuth * Math.PI) / 180;
+
+    // Calculate direction vector (pointing FROM sun TO scene)
+    // x = sin(azimuth) * cos(altitude)
+    // y = -sin(altitude) (negative because light points down)
+    // z = cos(azimuth) * cos(altitude)
+    const x = Math.sin(azRad) * Math.cos(altRad);
+    const y = -Math.sin(altRad);
+    const z = Math.cos(azRad) * Math.cos(altRad);
+
+    return new Vector3(x, y, z).normalize();
+  }, []);
+
+  // Update sun light when time/azimuth changes
+  useEffect(() => {
+    if (!sunLightRef.current) return;
+
+    const direction = calculateSunDirection(sunTime, sunAzimuth);
+    sunLightRef.current.direction = direction;
+
+    // Update light position to be opposite of direction, far from origin
+    const distance = 100;
+    sunLightRef.current.position = direction.scale(-distance);
+  }, [sunTime, sunAzimuth, calculateSunDirection]);
+
+  // Toggle shadow system
+  useEffect(() => {
+    // Update ref for observer closure
+    shadowEnabledRef.current = shadowEnabled;
+
+    const scene = sceneRef.current;
+    if (!scene || !sunLightRef.current) return;
+
+    // Find shadow ground
+    const shadowGround = scene.getMeshByName('shadowGround');
+
+    if (shadowEnabled) {
+      // Enable sun light and shadow ground
+      sunLightRef.current.intensity = 1.2;
+      if (shadowGround) shadowGround.visibility = 1;
+
+      // Add all meshes to shadow caster list
+      scene.meshes.forEach((mesh) => {
+        if (mesh instanceof Mesh &&
+          mesh.name !== 'groundPicker' &&
+          mesh.name !== 'shadowGround' &&
+          !mesh.name.includes('Axis') &&
+          !mesh.name.includes('snap') &&
+          !mesh.name.includes('origin') &&
+          !mesh.name.includes('preview') &&
+          !mesh.name.includes('Grid') &&
+          mesh.getTotalVertices() > 0) {
+          mesh.receiveShadows = true;
+          if (shadowGeneratorRef.current) {
+            shadowGeneratorRef.current.addShadowCaster(mesh);
+          }
+        }
+      });
+    } else {
+      // Disable sun light and hide shadow ground
+      sunLightRef.current.intensity = 0;
+      if (shadowGround) shadowGround.visibility = 0;
+
+      // Clear shadow caster list
+      if (shadowGeneratorRef.current) {
+        const renderList = shadowGeneratorRef.current.getShadowMap()?.renderList;
+        if (renderList) {
+          renderList.length = 0;
+        }
+      }
+    }
+  }, [shadowEnabled]);
+
   // Get ground point with grid snapping and magnetic snap to origin
   // Uses dynamic threshold based on camera distance for consistent snap feel
   const getGroundPoint = useCallback((scene: Scene, pointerX: number, pointerY: number): Vector3 | null => {
@@ -301,11 +468,12 @@ const CustomModelingPage: React.FC = () => {
         return Vector3.Zero();
       }
 
-      // Priority 2: Snap to existing snap points (endpoints, vertices, corners)
+      // Priority 2: Snap to existing snap points (endpoints, midpoints, corners)
       for (const snapPoint of snapPointsRef.current) {
-        const dist = Vector3.Distance(rawPoint, snapPoint);
+        const dist = Vector3.Distance(rawPoint, snapPoint.position);
         if (dist < snapThreshold) {
-          return snapPoint.clone();
+          // FORCE Y=0 for ground plane drawing - snap points may have non-zero Y from 3D objects
+          return new Vector3(snapPoint.position.x, 0, snapPoint.position.z);
         }
       }
 
@@ -542,8 +710,8 @@ const CustomModelingPage: React.FC = () => {
 
     // Create line with appropriate color (flat on ground plane at Y=0.01)
     const linePoints = [
-      new Vector3(start.x, 0.01, start.z),
-      new Vector3(constrainedEnd.x, 0.01, constrainedEnd.z)
+      new Vector3(start.x, 0.001, start.z),
+      new Vector3(constrainedEnd.x, 0.001, constrainedEnd.z)
     ];
     const line = MeshBuilder.CreateLines('previewLine', {
       points: linePoints,
@@ -620,7 +788,7 @@ const CustomModelingPage: React.FC = () => {
       // Create wireframe rectangle (4 lines) to avoid z-fighting
       const halfW = width / 2;
       const halfD = depth / 2;
-      const y = 0.02;  // Slightly above ground
+      const y = 0.001;  // Very slightly above ground to prevent z-fighting (5mm)
 
       const corners = [
         new Vector3(centerX - halfW, y, centerZ - halfD),
@@ -652,6 +820,392 @@ const CustomModelingPage: React.FC = () => {
   }, []);
 
   // Finalize line as edge geometry with axis color (SketchUp style - flat line on ground)
+
+  // Split a face with a line (SketchUp-style) - supports diagonal
+  const splitFaceWithLine = useCallback((scene: Scene, lineStart: Vector3, lineEnd: Vector3) => {
+    // Assign earcut to window for Babylon.js polygon creation
+    (window as any).earcut = earcut;
+    
+    const faces = scene.meshes.filter(m => 
+      m.metadata?.type === 'face' && 
+      m.name.startsWith('Face_')
+    );
+    
+    for (const face of faces) {
+      const bb = face.getBoundingInfo().boundingBox;
+      const minX = bb.minimumWorld.x;
+      const maxX = bb.maximumWorld.x;
+      const minZ = bb.minimumWorld.z;
+      const maxZ = bb.maximumWorld.z;
+      const faceY = (face as Mesh).position.y;
+      const tolerance = 0.05;
+      
+      // Rectangle corners (counter-clockwise)
+      const corners = [
+        { x: minX, z: minZ }, // bottom-left
+        { x: maxX, z: minZ }, // bottom-right
+        { x: maxX, z: maxZ }, // top-right
+        { x: minX, z: maxZ }, // top-left
+      ];
+      const edges = [
+        [corners[0], corners[1]], // bottom
+        [corners[1], corners[2]], // right
+        [corners[2], corners[3]], // top
+        [corners[3], corners[0]], // left
+      ];
+      
+      // Find which edges the line endpoints are on
+      const findEdgeIndex = (pt: Vector3): number => {
+        for (let i = 0; i < edges.length; i++) {
+          const [a, b] = edges[i];
+          // Check if point is on this edge
+          const onEdge = isPointOnSegment(pt.x, pt.z, a.x, a.z, b.x, b.z, tolerance);
+          if (onEdge) return i;
+        }
+        return -1;
+      };
+      
+      const startEdge = findEdgeIndex(lineStart);
+      const endEdge = findEdgeIndex(lineEnd);
+      
+      // Both endpoints must be on different edges
+      if (startEdge === -1 || endEdge === -1 || startEdge === endEdge) continue;
+      
+      // Get intersection points on edges
+      const p1 = { x: lineStart.x, z: lineStart.z };
+      const p2 = { x: lineEnd.x, z: lineEnd.z };
+      
+      // Build two polygons by splitting the rectangle
+      const poly1Points: Vector3[] = [];
+      const poly2Points: Vector3[] = [];
+      
+      // Walk around corners, splitting at the line endpoints
+      let inPoly1 = true;
+      for (let i = 0; i < 4; i++) {
+        const corner = corners[i];
+        if (inPoly1) {
+          poly1Points.push(new Vector3(corner.x, 0, corner.z));
+        } else {
+          poly2Points.push(new Vector3(corner.x, 0, corner.z));
+        }
+        
+        // Check if line crosses after this corner
+        if (i === startEdge) {
+          poly1Points.push(new Vector3(p1.x, 0, p1.z));
+          poly2Points.push(new Vector3(p1.x, 0, p1.z));
+          inPoly1 = !inPoly1;
+        } else if (i === endEdge) {
+          poly1Points.push(new Vector3(p2.x, 0, p2.z));
+          poly2Points.push(new Vector3(p2.x, 0, p2.z));
+          inPoly1 = !inPoly1;
+        }
+      }
+      
+      if (poly1Points.length < 3 || poly2Points.length < 3) continue;
+      
+      // Create polygon faces
+      const origMat = (face as Mesh).material as StandardMaterial;
+      const origColor = origMat?.diffuseColor || Color3.FromHexString('#E5E7EB');
+      
+      // Helper to create face from polygon points
+      const createPolyFace = (points: Vector3[]): Mesh | null => {
+        if (points.length < 3) return null;
+
+        // Calculate centroid
+        let cx = 0, cz = 0;
+        points.forEach(p => { cx += p.x; cz += p.z; });
+        cx /= points.length;
+        cz /= points.length;
+
+        // Convert to local coordinates (relative to centroid)
+        let localPoints = points.map(p => new Vector3(p.x - cx, 0, p.z - cz));
+
+        // Ensure counter-clockwise winding (for correct normals in Babylon.js)
+        let area = 0;
+        for (let i = 0; i < localPoints.length; i++) {
+          const j = (i + 1) % localPoints.length;
+          area += localPoints[i].x * localPoints[j].z;
+          area -= localPoints[j].x * localPoints[i].z;
+        }
+        if (area > 0) {
+          // Clockwise, need to reverse
+          localPoints = localPoints.reverse();
+        }
+        
+        const newFace = MeshBuilder.CreatePolygon(`Face_${++meshCounterRef.current}`, {
+          shape: localPoints,
+          sideOrientation: Mesh.DOUBLESIDE,
+          updatable: true
+        }, scene);
+
+        // Flip normals to face up (Babylon CreatePolygon may create downward normals)
+        newFace.flipFaces(true);
+
+        // Position at centroid
+        newFace.position = new Vector3(cx, 0.001, cz);
+        newFace.isPickable = true;
+        newFace.refreshBoundingInfo();
+
+        // Calculate width and depth from bounding box for push/pull
+        const bb = newFace.getBoundingInfo().boundingBox;
+        const faceWidth = bb.maximumWorld.x - bb.minimumWorld.x;
+        const faceDepth = bb.maximumWorld.z - bb.minimumWorld.z;
+
+        const mat = new StandardMaterial(`faceMat_${meshCounterRef.current}`, scene);
+        mat.diffuseColor = origColor.clone();
+        mat.emissiveColor = origColor.scale(0.3);
+        mat.specularColor = new Color3(0.2, 0.2, 0.2);
+        mat.backFaceCulling = false;
+        newFace.material = mat;
+        newFace.metadata = {
+          type: 'face',
+          originalY: 0.001,
+          width: faceWidth,
+          depth: faceDepth,
+          isPolygon: true,
+          polygonPoints: localPoints.map(p => ({ x: p.x, z: p.z }))
+        };
+        
+        // Create edges (in local coordinates)
+        const edgeIds: string[] = [];
+        for (let i = 0; i < localPoints.length; i++) {
+          const p1 = localPoints[i];
+          const p2 = localPoints[(i + 1) % localPoints.length];
+          const edge = MeshBuilder.CreateTube(`Edge_${meshCounterRef.current}_${i}`, {
+            path: [new Vector3(p1.x, 0.001, p1.z), new Vector3(p2.x, 0.001, p2.z)],
+            radius: 0.005,
+            tessellation: 4,
+            cap: 0
+          }, scene);
+          const edgeMat = new StandardMaterial(`EdgeMat_${meshCounterRef.current}_${i}`, scene);
+          edgeMat.diffuseColor = new Color3(0.15, 0.15, 0.15);
+          edgeMat.emissiveColor = new Color3(0.15, 0.15, 0.15);
+          edge.material = edgeMat;
+          edge.isPickable = true;
+          edge.parent = newFace;
+          edge.metadata = { type: 'edge', parentFace: newFace };
+          edgeIds.push(edge.id);
+        }
+        newFace.metadata.edgeIds = edgeIds;
+        
+        return newFace;
+      };
+      
+      try {
+        const face1 = createPolyFace(poly1Points);
+        const face2 = createPolyFace(poly2Points);
+
+        if (face1 && face2) {
+          face.dispose();
+          return true;
+        }
+      } catch (e) {
+        console.error('Failed to split face:', e);
+      }
+    }
+    return false;
+  }, []);
+
+  // Check if point is on a line segment
+
+  // Split a face with a closed shape (rectangle, circle, polygon) drawn inside it
+  // Returns the outer (donut) face if split successful, null otherwise
+  const splitFaceWithShape = useCallback((scene: Scene, shapeCorners: Vector3[]): { outerFace: Mesh | null, disposed: boolean } => {
+    // Assign earcut to window for Babylon.js polygon creation
+    (window as any).earcut = earcut;
+
+    // Find face that completely contains the new shape
+    const faces = scene.meshes.filter(m =>
+      m.metadata?.type === 'face' &&
+      m.name.startsWith('Face_')
+    ) as Mesh[];
+
+    for (const face of faces) {
+      const bb = face.getBoundingInfo().boundingBox;
+      const faceMinX = bb.minimumWorld.x;
+      const faceMaxX = bb.maximumWorld.x;
+      const faceMinZ = bb.minimumWorld.z;
+      const faceMaxZ = bb.maximumWorld.z;
+
+      // Check if ALL shape corners are inside this face
+      let allInside = true;
+      for (const corner of shapeCorners) {
+        if (corner.x < faceMinX || corner.x > faceMaxX ||
+            corner.z < faceMinZ || corner.z > faceMaxZ) {
+          allInside = false;
+          break;
+        }
+      }
+
+      if (!allInside) continue;
+
+      // Get original face material
+      const origMat = face.material as StandardMaterial;
+      const origColor = origMat?.diffuseColor || Color3.FromHexString('#E5E7EB');
+
+      // Get outer boundary corners (face corners)
+      const outerCorners = [
+        new Vector3(faceMinX, 0, faceMinZ),
+        new Vector3(faceMaxX, 0, faceMinZ),
+        new Vector3(faceMaxX, 0, faceMaxZ),
+        new Vector3(faceMinX, 0, faceMaxZ),
+      ];
+
+      // Create centroid for outer face
+      const outerCx = (faceMinX + faceMaxX) / 2;
+      const outerCz = (faceMinZ + faceMaxZ) / 2;
+
+      // Convert to local coordinates
+      const outerLocal = outerCorners.map(p => new Vector3(p.x - outerCx, 0, p.z - outerCz));
+
+      // Inner hole (shape) in local coordinates, reversed for hole winding
+      const innerLocal = shapeCorners.map(p => new Vector3(p.x - outerCx, 0, p.z - outerCz)).reverse();
+
+      try {
+        // Create donut face with hole using CreatePolygon with holes parameter
+        const outerFace = MeshBuilder.CreatePolygon(
+          `Face_${++meshCounterRef.current}`,
+          {
+            shape: outerLocal,
+            holes: [innerLocal],
+            sideOrientation: Mesh.DOUBLESIDE
+          },
+          scene
+        );
+        
+        // Flip normals to face up
+        outerFace.flipFaces(true);
+
+        outerFace.position = new Vector3(outerCx, 0.001, outerCz);
+        outerFace.isPickable = true;
+        outerFace.refreshBoundingInfo();
+
+        // Copy exact material properties from original face
+        const mat = new StandardMaterial(`faceMat_${meshCounterRef.current}`, scene);
+        mat.diffuseColor = origMat?.diffuseColor?.clone() || Color3.FromHexString('#E5E7EB');
+        mat.emissiveColor = origMat?.emissiveColor?.clone() || mat.diffuseColor.clone().scale(0.3);
+        mat.specularColor = origMat?.specularColor?.clone() || new Color3(0.2, 0.2, 0.2);
+        mat.backFaceCulling = false;
+        outerFace.material = mat;
+        // Store polygon shape data for push/pull extrusion
+        outerFace.metadata = {
+          type: 'face',
+          originalY: 0.001,
+          isPolygon: true,
+          shape: outerLocal.map(v => ({ x: v.x, z: v.z })),  // Outer polygon shape in local coords
+          holes: [innerLocal.map(v => ({ x: v.x, z: v.z }))]  // Inner holes in local coords
+        };
+
+        // Create outer edges
+        const outerEdgeIds: string[] = [];
+        for (let i = 0; i < outerLocal.length; i++) {
+          const p1 = outerLocal[i];
+          const p2 = outerLocal[(i + 1) % outerLocal.length];
+          const edge = MeshBuilder.CreateTube(`Edge_${meshCounterRef.current}_outer_${i}`, {
+            path: [new Vector3(p1.x, 0.001, p1.z), new Vector3(p2.x, 0.001, p2.z)],
+            radius: 0.005,
+            tessellation: 4,
+            cap: 0
+          }, scene);
+          const edgeMat = new StandardMaterial(`EdgeMat_${meshCounterRef.current}_outer_${i}`, scene);
+          edgeMat.diffuseColor = new Color3(0.15, 0.15, 0.15);
+          edgeMat.emissiveColor = new Color3(0.15, 0.15, 0.15);
+          edge.material = edgeMat;
+          edge.isPickable = true;
+          edge.parent = outerFace;
+          edge.metadata = { type: 'edge', parentFace: outerFace };
+          outerEdgeIds.push(edge.id);
+        }
+        outerFace.metadata.edgeIds = outerEdgeIds;
+
+        // Dispose original face
+        face.dispose();
+
+        console.log(`Face split: created donut face with hole`);
+        return { outerFace, disposed: true };
+      } catch (e) {
+        console.error('Failed to split face with shape:', e);
+      }
+    }
+
+    return { outerFace: null, disposed: false };
+  }, []);
+
+  const isPointOnSegment = (px: number, pz: number, ax: number, az: number, bx: number, bz: number, tol: number): boolean => {
+    const minX = Math.min(ax, bx) - tol;
+    const maxX = Math.max(ax, bx) + tol;
+    const minZ = Math.min(az, bz) - tol;
+    const maxZ = Math.max(az, bz) + tol;
+    if (px < minX || px > maxX || pz < minZ || pz > maxZ) return false;
+    
+    // Check distance to line
+    const dx = bx - ax;
+    const dz = bz - az;
+    const len = Math.sqrt(dx * dx + dz * dz);
+    if (len < 0.001) return Math.abs(px - ax) < tol && Math.abs(pz - az) < tol;
+    
+    const dist = Math.abs((bz - az) * px - (bx - ax) * pz + bx * az - bz * ax) / len;
+    return dist < tol;
+  };
+
+  // Create edges for polygon face
+  const createPolygonEdges = useCallback((scene: Scene, face: Mesh, points: Vector3[], faceY: number) => {
+    const edgeIds: string[] = [];
+    for (let i = 0; i < points.length; i++) {
+      const p1 = points[i];
+      const p2 = points[(i + 1) % points.length];
+      const edge = MeshBuilder.CreateTube(`Edge_${meshCounterRef.current}_${i}`, {
+        path: [new Vector3(p1.x - face.position.x, 0.001, p1.z - face.position.z), 
+               new Vector3(p2.x - face.position.x, 0.001, p2.z - face.position.z)],
+        radius: 0.005,
+        tessellation: 4,
+        cap: 0
+      }, scene);
+      const edgeMat = new StandardMaterial(`EdgeMat_${meshCounterRef.current}_${i}`, scene);
+      edgeMat.diffuseColor = new Color3(0.15, 0.15, 0.15);
+      edgeMat.emissiveColor = new Color3(0.15, 0.15, 0.15);
+      edge.material = edgeMat;
+      edge.isPickable = true;
+      edge.parent = face;
+      edge.metadata = { type: 'edge', parentFace: face };
+      edgeIds.push(edge.id);
+    }
+    face.metadata.edgeIds = edgeIds;
+  }, []);
+
+  // Helper to create edges for a face
+  const createFaceEdges = useCallback((scene: Scene, face: Mesh, width: number, depth: number) => {
+    const halfW = width / 2;
+    const halfD = depth / 2;
+    const edgeY = 0.001;
+    const corners = [
+      new Vector3(-halfW, edgeY, -halfD),
+      new Vector3(+halfW, edgeY, -halfD),
+      new Vector3(+halfW, edgeY, +halfD),
+      new Vector3(-halfW, edgeY, +halfD),
+    ];
+    const edgeIds: string[] = [];
+    const edgePairs = [[0, 1], [1, 2], [2, 3], [3, 0]];
+    edgePairs.forEach((pair, idx) => {
+      const edge = MeshBuilder.CreateTube(`Edge_${meshCounterRef.current}_${idx}`, {
+        path: [corners[pair[0]], corners[pair[1]]],
+        radius: 0.005,
+        tessellation: 4,
+        cap: 0
+      }, scene);
+      const edgeMat = new StandardMaterial(`EdgeMat_${meshCounterRef.current}_${idx}`, scene);
+      edgeMat.diffuseColor = new Color3(0.15, 0.15, 0.15);
+      edgeMat.emissiveColor = new Color3(0.15, 0.15, 0.15);
+      edge.material = edgeMat;
+      edge.isPickable = true;
+      edge.parent = face;
+      edge.metadata = { type: 'edge', parentFace: face };
+      edgeIds.push(edge.id);
+    });
+    face.metadata.edgeIds = edgeIds;
+  }, []);
+
+
   const finalizeLine = useCallback((scene: Scene, start: Vector3, end: Vector3): Mesh => {
     const lineInf = lineInferenceRef.current;
 
@@ -681,8 +1235,8 @@ const CustomModelingPage: React.FC = () => {
 
     // Create flat line on ground plane (Y=0.01 to avoid z-fighting)
     const linePoints = [
-      new Vector3(start.x, 0.01, start.z),
-      new Vector3(constrainedEnd.x, 0.01, constrainedEnd.z)
+      new Vector3(start.x, 0.001, start.z),
+      new Vector3(constrainedEnd.x, 0.001, constrainedEnd.z)
     ];
 
     const edge = MeshBuilder.CreateLines(`Edge_${meshCounterRef.current}`, {
@@ -692,7 +1246,11 @@ const CustomModelingPage: React.FC = () => {
 
     edge.color = lineColor;
     edge.isPickable = true;
-    edge.intersectionThreshold = 0.1; // Make selection easier
+    edge.intersectionThreshold = 0.3; // Make selection easier
+
+    // IMPORTANT: Force bounding info refresh for LinesMesh
+    // LinesMesh doesn't automatically compute proper bounding box
+    edge.refreshBoundingInfo();
 
     // Store edge metadata for future operations
     edge.metadata = {
@@ -710,8 +1268,11 @@ const CustomModelingPage: React.FC = () => {
     lineInf.inferenceLocked = false;
     setLineInferenceUI(prev => ({ ...prev, axisLock: 'none', inferenceLocked: false }));
 
+    // Try to split any face that this line crosses
+    splitFaceWithLine(scene, start, constrainedEnd);
+
     return edge as unknown as Mesh;
-  }, [applyAxisLock]);
+  }, [applyAxisLock, splitFaceWithLine]);
 
   // Finalize rectangle as face geometry with modifier support
   const finalizeRectangle = useCallback((scene: Scene, start: Vector3, end: Vector3): Mesh | null => {
@@ -744,15 +1305,30 @@ const CustomModelingPage: React.FC = () => {
       centerZ = start.z + (signZ * depth / 2);
     }
 
+    // Calculate world corners for face splitting check
+    const worldCorners = [
+      new Vector3(centerX - width / 2, 0, centerZ - depth / 2),
+      new Vector3(centerX + width / 2, 0, centerZ - depth / 2),
+      new Vector3(centerX + width / 2, 0, centerZ + depth / 2),
+      new Vector3(centerX - width / 2, 0, centerZ + depth / 2),
+    ];
+
+    // Try to split any containing face (coplanar face merging)
+    splitFaceWithShape(scene, worldCorners);
+
     meshCounterRef.current++;
     const face = MeshBuilder.CreateGround(`Face_${meshCounterRef.current}`, {
       width,
       height: depth,
     }, scene);
-    face.position = new Vector3(centerX, 0.01, centerZ);
+    face.position = new Vector3(centerX, 0.001, centerZ);
+    face.isPickable = true;
+    // Refresh bounding info after position change for box selection
+    face.refreshBoundingInfo();
 
     const faceMat = new StandardMaterial(`faceMat_${meshCounterRef.current}`, scene);
     faceMat.diffuseColor = Color3.FromHexString(selectedColor);
+    faceMat.emissiveColor = Color3.FromHexString(selectedColor).scale(0.3);
     faceMat.specularColor = new Color3(0.2, 0.2, 0.2);
     faceMat.backFaceCulling = false;
     face.material = faceMat;
@@ -761,13 +1337,13 @@ const CustomModelingPage: React.FC = () => {
       type: 'face',
       width,
       depth,
-      originalY: 0.01,
+      originalY: 0.001,
     };
 
-    // Create individual edge lines parented to face (so they move together)
+    // Create individual edge tubes parented to face (pickable)
     const halfW = width / 2;
     const halfD = depth / 2;
-    const edgeY = 0.005; // Slightly above face to prevent z-fighting (local Y)
+    const edgeY = 0.001; // Slightly above face to prevent z-fighting (local Y)
     // Local coordinates relative to face center
     const corners = [
       new Vector3(-halfW, edgeY, -halfD), // 0: bottom-left
@@ -779,13 +1355,20 @@ const CustomModelingPage: React.FC = () => {
     const edgeIds: string[] = [];
     const edgePairs = [[0, 1], [1, 2], [2, 3], [3, 0]]; // 4 edges
     edgePairs.forEach((pair, idx) => {
-      const edge = MeshBuilder.CreateLines(`Edge_${meshCounterRef.current}_${idx}`, {
-        points: [corners[pair[0]], corners[pair[1]]],
+      const edge = MeshBuilder.CreateTube(`Edge_${meshCounterRef.current}_${idx}`, {
+        path: [corners[pair[0]], corners[pair[1]]],
+        radius: 0.005,
+        tessellation: 4,
+        cap: 0
       }, scene);
-      edge.color = new Color3(0.15, 0.15, 0.15);
-      edge.isPickable = false;
-      edge.parent = face; // Parent to face so edges move with it
-      edge.metadata = { type: 'edge', parentFaceId: face.id };
+      // Each edge gets its own material for individual selection highlighting
+      const edgeMat = new StandardMaterial(`EdgeMat_${meshCounterRef.current}_${idx}`, scene);
+      edgeMat.diffuseColor = new Color3(0.15, 0.15, 0.15);
+      edgeMat.emissiveColor = new Color3(0.15, 0.15, 0.15);
+      edge.material = edgeMat;
+      edge.isPickable = true;
+      edge.parent = face;
+      edge.metadata = { type: 'edge', parentFace: face };
       edgeIds.push(edge.id);
     });
 
@@ -802,7 +1385,7 @@ const CustomModelingPage: React.FC = () => {
     setShapeModifiersUI(resetMods);
 
     return face;
-  }, [selectedColor]);
+  }, [selectedColor, splitFaceWithShape]);
 
   // Create/update preview circle with modifier support
   const updatePreviewCircle = useCallback((scene: Scene, start: Vector3, end: Vector3) => {
@@ -838,7 +1421,7 @@ const CustomModelingPage: React.FC = () => {
         tessellation: 48
       }, scene);
       disc.rotation.x = Math.PI / 2; // Rotate to be horizontal
-      disc.position = new Vector3(centerX, 0.01, centerZ);
+      disc.position = new Vector3(centerX, 0.001, centerZ);  // Very slightly above ground (5mm)
 
       const mat = new StandardMaterial('previewCircleMat', scene);
 
@@ -885,13 +1468,31 @@ const CustomModelingPage: React.FC = () => {
       centerZ = start.z;
     }
 
+    // Calculate circle points for face splitting check
+    const circleCorners: Vector3[] = [];
+    const splitSegments = 24; // Use fewer segments for splitting detection
+    for (let i = 0; i < splitSegments; i++) {
+      const angle = (i / splitSegments) * Math.PI * 2;
+      circleCorners.push(new Vector3(
+        centerX + Math.cos(angle) * radius,
+        0,
+        centerZ + Math.sin(angle) * radius
+      ));
+    }
+
+    // Try to split any containing face (coplanar face merging)
+    splitFaceWithShape(scene, circleCorners);
+
     meshCounterRef.current++;
     const disc = MeshBuilder.CreateDisc(`Circle_${meshCounterRef.current}`, {
       radius: radius,
       tessellation: 48
     }, scene);
     disc.rotation.x = Math.PI / 2;
-    disc.position = new Vector3(centerX, 0.01, centerZ);
+    disc.position = new Vector3(centerX, 0.001, centerZ);
+    disc.isPickable = true;
+    // Refresh bounding info after position/rotation change for box selection
+    disc.refreshBoundingInfo();
 
     const faceMat = new StandardMaterial(`circleMat_${meshCounterRef.current}`, scene);
     faceMat.diffuseColor = Color3.FromHexString(selectedColor);
@@ -904,11 +1505,11 @@ const CustomModelingPage: React.FC = () => {
       centerX,
       centerZ,
       radius,
-      originalY: 0.01,
+      originalY: 0.001,
     };
 
     // Create edge line parented to disc (circular outline - moves with face)
-    const edgeY = 0.005; // Local Y relative to disc
+    const edgeY = 0.001; // Local Y relative to disc
     const segments = 48;
     const circlePoints: Vector3[] = [];
     for (let i = 0; i <= segments; i++) {
@@ -946,7 +1547,7 @@ const CustomModelingPage: React.FC = () => {
     setShapeModifiersUI(resetMods);
 
     return disc;
-  }, [selectedColor]);
+  }, [selectedColor, splitFaceWithShape]);
 
   // Create/update preview polygon with modifier support
   const updatePreviewPolygon = useCallback((scene: Scene, start: Vector3, end: Vector3, sides: number = 6) => {
@@ -1038,7 +1639,7 @@ const CustomModelingPage: React.FC = () => {
       // For lines on ground (Y=0), rotation.y should be -angle.
 
       polygon.rotation.y = -angle;
-      polygon.position = new Vector3(centerX, 0.01, centerZ);
+      polygon.position = new Vector3(centerX, 0.001, centerZ);  // Very slightly above ground (5mm)
 
       // Set color based on modifiers
       let color: Color3;
@@ -1078,6 +1679,20 @@ const CustomModelingPage: React.FC = () => {
       centerZ = start.z;
     }
 
+    // Calculate polygon points for face splitting check
+    const polygonCorners: Vector3[] = [];
+    for (let i = 0; i < sides; i++) {
+      const polyAngle = (i / sides) * Math.PI * 2;
+      polygonCorners.push(new Vector3(
+        centerX + Math.cos(polyAngle) * radius,
+        0,
+        centerZ + Math.sin(polyAngle) * radius
+      ));
+    }
+
+    // Try to split any containing face (coplanar face merging)
+    splitFaceWithShape(scene, polygonCorners);
+
     meshCounterRef.current++;
     const polygon = MeshBuilder.CreateDisc(`Polygon_${meshCounterRef.current}`, {
       radius: radius,
@@ -1116,7 +1731,10 @@ const CustomModelingPage: React.FC = () => {
     polygon.rotation.x = Math.PI / 2;
     polygon.rotation.z = -angle;
 
-    polygon.position = new Vector3(centerX, 0.01, centerZ);
+    polygon.position = new Vector3(centerX, 0.001, centerZ);
+    polygon.isPickable = true;
+    // Refresh bounding info after position/rotation change for box selection
+    polygon.refreshBoundingInfo();
 
     const faceMat = new StandardMaterial(`polygonMat_${meshCounterRef.current}`, scene);
     faceMat.diffuseColor = Color3.FromHexString(selectedColor);
@@ -1129,12 +1747,12 @@ const CustomModelingPage: React.FC = () => {
       centerZ,
       radius,
       sides,
-      originalY: 0.01,
+      originalY: 0.001,
       edgeIds: [] as string[],
     };
 
     // Create individual edge lines parented to polygon (so they move together)
-    const edgeY = 0.005; // Local Y offset above face
+    const edgeY = 0.001; // Local Y offset above face
     const vertices: Vector3[] = [];
     for (let i = 0; i < sides; i++) {
       // Local vertices relative to polygon center (include rotation.z angle)
@@ -1172,26 +1790,34 @@ const CustomModelingPage: React.FC = () => {
     setShapeModifiersUI(resetMods);
 
     return polygon;
-  }, [selectedColor]);
+  }, [selectedColor, splitFaceWithShape]);
 
-  // Add snap points for line (start and end points)
+  // Add snap points for line (start point, end point, and midpoint)
   const addLineSnapPoints = useCallback((start: Vector3, end: Vector3) => {
-    const newPoints = [
-      new Vector3(start.x, 0, start.z),
-      new Vector3(end.x, 0, end.z),
+    // Endpoint positions
+    const startPos = new Vector3(start.x, 0, start.z);
+    const endPos = new Vector3(end.x, 0, end.z);
+    // Midpoint position
+    const midPos = new Vector3((start.x + end.x) / 2, 0, (start.z + end.z) / 2);
+
+    const newPoints: { position: Vector3; type: 'endpoint' | 'midpoint' }[] = [
+      { position: startPos, type: 'endpoint' },
+      { position: endPos, type: 'endpoint' },
+      { position: midPos, type: 'midpoint' },
     ];
 
     newPoints.forEach(point => {
       // Check if point already exists
-      const exists = snapPointsRef.current.some(p => Vector3.Distance(p, point) < 0.1);
+      const exists = snapPointsRef.current.some(p => Vector3.Distance(p.position, point.position) < 0.1);
       if (!exists) {
         snapPointsRef.current.push(point);
       }
     });
   }, []);
 
-  // Add snap points for rectangle (4 corners)
+  // Add snap points for rectangle (4 corners + 4 edge midpoints)
   const addRectangleSnapPoints = useCallback((start: Vector3, end: Vector3) => {
+    // 4 corners (endpoints)
     const corners = [
       new Vector3(start.x, 0, start.z),
       new Vector3(end.x, 0, start.z),
@@ -1199,21 +1825,47 @@ const CustomModelingPage: React.FC = () => {
       new Vector3(start.x, 0, end.z),
     ];
 
+    // 4 edge midpoints
+    const midpoints = [
+      new Vector3((start.x + end.x) / 2, 0, start.z),  // Top edge midpoint
+      new Vector3(end.x, 0, (start.z + end.z) / 2),    // Right edge midpoint
+      new Vector3((start.x + end.x) / 2, 0, end.z),    // Bottom edge midpoint
+      new Vector3(start.x, 0, (start.z + end.z) / 2),  // Left edge midpoint
+    ];
+
+    // Add corners as endpoints
     corners.forEach(corner => {
-      const exists = snapPointsRef.current.some(p => Vector3.Distance(p, corner) < 0.1);
+      const exists = snapPointsRef.current.some(p => Vector3.Distance(p.position, corner) < 0.1);
       if (!exists) {
-        snapPointsRef.current.push(corner);
+        snapPointsRef.current.push({ position: corner, type: 'endpoint' });
+      }
+    });
+
+    // Add midpoints
+    midpoints.forEach(midpoint => {
+      const exists = snapPointsRef.current.some(p => Vector3.Distance(p.position, midpoint) < 0.1);
+      if (!exists) {
+        snapPointsRef.current.push({ position: midpoint, type: 'midpoint' });
       }
     });
   }, []);
 
-  // Show snap indicator - change cursor color to green (cursor itself jumps to snap point)
-  const showSnapIndicator = useCallback((_position: Vector3) => {
+  // Show snap indicator - change cursor color based on snap type
+  // Endpoint/Origin: Green, Midpoint: Cyan (sky blue), On-edge: Red
+  const showSnapIndicator = useCallback((snapType: 'endpoint' | 'midpoint' | 'origin' | 'onedge') => {
     // Cursor position is handled by pointer observer - just change color here
     const pointerCircle = pointerCircleRef.current;
     if (pointerCircle) {
-      pointerCircle.color = '#90EE90';  // Light green border
-      pointerCircle.background = '#FFFFFF';  // White fill when snapped
+      if (snapType === 'midpoint') {
+        pointerCircle.color = '#00BFFF';  // Deep sky blue border for midpoint
+        pointerCircle.background = '#87CEEB';  // Light sky blue fill for midpoint
+      } else if (snapType === 'onedge') {
+        pointerCircle.color = '#FF4444';  // Red border for on-edge
+        pointerCircle.background = '#FF6666';  // Light red fill for on-edge
+      } else {
+        pointerCircle.color = '#90EE90';  // Light green border for endpoint/origin
+        pointerCircle.background = '#FFFFFF';  // White fill for endpoint/origin
+      }
     }
   }, []);
 
@@ -1227,77 +1879,361 @@ const CustomModelingPage: React.FC = () => {
   }, []);
 
   // Find nearest snap point to a position (uses dynamic threshold based on camera distance)
-  const findNearestSnapPoint = useCallback((position: Vector3): Vector3 | null => {
+  // Returns snap point data with type information for visual feedback
+  const findNearestSnapPoint = useCallback((position: Vector3): SnapPointData | null => {
     const camera = cameraRef.current;
     // Dynamic threshold: scales with camera distance for consistent "screen feel"
     // When zoomed out (large radius), larger threshold; when zoomed in, smaller threshold
     // Minimum of 1.0 world units ensures snap works well even when zoomed in very close
     const snapThreshold = camera ? Math.max(camera.radius * SNAP_THRESHOLD_BASE, 1.0) : 2.0;
 
-    let nearest: Vector3 | null = null;
+    let nearest: SnapPointData | null = null;
     let minDist = snapThreshold;
 
     // Check origin first (highest priority snap point)
     const distToOrigin = Vector3.Distance(position, Vector3.Zero());
     if (distToOrigin < minDist) {
       minDist = distToOrigin;
-      nearest = Vector3.Zero();
+      nearest = { position: Vector3.Zero(), type: 'origin' };
     }
 
-    // Check all snap points (endpoints, vertices, etc.)
+    // Check all snap points (endpoints, midpoints, etc.)
     for (const snapPoint of snapPointsRef.current) {
-      const dist = Vector3.Distance(position, snapPoint);
-      if (dist < minDist) {
-        minDist = dist;
-        nearest = snapPoint;
+      // Use 2D distance (XZ plane) for ground-level drawing
+      // This allows snapping to 3D object corners/edges projected to ground
+      const dx = position.x - snapPoint.position.x;
+      const dz = position.z - snapPoint.position.z;
+      const dist2D = Math.sqrt(dx * dx + dz * dz);
+      if (dist2D < minDist) {
+        minDist = dist2D;
+        // FORCE Y=0 for ground plane - snap points project to ground
+        nearest = {
+          position: new Vector3(snapPoint.position.x, 0, snapPoint.position.z),
+          type: snapPoint.type
+        };
       }
     }
 
     return nearest;
   }, []);
 
+  // Push/Pull for polygon faces with holes (donut shapes)
+  const applyPushPullPolygon = useCallback((face: Mesh, distance: number, faceNormal: Vector3, scene: Scene): Mesh | null => {
+    const { shape, holes } = face.metadata;
+    const baseCenter = face.getAbsolutePosition().clone();
+    const height = Math.abs(distance);
+    const hh = height / 2;
+
+    meshCounterRef.current++;
+    const solidId = meshCounterRef.current;
+
+    // Assign earcut to window for Babylon.js polygon creation
+    (window as any).earcut = earcut;
+
+    // Convert stored shape data back to Vector3 arrays
+    const outerShape = shape.map((p: { x: number; z: number }) => new Vector3(p.x, 0, p.z));
+    const innerHoles = holes.map((hole: Array<{ x: number; z: number }>) =>
+      hole.map((p: { x: number; z: number }) => new Vector3(p.x, 0, p.z))
+    );
+
+    // Calculate solid center position based on face normal direction
+    const normalizedNormal = faceNormal.normalize();
+    const offset = normalizedNormal.scale(distance / 2);
+
+    // Create parent container
+    const solid = new Mesh(`Solid_${solidId}`, scene);
+    solid.position = baseCenter.add(offset);
+    solid.isPickable = false;
+
+    // Handle rotation based on normal direction
+    if (Math.abs(normalizedNormal.x) > 0.9) {
+      solid.rotation.z = normalizedNormal.x > 0 ? -Math.PI / 2 : Math.PI / 2;
+    } else if (Math.abs(normalizedNormal.z) > 0.9) {
+      solid.rotation.x = normalizedNormal.z > 0 ? Math.PI / 2 : -Math.PI / 2;
+    } else if (normalizedNormal.y < -0.9) {
+      solid.rotation.x = Math.PI;
+    }
+
+    solid.metadata = { type: 'solid', isPolygon: true };
+
+    // Helper to create face material
+    const createFaceMat = (name: string) => {
+      const mat = new StandardMaterial(name, scene);
+      mat.diffuseColor = Color3.FromHexString(selectedColor);
+      mat.specularColor = new Color3(0.2, 0.2, 0.2);
+      mat.backFaceCulling = false;
+      return mat;
+    };
+
+    try {
+      // Create top face (donut at Y = +hh)
+      const topFace = MeshBuilder.CreatePolygon(
+        `Face_${solidId}_top`,
+        { shape: outerShape, holes: innerHoles, sideOrientation: Mesh.DOUBLESIDE },
+        scene
+      );
+      topFace.position = new Vector3(0, hh, 0);
+      topFace.material = createFaceMat(`FaceMat_${solidId}_top`);
+      topFace.isPickable = true;
+      topFace.parent = solid;
+      topFace.metadata = {
+        type: 'face',
+        isPolygon: true,
+        shape: shape,
+        holes: holes,
+        parentSolid: solid,
+        faceDir: 'top'
+      };
+
+      // Create bottom face (donut at Y = -hh)
+      const bottomFace = MeshBuilder.CreatePolygon(
+        `Face_${solidId}_bottom`,
+        { shape: outerShape, holes: innerHoles, sideOrientation: Mesh.DOUBLESIDE },
+        scene
+      );
+      bottomFace.position = new Vector3(0, -hh, 0);
+      bottomFace.rotation.x = Math.PI;
+      bottomFace.material = createFaceMat(`FaceMat_${solidId}_bottom`);
+      bottomFace.isPickable = true;
+      bottomFace.parent = solid;
+      bottomFace.metadata = {
+        type: 'face',
+        isPolygon: true,
+        shape: shape,
+        holes: holes,
+        parentSolid: solid,
+        faceDir: 'bottom'
+      };
+
+      // Create outer walls (4 sides for rectangular outer shape)
+      for (let i = 0; i < outerShape.length; i++) {
+        const p1 = outerShape[i];
+        const p2 = outerShape[(i + 1) % outerShape.length];
+
+        // Create a plane for this wall segment
+        const wallWidth = Vector3.Distance(p1, p2);
+        const wall = MeshBuilder.CreatePlane(`Face_${solidId}_outerWall_${i}`, {
+          width: wallWidth,
+          height: height
+        }, scene);
+
+        // Position at midpoint of edge
+        const midX = (p1.x + p2.x) / 2;
+        const midZ = (p1.z + p2.z) / 2;
+        wall.position = new Vector3(midX, 0, midZ);
+
+        // Calculate rotation to face outward
+        const angle = Math.atan2(p2.z - p1.z, p2.x - p1.x);
+        wall.rotation.y = -angle + Math.PI / 2;
+
+        wall.material = createFaceMat(`FaceMat_${solidId}_outerWall_${i}`);
+        wall.isPickable = true;
+        wall.parent = solid;
+        wall.metadata = { type: 'face', width: wallWidth, depth: height, parentSolid: solid, faceDir: 'side' };
+      }
+
+      // Create inner walls (walls around the hole)
+      for (let h = 0; h < innerHoles.length; h++) {
+        const hole = innerHoles[h];
+        for (let i = 0; i < hole.length; i++) {
+          const p1 = hole[i];
+          const p2 = hole[(i + 1) % hole.length];
+
+          const wallWidth = Vector3.Distance(p1, p2);
+          const wall = MeshBuilder.CreatePlane(`Face_${solidId}_innerWall_${h}_${i}`, {
+            width: wallWidth,
+            height: height
+          }, scene);
+
+          const midX = (p1.x + p2.x) / 2;
+          const midZ = (p1.z + p2.z) / 2;
+          wall.position = new Vector3(midX, 0, midZ);
+
+          // Face inward (opposite direction from outer walls)
+          const angle = Math.atan2(p2.z - p1.z, p2.x - p1.x);
+          wall.rotation.y = -angle - Math.PI / 2;
+
+          wall.material = createFaceMat(`FaceMat_${solidId}_innerWall_${h}_${i}`);
+          wall.isPickable = true;
+          wall.parent = solid;
+          wall.metadata = { type: 'face', width: wallWidth, depth: height, parentSolid: solid, faceDir: 'side' };
+        }
+      }
+
+      // Create edges
+      const createEdge = (p1: Vector3, p2: Vector3, idx: string) => {
+        const edge = MeshBuilder.CreateTube(`Edge_${solidId}_${idx}`, {
+          path: [p1, p2],
+          radius: 0.005,
+          tessellation: 4,
+          cap: 0
+        }, scene);
+        const edgeMat = new StandardMaterial(`EdgeMat_${solidId}_${idx}`, scene);
+        edgeMat.diffuseColor = new Color3(0.15, 0.15, 0.15);
+        edgeMat.emissiveColor = new Color3(0.15, 0.15, 0.15);
+        edge.material = edgeMat;
+        edge.isPickable = true;
+        edge.parent = solid;
+        edge.metadata = { type: 'edge', parentSolid: solid };
+      };
+
+      // Outer horizontal edges (top and bottom)
+      for (let i = 0; i < outerShape.length; i++) {
+        const p1 = outerShape[i];
+        const p2 = outerShape[(i + 1) % outerShape.length];
+        // Top edge
+        createEdge(new Vector3(p1.x, hh, p1.z), new Vector3(p2.x, hh, p2.z), `outer_top_${i}`);
+        // Bottom edge
+        createEdge(new Vector3(p1.x, -hh, p1.z), new Vector3(p2.x, -hh, p2.z), `outer_bottom_${i}`);
+        // Vertical edge
+        createEdge(new Vector3(p1.x, -hh, p1.z), new Vector3(p1.x, hh, p1.z), `outer_vert_${i}`);
+      }
+
+      // Inner horizontal edges (around hole, top and bottom)
+      for (let h = 0; h < innerHoles.length; h++) {
+        const hole = innerHoles[h];
+        for (let i = 0; i < hole.length; i++) {
+          const p1 = hole[i];
+          const p2 = hole[(i + 1) % hole.length];
+          // Top edge
+          createEdge(new Vector3(p1.x, hh, p1.z), new Vector3(p2.x, hh, p2.z), `inner_${h}_top_${i}`);
+          // Bottom edge
+          createEdge(new Vector3(p1.x, -hh, p1.z), new Vector3(p2.x, -hh, p2.z), `inner_${h}_bottom_${i}`);
+          // Vertical edge
+          createEdge(new Vector3(p1.x, -hh, p1.z), new Vector3(p1.x, hh, p1.z), `inner_${h}_vert_${i}`);
+        }
+      }
+
+      // Dispose original face
+      face.getChildMeshes().forEach(child => child.dispose());
+      face.dispose();
+
+      solid.computeWorldMatrix(true);
+
+      console.log(`Created polygon solid with holes`);
+      return solid;
+    } catch (e) {
+      console.error('Failed to create polygon solid:', e);
+      return null;
+    }
+  }, [selectedColor]);
+
   // Push/Pull functionality - SketchUp-style face extrusion
-  // Creates a solid box with invisible pickable faces and edge lines
+  // Creates 6 individual pickable faces + 12 edges for full selectability
   const applyPushPull = useCallback((face: Mesh, distance: number, faceNormal: Vector3): Mesh | null => {
     if (!face.metadata || face.metadata.type !== 'face') return null;
     if (Math.abs(distance) < 0.001) return null;
 
     const scene = face.getScene();
+
+    // Handle polygon faces with holes (donut faces)
+    if (face.metadata.isPolygon && face.metadata.shape) {
+      return applyPushPullPolygon(face, distance, faceNormal, scene);
+    }
+
     const { width, depth } = face.metadata;
-    const baseCenter = face.position.clone();
+    // IMPORTANT: Use absolute position for child faces of solids
+    const baseCenter = face.getAbsolutePosition().clone();
 
     meshCounterRef.current++;
     const solidId = meshCounterRef.current;
 
     const hw = width / 2;
-    const hh = Math.abs(distance) / 2;
+    const height = Math.abs(distance);
+    const hh = height / 2;
     const hd = depth / 2;
 
-    // Create visual solid box (not pickable - faces will be pickable)
-    const solid = MeshBuilder.CreateBox(`Solid_${solidId}`, {
-      width: width,
-      height: Math.abs(distance),
-      depth: depth,
-    }, scene);
+    // Calculate solid center position based on face normal direction
+    const normalizedNormal = faceNormal.normalize();
+    const offset = normalizedNormal.scale(distance / 2);
 
-    solid.position = new Vector3(
-      baseCenter.x,
-      baseCenter.y + distance / 2,
-      baseCenter.z
-    );
+    // Create parent container (empty mesh as transform node)
+    const solid = new Mesh(`Solid_${solidId}`, scene);
+    solid.position = baseCenter.add(offset);
+    solid.isPickable = false;
 
-    const mat = new StandardMaterial(`Solid_${solidId}_Mat`, scene);
-    mat.diffuseColor = Color3.FromHexString(selectedColor);
-    mat.specularColor = new Color3(0.2, 0.2, 0.2);
-    solid.material = mat;
-    solid.isPickable = true;
+    // Rotate solid to match extrusion direction (default is Y-up)
+    // For X-axis faces: rotate 90 degrees around Z
+    // For Z-axis faces: rotate 90 degrees around X
+    if (Math.abs(normalizedNormal.x) > 0.9) {
+      // Extruding in X direction
+      solid.rotation.z = normalizedNormal.x > 0 ? -Math.PI / 2 : Math.PI / 2;
+    } else if (Math.abs(normalizedNormal.z) > 0.9) {
+      // Extruding in Z direction
+      solid.rotation.x = normalizedNormal.z > 0 ? Math.PI / 2 : -Math.PI / 2;
+    } else if (normalizedNormal.y < -0.9) {
+      // Extruding downward (Y-)
+      solid.rotation.x = Math.PI;
+    }
 
     solid.metadata = {
       type: 'solid',
       width: width,
-      height: Math.abs(distance),
+      height: height,
       depth: depth,
     };
+
+    // Helper to create individual face material
+    const createFaceMat = (name: string) => {
+      const mat = new StandardMaterial(name, scene);
+      mat.diffuseColor = Color3.FromHexString(selectedColor);
+      mat.specularColor = new Color3(0.2, 0.2, 0.2);
+      mat.backFaceCulling = false;
+      return mat;
+    };
+
+    // Create 6 individual face meshes - each with its own material
+    // Top face (Y+)
+    const topFace = MeshBuilder.CreateGround(`Face_${solidId}_top`, { width, height: depth }, scene);
+    topFace.position = new Vector3(0, hh, 0);
+    topFace.material = createFaceMat(`FaceMat_${solidId}_top`);
+    topFace.isPickable = true;
+    topFace.parent = solid;
+    topFace.metadata = { type: 'face', width, depth, parentSolid: solid, faceDir: 'top' };
+
+    // Bottom face (Y-)
+    const bottomFace = MeshBuilder.CreateGround(`Face_${solidId}_bottom`, { width, height: depth }, scene);
+    bottomFace.position = new Vector3(0, -hh, 0);
+    bottomFace.rotation.x = Math.PI;
+    bottomFace.material = createFaceMat(`FaceMat_${solidId}_bottom`);
+    bottomFace.isPickable = true;
+    bottomFace.parent = solid;
+    bottomFace.metadata = { type: 'face', width, depth, parentSolid: solid, faceDir: 'bottom' };
+
+    // Front face (Z+)
+    const frontFace = MeshBuilder.CreatePlane(`Face_${solidId}_front`, { width, height }, scene);
+    frontFace.position = new Vector3(0, 0, hd);
+    frontFace.material = createFaceMat(`FaceMat_${solidId}_front`);
+    frontFace.isPickable = true;
+    frontFace.parent = solid;
+    frontFace.metadata = { type: 'face', width, depth: height, parentSolid: solid, faceDir: 'front' };
+
+    // Back face (Z-)
+    const backFace = MeshBuilder.CreatePlane(`Face_${solidId}_back`, { width, height }, scene);
+    backFace.position = new Vector3(0, 0, -hd);
+    backFace.rotation.y = Math.PI;
+    backFace.material = createFaceMat(`FaceMat_${solidId}_back`);
+    backFace.isPickable = true;
+    backFace.parent = solid;
+    backFace.metadata = { type: 'face', width, depth: height, parentSolid: solid, faceDir: 'back' };
+
+    // Right face (X+)
+    const rightFace = MeshBuilder.CreatePlane(`Face_${solidId}_right`, { width: depth, height }, scene);
+    rightFace.position = new Vector3(hw, 0, 0);
+    rightFace.rotation.y = Math.PI / 2;
+    rightFace.material = createFaceMat(`FaceMat_${solidId}_right`);
+    rightFace.isPickable = true;
+    rightFace.parent = solid;
+    rightFace.metadata = { type: 'face', width: depth, depth: height, parentSolid: solid, faceDir: 'right' };
+
+    // Left face (X-)
+    const leftFace = MeshBuilder.CreatePlane(`Face_${solidId}_left`, { width: depth, height }, scene);
+    leftFace.position = new Vector3(-hw, 0, 0);
+    leftFace.rotation.y = -Math.PI / 2;
+    leftFace.material = createFaceMat(`FaceMat_${solidId}_left`);
+    leftFace.isPickable = true;
+    leftFace.parent = solid;
+    leftFace.metadata = { type: 'face', width: depth, depth: height, parentSolid: solid, faceDir: 'left' };
 
     // 8 corners relative to solid center (for edge lines)
     const corners = [
@@ -1311,7 +2247,7 @@ const CustomModelingPage: React.FC = () => {
       new Vector3(+hw, +hh, -hd), // 7
     ];
 
-    // 12 edges
+    // 12 edges - use Tube mesh for pickability
     const edgeIndices = [
       [0, 1], [1, 2], [2, 3], [3, 0], // bottom ring
       [4, 5], [5, 6], [6, 7], [7, 4], // top ring
@@ -1319,25 +2255,245 @@ const CustomModelingPage: React.FC = () => {
     ];
 
     edgeIndices.forEach((indices, i) => {
-      const edge = MeshBuilder.CreateLines(`Edge_${solidId}_${i}`, {
-        points: [corners[indices[0]], corners[indices[1]]],
-        updatable: false
+      const edge = MeshBuilder.CreateTube(`Edge_${solidId}_${i}`, {
+        path: [corners[indices[0]], corners[indices[1]]],
+        radius: 0.005,
+        tessellation: 4,
+        cap: 0
       }, scene);
-      edge.color = new Color3(0.15, 0.15, 0.15);
+      // Each edge gets its own material for individual selection highlighting
+      const edgeMat = new StandardMaterial(`EdgeMat_${solidId}_${i}`, scene);
+      edgeMat.diffuseColor = new Color3(0.15, 0.15, 0.15);
+      edgeMat.emissiveColor = new Color3(0.15, 0.15, 0.15);
+      edge.material = edgeMat;
       edge.isPickable = true;
       edge.parent = solid;
       edge.metadata = { type: 'edge', parentSolid: solid };
+    });
+
+    // Force computation of world matrix after setting position and rotation
+    solid.computeWorldMatrix(true);
+
+    // Add snap points for all 8 corners (world positions, accounting for rotation)
+    corners.forEach(corner => {
+      const worldPos = Vector3.TransformCoordinates(corner, solid.getWorldMatrix());
+      const exists = snapPointsRef.current.some(p => Vector3.Distance(p.position, worldPos) < 0.1);
+      if (!exists) {
+        snapPointsRef.current.push({ position: worldPos, type: 'endpoint' });
+      }
+    });
+
+    // Add snap points for all 12 edge midpoints (world positions, accounting for rotation)
+    edgeIndices.forEach(indices => {
+      const start = corners[indices[0]];
+      const end = corners[indices[1]];
+      const midpoint = new Vector3(
+        (start.x + end.x) / 2,
+        (start.y + end.y) / 2,
+        (start.z + end.z) / 2
+      );
+      const worldPos = Vector3.TransformCoordinates(midpoint, solid.getWorldMatrix());
+      const exists = snapPointsRef.current.some(p => Vector3.Distance(p.position, worldPos) < 0.1);
+      if (!exists) {
+        snapPointsRef.current.push({ position: worldPos, type: 'midpoint' });
+      }
     });
 
     // Dispose the original face and all its children (edges)
     face.getChildMeshes().forEach(child => child.dispose());
     face.dispose();
 
+    // IMPORTANT: Dispose preview mesh to prevent ghost duplicates
+    if (pushPullStateRef.current.previewMesh) {
+      pushPullStateRef.current.previewMesh.dispose();
+      pushPullStateRef.current.previewMesh = null;
+    }
+
     // Store last extrusion distance
     pushPullStateRef.current.lastExtrudeDistance = distance;
 
     return solid;
   }, [selectedColor]);
+
+  // Offset functionality - SketchUp-style face offset
+  // Creates an inner or outer offset of a face with connecting edges
+  const applyOffset = useCallback((face: Mesh, distance: number): Mesh | null => {
+    if (!face.metadata || face.metadata.type !== 'face') return null;
+    if (Math.abs(distance) < 0.001) return null;
+
+    const scene = face.getScene();
+
+    // Get face vertices
+    const positions = face.getVerticesData('position');
+    if (!positions || positions.length < 9) return null;
+
+    // Extract unique vertices in world space
+    const vertices: Vector3[] = [];
+    const seen = new Set<string>();
+    for (let i = 0; i < positions.length; i += 3) {
+      const key = `${positions[i].toFixed(4)},${positions[i+1].toFixed(4)},${positions[i+2].toFixed(4)}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        const worldPos = Vector3.TransformCoordinates(
+          new Vector3(positions[i], positions[i+1], positions[i+2]),
+          face.getWorldMatrix()
+        );
+        vertices.push(worldPos);
+      }
+    }
+
+    if (vertices.length < 3) return null;
+
+    // Calculate face center
+    const center = vertices.reduce((acc, v) => acc.add(v), Vector3.Zero()).scale(1 / vertices.length);
+
+    // Calculate offset vertices (move each vertex toward/away from center)
+    const offsetVertices: Vector3[] = vertices.map(v => {
+      const toCenter = center.subtract(v).normalize();
+      return v.add(toCenter.scale(distance));
+    });
+
+    // Determine Y position (for ground faces)
+    const yPos = center.y;
+
+    meshCounterRef.current++;
+    const offsetId = meshCounterRef.current;
+
+    // Build vertex positions for mesh using earcut
+    const flatPoints: number[] = [];
+    offsetVertices.forEach(v => {
+      flatPoints.push(v.x - center.x, v.z - center.z);
+    });
+
+    const indices = earcut(flatPoints);
+
+    // Build vertex positions for mesh
+    const meshPositions: number[] = [];
+    const meshIndices: number[] = [];
+    const meshNormals: number[] = [];
+
+    offsetVertices.forEach(v => {
+      meshPositions.push(v.x, yPos, v.z);
+      meshNormals.push(0, 1, 0);
+    });
+
+    indices.forEach(i => meshIndices.push(i));
+
+    const innerFace = new Mesh(`OffsetFace_${offsetId}`, scene);
+    const vertexData = new (window as any).BABYLON.VertexData();
+    vertexData.positions = meshPositions;
+    vertexData.indices = meshIndices;
+    vertexData.normals = meshNormals;
+    vertexData.applyToMesh(innerFace);
+
+    const innerMat = new StandardMaterial(`OffsetMat_${offsetId}`, scene);
+    innerMat.diffuseColor = Color3.FromHexString(selectedColor);
+    innerMat.specularColor = new Color3(0.2, 0.2, 0.2);
+    innerMat.backFaceCulling = false;
+    innerFace.material = innerMat;
+    innerFace.isPickable = true;
+    innerFace.metadata = {
+      type: 'face',
+      isPolygon: true,
+      vertices: offsetVertices.length
+    };
+
+    // Create connecting edges between original and offset face
+    for (let i = 0; i < vertices.length; i++) {
+      const orig = vertices[i];
+      const offs = offsetVertices[i];
+
+      const edgeLine = MeshBuilder.CreateLines(`OffsetEdge_${offsetId}_${i}`, {
+        points: [orig, offs],
+        updatable: false
+      }, scene);
+      edgeLine.color = new Color3(0.15, 0.15, 0.15);
+      edgeLine.isPickable = true;
+      edgeLine.metadata = { type: 'edge' };
+    }
+
+    // Create inner face edges
+    for (let i = 0; i < offsetVertices.length; i++) {
+      const p1 = offsetVertices[i];
+      const p2 = offsetVertices[(i + 1) % offsetVertices.length];
+
+      const innerEdge = MeshBuilder.CreateLines(`OffsetInnerEdge_${offsetId}_${i}`, {
+        points: [new Vector3(p1.x, yPos, p1.z), new Vector3(p2.x, yPos, p2.z)],
+        updatable: false
+      }, scene);
+      innerEdge.color = new Color3(0.15, 0.15, 0.15);
+      innerEdge.isPickable = true;
+      innerEdge.metadata = { type: 'edge' };
+    }
+
+    // Store last offset distance
+    offsetStateRef.current.lastOffsetDistance = distance;
+
+    return innerFace;
+  }, [selectedColor]);
+
+  // Create/update offset preview mesh (wireframe outline showing offset shape)
+  const updateOffsetPreview = useCallback((
+    scene: Scene,
+    face: Mesh,
+    baseVertices: Vector3[],
+    center: Vector3,
+    distance: number
+  ) => {
+    const osState = offsetStateRef.current;
+
+    // Dispose old preview
+    if (osState.previewMesh) {
+      osState.previewMesh.dispose();
+      osState.previewMesh = null;
+    }
+
+    if (Math.abs(distance) < 0.001 || baseVertices.length < 3) return;
+
+    // Calculate offset vertices (move each vertex toward/away from center)
+    const offsetVertices: Vector3[] = baseVertices.map(v => {
+      const toCenter = center.subtract(v).normalize();
+      return v.add(toCenter.scale(distance));
+    });
+
+    // Determine Y position from base vertices
+    const yPos = baseVertices[0].y;
+
+    // Create preview lines showing the offset shape
+    const previewPoints: Vector3[] = [];
+    for (let i = 0; i <= offsetVertices.length; i++) {
+      const v = offsetVertices[i % offsetVertices.length];
+      previewPoints.push(new Vector3(v.x, yPos, v.z));
+    }
+
+    const preview = MeshBuilder.CreateLines('offsetPreview', {
+      points: previewPoints,
+      updatable: false
+    }, scene);
+
+    // Red preview color to indicate offset shape
+    preview.color = new Color3(1, 0.3, 0.3);
+    preview.isPickable = false;
+
+    // Also create connecting lines from original vertices to offset vertices
+    for (let i = 0; i < baseVertices.length; i++) {
+      const orig = baseVertices[i];
+      const offs = offsetVertices[i];
+
+      const connectLine = MeshBuilder.CreateLines(`offsetConnect_${i}`, {
+        points: [
+          new Vector3(orig.x, yPos, orig.z),
+          new Vector3(offs.x, yPos, offs.z)
+        ],
+        updatable: false
+      }, scene);
+      connectLine.color = new Color3(0.5, 0.5, 0.5);
+      connectLine.isPickable = false;
+      connectLine.parent = preview; // Parent to main preview so they dispose together
+    }
+
+    osState.previewMesh = preview;
+  }, []);
 
   // Create/update push/pull preview mesh (wireframe box)
   const updatePushPullPreview = useCallback((
@@ -1357,30 +2513,44 @@ const CustomModelingPage: React.FC = () => {
 
     if (Math.abs(distance) < 0.001) return;
 
-    // Create preview box (wireframe)
+    const absDistance = Math.abs(distance);
+    const normalizedNormal = faceNormal.normalize();
+
+    // Create preview box (same dimensions as solid, then rotate)
     const preview = MeshBuilder.CreateBox('pushPullPreview', {
       width,
-      height: Math.abs(distance),
+      height: absDistance,
       depth,
     }, scene);
 
-    // Position same as final solid would be
-    const extrudeDir = faceNormal.scale(distance);
+    // Position using face's absolute position + half the extrude direction
+    const faceAbsPos = face.getAbsolutePosition();
+    const extrudeDir = normalizedNormal.scale(distance / 2);
     preview.position = new Vector3(
-      face.position.x + extrudeDir.x / 2,
-      face.position.y + Math.abs(distance) / 2,
-      face.position.z + extrudeDir.z / 2
+      faceAbsPos.x + extrudeDir.x,
+      faceAbsPos.y + extrudeDir.y,
+      faceAbsPos.z + extrudeDir.z
     );
 
-    // Solid preview material
+    // Rotate preview to match extrusion direction (same as solid)
+    if (Math.abs(normalizedNormal.x) > 0.9) {
+      preview.rotation.z = normalizedNormal.x > 0 ? -Math.PI / 2 : Math.PI / 2;
+    } else if (Math.abs(normalizedNormal.z) > 0.9) {
+      preview.rotation.x = normalizedNormal.z > 0 ? Math.PI / 2 : -Math.PI / 2;
+    } else if (normalizedNormal.y < -0.9) {
+      preview.rotation.x = Math.PI;
+    }
+
+    // Semi-transparent preview material (becomes solid on click)
     const previewMat = new StandardMaterial('pushPullPreviewMat', scene);
-    previewMat.diffuseColor = new Color3(0.5, 0.7, 1);
+    previewMat.diffuseColor = Color3.FromHexString(selectedColor);
     previewMat.specularColor = new Color3(0.1, 0.1, 0.1);
+    previewMat.alpha = 0.5;  // Semi-transparent during drag
     preview.material = previewMat;
 
     preview.isPickable = false;
     state.previewMesh = preview;
-  }, []);
+  }, [selectedColor]);
 
   // Calculate extrusion distance from mouse position using dot product
   // This gives the distance along the face normal direction
@@ -1391,50 +2561,65 @@ const CustomModelingPage: React.FC = () => {
     pointerX: number,
     pointerY: number
   ): number => {
-    // Create a ray from camera through mouse position
     const camera = cameraRef.current;
     if (!camera) return 0;
 
+    const normalizedNormal = faceNormal.normalize();
+    const baseClickPoint = pushPullStateRef.current.baseClickPoint;
+    if (!baseClickPoint) return 0;
+
+    // Calculate screen delta (mouse movement in pixels)
+    const screenDeltaY = baseClickPoint.y - pointerY;
+    const screenDeltaX = pointerX - baseClickPoint.x;
+
+    // Scale factor based on camera distance for consistent feel
+    const scaleFactor = camera.radius * 0.002;
+
+    // For Y-axis faces (top/bottom) - use screen Y movement
+    if (Math.abs(normalizedNormal.y) > 0.9) {
+      return screenDeltaY * scaleFactor;
+    }
+
+    // For X-axis faces (left/right) - use screen X movement
+    if (Math.abs(normalizedNormal.x) > 0.9) {
+      // Determine direction based on camera position and face normal
+      const cameraRight = Vector3.Cross(camera.upVector, camera.getDirection(Vector3.Forward())).normalize();
+      const dotRight = Vector3.Dot(normalizedNormal, cameraRight);
+      const sign = dotRight > 0 ? 1 : -1;
+      return screenDeltaX * scaleFactor * sign;
+    }
+
+    // For Z-axis faces (front/back) - use screen X or Y based on camera angle
+    if (Math.abs(normalizedNormal.z) > 0.9) {
+      const cameraRight = Vector3.Cross(camera.upVector, camera.getDirection(Vector3.Forward())).normalize();
+      const dotRight = Vector3.Dot(normalizedNormal, cameraRight);
+      // Use X if face normal is perpendicular to camera, Y otherwise
+      if (Math.abs(dotRight) > 0.5) {
+        const sign = dotRight > 0 ? 1 : -1;
+        return screenDeltaX * scaleFactor * sign;
+      } else {
+        // Face is more aligned with camera forward - use screen Y
+        const cameraForward = camera.getDirection(Vector3.Forward());
+        const dotForward = Vector3.Dot(normalizedNormal, cameraForward);
+        const sign = dotForward > 0 ? -1 : 1;
+        return screenDeltaY * scaleFactor * sign;
+      }
+    }
+
+    // Fallback: Calculate ray-plane intersection for arbitrary normals
     const ray = scene.createPickingRay(pointerX, pointerY, Matrix.Identity(), camera);
-
-    // Project the ray onto a plane that contains the base point and is perpendicular to
-    // the view direction but aligned with the face normal
-    // For simplicity, we use the distance moved along screen Y mapped to world units
-
-    // Alternative: Create a plane along the face normal and find intersection
-    // For ground faces (normal = Y), we want to track vertical mouse movement
-
-    // Simple approach: Use screen Y delta mapped to world distance
-    // This works well for ground faces looking from above
-    const screenDelta = pushPullStateRef.current.baseClickPoint
-      ? (pushPullStateRef.current.baseClickPoint.y - pointerY) * 0.02  // Scale factor
-      : 0;
-
-    // For more accurate calculation with arbitrary face normals:
-    // Project mouse ray onto the extrusion axis
-    if (faceNormal.y > 0.9) {
-      // Horizontal face (ground) - use screen Y for height
-      return screenDelta;
-    }
-
-    // For other orientations, calculate ray-plane intersection
-    // Create infinite line along face normal through base point
-    const planeNormal = Vector3.Cross(faceNormal, camera.getDirection(Vector3.Forward())).normalize();
+    const planeNormal = Vector3.Cross(normalizedNormal, camera.getDirection(Vector3.Forward())).normalize();
     if (planeNormal.length() < 0.001) {
-      // Face normal parallel to view - use screen delta
-      return screenDelta;
+      return screenDeltaY * scaleFactor;
     }
 
-    // Find where ray intersects the plane defined by base point and planeNormal
     const denom = Vector3.Dot(ray.direction, planeNormal);
-    if (Math.abs(denom) < 0.0001) return screenDelta;
+    if (Math.abs(denom) < 0.0001) return screenDeltaY * scaleFactor;
 
     const t = Vector3.Dot(basePoint.subtract(ray.origin), planeNormal) / denom;
     const hitPoint = ray.origin.add(ray.direction.scale(t));
-
-    // Project the hit point - base point vector onto face normal
     const delta = hitPoint.subtract(basePoint);
-    return Vector3.Dot(delta, faceNormal);
+    return Vector3.Dot(delta, normalizedNormal);
   }, []);
 
   // Zoom to fit all meshes
@@ -1663,6 +2848,37 @@ const CustomModelingPage: React.FC = () => {
     return connected;
   }, []);
 
+  // Helper to check if a line segment intersects a rectangle
+  const lineIntersectsBox = useCallback((
+    x1: number, y1: number, x2: number, y2: number,
+    boxLeft: number, boxTop: number, boxRight: number, boxBottom: number
+  ): boolean => {
+    // Check if either endpoint is inside the box
+    const p1Inside = x1 >= boxLeft && x1 <= boxRight && y1 >= boxTop && y1 <= boxBottom;
+    const p2Inside = x2 >= boxLeft && x2 <= boxRight && y2 >= boxTop && y2 <= boxBottom;
+    if (p1Inside || p2Inside) return true;
+
+    // Check if line intersects any of the 4 box edges
+    const lineIntersectsSegment = (
+      ax1: number, ay1: number, ax2: number, ay2: number,
+      bx1: number, by1: number, bx2: number, by2: number
+    ): boolean => {
+      const denom = (by2 - by1) * (ax2 - ax1) - (bx2 - bx1) * (ay2 - ay1);
+      if (Math.abs(denom) < 0.0001) return false;
+      const ua = ((bx2 - bx1) * (ay1 - by1) - (by2 - by1) * (ax1 - bx1)) / denom;
+      const ub = ((ax2 - ax1) * (ay1 - by1) - (ay2 - ay1) * (ax1 - bx1)) / denom;
+      return ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1;
+    };
+
+    // Check intersection with all 4 edges of the box
+    return (
+      lineIntersectsSegment(x1, y1, x2, y2, boxLeft, boxTop, boxRight, boxTop) ||      // Top
+      lineIntersectsSegment(x1, y1, x2, y2, boxLeft, boxBottom, boxRight, boxBottom) || // Bottom
+      lineIntersectsSegment(x1, y1, x2, y2, boxLeft, boxTop, boxLeft, boxBottom) ||    // Left
+      lineIntersectsSegment(x1, y1, x2, y2, boxRight, boxTop, boxRight, boxBottom)     // Right
+    );
+  }, []);
+
   // Check if mesh is within box selection (window or crossing mode)
   const isMeshInSelectionBox = useCallback((
     mesh: Mesh,
@@ -1675,6 +2891,64 @@ const CustomModelingPage: React.FC = () => {
     if (!scene || !camera) return false;
 
     const engine = scene.getEngine();
+
+    // Normalize box coordinates
+    const boxLeft = Math.min(x1, x2);
+    const boxRight = Math.max(x1, x2);
+    const boxTop = Math.min(y1, y2);
+    const boxBottom = Math.max(y1, y2);
+
+    // Special handling for edges (both LinesMesh and Tube edges)
+    if (mesh.name.startsWith('Edge_') && mesh.metadata?.type === 'edge') {
+      const viewport = camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
+      const transformMatrix = scene.getTransformMatrix();
+
+      let startPoint: Vector3;
+      let endPoint: Vector3;
+
+      // Check if this is a LinesMesh with stored start/end points in metadata
+      if (mesh.metadata.startPoint && mesh.metadata.endPoint) {
+        // Standalone line created with finalizeLine()
+        startPoint = mesh.metadata.startPoint as Vector3;
+        endPoint = mesh.metadata.endPoint as Vector3;
+      } else {
+        // Edge tube parented to a face - use bounding box corners with world transform
+        const bb = mesh.getBoundingInfo().boundingBox;
+        const worldMatrix = mesh.getWorldMatrix();
+        const localMin = bb.minimum;
+        const localMax = bb.maximum;
+
+        startPoint = Vector3.TransformCoordinates(
+          new Vector3(localMin.x, localMin.y, localMin.z),
+          worldMatrix
+        );
+        endPoint = Vector3.TransformCoordinates(
+          new Vector3(localMax.x, localMax.y, localMax.z),
+          worldMatrix
+        );
+      }
+
+      // Project to screen space
+      const screenStart = Vector3.Project(startPoint, Matrix.Identity(), transformMatrix, viewport);
+      const screenEnd = Vector3.Project(endPoint, Matrix.Identity(), transformMatrix, viewport);
+
+      if (isWindowSelect) {
+        // Window select: both endpoints must be inside box
+        const startInside = screenStart.x >= boxLeft && screenStart.x <= boxRight &&
+                           screenStart.y >= boxTop && screenStart.y <= boxBottom;
+        const endInside = screenEnd.x >= boxLeft && screenEnd.x <= boxRight &&
+                         screenEnd.y >= boxTop && screenEnd.y <= boxBottom;
+        return startInside && endInside;
+      } else {
+        // Crossing select: line must intersect or be inside box
+        return lineIntersectsBox(
+          screenStart.x, screenStart.y, screenEnd.x, screenEnd.y,
+          boxLeft, boxTop, boxRight, boxBottom
+        );
+      }
+    }
+
+    // Standard bounding box approach for other meshes
     const bb = mesh.getBoundingInfo().boundingBox;
 
     // Get all 8 corners of bounding box
@@ -1698,12 +2972,6 @@ const CustomModelingPage: React.FC = () => {
         camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight())
       )
     );
-
-    // Normalize box coordinates
-    const boxLeft = Math.min(x1, x2);
-    const boxRight = Math.max(x1, x2);
-    const boxTop = Math.min(y1, y2);
-    const boxBottom = Math.max(y1, y2);
 
     if (isWindowSelect) {
       // Window select: ALL corners must be inside box
@@ -1734,7 +3002,7 @@ const CustomModelingPage: React.FC = () => {
       return !(boxRight < meshScreenMin.x || boxLeft > meshScreenMax.x ||
         boxBottom < meshScreenMin.y || boxTop > meshScreenMax.y);
     }
-  }, []);
+  }, [lineIntersectsBox]);
 
   // Perform box selection
   const performBoxSelection = useCallback((
@@ -1882,12 +3150,81 @@ const CustomModelingPage: React.FC = () => {
 
     camera.wheelPrecision = 15;
     camera.pinchPrecision = 50;
-    camera.lowerRadiusLimit = 1;
+    camera.minZ = 0.01;  // Near clipping plane - prevents geometry from being cut when close
+    camera.lowerRadiusLimit = 0.5;
     camera.upperRadiusLimit = 500;
     camera.lowerBetaLimit = 0.1;
     camera.upperBetaLimit = Math.PI - 0.1;
     camera.inertia = 0.7;
     camera.panningInertia = 0.7;
+
+    // Disable default wheel zoom - we'll handle it with zoom-to-cursor
+    camera.inputs.removeByType("ArcRotateCameraMouseWheelInput");
+
+    // Zoom to cursor without rotation
+    const handleWheel = (evt: WheelEvent) => {
+      evt.preventDefault();
+
+      // Use ref to get current camera state (mode may have changed)
+      const cam = cameraRef.current;
+      if (!cam) return;
+
+      // Store angles BEFORE any changes
+      const savedAlpha = cam.alpha;
+      const savedBeta = cam.beta;
+
+      const zoomSpeed = 0.05;
+      // deltaY < 0 = scroll up = zoom in (smaller radius/ortho)
+      // deltaY > 0 = scroll down = zoom out (larger radius/ortho)
+      const zoomIn = evt.deltaY < 0;
+      const factor = zoomIn ? (1 - zoomSpeed) : (1 + zoomSpeed);
+
+      // Handle orthographic mode - just adjust ortho bounds
+      if (cam.mode === 1) {
+        const aspect = engine.getAspectRatio(cam);
+        const currentSize = cam.orthoTop ?? 10;
+        const newSize = Math.max(0.5, Math.min(500, currentSize * factor));
+
+        cam.orthoLeft = -newSize * aspect;
+        cam.orthoRight = newSize * aspect;
+        cam.orthoTop = newSize;
+        cam.orthoBottom = -newSize;
+        cam.radius = newSize * 2;
+        return;
+      }
+
+      // Perspective mode - use radius
+      const oldRadius = cam.radius;
+      const newRadius = Math.max(cam.lowerRadiusLimit!, Math.min(cam.upperRadiusLimit!, oldRadius * factor));
+
+      // Get cursor point
+      const pickResult = scene.pick(evt.offsetX, evt.offsetY);
+
+      if (pickResult?.hit && pickResult.pickedPoint) {
+        const cursorPt = pickResult.pickedPoint;
+        const oldTarget = cam.target.clone();
+
+        // How much to pan: proportional to zoom change
+        const ratio = 1 - (newRadius / oldRadius);
+
+        // Move target towards cursor point
+        const offset = cursorPt.subtract(oldTarget).scale(ratio);
+        const newTarget = oldTarget.add(offset);
+
+        // Apply changes
+        cam.radius = newRadius;
+        cam.target.copyFrom(newTarget);
+
+        // FORCE restore angles (prevents rotation)
+        cam.alpha = savedAlpha;
+        cam.beta = savedBeta;
+      } else {
+        // No pick - just zoom to center
+        cam.radius = newRadius;
+      }
+    };
+
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
 
     cameraRef.current = camera;
 
@@ -1897,12 +3234,58 @@ const CustomModelingPage: React.FC = () => {
     const light2 = new HemisphericLight('light2', new Vector3(-1, 1, 0), scene);
     light2.intensity = 0.4;
 
+    // Sun directional light for shadows (initially disabled)
+    const sunLight = new DirectionalLight('sunLight', new Vector3(-1, -2, -1), scene);
+    sunLight.intensity = 0;  // Start disabled
+    sunLight.position = new Vector3(50, 100, 50);
+    sunLight.shadowMinZ = 0.1;
+    sunLight.shadowMaxZ = 500;
+    sunLightRef.current = sunLight;
+
+    // Shadow generator
+    const shadowGen = new ShadowGenerator(2048, sunLight);
+    shadowGen.useBlurExponentialShadowMap = true;
+    shadowGen.blurKernel = 32;
+    shadowGen.darkness = 0.3;
+    shadowGen.transparencyShadow = true;
+    shadowGeneratorRef.current = shadowGen;
+
     // Ground picker
     const groundPicker = MeshBuilder.CreateGround('groundPicker', { width: 1000, height: 1000 }, scene);
     groundPicker.position.y = 0;
     groundPicker.visibility = 0;
     groundPicker.isPickable = true;
     groundPickerRef.current = groundPicker;
+
+    // Shadow-receiving ground (visible when shadows enabled)
+    const shadowGround = MeshBuilder.CreateGround('shadowGround', { width: 500, height: 500 }, scene);
+    shadowGround.position.y = -0.01; // Slightly below to avoid z-fighting
+    shadowGround.receiveShadows = true;
+    shadowGround.isPickable = false;
+    shadowGround.visibility = 0; // Start invisible
+    const shadowGroundMat = new StandardMaterial('shadowGroundMat', scene);
+    shadowGroundMat.diffuseColor = new Color3(0.9, 0.9, 0.9);
+    shadowGroundMat.specularColor = new Color3(0, 0, 0);
+    shadowGroundMat.backFaceCulling = false;
+    shadowGround.material = shadowGroundMat;
+
+    // Auto-add new meshes to shadow system
+    scene.onNewMeshAddedObservable.add((mesh) => {
+      if (mesh instanceof Mesh &&
+          mesh.name !== 'groundPicker' &&
+          mesh.name !== 'shadowGround' &&
+          !mesh.name.includes('Axis') &&
+          !mesh.name.includes('snap') &&
+          !mesh.name.includes('origin') &&
+          !mesh.name.includes('preview') &&
+          !mesh.name.includes('Grid') &&
+          !(mesh instanceof LinesMesh)) {
+        mesh.receiveShadows = true;
+        if (shadowGeneratorRef.current && shadowEnabledRef.current) {
+          shadowGeneratorRef.current.addShadowCaster(mesh);
+        }
+      }
+    });
 
     // Axis lines
     const axisLength = 500;
@@ -1915,7 +3298,7 @@ const CustomModelingPage: React.FC = () => {
 
     // Helper function to create/update dashed axes with screen-space consistent dash pattern
     const DASH_REFERENCE_RADIUS = 20; // Reference camera radius for dash size calculation
-    const BASE_DASH_SIZE = 0.15; // Base dash size at reference radius (in world units)
+    const BASE_DASH_SIZE = 0.05; // Base dash size at reference radius (in world units) - smaller = denser
 
     const createOrUpdateDashedAxes = (cameraRadius: number) => {
       // Calculate dash size proportional to camera distance for consistent screen appearance
@@ -2024,7 +3407,8 @@ const CustomModelingPage: React.FC = () => {
     const hoverMaterial = new StandardMaterial('hoverHighlightMaterial', scene);
     hoverMaterial.diffuseColor = new Color3(0.6, 0.75, 1.0);  // Light blue tint
     hoverMaterial.specularColor = new Color3(0, 0, 0);  // No specular
-    hoverMaterial.alpha = 0.85;  // Slightly transparent
+    hoverMaterial.backFaceCulling = false;  // Show both sides of faces
+    hoverMaterial.alpha = 1.0;  // Fully opaque to prevent disappearing
     dottedHoverMaterialRef.current = hoverMaterial;
 
     // Gizmo manager
@@ -2044,6 +3428,7 @@ const CustomModelingPage: React.FC = () => {
     window.addEventListener('resize', handleResize);
 
     return () => {
+      canvas.removeEventListener('wheel', handleWheel);
       window.removeEventListener('resize', handleResize);
       engine.dispose();
     };
@@ -2083,7 +3468,7 @@ const CustomModelingPage: React.FC = () => {
       if (activeSnapPointRef.current && camera) {
         // Convert 3D snap point to screen coordinates
         const snapScreenPos = Vector3.Project(
-          new Vector3(activeSnapPointRef.current.x, 0, activeSnapPointRef.current.z),
+          new Vector3(activeSnapPointRef.current.position.x, 0, activeSnapPointRef.current.position.z),
           Matrix.Identity(),
           scene.getTransformMatrix(),
           camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight())
@@ -2169,8 +3554,8 @@ const CustomModelingPage: React.FC = () => {
 
       if (evt.button !== 0) return;
 
-      // Handle Pan tool (middle mouse or specific tool)
-      if (activeTool === 'pan' || evt.button === 1) {
+      // Handle Pan tool
+      if (activeTool === 'pan') {
         panStateRef.current.isPanning = true;
         panStateRef.current.lastX = evt.clientX;
         panStateRef.current.lastY = evt.clientY;
@@ -2184,30 +3569,209 @@ const CustomModelingPage: React.FC = () => {
         const boxState = selectionBoxRef.current;
         const now = Date.now();
 
+        // Robust helper to clear ALL solid highlights in the scene
+        const clearAllSolidHighlights = () => {
+          const manager = selectionManagerRef.current;
+          if (manager) {
+            manager.clear();
+          }
+          // Iterate through ALL meshes in scene and clear face/edge highlights
+          scene.meshes.forEach(m => {
+            if (m.metadata?.type === 'solid') {
+              m.getChildMeshes().forEach((child: any) => {
+                if (child.metadata?.type === 'face') {
+                  child.renderOverlay = false;
+                  child.disableEdgesRendering();
+                  if (child.material) {
+                    (child.material as StandardMaterial).emissiveColor = Color3.Black();
+                  }
+                } else if (child.metadata?.type === 'edge') {
+                  child.disableEdgesRendering();
+                  if (child.material) {
+                    const edgeMat = child.material as StandardMaterial;
+                    edgeMat.diffuseColor = new Color3(0.15, 0.15, 0.15);
+                    edgeMat.emissiveColor = new Color3(0.15, 0.15, 0.15);
+                  }
+                }
+              });
+            } else if (m.metadata?.type === 'face') {
+              m.renderOverlay = false;
+              m.disableEdgesRendering();
+              if (m.material) {
+                (m.material as StandardMaterial).emissiveColor = Color3.Black();
+              }
+            } else if (m.metadata?.type === 'edge') {
+              m.disableEdgesRendering();
+              if (m.material) {
+                const edgeMat = m.material as StandardMaterial;
+                edgeMat.diffuseColor = new Color3(0.15, 0.15, 0.15);
+                edgeMat.emissiveColor = new Color3(0.15, 0.15, 0.15);
+              }
+            }
+          });
+          deselectMesh();
+          (boxState as any).clickCount = 0;
+          (boxState as any).lastClickedMeshId = null;
+        };
+
         // Handle Click Selection
         if (pickInfo.hit && pickInfo.pickedMesh) {
           const mesh = pickInfo.pickedMesh as Mesh;
-          // Skip ground/helper meshes
-          if (mesh.name !== 'ground' && mesh.name !== 'groundPicker' && !mesh.name.startsWith('snap')) {
-            // Double-click: Select all children (faces + edges of solid)
-            const isDoubleClick = (now - (boxState as any).lastClickTime) < 300;
-            if (isDoubleClick && mesh.metadata?.type === 'solid') {
-              // Select solid and highlight all its edges
-              selectMesh(mesh);
-              // Also highlight all child edges
-              mesh.getChildMeshes().forEach((child: any) => {
-                if (child.metadata?.type === 'edge') {
-                  child.color = new Color3(0.2, 0.4, 1.0);
+
+          // Check if we clicked on a face or edge (part of a solid)
+          const isFaceOrEdge = mesh.metadata?.type === 'face' || mesh.metadata?.type === 'edge';
+
+          // If NOT clicking on a face or edge, deselect all solids
+          if (!isFaceOrEdge) {
+            clearAllSolidHighlights();
+          } else {
+            const timeSinceLastClick = now - ((boxState as any).lastClickTime || 0);
+            const isSameMesh = (boxState as any).lastClickedMeshId === mesh.id;
+            const isCtrlPressed = evt.ctrlKey || evt.metaKey;
+            const manager = selectionManagerRef.current;
+
+            // Track click count for same mesh within 400ms
+            let clickCount = 1;
+            if (isSameMesh && timeSinceLastClick < 400) {
+              clickCount = ((boxState as any).clickCount || 1) + 1;
+              if (clickCount > 3) clickCount = 1;  // Reset after triple click
+            }
+            (boxState as any).clickCount = clickCount;
+            (boxState as any).lastClickedMeshId = mesh.id;
+
+            // Get the parent solid for face/edge elements
+            const getParentSolid = (m: Mesh): Mesh | null => {
+              if (m.metadata?.type === 'solid') return m;
+              if (m.metadata?.parentSolid) return m.metadata.parentSolid as Mesh;
+              return null;
+            };
+
+            // Helper to clear all highlights - uses robust scene mesh iteration
+            const clearAllHighlights = () => {
+              if (manager) {
+                manager.clear();
+              }
+              // Iterate through ALL meshes in scene and clear face/edge highlights
+              scene.meshes.forEach(m => {
+                if (m.metadata?.type === 'solid') {
+                  m.getChildMeshes().forEach((child: any) => {
+                    if (child.metadata?.type === 'face') {
+                      child.renderOverlay = false;
+                      child.disableEdgesRendering();
+                      if (child.material) {
+                        (child.material as StandardMaterial).emissiveColor = Color3.Black();
+                      }
+                    } else if (child.metadata?.type === 'edge') {
+                      child.disableEdgesRendering();
+                      if (child.material) {
+                        const edgeMat = child.material as StandardMaterial;
+                        edgeMat.diffuseColor = new Color3(0.15, 0.15, 0.15);
+                        edgeMat.emissiveColor = new Color3(0.15, 0.15, 0.15);
+                      }
+                    }
+                  });
+                } else if (m.metadata?.type === 'face') {
+                  m.renderOverlay = false;
+                  m.disableEdgesRendering();
+                  if (m.material) {
+                    (m.material as StandardMaterial).emissiveColor = Color3.Black();
+                  }
+                } else if (m.metadata?.type === 'edge') {
+                  m.disableEdgesRendering();
+                  if (m.material) {
+                    const edgeMat = m.material as StandardMaterial;
+                    edgeMat.diffuseColor = new Color3(0.15, 0.15, 0.15);
+                    edgeMat.emissiveColor = new Color3(0.15, 0.15, 0.15);
+                  }
                 }
               });
+            };
+
+            // Helper to highlight a face
+            const highlightFace = (face: Mesh) => {
+              face.renderOverlay = true;
+              face.overlayColor = new Color3(0.2, 0.4, 1.0);
+              face.overlayAlpha = 0.4;
+              if (face.material) {
+                const faceMat = face.material as StandardMaterial;
+                faceMat.emissiveColor = new Color3(0.1, 0.2, 0.5);
+              }
+              manager?.select(face.id, 'add');
+            };
+
+            // Helper to highlight an edge
+            const highlightEdge = (edge: Mesh) => {
+              if (edge.material) {
+                const mat = edge.material as StandardMaterial;
+                mat.diffuseColor = new Color3(0.2, 0.4, 1.0);
+                mat.emissiveColor = new Color3(0.2, 0.4, 1.0);
+              }
+              manager?.select(edge.id, 'add');
+            };
+
+            if (isCtrlPressed) {
+              // Ctrl+click: toggle selection
+              manager?.select(mesh.id, 'toggle');
+              if (manager?.isSelected(mesh.id)) {
+                selectMesh(mesh);
+              }
+            } else if (mesh.metadata?.type === 'face' || mesh.metadata?.type === 'edge') {
+              // Face or edge of a solid clicked
+              const parentSolid = getParentSolid(mesh);
+              const clickedFace = mesh.metadata?.type === 'face' ? mesh : null;
+
+              clearAllHighlights();
+
+              if (clickCount === 1) {
+                // Single click: select face only
+                if (clickedFace) {
+                  selectMesh(clickedFace);
+                  highlightFace(clickedFace);
+                } else if (mesh.metadata?.type === 'edge') {
+                  // Edge clicked - just highlight the edge
+                  selectMesh(mesh);
+                  highlightEdge(mesh);
+                }
+              } else if (clickCount === 2) {
+                // Double click: select face + all edges of solid
+                if (parentSolid) {
+                  selectMesh(parentSolid);
+                  // Highlight clicked face
+                  if (clickedFace) {
+                    highlightFace(clickedFace);
+                  }
+                  // Highlight all edges of the solid
+                  parentSolid.getChildMeshes().forEach((child: any) => {
+                    if (child.metadata?.type === 'edge') {
+                      highlightEdge(child as Mesh);
+                    }
+                  });
+                }
+              } else if (clickCount === 3) {
+                // Triple click: select entire solid (all faces + edges)
+                if (parentSolid) {
+                  selectMesh(parentSolid);
+                  // Highlight all faces and edges
+                  parentSolid.getChildMeshes().forEach((child: any) => {
+                    if (child.metadata?.type === 'face') {
+                      highlightFace(child as Mesh);
+                    } else if (child.metadata?.type === 'edge') {
+                      highlightEdge(child as Mesh);
+                    }
+                  });
+                }
+              }
             } else {
+              // Non-solid mesh clicked (ground face, line, etc.)
+              clearAllHighlights();
               selectMesh(mesh);
+              manager?.select(mesh.id, 'replace');
             }
             (boxState as any).lastClickTime = now;
           }
         } else {
-          // Clicked empty space
-          deselectMesh();
+          // Clicked empty space - deselect all using the robust helper
+          clearAllSolidHighlights();
         }
 
         // Start box selection
@@ -2233,7 +3797,7 @@ const CustomModelingPage: React.FC = () => {
         // IMPORTANT: Force Y=0 for snap points to ensure drawing on ground plane
         let point: Vector3 | null = null;
         if (activeSnapPointRef.current) {
-          point = new Vector3(activeSnapPointRef.current.x, 0, activeSnapPointRef.current.z);
+          point = new Vector3(activeSnapPointRef.current.position.x, 0, activeSnapPointRef.current.position.z);
         } else {
           point = rawPoint;
         }
@@ -2284,13 +3848,15 @@ const CustomModelingPage: React.FC = () => {
       } else if (activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon') {
         // Use active snap point if available, otherwise get ground point
         const rawPoint = getGroundPoint(scene, scene.pointerX, scene.pointerY);
-        // IMPORTANT: Force Y=0 for snap points to ensure drawing on ground plane
+        // IMPORTANT: Force Y=0 for ALL points to ensure drawing on ground plane
         let point: Vector3 | null = null;
+
         if (activeSnapPointRef.current) {
-          point = new Vector3(activeSnapPointRef.current.x, 0, activeSnapPointRef.current.z);
-        } else {
-          point = rawPoint;
+          point = new Vector3(activeSnapPointRef.current.position.x, 0, activeSnapPointRef.current.position.z);
+        } else if (rawPoint) {
+          point = new Vector3(rawPoint.x, 0, rawPoint.z);
         }
+
         if (point) {
           if (!state.isDrawing) {
             // First click: Start drawing
@@ -2339,18 +3905,32 @@ const CustomModelingPage: React.FC = () => {
           if (pickResult?.hit && pickResult.pickedMesh) {
             const face = pickResult.pickedMesh as Mesh;
 
+            // Calculate face normal based on face direction
+            const getFaceNormal = (f: Mesh): Vector3 => {
+              const dir = f.metadata?.faceDir;
+              switch (dir) {
+                case 'top': return new Vector3(0, 1, 0);
+                case 'bottom': return new Vector3(0, -1, 0);
+                case 'front': return new Vector3(0, 0, 1);
+                case 'back': return new Vector3(0, 0, -1);
+                case 'right': return new Vector3(1, 0, 0);
+                case 'left': return new Vector3(-1, 0, 0);
+                default: return new Vector3(0, 1, 0); // Ground face default
+              }
+            };
+
             // Check for double-click on a face - apply last extrusion distance
             if (isDoubleClick && ppState.lastExtrudeDistance !== 0) {
               // Double-click: Apply previous extrusion distance
-              const faceNormal = new Vector3(0, 1, 0);  // Ground face normal
+              const faceNormal = getFaceNormal(face);
               applyPushPull(face, ppState.lastExtrudeDistance, faceNormal);
               // Update measurement display
-              setMeasurementValue(Math.abs(ppState.lastExtrudeDistance * 1000).toFixed(0));
+              setMeasurementInput(Math.abs(ppState.lastExtrudeDistance * 1000).toFixed(0));
             } else {
               // First click: Start extrusion mode
               ppState.baseFace = face;
-              ppState.baseFaceNormal = new Vector3(0, 1, 0);  // Ground faces have Y-up normal
-              ppState.baseFaceCenter = face.position.clone();
+              ppState.baseFaceNormal = getFaceNormal(face);
+              ppState.baseFaceCenter = face.getAbsolutePosition().clone();
               ppState.baseClickPoint = new Vector3(scene.pointerX, scene.pointerY, 0);
               ppState.isExtruding = true;
             }
@@ -2377,7 +3957,7 @@ const CustomModelingPage: React.FC = () => {
                 // Store last extrusion distance for double-click repeat
                 ppState.lastExtrudeDistance = distance;
                 // Update measurement display
-                setMeasurementValue(Math.abs(distance * 1000).toFixed(0));
+                setMeasurementInput(Math.abs(distance * 1000).toFixed(0));
               }
             }
 
@@ -2403,12 +3983,123 @@ const CustomModelingPage: React.FC = () => {
           ppState.lockedDistance = 0;
           ppState.lastClickTime = now;
         }
+      } else if (activeTool === 'offset') {
+        // Offset Tool - creates offset face inside/outside original
+        const osState = offsetStateRef.current;
+        const now = Date.now();
+        const isDoubleClick = (now - osState.lastClickTime) < 300;
+
+        // Pick face under cursor
+        const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
+          mesh.metadata?.type === 'face'
+        );
+
+        if (!osState.isOffsetting) {
+          // Not currently offsetting - check for face click
+          if (pickResult?.hit && pickResult.pickedMesh) {
+            const face = pickResult.pickedMesh as Mesh;
+
+            // Get face vertices from positions buffer
+            const positions = face.getVerticesData('position');
+            if (positions && positions.length >= 9) {
+              const vertices: Vector3[] = [];
+              // Get unique vertices (assume triangulated quad face = 6 indices, 4 unique vertices)
+              const seen = new Set<string>();
+              for (let i = 0; i < positions.length; i += 3) {
+                const key = `${positions[i].toFixed(4)},${positions[i+1].toFixed(4)},${positions[i+2].toFixed(4)}`;
+                if (!seen.has(key)) {
+                  seen.add(key);
+                  const worldPos = Vector3.TransformCoordinates(
+                    new Vector3(positions[i], positions[i+1], positions[i+2]),
+                    face.getWorldMatrix()
+                  );
+                  vertices.push(worldPos);
+                }
+              }
+
+              // Calculate face center
+              const center = vertices.reduce((acc, v) => acc.add(v), Vector3.Zero()).scale(1 / vertices.length);
+
+              // Check for double-click - apply last offset distance
+              if (isDoubleClick && osState.lastOffsetDistance !== 0) {
+                applyOffset(face, osState.lastOffsetDistance);
+                setMeasurementInput(Math.abs(osState.lastOffsetDistance * 1000).toFixed(0));
+              } else {
+                // First click - start offset mode
+                osState.baseFace = face;
+                osState.baseVertices = vertices;
+                osState.baseCenter = center;
+                osState.baseClickY = evt.clientY;
+                osState.isOffsetting = true;
+              }
+
+              osState.lastClickTime = now;
+            }
+          }
+        } else {
+          // Currently offsetting - second click finalizes
+          if (osState.baseFace) {
+            // Calculate offset distance based on mouse movement
+            const distance = (osState.baseClickY - evt.clientY) * 0.005; // Scale factor
+
+            if (Math.abs(distance) > 0.001) {
+              applyOffset(osState.baseFace, distance);
+              osState.lastOffsetDistance = distance;
+              setMeasurementInput(Math.abs(distance * 1000).toFixed(0));
+            }
+
+            // Clean up preview
+            if (osState.previewMesh) {
+              osState.previewMesh.dispose();
+              osState.previewMesh = null;
+            }
+          }
+
+          // Reset state
+          osState.baseFace = null;
+          osState.baseVertices = [];
+          osState.baseCenter = null;
+          osState.isOffsetting = false;
+          osState.lastClickTime = now;
+        }
       } else if (activeTool === 'eraser') {
         const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
-          mesh.isPickable && mesh.name !== 'ground' && mesh.name !== 'groundPicker'
+          mesh.isPickable && mesh.name !== 'ground' && mesh.name !== 'groundPicker' && !mesh.name.startsWith('snap')
         );
+        
         if (pickResult?.hit && pickResult.pickedMesh) {
-          pickResult.pickedMesh.dispose();
+          const pickedMesh = pickResult.pickedMesh as Mesh;
+          
+          // If picked a face, check if we're near an edge
+          if (pickedMesh.metadata?.type === 'face') {
+            const ray = scene.createPickingRay(scene.pointerX, scene.pointerY, Matrix.Identity(), camera);
+            let closestEdge: Mesh | null = null;
+            let closestDist = Infinity;
+            
+            // Check child edges
+            pickedMesh.getChildMeshes().forEach((child: any) => {
+              if (child.metadata?.type === 'edge' && child.isPickable) {
+                const edgePick = ray.intersectsMesh(child as Mesh, false);
+                if (edgePick.hit && edgePick.distance < closestDist) {
+                  closestDist = edgePick.distance;
+                  closestEdge = child as Mesh;
+                }
+              }
+            });
+            
+            if (closestEdge) {
+              // Delete only the edge
+              (closestEdge as Mesh).dispose();
+            } else {
+              // Delete the face (and children)
+              pickedMesh.dispose();
+            }
+          } else if (pickedMesh.metadata?.type === 'edge') {
+            // Standalone edge - just dispose
+            pickedMesh.dispose();
+          } else {
+            pickedMesh.dispose();
+          }
           deselectMesh();
         }
       } else if (activeTool === 'paint') {
@@ -2454,27 +4145,119 @@ const CustomModelingPage: React.FC = () => {
       }
 
       // Show/hide snap indicator for drawing tools (SketchUp style)
-      // Also save active snap point for use in click handling
-      // IMPORTANT: Use RAW coordinates for snap detection, not pre-rounded coordinates
-      // This ensures snap works like a magnet based on actual cursor proximity
+      // Uses SCREEN-SPACE distance for snap detection to work with 3D geometry
       if (activeTool === 'line' || activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon') {
-        const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) => mesh.name === 'groundPicker');
-        if (pickResult?.hit && pickResult.pickedPoint) {
-          // Use RAW coordinates for snap detection (not rounded)
-          // This makes snap feel magnetic - cursor pulls to nearby points
-          const rawPoint = new Vector3(
-            pickResult.pickedPoint.x,
-            0,
-            pickResult.pickedPoint.z
+        const engine = scene.getEngine();
+        const screenX = scene.pointerX;
+        const screenY = scene.pointerY;
+
+        // Find nearest snap point using screen-space distance
+        const viewport = camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
+        let nearestSnap: SnapPointData | null = null;
+        let minScreenDist = 20; // 20 pixel threshold for endpoint/midpoint snap (stronger)
+
+        // Check origin first (highest priority)
+        const originScreen = Vector3.Project(
+          Vector3.Zero(),
+          Matrix.Identity(),
+          scene.getTransformMatrix(),
+          viewport
+        );
+        const originDist = Math.sqrt(
+          Math.pow(screenX - originScreen.x, 2) +
+          Math.pow(screenY - originScreen.y, 2)
+        );
+        if (originDist < minScreenDist) {
+          minScreenDist = originDist;
+          nearestSnap = { position: Vector3.Zero(), type: 'origin' };
+        }
+
+        // Check all snap points (endpoints, midpoints) in screen space
+        for (const snapPoint of snapPointsRef.current) {
+          const screenPos = Vector3.Project(
+            snapPoint.position,
+            Matrix.Identity(),
+            scene.getTransformMatrix(),
+            viewport
           );
-          const nearestSnap = findNearestSnapPoint(rawPoint);
-          if (nearestSnap) {
-            activeSnapPointRef.current = nearestSnap.clone();  // Save for click handling
-            showSnapIndicator(nearestSnap);
-          } else {
-            activeSnapPointRef.current = null;  // Clear when no snap
-            hideSnapIndicator();
+          const screenDist = Math.sqrt(
+            Math.pow(screenX - screenPos.x, 2) +
+            Math.pow(screenY - screenPos.y, 2)
+          );
+          if (screenDist < minScreenDist) {
+            minScreenDist = screenDist;
+            nearestSnap = snapPoint;
           }
+        }
+
+        // If no endpoint/midpoint snap found, check for on-edge snap (weaker threshold)
+        if (!nearestSnap) {
+          const onEdgeThreshold = 12; // 12 pixel threshold for on-edge snap
+          let minEdgeDist = onEdgeThreshold;
+
+          // Helper function: find nearest point on line segment (in screen space)
+          const nearestPointOnSegment = (px: number, py: number, ax: number, ay: number, bx: number, by: number) => {
+            const dx = bx - ax;
+            const dy = by - ay;
+            const lenSq = dx * dx + dy * dy;
+            if (lenSq < 0.001) return { x: ax, y: ay, t: 0 };
+
+            let t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
+            t = Math.max(0, Math.min(1, t)); // Clamp to segment
+            return { x: ax + t * dx, y: ay + t * dy, t };
+          };
+
+          // Check all edge meshes for on-edge snapping
+          scene.meshes.forEach(mesh => {
+            if (mesh.metadata?.type === 'edge') {
+              // Get edge path from mesh vertices
+              const positions = mesh.getVerticesData('position');
+              if (positions && positions.length >= 6) {
+                // Get first and last vertex positions (start and end of edge)
+                const startLocal = new Vector3(positions[0], positions[1], positions[2]);
+                const endLocal = new Vector3(
+                  positions[positions.length - 3],
+                  positions[positions.length - 2],
+                  positions[positions.length - 1]
+                );
+
+                // Transform to world coordinates
+                const worldMatrix = mesh.getWorldMatrix();
+                const startWorld = Vector3.TransformCoordinates(startLocal, worldMatrix);
+                const endWorld = Vector3.TransformCoordinates(endLocal, worldMatrix);
+
+                // Project to screen
+                const startScreen = Vector3.Project(startWorld, Matrix.Identity(), scene.getTransformMatrix(), viewport);
+                const endScreen = Vector3.Project(endWorld, Matrix.Identity(), scene.getTransformMatrix(), viewport);
+
+                // Find nearest point on this edge in screen space
+                const nearest = nearestPointOnSegment(
+                  screenX, screenY,
+                  startScreen.x, startScreen.y,
+                  endScreen.x, endScreen.y
+                );
+
+                const dist = Math.sqrt(Math.pow(screenX - nearest.x, 2) + Math.pow(screenY - nearest.y, 2));
+
+                // Only consider if not at endpoints (t between 0.05 and 0.95) to avoid overlap with endpoint snap
+                if (dist < minEdgeDist && nearest.t > 0.05 && nearest.t < 0.95) {
+                  minEdgeDist = dist;
+                  // Interpolate world position
+                  const worldPos = Vector3.Lerp(startWorld, endWorld, nearest.t);
+                  nearestSnap = { position: worldPos, type: 'onedge' };
+                }
+              }
+            }
+          });
+        }
+
+        if (nearestSnap) {
+          // FORCE Y=0 for ground plane drawing - snap points project to ground
+          activeSnapPointRef.current = {
+            position: new Vector3(nearestSnap.position.x, 0, nearestSnap.position.z),
+            type: nearestSnap.type
+          };
+          showSnapIndicator(nearestSnap.type);
         } else {
           activeSnapPointRef.current = null;
           hideSnapIndicator();
@@ -2510,9 +4293,53 @@ const CustomModelingPage: React.FC = () => {
           updatePushPullPreview(scene, ppState.baseFace, distance, ppState.baseFaceNormal);
 
           // Update measurement display (convert to mm)
-          setMeasurementValue(Math.abs(distance * 1000).toFixed(0));
+          setMeasurementInput(Math.abs(distance * 1000).toFixed(0));
         } else {
           // Not extruding - show dotted pattern on hovered face (SketchUp-style)
+          const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) => {
+            return mesh.metadata?.type === 'face';
+          });
+
+          if (pickResult?.hit && pickResult.pickedMesh && dottedHoverMaterialRef.current) {
+            const hoveredMesh = pickResult.pickedMesh as Mesh;
+
+            // Only update if hovering different face
+            if (hoveredFaceRef.current !== hoveredMesh) {
+              // Restore previous face's original material
+              if (hoveredFaceRef.current && hoveredFaceOriginalMaterialRef.current) {
+                hoveredFaceRef.current.material = hoveredFaceOriginalMaterialRef.current;
+              }
+              // Store original material and apply dotted pattern
+              hoveredFaceOriginalMaterialRef.current = hoveredMesh.material;
+              hoveredMesh.material = dottedHoverMaterialRef.current;
+              hoveredFaceRef.current = hoveredMesh;
+            }
+          } else {
+            // Not hovering over a face - restore original material
+            if (hoveredFaceRef.current && hoveredFaceOriginalMaterialRef.current) {
+              hoveredFaceRef.current.material = hoveredFaceOriginalMaterialRef.current;
+              hoveredFaceRef.current = null;
+              hoveredFaceOriginalMaterialRef.current = null;
+            }
+          }
+        }
+      } else if (activeTool === 'offset') {
+        // Offset tool - show hover highlight and update preview during offsetting
+        const osState = offsetStateRef.current;
+        activeSnapPointRef.current = null;
+        hideSnapIndicator();
+
+        if (osState.isOffsetting && osState.baseFace && osState.baseCenter) {
+          // Currently offsetting - update preview based on mouse movement
+          const distance = (osState.baseClickY - evt.clientY) * 0.005;
+
+          // Update preview mesh
+          updateOffsetPreview(scene, osState.baseFace, osState.baseVertices, osState.baseCenter, distance);
+
+          // Update measurement display (convert to mm)
+          setMeasurementInput(Math.abs(distance * 1000).toFixed(0));
+        } else {
+          // Not offsetting - show dotted pattern on hovered face (SketchUp-style)
           const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) => {
             return mesh.metadata?.type === 'face';
           });
@@ -2561,13 +4388,16 @@ const CustomModelingPage: React.FC = () => {
       if (!state.isDrawing || !state.startPoint) return;
 
       // Use active snap point if available for drawing previews
-      // IMPORTANT: Force Y=0 for snap points to ensure drawing on ground plane
+      // IMPORTANT: Force Y=0 for ALL points to ensure drawing on ground plane
       const getSnappedPoint = (): Vector3 | null => {
         const rawPoint = getGroundPoint(scene, scene.pointerX, scene.pointerY);
         if (activeSnapPointRef.current) {
-          return new Vector3(activeSnapPointRef.current.x, 0, activeSnapPointRef.current.z);
+          return new Vector3(activeSnapPointRef.current.position.x, 0, activeSnapPointRef.current.position.z);
         }
-        return rawPoint;
+        if (rawPoint) {
+          return new Vector3(rawPoint.x, 0, rawPoint.z);
+        }
+        return null;
       };
 
       if (activeTool === 'line') {
@@ -2697,9 +4527,9 @@ const CustomModelingPage: React.FC = () => {
         return;
       }
 
-      // Line, rectangle, circle, polygon, and push/pull use click-click (SketchUp style), not drag
+      // Line, rectangle, circle, polygon, push/pull, and offset use click-click (SketchUp style), not drag
       // So don't finalize on mouse up for those tools
-      if (activeTool === 'line' || activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon' || activeTool === 'pushpull') {
+      if (activeTool === 'line' || activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon' || activeTool === 'pushpull' || activeTool === 'offset') {
         return;
       }
     };
@@ -2718,7 +4548,7 @@ const CustomModelingPage: React.FC = () => {
         canvas.removeEventListener('pointerup', handlePointerUp);
       }
     };
-  }, [activeTool, selectedColor, getGroundPoint, updatePreviewLine, updatePreviewRectangle, updatePreviewCircle, updatePreviewPolygon, finalizeLine, finalizeRectangle, finalizeCircle, finalizePolygon, applyPushPull, zoomExtents, addLineSnapPoints, addRectangleSnapPoints, showSnapIndicator, hideSnapIndicator, findNearestSnapPoint, updatePushPullPreview, calculateExtrudeDistance, handleSelectionClick, handleDoubleClick, handleTripleClick, clearSelection, performBoxSelection, updateSelectionBox]);
+  }, [activeTool, selectedColor, getGroundPoint, updatePreviewLine, updatePreviewRectangle, updatePreviewCircle, updatePreviewPolygon, finalizeLine, finalizeRectangle, finalizeCircle, finalizePolygon, applyPushPull, applyOffset, zoomExtents, addLineSnapPoints, addRectangleSnapPoints, showSnapIndicator, hideSnapIndicator, findNearestSnapPoint, updatePushPullPreview, calculateExtrudeDistance, handleSelectionClick, handleDoubleClick, handleTripleClick, clearSelection, performBoxSelection, updateSelectionBox]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -2954,11 +4784,25 @@ const CustomModelingPage: React.FC = () => {
 
       // Line tool modifiers
       if (activeTool === 'line') {
-        // Shift key: Lock current inference (while held)
+        // Shift key: Lock current axis (while held) - SketchUp style
+        // When Shift is pressed, lock to the currently detected axis
         if (e.key === 'Shift') {
           e.preventDefault();
-          lineInferenceRef.current.inferenceLocked = true;
-          setLineInferenceUI(prev => ({ ...prev, inferenceLocked: true }));
+          const currentAxisColor = lineInferenceRef.current.axisColor;
+          // Only lock if we're on a valid axis (red, green, or blue)
+          if (currentAxisColor === 'red' || currentAxisColor === 'green' || currentAxisColor === 'blue') {
+            lineInferenceRef.current.axisLock = currentAxisColor;
+            lineInferenceRef.current.inferenceLocked = true;
+            setLineInferenceUI(prev => ({
+              ...prev,
+              axisLock: currentAxisColor,
+              inferenceLocked: true
+            }));
+          } else {
+            // If not on an axis, just set inference locked flag
+            lineInferenceRef.current.inferenceLocked = true;
+            setLineInferenceUI(prev => ({ ...prev, inferenceLocked: true }));
+          }
           return;
         }
         // Arrow keys: Axis lock (SketchUp style: Right=Red/X, Left=Green/Z, Up/Down=Blue/Y)
@@ -3165,10 +5009,11 @@ const CustomModelingPage: React.FC = () => {
         shapeModifiersRef.current.lockSquare = false;
         setShapeModifiersUI(prev => ({ ...prev, lockSquare: false }));
       }
-      // Release Shift key: Unlock inference lock (line tool)
+      // Release Shift key: Unlock axis and inference lock (line tool)
       if (e.key === 'Shift' && activeTool === 'line') {
+        lineInferenceRef.current.axisLock = 'none';
         lineInferenceRef.current.inferenceLocked = false;
-        setLineInferenceUI(prev => ({ ...prev, inferenceLocked: false }));
+        setLineInferenceUI(prev => ({ ...prev, axisLock: 'none', inferenceLocked: false }));
       }
     };
 
@@ -3181,26 +5026,35 @@ const CustomModelingPage: React.FC = () => {
   }, [selectedMesh, zoomExtents, activeTool, selectAll, clearSelection, finalizeLine, finalizeRectangle, finalizeCircle, finalizePolygon, currentMeasurement.sides, applyPushPull]);
 
   const selectMesh = (mesh: Mesh) => {
-    // Remove selection from previous mesh
-    if (selectedMesh) {
-      selectedMesh.disableEdgesRendering();
-      // Restore edge line color if it was an edge
-      if (selectedMesh.metadata?.type === 'edge') {
-        (selectedMesh as any).color = new Color3(0.15, 0.15, 0.15);
+    // Remove selection from previous mesh using ref for fresh value
+    const prevMesh = selectedMeshRef.current;
+    if (prevMesh) {
+      prevMesh.disableEdgesRendering();
+      prevMesh.renderOverlay = false;
+      // Restore edge material color if it was an edge (Tube mesh)
+      if (prevMesh.metadata?.type === 'edge' && prevMesh.material) {
+        const mat = prevMesh.material as StandardMaterial;
+        mat.diffuseColor = new Color3(0.15, 0.15, 0.15);
+        mat.emissiveColor = new Color3(0.15, 0.15, 0.15);
       }
     }
 
     setSelectedMesh(mesh);
+    selectedMeshRef.current = mesh;
 
-    // Show selection with blue edges (not emissive glow)
+    // Show selection with blue highlight
     if (mesh.metadata?.type === 'edge') {
-      // For edge lines, change color to blue
-      (mesh as any).color = new Color3(0.2, 0.4, 1.0);
+      // For edge (Tube mesh), change material color to blue
+      if (mesh.material) {
+        const mat = mesh.material as StandardMaterial;
+        mat.diffuseColor = new Color3(0.2, 0.4, 1.0);
+        mat.emissiveColor = new Color3(0.2, 0.4, 1.0);
+      }
     } else {
-      // For faces/solids, show edge rendering
-      mesh.enableEdgesRendering();
-      mesh.edgesWidth = 3.0;
-      mesh.edgesColor = new Color4(0.2, 0.4, 1.0, 1.0);
+      // For faces/solids, show overlay highlight only
+      mesh.renderOverlay = true;
+      mesh.overlayColor = new Color3(0.39, 0.4, 0.95); // Indigo
+      mesh.overlayAlpha = 0.3;
     }
 
     if (gizmoManagerRef.current) {
@@ -3221,22 +5075,41 @@ const CustomModelingPage: React.FC = () => {
   };
 
   const deselectMesh = () => {
-    if (selectedMesh) {
-      selectedMesh.disableEdgesRendering();
-      // Restore edge line color if it was an edge
-      if (selectedMesh.metadata?.type === 'edge') {
-        (selectedMesh as any).color = new Color3(0.15, 0.15, 0.15);
+    const mesh = selectedMeshRef.current;
+    if (mesh) {
+      mesh.disableEdgesRendering();
+      mesh.renderOverlay = false;
+      // Restore edge material color if it was an edge (Tube mesh)
+      if (mesh.metadata?.type === 'edge' && mesh.material) {
+        const mat = mesh.material as StandardMaterial;
+        mat.diffuseColor = new Color3(0.15, 0.15, 0.15);
+        mat.emissiveColor = new Color3(0.15, 0.15, 0.15);
+      }
+      // Restore face emissive and child edges if it was a face
+      if (mesh.metadata?.type === 'face' && mesh.material) {
+        const mat = mesh.material as StandardMaterial;
+        mat.emissiveColor = new Color3(0, 0, 0);
+        mesh.getChildMeshes().forEach((child: any) => {
+          if (child.metadata?.type === 'edge' && child.material) {
+            const edgeMat = child.material as StandardMaterial;
+            edgeMat.diffuseColor = new Color3(0.15, 0.15, 0.15);
+            edgeMat.emissiveColor = new Color3(0.15, 0.15, 0.15);
+          }
+        });
       }
       // Restore child edge colors if it was a solid
-      if (selectedMesh.metadata?.type === 'solid') {
-        selectedMesh.getChildMeshes().forEach((child: any) => {
-          if (child.metadata?.type === 'edge') {
-            child.color = new Color3(0.15, 0.15, 0.15);
+      if (mesh.metadata?.type === 'solid') {
+        mesh.getChildMeshes().forEach((child: any) => {
+          if (child.metadata?.type === 'edge' && child.material) {
+            const mat = child.material as StandardMaterial;
+            mat.diffuseColor = new Color3(0.15, 0.15, 0.15);
+            mat.emissiveColor = new Color3(0.15, 0.15, 0.15);
           }
         });
       }
     }
     setSelectedMesh(null);
+    selectedMeshRef.current = null;
     setMeshProperties(null);
     if (gizmoManagerRef.current) {
       gizmoManagerRef.current.attachToMesh(null);
@@ -3358,10 +5231,332 @@ const CustomModelingPage: React.FC = () => {
           </div>
         </div>
 
-        <div className={styles.headerCenter}>
-          <button className={styles.menuBtn}>File</button>
-          <button className={styles.menuBtn}>Edit</button>
-          <button className={styles.menuBtn}>View</button>
+        <div className={styles.menuBar}>
+          <div className={styles.menuDropdown}>
+            <button
+              className={`${styles.menuBtn} ${activeMenu === 'file' ? styles.menuBtnActive : ''}`}
+              onClick={() => setActiveMenu(activeMenu === 'file' ? null : 'file')}
+            >
+              File
+            </button>
+            {activeMenu === 'file' && (
+              <div className={styles.dropdownMenu} onClick={(e) => e.stopPropagation()}>
+                <div className={styles.dropdownSubmenu}>
+                  <button className={styles.dropdownItem}>
+                    Open Recent
+                    <span className={styles.submenuArrow}>›</span>
+                  </button>
+                </div>
+                <div className={styles.dropdownDivider} />
+                <button className={styles.dropdownItem}>
+                  Close
+                  <span className={styles.shortcut}>⌘W</span>
+                </button>
+                <button className={styles.dropdownItem}>
+                  Close All
+                  <span className={styles.shortcut}>⌥⌘W</span>
+                </button>
+                <button className={styles.dropdownItem}>
+                  Save
+                  <span className={styles.shortcut}>⌘S</span>
+                </button>
+                <button className={styles.dropdownItem}>
+                  Save As...
+                  <span className={styles.shortcut}>⇧⌘S</span>
+                </button>
+                <button className={styles.dropdownItem}>Save a Copy As...</button>
+                <div className={styles.dropdownDivider} />
+                <button className={styles.dropdownItem}>Import...</button>
+                <div className={styles.dropdownSubmenu}>
+                  <button className={styles.dropdownItem}>
+                    Export
+                    <span className={styles.submenuArrow}>›</span>
+                  </button>
+                </div>
+                <div className={styles.dropdownDivider} />
+                <button className={styles.dropdownItem}>
+                  Page Setup...
+                  <span className={styles.shortcut}>⇧⌘P</span>
+                </button>
+                <button className={styles.dropdownItem}>Document Setup...</button>
+                <button className={styles.dropdownItem}>
+                  Print...
+                  <span className={styles.shortcut}>⌘P</span>
+                </button>
+              </div>
+            )}
+          </div>
+          <div className={styles.menuDropdown}>
+            <button
+              className={`${styles.menuBtn} ${activeMenu === 'edit' ? styles.menuBtnActive : ''}`}
+              onClick={() => setActiveMenu(activeMenu === 'edit' ? null : 'edit')}
+            >
+              Edit
+            </button>
+            {activeMenu === 'edit' && (
+              <div className={styles.dropdownMenu} onClick={(e) => e.stopPropagation()}>
+                <button className={styles.dropdownItem}>
+                  Undo
+                  <span className={styles.shortcut}>⌘Z</span>
+                </button>
+                <button className={styles.dropdownItem} disabled>
+                  Redo
+                  <span className={styles.shortcut}>⇧⌘Z</span>
+                </button>
+                <div className={styles.dropdownDivider} />
+                <button className={styles.dropdownItem} disabled>
+                  Cut
+                  <span className={styles.shortcut}>⌘X</span>
+                </button>
+                <button className={styles.dropdownItem} disabled>
+                  Copy
+                  <span className={styles.shortcut}>⌘C</span>
+                </button>
+                <button className={styles.dropdownItem}>
+                  Paste
+                  <span className={styles.shortcut}>⌘V</span>
+                </button>
+                <button className={styles.dropdownItem}>Paste in Place</button>
+                <button className={styles.dropdownItem} disabled>Delete</button>
+                <button className={styles.dropdownItem}>Delete Guides</button>
+                <div className={styles.dropdownDivider} />
+                <button className={styles.dropdownItem}>
+                  Select All
+                  <span className={styles.shortcut}>⌘A</span>
+                </button>
+                <button className={styles.dropdownItem} disabled>
+                  Deselect All
+                  <span className={styles.shortcut}>⇧⌘A</span>
+                </button>
+                <button className={styles.dropdownItem}>
+                  Invert Selection
+                  <span className={styles.shortcut}>⇧⌘I</span>
+                </button>
+                <div className={styles.dropdownDivider} />
+                <button className={styles.dropdownItem} disabled>
+                  Hide
+                  <span className={styles.shortcut}>⌘E</span>
+                </button>
+                <div className={styles.dropdownSubmenu}>
+                  <button className={styles.dropdownItem}>
+                    Unhide
+                    <span className={styles.submenuArrow}>›</span>
+                  </button>
+                </div>
+                <div className={styles.dropdownDivider} />
+                <button className={styles.dropdownItem} disabled>Lock</button>
+                <div className={styles.dropdownSubmenu}>
+                  <button className={styles.dropdownItem}>
+                    Unlock
+                    <span className={styles.submenuArrow}>›</span>
+                  </button>
+                </div>
+                <div className={styles.dropdownDivider} />
+                <button className={styles.dropdownItem}>
+                  Make Component...
+                  <span className={styles.shortcut}>⇧⌘G</span>
+                </button>
+                <button className={styles.dropdownItem}>
+                  Make Group
+                  <span className={styles.shortcut}>⌘G</span>
+                </button>
+                <button className={styles.dropdownItem} disabled>
+                  Close Group/Component
+                  <span className={styles.shortcut}>^⇧⌘G</span>
+                </button>
+                <div className={styles.dropdownDivider} />
+                <div className={styles.dropdownSubmenu}>
+                  <button className={styles.dropdownItem}>
+                    Intersect Faces
+                    <span className={styles.submenuArrow}>›</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className={styles.menuDropdown}>
+            <button
+              className={`${styles.menuBtn} ${activeMenu === 'view' ? styles.menuBtnActive : ''}`}
+              onClick={() => setActiveMenu(activeMenu === 'view' ? null : 'view')}
+            >
+              View
+            </button>
+            {activeMenu === 'view' && (
+              <div className={styles.dropdownMenu} onClick={(e) => e.stopPropagation()}>
+                <button className={styles.dropdownItem}>
+                  Show Tab Bar
+                </button>
+                <button className={styles.dropdownItem}>
+                  Show All Tabs
+                  <span className={styles.shortcut}>⇧⌘\</span>
+                </button>
+                <div className={styles.dropdownSubmenu}>
+                  <button className={styles.dropdownItem}>
+                    Tool Palette
+                    <span className={styles.submenuArrow}>›</span>
+                  </button>
+                </div>
+                <button className={styles.dropdownItem} disabled>Scene Tabs</button>
+                <div className={styles.dropdownDivider} />
+                <button className={styles.dropdownItem}>Hidden Geometry</button>
+                <button className={styles.dropdownItem}>Hidden Objects</button>
+                <button className={styles.dropdownItem}>Section Planes</button>
+                <button className={`${styles.dropdownItem} ${styles.dropdownItemChecked}`}>
+                  Section Cuts
+                </button>
+                <button className={`${styles.dropdownItem} ${styles.dropdownItemChecked}`}>
+                  Section Fill
+                </button>
+                <button className={`${styles.dropdownItem} ${styles.dropdownItemChecked}`}>
+                  Axes
+                </button>
+                <button className={`${styles.dropdownItem} ${styles.dropdownItemChecked}`}>
+                  Guides
+                </button>
+                <div className={styles.dropdownDivider} />
+                <button
+                  className={`${styles.dropdownItem} ${shadowEnabled ? styles.dropdownItemChecked : ''}`}
+                  onClick={() => setShadowEnabled(!shadowEnabled)}
+                >
+                  Shadows
+                </button>
+                <button className={styles.dropdownItem}>Fog</button>
+                <div className={styles.dropdownDivider} />
+                <div className={styles.dropdownSubmenu}>
+                  <button className={styles.dropdownItem}>
+                    Edge Style
+                    <span className={styles.submenuArrow}>›</span>
+                  </button>
+                </div>
+                <div className={styles.dropdownSubmenu}>
+                  <button className={styles.dropdownItem}>
+                    Face Style
+                    <span className={styles.submenuArrow}>›</span>
+                  </button>
+                </div>
+                <div className={styles.dropdownSubmenu}>
+                  <button className={styles.dropdownItem}>
+                    Component Edit
+                    <span className={styles.submenuArrow}>›</span>
+                  </button>
+                </div>
+                <div className={styles.dropdownDivider} />
+                <div className={styles.dropdownSubmenu}>
+                  <button className={styles.dropdownItem}>
+                    Animation
+                    <span className={styles.submenuArrow}>›</span>
+                  </button>
+                </div>
+                <div className={styles.dropdownDivider} />
+                <button className={styles.dropdownItem}>Hide Toolbar</button>
+                <button className={styles.dropdownItem}>Customize Toolbar...</button>
+                <button className={styles.dropdownItem}>
+                  Exit Full Screen
+                  <span className={styles.shortcut}>⌃F</span>
+                </button>
+              </div>
+            )}
+          </div>
+          <div className={styles.menuDropdown}>
+            <button
+              className={`${styles.menuBtn} ${activeMenu === 'camera' ? styles.menuBtnActive : ''}`}
+              onClick={() => setActiveMenu(activeMenu === 'camera' ? null : 'camera')}
+            >
+              Camera
+            </button>
+            {activeMenu === 'camera' && (
+              <div className={styles.dropdownMenu} onClick={() => setActiveMenu(null)}>
+                <button className={styles.dropdownItem}>Previous</button>
+                <button className={styles.dropdownItem}>Next</button>
+                <div className={styles.dropdownSubmenu}>
+                  <button className={styles.dropdownItem}>
+                    Standard Views
+                    <span className={styles.submenuArrow}>›</span>
+                  </button>
+                </div>
+                <div className={styles.dropdownDivider} />
+                <button
+                  className={`${styles.dropdownItem} ${cameraMode === 'orthographic' ? styles.dropdownItemChecked : ''}`}
+                  onClick={() => setCameraMode('orthographic')}
+                >
+                  Orthographic
+                </button>
+                <button
+                  className={`${styles.dropdownItem} ${cameraMode === 'perspective' ? styles.dropdownItemChecked : ''}`}
+                  onClick={() => setCameraMode('perspective')}
+                >
+                  Perspective
+                </button>
+                <button
+                  className={`${styles.dropdownItem} ${cameraMode === 'twoPoint' ? styles.dropdownItemChecked : ''}`}
+                  onClick={() => setCameraMode('twoPoint')}
+                >
+                  Two-Point Perspective
+                </button>
+                <div className={styles.dropdownDivider} />
+                <button className={styles.dropdownItem}>Match New Photo...</button>
+                <button className={styles.dropdownItem} disabled>Edit Matched Photo</button>
+                <div className={styles.dropdownDivider} />
+                <button
+                  className={`${styles.dropdownItem} ${activeTool === 'orbit' ? styles.dropdownItemChecked : ''}`}
+                  onClick={() => setActiveTool('orbit')}
+                >
+                  Orbit
+                  <span className={styles.shortcut}>⌘B</span>
+                </button>
+                <button
+                  className={`${styles.dropdownItem} ${activeTool === 'pan' ? styles.dropdownItemChecked : ''}`}
+                  onClick={() => setActiveTool('pan')}
+                >
+                  Pan
+                  <span className={styles.shortcut}>⌘R</span>
+                </button>
+                <button
+                  className={`${styles.dropdownItem} ${activeTool === 'zoom' ? styles.dropdownItemChecked : ''}`}
+                  onClick={() => setActiveTool('zoom')}
+                >
+                  Zoom
+                  <span className={styles.shortcut}>⌘\</span>
+                </button>
+                <button className={styles.dropdownItem}>Field of View</button>
+                <button
+                  className={styles.dropdownItem}
+                  onClick={() => setActiveTool('zoomWindow')}
+                >
+                  Zoom Window
+                  <span className={styles.shortcut}>⌘]</span>
+                </button>
+                <button
+                  className={styles.dropdownItem}
+                  onClick={() => zoomExtents()}
+                >
+                  Zoom Extents
+                  <span className={styles.shortcut}>⌘[</span>
+                </button>
+                <div className={styles.dropdownDivider} />
+                <button
+                  className={styles.dropdownItem}
+                  onClick={() => setActiveTool('positionCamera')}
+                >
+                  Position Camera
+                </button>
+                <button
+                  className={styles.dropdownItem}
+                  onClick={() => setActiveTool('walk')}
+                >
+                  Walk
+                  <span className={styles.shortcut}>⌘/</span>
+                </button>
+                <button
+                  className={styles.dropdownItem}
+                  onClick={() => setActiveTool('lookAround')}
+                >
+                  Look Around
+                  <span className={styles.shortcut}>⌘.</span>
+                </button>
+              </div>
+            )}
+          </div>
           <button className={styles.menuBtn}>Draw</button>
           <button className={styles.menuBtn}>Tools</button>
           <button className={styles.menuBtn}>Window</button>
@@ -3387,6 +5582,16 @@ const CustomModelingPage: React.FC = () => {
               </svg>
             )}
           </button>
+
+          {/* Shadow Controls */}
+          <ShadowControls
+            enabled={shadowEnabled}
+            onToggle={setShadowEnabled}
+            time={sunTime}
+            onTimeChange={setSunTime}
+            azimuth={sunAzimuth}
+            onAzimuthChange={setSunAzimuth}
+          />
           <button className={`${styles.headerBtn} ${styles.headerBtnGhost}`}>
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

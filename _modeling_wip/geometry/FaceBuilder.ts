@@ -321,7 +321,7 @@ export class FaceBuilder {
   }
 
   /**
-   * Create a mesh from an edge loop
+   * Create a mesh from an edge loop with optional inner loops (holes)
    */
   public createFaceMesh(
     faceId: GeometryId,
@@ -329,9 +329,10 @@ export class FaceBuilder {
     options: {
       material?: StandardMaterial;
       flipNormal?: boolean;
+      innerLoops?: Vector3[][];  // Array of inner loops (holes)
     } = {}
   ): FaceCreationResult {
-    // Validate the loop
+    // Validate the outer loop
     const validation = this.validateLoop(vertices);
     if (!validation.valid) {
       return { success: false, error: validation.error };
@@ -348,7 +349,18 @@ export class FaceBuilder {
     // Flip normal if requested
     const finalNormal = options.flipNormal ? normal.negate() : normal;
 
-    // Triangulate
+    // Handle inner loops (holes)
+    if (options.innerLoops && options.innerLoops.length > 0) {
+      return this.createFaceMeshWithHoles(
+        faceId,
+        orderedVertices,
+        options.innerLoops,
+        finalNormal,
+        options.material
+      );
+    }
+
+    // Triangulate (simple case, no holes)
     const triangleIndices = earClipTriangulate(orderedVertices, finalNormal);
     if (!triangleIndices) {
       return { success: false, error: 'triangulation_failed' };
@@ -380,6 +392,137 @@ export class FaceBuilder {
     vertexData.applyToMesh(mesh, true);
 
     mesh.material = options.material ?? this.defaultMaterial;
+    mesh.isPickable = true;
+
+    return {
+      success: true,
+      faceId,
+      mesh,
+    };
+  }
+
+  /**
+   * Create a mesh with holes using bridge algorithm
+   * Connects outer boundary to inner holes to create a single polygon
+   */
+  private createFaceMeshWithHoles(
+    faceId: GeometryId,
+    outerLoop: Vector3[],
+    innerLoops: Vector3[][],
+    normal: Vector3,
+    material?: StandardMaterial
+  ): FaceCreationResult {
+    // Project to 2D for hole bridging
+    const absNormal = new Vector3(Math.abs(normal.x), Math.abs(normal.y), Math.abs(normal.z));
+    let axis1: 'x' | 'y' | 'z';
+    let axis2: 'x' | 'y' | 'z';
+
+    if (absNormal.x >= absNormal.y && absNormal.x >= absNormal.z) {
+      axis1 = 'y'; axis2 = 'z';
+    } else if (absNormal.y >= absNormal.x && absNormal.y >= absNormal.z) {
+      axis1 = 'x'; axis2 = 'z';
+    } else {
+      axis1 = 'x'; axis2 = 'y';
+    }
+
+    // Ensure inner loops are CW (opposite of outer loop for holes)
+    const processedInnerLoops: Vector3[][] = [];
+    for (const innerLoop of innerLoops) {
+      let processed = [...innerLoop];
+      if (isLoopCCW(processed, normal)) {
+        processed = processed.reverse();
+      }
+      processedInnerLoops.push(processed);
+    }
+
+    // Bridge algorithm: connect each hole to outer boundary
+    let mergedVertices = [...outerLoop];
+
+    for (const innerLoop of processedInnerLoops) {
+      // Find rightmost point in inner loop
+      let innerRightmostIdx = 0;
+      let maxX = -Infinity;
+      for (let i = 0; i < innerLoop.length; i++) {
+        const x = innerLoop[i][axis1];
+        if (x > maxX) {
+          maxX = x;
+          innerRightmostIdx = i;
+        }
+      }
+
+      // Find closest visible point on outer boundary
+      const innerPoint = innerLoop[innerRightmostIdx];
+      let bestOuterIdx = 0;
+      let minDist = Infinity;
+
+      for (let i = 0; i < mergedVertices.length; i++) {
+        const dist = Vector3.Distance(innerPoint, mergedVertices[i]);
+        if (dist < minDist) {
+          minDist = dist;
+          bestOuterIdx = i;
+        }
+      }
+
+      // Create bridge: insert hole vertices into merged polygon
+      // Order: outer[0..bestOuterIdx] + inner[rightmost..end] + inner[0..rightmost] + outer[bestOuterIdx..]
+      const reorderedInner: Vector3[] = [];
+      for (let i = 0; i < innerLoop.length; i++) {
+        const idx = (innerRightmostIdx + i) % innerLoop.length;
+        reorderedInner.push(innerLoop[idx]);
+      }
+
+      // Insert with bridge edges
+      const newMerged: Vector3[] = [];
+      for (let i = 0; i <= bestOuterIdx; i++) {
+        newMerged.push(mergedVertices[i]);
+      }
+      // Bridge to hole
+      for (const v of reorderedInner) {
+        newMerged.push(v);
+      }
+      // Bridge back
+      newMerged.push(reorderedInner[0].clone());
+      newMerged.push(mergedVertices[bestOuterIdx].clone());
+      // Rest of outer
+      for (let i = bestOuterIdx + 1; i < mergedVertices.length; i++) {
+        newMerged.push(mergedVertices[i]);
+      }
+
+      mergedVertices = newMerged;
+    }
+
+    // Triangulate the merged polygon
+    const triangleIndices = earClipTriangulate(mergedVertices, normal);
+    if (!triangleIndices) {
+      return { success: false, error: 'triangulation_failed' };
+    }
+
+    // Create vertex data
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const uvs: number[] = [];
+
+    const uvCoords = calculateUVs(mergedVertices, normal);
+
+    for (let i = 0; i < mergedVertices.length; i++) {
+      const v = mergedVertices[i];
+      positions.push(v.x, v.y, v.z);
+      normals.push(normal.x, normal.y, normal.z);
+      uvs.push(uvCoords[i].x, uvCoords[i].y);
+    }
+
+    // Create mesh
+    const mesh = new Mesh(`face_${faceId}`, this.scene);
+
+    const vertexData = new VertexData();
+    vertexData.positions = positions;
+    vertexData.indices = triangleIndices;
+    vertexData.normals = normals;
+    vertexData.uvs = uvs;
+
+    vertexData.applyToMesh(mesh, true);
+
+    mesh.material = material ?? this.defaultMaterial;
     mesh.isPickable = true;
 
     return {

@@ -16,7 +16,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Vector3 } from '@babylonjs/core';
 import { useInferenceStore } from '../stores/inferenceStore';
-import { parseLength, parseCoordinates, formatLength } from '../types';
+import { parseLength, parseCoordinates, formatLength, parseDimensions, parseSides } from '../types';
 
 export interface MeasurementsBoxProps {
   onApply: (value: MeasurementResult) => void;
@@ -28,9 +28,14 @@ export interface MeasurementsBoxProps {
 }
 
 export interface MeasurementResult {
-  type: 'length' | 'absolute' | 'relative';
+  type: 'length' | 'absolute' | 'relative' | 'dimensions' | 'sides';
   length?: number;              // For length input
   position?: Vector3;           // For coordinate input
+  dimensions?: {                // For width,height input (Rectangle)
+    width?: number;
+    height?: number;
+  };
+  sides?: number;               // For polygon sides input
   raw: string;                  // Original input string
 }
 
@@ -115,7 +120,7 @@ export const MeasurementsBox: React.FC<MeasurementsBoxProps> = ({
       return;
     }
 
-    // Try parsing as coordinates first
+    // Try parsing as coordinates first [x,y,z] or <x,y,z>
     const coords = parseCoordinates(trimmed);
     if (coords) {
       if (coords.isAbsolute) {
@@ -141,26 +146,67 @@ export const MeasurementsBox: React.FC<MeasurementsBoxProps> = ({
         setError('No start point for relative coordinates');
         return;
       }
-    } else {
-      // Try parsing as length
-      const length = parseLength(trimmed);
-      if (length !== null && length > 0) {
-        onApply({
-          type: 'length',
-          length,
-          raw: trimmed,
-        });
-      } else {
-        setError('Invalid input format');
-        return;
-      }
+      // Reset state and return
+      setInputValue('');
+      setIsEditing(false);
+      setError(null);
+      inputRef.current?.blur();
+      return;
     }
 
-    // Reset state
-    setInputValue('');
-    setIsEditing(false);
-    setError(null);
-    inputRef.current?.blur();
+    // Try parsing as dimensions (width,height format for rectangles)
+    const dimensions = parseDimensions(trimmed);
+    if (dimensions) {
+      onApply({
+        type: 'dimensions',
+        dimensions: {
+          width: dimensions.width,
+          height: dimensions.height,
+        },
+        raw: trimmed,
+      });
+      // Reset state and return
+      setInputValue('');
+      setIsEditing(false);
+      setError(null);
+      inputRef.current?.blur();
+      return;
+    }
+
+    // Try parsing as sides (6s, 24s format for polygons/circles)
+    const sides = parseSides(trimmed);
+    if (sides !== null) {
+      onApply({
+        type: 'sides',
+        sides,
+        raw: trimmed,
+      });
+      // Reset state and return
+      setInputValue('');
+      setIsEditing(false);
+      setError(null);
+      inputRef.current?.blur();
+      return;
+    }
+
+    // Try parsing as length (single number with optional unit)
+    const length = parseLength(trimmed);
+    if (length !== null && length > 0) {
+      onApply({
+        type: 'length',
+        length,
+        raw: trimmed,
+      });
+      // Reset state and return
+      setInputValue('');
+      setIsEditing(false);
+      setError(null);
+      inputRef.current?.blur();
+      return;
+    }
+
+    // Nothing matched
+    setError('Invalid input format');
   }, [inputValue, startPoint, onApply]);
 
   // Cancel input
@@ -258,7 +304,7 @@ export const MeasurementsBox: React.FC<MeasurementsBoxProps> = ({
 
       {isEditing && (
         <div style={hintStyle}>
-          Length: 1000, 1m | Absolute: [x,y,z] | Relative: &lt;x,y,z&gt;
+          Length: 1000, 1m | Dims: 1000,500 | Sides: 6s | [x,y,z] | &lt;x,y,z&gt;
         </div>
       )}
     </div>

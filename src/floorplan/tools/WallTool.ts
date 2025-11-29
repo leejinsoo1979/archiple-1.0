@@ -30,6 +30,7 @@ export class WallTool extends BaseTool {
   private startPoint: Point | null = null;
   private currentPreviewEnd: Vector2 | null = null;
   private wallChain: Point[] = [];
+  private lastMousePosition: Vector2 | null = null;
 
   // Config (units: mm)
   private defaultWallThickness = 100; // 100mm = 10cm
@@ -67,6 +68,8 @@ export class WallTool extends BaseTool {
   }
 
   handleMouseDown(position: Vector2, event: MouseEvent): void {
+    this.lastMousePosition = position;
+
     if (event.button === 2) {
       // Right-click: finish chain
       this.finishChain();
@@ -89,6 +92,30 @@ export class WallTool extends BaseTool {
   }
 
   handleMouseMove(position: Vector2, event: MouseEvent): void {
+    this.lastMousePosition = position;
+    this.updatePreview(position, event.shiftKey);
+  }
+
+  handleKeyDown(event: KeyboardEvent): void {
+    // Call parent to handle Escape key
+    super.handleKeyDown(event);
+
+    if (event.key === 'Shift') {
+      if (this.lastMousePosition) {
+        this.updatePreview(this.lastMousePosition, true);
+      }
+    }
+  }
+
+  handleKeyUp(event: KeyboardEvent): void {
+    if (event.key === 'Shift') {
+      if (this.lastMousePosition) {
+        this.updatePreview(this.lastMousePosition, false);
+      }
+    }
+  }
+
+  private updatePreview(position: Vector2, isShiftPressed: boolean): void {
     const hasActiveStart = this.isDrawing && !!this.startPoint;
 
     // Update snap service with all existing points and walls
@@ -97,7 +124,7 @@ export class WallTool extends BaseTool {
 
     // Enable orthogonal snap only when Shift key is pressed
     this.snapService.updateConfig({
-      orthogonalSnapEnabled: hasActiveStart && event.shiftKey,
+      orthogonalSnapEnabled: hasActiveStart && isShiftPressed,
     });
 
     if (hasActiveStart && this.startPoint) {

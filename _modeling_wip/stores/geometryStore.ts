@@ -69,6 +69,11 @@ interface GeometryState {
   detectNewFaces: (edgeId: GeometryId) => Face[];
   healFaces: () => Face[];
 
+  // Face splitting (coplanar face merging)
+  isPointInsideFaceLoop: (point: Vector3, faceId: GeometryId) => boolean;
+  splitFaceWithInnerLoop: (faceId: GeometryId, innerLoopEdgeIds: GeometryId[]) => Face | null;
+  findCoplanarFaceContainingLoop: (loopEdgeIds: GeometryId[]) => GeometryId | null;
+
   // Selection
   selectVertex: (id: GeometryId, addToSelection?: boolean) => void;
   selectEdge: (id: GeometryId, addToSelection?: boolean) => void;
@@ -105,6 +110,75 @@ function calculateNormal(vertices: Vector3[]): Vector3 {
   const v1 = vertices[1].subtract(vertices[0]);
   const v2 = vertices[2].subtract(vertices[0]);
   return Vector3.Cross(v1, v2).normalize();
+}
+
+/**
+ * Check if a point is inside a 2D polygon using ray casting algorithm
+ * Projects to the dominant plane of the normal for accurate inside/outside test
+ */
+function isPointInsidePolygon2D(
+  point: Vector3,
+  polygonVertices: Vector3[],
+  normal: Vector3
+): boolean {
+  if (polygonVertices.length < 3) return false;
+
+  // Determine projection plane based on dominant normal component
+  const absNormal = new Vector3(Math.abs(normal.x), Math.abs(normal.y), Math.abs(normal.z));
+  let axis1: 'x' | 'y' | 'z';
+  let axis2: 'x' | 'y' | 'z';
+
+  if (absNormal.x >= absNormal.y && absNormal.x >= absNormal.z) {
+    axis1 = 'y'; axis2 = 'z';
+  } else if (absNormal.y >= absNormal.x && absNormal.y >= absNormal.z) {
+    axis1 = 'x'; axis2 = 'z';
+  } else {
+    axis1 = 'x'; axis2 = 'y';
+  }
+
+  // Project point and polygon to 2D
+  const px = point[axis1];
+  const py = point[axis2];
+
+  const poly2D = polygonVertices.map(v => ({ x: v[axis1], y: v[axis2] }));
+
+  // Ray casting algorithm
+  let inside = false;
+  const n = poly2D.length;
+
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = poly2D[i].x, yi = poly2D[i].y;
+    const xj = poly2D[j].x, yj = poly2D[j].y;
+
+    if (((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+
+  return inside;
+}
+
+/**
+ * Check if two sets of vertices are coplanar within tolerance
+ */
+function areVerticesCoplanar(
+  vertices1: Vector3[],
+  vertices2: Vector3[],
+  tolerance: number = 0.001
+): boolean {
+  if (vertices1.length < 3 || vertices2.length < 3) return false;
+
+  // Calculate plane from first set
+  const normal = calculateNormal(vertices1);
+  const d = -Vector3.Dot(normal, vertices1[0]);
+
+  // Check all vertices from second set against this plane
+  for (const v of vertices2) {
+    const distance = Math.abs(Vector3.Dot(normal, v) + d);
+    if (distance > tolerance) return false;
+  }
+
+  return true;
 }
 
 // ============================================================================
@@ -620,8 +694,21 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
       }
 
       if (!hasFace) {
-        const face = state.addFace(loop);
-        if (face) createdFaces.push(face);
+        // Check if this loop is inside an existing coplanar face
+        const containingFaceId = state.findCoplanarFaceContainingLoop(loop);
+
+        if (containingFaceId) {
+          // Split the containing face - add hole and create inner face
+          const innerFace = state.splitFaceWithInnerLoop(containingFaceId, loop);
+          if (innerFace) {
+            createdFaces.push(innerFace);
+            console.log(`Loop inside existing face ${containingFaceId}, split into inner face ${innerFace.id}`);
+          }
+        } else {
+          // No containing face - create new standalone face
+          const face = state.addFace(loop);
+          if (face) createdFaces.push(face);
+        }
       }
     }
 
@@ -639,6 +726,114 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
     }
 
     return createdFaces;
+  },
+
+  // ============================================================================
+  // FACE SPLITTING (COPLANAR FACE MERGING)
+  // ============================================================================
+
+  /**
+   * Check if a point is inside a face's outer boundary
+   */
+  isPointInsideFaceLoop: (point: Vector3, faceId: GeometryId): boolean => {
+    const state = get();
+    const face = state.faces.get(faceId);
+    if (!face) return false;
+
+    // Get ordered vertices from face edges
+    const faceVertices: Vector3[] = [];
+    for (const edgeId of face.edgeIds) {
+      const edge = state.edges.get(edgeId);
+      if (!edge) continue;
+      const vertex = state.vertices.get(edge.startVertexId);
+      if (vertex) faceVertices.push(vertex.position);
+    }
+
+    if (faceVertices.length < 3) return false;
+
+    return isPointInsidePolygon2D(point, faceVertices, face.normal);
+  },
+
+  /**
+   * Find a coplanar face that completely contains the given loop
+   */
+  findCoplanarFaceContainingLoop: (loopEdgeIds: GeometryId[]): GeometryId | null => {
+    const state = get();
+
+    // Get vertices of the new loop
+    const loopVertices: Vector3[] = [];
+    for (const edgeId of loopEdgeIds) {
+      const edge = state.edges.get(edgeId);
+      if (!edge) continue;
+      const vertex = state.vertices.get(edge.startVertexId);
+      if (vertex) loopVertices.push(vertex.position);
+    }
+
+    if (loopVertices.length < 3) return null;
+
+    // Check each existing face
+    for (const [faceId, face] of state.faces) {
+      // Get face vertices
+      const faceVertices: Vector3[] = [];
+      for (const edgeId of face.edgeIds) {
+        const edge = state.edges.get(edgeId);
+        if (!edge) continue;
+        const vertex = state.vertices.get(edge.startVertexId);
+        if (vertex) faceVertices.push(vertex.position);
+      }
+
+      if (faceVertices.length < 3) continue;
+
+      // Check coplanarity
+      if (!areVerticesCoplanar(faceVertices, loopVertices)) continue;
+
+      // Check if ALL loop vertices are inside this face
+      let allInside = true;
+      for (const loopVertex of loopVertices) {
+        if (!isPointInsidePolygon2D(loopVertex, faceVertices, face.normal)) {
+          allInside = false;
+          break;
+        }
+      }
+
+      if (allInside) {
+        return faceId;
+      }
+    }
+
+    return null;
+  },
+
+  /**
+   * Split a face by adding an inner loop (hole)
+   * The inner loop becomes a separate face, outer boundary becomes donut shape
+   */
+  splitFaceWithInnerLoop: (faceId: GeometryId, innerLoopEdgeIds: GeometryId[]): Face | null => {
+    const state = get();
+    const existingFace = state.faces.get(faceId);
+    if (!existingFace) return null;
+
+    // Add inner loop to existing face
+    set((s) => {
+      const newFaces = new Map(s.faces);
+      const updatedFace = {
+        ...existingFace,
+        innerLoopEdgeIds: [
+          ...(existingFace.innerLoopEdgeIds || []),
+          innerLoopEdgeIds,
+        ],
+      };
+      newFaces.set(faceId, updatedFace);
+
+      return { faces: newFaces };
+    });
+
+    // Create a new face for the inner loop (the hole becomes a separate face)
+    const innerFace = state.addFace(innerLoopEdgeIds);
+
+    console.log(`Face ${faceId} split: added inner loop, created inner face ${innerFace?.id}`);
+
+    return innerFace;
   },
 
   // ============================================================================
