@@ -2069,39 +2069,50 @@ const CustomModelingPage: React.FC = () => {
     meshCounterRef.current++;
     const solidId = meshCounterRef.current;
 
-    const hw = width / 2;
-    const height = Math.abs(distance);
-    const hh = height / 2;
-    const hd = depth / 2;
+    const normalizedNormal = faceNormal.normalize();
+    const absX = Math.abs(normalizedNormal.x);
+    const absY = Math.abs(normalizedNormal.y);
+    const absZ = Math.abs(normalizedNormal.z);
+    const extrudeLength = Math.abs(distance);
+
+    // Determine extrusion axis and box dimensions in WORLD coordinates
+    // NO ROTATION on solid - all faces positioned directly in world space
+    let boxWidth: number, boxHeight: number, boxDepth: number;
+
+    if (absY > absX && absY > absZ) {
+      // Y-axis face - extrude in Y direction
+      boxWidth = width;      // X dimension
+      boxHeight = extrudeLength;  // Y dimension (extrusion)
+      boxDepth = depth;      // Z dimension
+    } else if (absX > absZ) {
+      // X-axis face - extrude in X direction
+      boxWidth = extrudeLength;   // X dimension (extrusion)
+      boxHeight = depth;     // Y dimension (original face's "depth" is vertical)
+      boxDepth = width;      // Z dimension (original face's "width")
+    } else {
+      // Z-axis face - extrude in Z direction
+      boxWidth = width;      // X dimension
+      boxHeight = depth;     // Y dimension (original face's "depth" is vertical)
+      boxDepth = extrudeLength;   // Z dimension (extrusion)
+    }
+
+    const hw = boxWidth / 2;
+    const hh = boxHeight / 2;
+    const hd = boxDepth / 2;
 
     // Calculate solid center position based on face normal direction
-    const normalizedNormal = faceNormal.normalize();
     const offset = normalizedNormal.scale(distance / 2);
 
-    // Create parent container (empty mesh as transform node)
+    // Create parent container (empty mesh as transform node) - NO ROTATION
     const solid = new Mesh(`Solid_${solidId}`, scene);
     solid.position = baseCenter.add(offset);
     solid.isPickable = false;
 
-    // Rotate solid to match extrusion direction (default is Y-up)
-    // For X-axis faces: rotate 90 degrees around Z
-    // For Z-axis faces: rotate 90 degrees around X
-    if (Math.abs(normalizedNormal.x) > 0.9) {
-      // Extruding in X direction
-      solid.rotation.z = normalizedNormal.x > 0 ? -Math.PI / 2 : Math.PI / 2;
-    } else if (Math.abs(normalizedNormal.z) > 0.9) {
-      // Extruding in Z direction
-      solid.rotation.x = normalizedNormal.z > 0 ? Math.PI / 2 : -Math.PI / 2;
-    } else if (normalizedNormal.y < -0.9) {
-      // Extruding downward (Y-)
-      solid.rotation.x = Math.PI;
-    }
-
     solid.metadata = {
       type: 'solid',
-      width: width,
-      height: height,
-      depth: depth,
+      width: boxWidth,
+      height: boxHeight,
+      depth: boxDepth,
     };
 
     // Helper to create individual face material
@@ -2113,60 +2124,62 @@ const CustomModelingPage: React.FC = () => {
       return mat;
     };
 
-    // Create 6 individual face meshes - each with its own material
-    // Top face (Y+)
-    const topFace = MeshBuilder.CreateGround(`Face_${solidId}_top`, { width, height: depth }, scene);
+    // Create 6 individual face meshes in LOCAL coordinates relative to solid center
+    // These are in WORLD-aligned coordinates (no rotation on solid)
+
+    // Top face (Y+) - horizontal face at top
+    const topFace = MeshBuilder.CreateGround(`Face_${solidId}_top`, { width: boxWidth, height: boxDepth }, scene);
     topFace.position = new Vector3(0, hh, 0);
     topFace.material = createFaceMat(`FaceMat_${solidId}_top`);
     topFace.isPickable = true;
     topFace.parent = solid;
-    topFace.metadata = { type: 'face', width, depth, parentSolid: solid, faceDir: 'top' };
+    topFace.metadata = { type: 'face', width: boxWidth, depth: boxDepth, parentSolid: solid, faceDir: 'top' };
 
-    // Bottom face (Y-)
-    const bottomFace = MeshBuilder.CreateGround(`Face_${solidId}_bottom`, { width, height: depth }, scene);
+    // Bottom face (Y-) - horizontal face at bottom
+    const bottomFace = MeshBuilder.CreateGround(`Face_${solidId}_bottom`, { width: boxWidth, height: boxDepth }, scene);
     bottomFace.position = new Vector3(0, -hh, 0);
     bottomFace.rotation.x = Math.PI;
     bottomFace.material = createFaceMat(`FaceMat_${solidId}_bottom`);
     bottomFace.isPickable = true;
     bottomFace.parent = solid;
-    bottomFace.metadata = { type: 'face', width, depth, parentSolid: solid, faceDir: 'bottom' };
+    bottomFace.metadata = { type: 'face', width: boxWidth, depth: boxDepth, parentSolid: solid, faceDir: 'bottom' };
 
-    // Front face (Z+)
-    const frontFace = MeshBuilder.CreatePlane(`Face_${solidId}_front`, { width, height }, scene);
+    // Front face (Z+) - vertical face
+    const frontFace = MeshBuilder.CreatePlane(`Face_${solidId}_front`, { width: boxWidth, height: boxHeight }, scene);
     frontFace.position = new Vector3(0, 0, hd);
     frontFace.material = createFaceMat(`FaceMat_${solidId}_front`);
     frontFace.isPickable = true;
     frontFace.parent = solid;
-    frontFace.metadata = { type: 'face', width, depth: height, parentSolid: solid, faceDir: 'front' };
+    frontFace.metadata = { type: 'face', width: boxWidth, depth: boxHeight, parentSolid: solid, faceDir: 'front' };
 
-    // Back face (Z-)
-    const backFace = MeshBuilder.CreatePlane(`Face_${solidId}_back`, { width, height }, scene);
+    // Back face (Z-) - vertical face
+    const backFace = MeshBuilder.CreatePlane(`Face_${solidId}_back`, { width: boxWidth, height: boxHeight }, scene);
     backFace.position = new Vector3(0, 0, -hd);
     backFace.rotation.y = Math.PI;
     backFace.material = createFaceMat(`FaceMat_${solidId}_back`);
     backFace.isPickable = true;
     backFace.parent = solid;
-    backFace.metadata = { type: 'face', width, depth: height, parentSolid: solid, faceDir: 'back' };
+    backFace.metadata = { type: 'face', width: boxWidth, depth: boxHeight, parentSolid: solid, faceDir: 'back' };
 
-    // Right face (X+)
-    const rightFace = MeshBuilder.CreatePlane(`Face_${solidId}_right`, { width: depth, height }, scene);
+    // Right face (X+) - vertical face
+    const rightFace = MeshBuilder.CreatePlane(`Face_${solidId}_right`, { width: boxDepth, height: boxHeight }, scene);
     rightFace.position = new Vector3(hw, 0, 0);
     rightFace.rotation.y = Math.PI / 2;
     rightFace.material = createFaceMat(`FaceMat_${solidId}_right`);
     rightFace.isPickable = true;
     rightFace.parent = solid;
-    rightFace.metadata = { type: 'face', width: depth, depth: height, parentSolid: solid, faceDir: 'right' };
+    rightFace.metadata = { type: 'face', width: boxDepth, depth: boxHeight, parentSolid: solid, faceDir: 'right' };
 
-    // Left face (X-)
-    const leftFace = MeshBuilder.CreatePlane(`Face_${solidId}_left`, { width: depth, height }, scene);
+    // Left face (X-) - vertical face
+    const leftFace = MeshBuilder.CreatePlane(`Face_${solidId}_left`, { width: boxDepth, height: boxHeight }, scene);
     leftFace.position = new Vector3(-hw, 0, 0);
     leftFace.rotation.y = -Math.PI / 2;
     leftFace.material = createFaceMat(`FaceMat_${solidId}_left`);
     leftFace.isPickable = true;
     leftFace.parent = solid;
-    leftFace.metadata = { type: 'face', width: depth, depth: height, parentSolid: solid, faceDir: 'left' };
+    leftFace.metadata = { type: 'face', width: boxDepth, depth: boxHeight, parentSolid: solid, faceDir: 'left' };
 
-    // 8 corners relative to solid center (for edge lines)
+    // 8 corners relative to solid center (for edge lines) - in WORLD-aligned local coords
     const corners = [
       new Vector3(-hw, -hh, -hd), // 0
       new Vector3(-hw, -hh, +hd), // 1
@@ -2202,10 +2215,10 @@ const CustomModelingPage: React.FC = () => {
       edge.metadata = { type: 'edge', parentSolid: solid };
     });
 
-    // Force computation of world matrix after setting position and rotation
+    // Force computation of world matrix after setting position
     solid.computeWorldMatrix(true);
 
-    // Add snap points for all 8 corners (world positions, accounting for rotation)
+    // Add snap points for all 8 corners (world positions)
     corners.forEach(corner => {
       const worldPos = Vector3.TransformCoordinates(corner, solid.getWorldMatrix());
       const exists = snapPointsRef.current.some(p => Vector3.Distance(p.position, worldPos) < 0.1);
@@ -2214,7 +2227,7 @@ const CustomModelingPage: React.FC = () => {
       }
     });
 
-    // Add snap points for all 12 edge midpoints (world positions, accounting for rotation)
+    // Add snap points for all 12 edge midpoints (world positions)
     edgeIndices.forEach(indices => {
       const start = corners[indices[0]];
       const end = corners[indices[1]];
