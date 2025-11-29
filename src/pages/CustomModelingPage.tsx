@@ -674,6 +674,7 @@ const CustomModelingPage: React.FC = () => {
 
     edge.color = lineColor;
     edge.isPickable = true;
+    edge.intersectionThreshold = 0.1; // Make selection easier
 
     // Store edge metadata for future operations
     edge.metadata = {
@@ -745,15 +746,16 @@ const CustomModelingPage: React.FC = () => {
       originalY: 0.01,
     };
 
-    // Create individual edge lines (SketchUp style - each edge separately selectable)
+    // Create individual edge lines parented to face (so they move together)
     const halfW = width / 2;
     const halfD = depth / 2;
-    const edgeY = 0.015; // Slightly above face to prevent z-fighting
+    const edgeY = 0.005; // Slightly above face to prevent z-fighting (local Y)
+    // Local coordinates relative to face center
     const corners = [
-      new Vector3(centerX - halfW, edgeY, centerZ - halfD), // 0: bottom-left
-      new Vector3(centerX + halfW, edgeY, centerZ - halfD), // 1: bottom-right
-      new Vector3(centerX + halfW, edgeY, centerZ + halfD), // 2: top-right
-      new Vector3(centerX - halfW, edgeY, centerZ + halfD), // 3: top-left
+      new Vector3(-halfW, edgeY, -halfD), // 0: bottom-left
+      new Vector3(+halfW, edgeY, -halfD), // 1: bottom-right
+      new Vector3(+halfW, edgeY, +halfD), // 2: top-right
+      new Vector3(-halfW, edgeY, +halfD), // 3: top-left
     ];
 
     const edgeIds: string[] = [];
@@ -762,8 +764,9 @@ const CustomModelingPage: React.FC = () => {
       const edge = MeshBuilder.CreateLines(`Edge_${meshCounterRef.current}_${idx}`, {
         points: [corners[pair[0]], corners[pair[1]]],
       }, scene);
-      edge.color = new Color3(0, 0, 0);
-      edge.isPickable = true;
+      edge.color = new Color3(0.15, 0.15, 0.15);
+      edge.isPickable = false;
+      edge.parent = face; // Parent to face so edges move with it
       edge.metadata = { type: 'edge', parentFaceId: face.id };
       edgeIds.push(edge.id);
     });
@@ -886,24 +889,26 @@ const CustomModelingPage: React.FC = () => {
       originalY: 0.01,
     };
 
-    // Create edge line (circular outline - single selectable edge)
-    const edgeY = 0.015;
+    // Create edge line parented to disc (circular outline - moves with face)
+    const edgeY = 0.005; // Local Y relative to disc
     const segments = 48;
     const circlePoints: Vector3[] = [];
     for (let i = 0; i <= segments; i++) {
       const angle = (i / segments) * Math.PI * 2;
+      // Local coordinates relative to disc center
       circlePoints.push(new Vector3(
-        centerX + Math.cos(angle) * radius,
+        Math.cos(angle) * radius,
         edgeY,
-        centerZ + Math.sin(angle) * radius
+        Math.sin(angle) * radius
       ));
     }
 
     const edgeLines = MeshBuilder.CreateLines(`CircleEdge_${meshCounterRef.current}`, {
       points: circlePoints,
     }, scene);
-    edgeLines.color = new Color3(0, 0, 0);
-    edgeLines.isPickable = true;
+    edgeLines.color = new Color3(0.15, 0.15, 0.15);
+    edgeLines.isPickable = false;
+    edgeLines.parent = disc; // Parent to disc so edge moves with it
     edgeLines.metadata = { type: 'edge', parentFaceId: disc.id };
 
     // Store edge reference in face metadata
@@ -1110,15 +1115,18 @@ const CustomModelingPage: React.FC = () => {
       edgeIds: [] as string[],
     };
 
-    // Create individual edge lines (each edge separately selectable)
-    const edgeY = 0.015;
+    // Create individual edge lines parented to polygon (so they move together)
+    const edgeY = 0.005; // Local Y offset above face
     const vertices: Vector3[] = [];
     for (let i = 0; i < sides; i++) {
+      // Local vertices relative to polygon center (include rotation.z angle)
       const vertexAngle = angle + (i / sides) * Math.PI * 2;
+      // Since polygon is rotated x=PI/2, local XY -> world XZ
+      // We create in XZ local space and let parenting handle the rest
       vertices.push(new Vector3(
-        centerX + Math.cos(vertexAngle) * radius,
+        Math.cos(vertexAngle) * radius,
         edgeY,
-        centerZ + Math.sin(vertexAngle) * radius
+        Math.sin(vertexAngle) * radius
       ));
     }
 
@@ -1128,8 +1136,9 @@ const CustomModelingPage: React.FC = () => {
       const edge = MeshBuilder.CreateLines(`PolygonEdge_${meshCounterRef.current}_${i}`, {
         points: [vertices[i], vertices[nextIdx]],
       }, scene);
-      edge.color = new Color3(0, 0, 0);
-      edge.isPickable = true;
+      edge.color = new Color3(0.15, 0.15, 0.15);
+      edge.isPickable = false;
+      edge.parent = polygon; // Parent to polygon so edges move with it
       edge.metadata = { type: 'edge', parentFaceId: polygon.id };
       edgeIds.push(edge.id);
     }
@@ -1231,52 +1240,93 @@ const CustomModelingPage: React.FC = () => {
 
   // Push/Pull functionality - SketchUp-style face extrusion
   // Extrudes a face along its normal direction by the specified distance
+  // Creates a single solid box with parented edge lines so they all move together
   const applyPushPull = useCallback((face: Mesh, distance: number, faceNormal: Vector3): Mesh | null => {
     if (!face.metadata || face.metadata.type !== 'face') return null;
-    if (Math.abs(distance) < 0.001) return null;  // Ignore tiny extrusions
+    if (Math.abs(distance) < 0.001) return null;
 
     const scene = face.getScene();
     const { width, depth } = face.metadata;
-
-    // Calculate extrusion direction (positive = extrude out, negative = would cut in)
-    const extrudeDir = faceNormal.scale(distance);
+    const baseCenter = face.position.clone();
 
     meshCounterRef.current++;
+    const solidId = meshCounterRef.current;
 
-    // Create the 3D solid (box for rectangular faces)
-    const solid = MeshBuilder.CreateBox(`Solid_${meshCounterRef.current}`, {
-      width,
+    // Create a single solid box
+    const solid = MeshBuilder.CreateBox(`Solid_${solidId}`, {
+      width: width,
       height: Math.abs(distance),
-      depth,
+      depth: depth
     }, scene);
 
-    // Position: face center + half the extrusion in normal direction
-    // For upward extrusion from ground face (normal = 0,1,0):
-    // Position Y = face.position.y + distance/2
+    // Position the box: center is at half the extrusion height
+    const extrudeDir = faceNormal.scale(distance);
     solid.position = new Vector3(
-      face.position.x + extrudeDir.x / 2,
-      face.position.y + Math.abs(distance) / 2,
-      face.position.z + extrudeDir.z / 2
+      baseCenter.x + extrudeDir.x / 2,
+      baseCenter.y + extrudeDir.y / 2,
+      baseCenter.z + extrudeDir.z / 2
     );
 
-    // Material
-    const solidMat = new StandardMaterial(`solidMat_${meshCounterRef.current}`, scene);
-    solidMat.diffuseColor = Color3.FromHexString(selectedColor);
-    solidMat.specularColor = new Color3(0.2, 0.2, 0.2);
-    solid.material = solidMat;
+    // Apply material
+    const mat = new StandardMaterial(`Solid_${solidId}_Mat`, scene);
+    mat.diffuseColor = Color3.FromHexString(selectedColor);
+    mat.specularColor = new Color3(0.2, 0.2, 0.2);
+    solid.material = mat;
 
-    // Mark as solid with metadata
     solid.metadata = {
       type: 'solid',
-      originalFacePosition: face.position.clone(),
-      extrudeDistance: distance,
-      extrudeNormal: faceNormal.clone(),
+      width: width,
+      height: Math.abs(distance),
+      depth: depth,
+      edgeIds: []
     };
 
-    // Dispose the original face
+    // Create edge lines parented to solid (so they move together)
+    const hw = width / 2;
+    const hh = Math.abs(distance) / 2;
+    const hd = depth / 2;
+
+    // 8 corners relative to solid center (0,0,0)
+    const corners = [
+      new Vector3(-hw, -hh, -hd), // 0: bottom-front-left
+      new Vector3(-hw, -hh, +hd), // 1: bottom-back-left
+      new Vector3(+hw, -hh, +hd), // 2: bottom-back-right
+      new Vector3(+hw, -hh, -hd), // 3: bottom-front-right
+      new Vector3(-hw, +hh, -hd), // 4: top-front-left
+      new Vector3(-hw, +hh, +hd), // 5: top-back-left
+      new Vector3(+hw, +hh, +hd), // 6: top-back-right
+      new Vector3(+hw, +hh, -hd), // 7: top-front-right
+    ];
+
+    // 12 edges
+    const edgeIndices = [
+      [0, 1], [1, 2], [2, 3], [3, 0], // bottom ring
+      [4, 5], [5, 6], [6, 7], [7, 4], // top ring
+      [0, 4], [1, 5], [2, 6], [3, 7], // verticals
+    ];
+
+    edgeIndices.forEach((indices, i) => {
+      const edge = MeshBuilder.CreateLines(`Edge_${solidId}_${i}`, {
+        points: [corners[indices[0]], corners[indices[1]]],
+        updatable: false
+      }, scene);
+      edge.color = new Color3(0.15, 0.15, 0.15);
+      edge.isPickable = false;
+      edge.parent = solid; // Parent to solid so edges move with it
+      edge.metadata = { type: 'edge', parentSolidId: solid.id };
+      solid.metadata.edgeIds.push(edge.id);
+    });
+
+    // Dispose the original face and its edges
+    if (face.metadata?.edgeIds) {
+      face.metadata.edgeIds.forEach((edgeId: number) => {
+        const edgeMesh = scene.getMeshById(edgeId);
+        if (edgeMesh) edgeMesh.dispose();
+      });
+    }
     face.dispose();
 
-    // Store last extrusion distance for double-click repeat
+    // Store last extrusion distance
     pushPullStateRef.current.lastExtrudeDistance = distance;
 
     return solid;
@@ -1698,101 +1748,85 @@ const CustomModelingPage: React.FC = () => {
       m.isPickable &&
       !m.name.includes('ground') &&
       !m.name.includes('Axis') &&
-      !m.name.includes('preview') &&
-      !m.name.includes('snapIndicator')
-    ) as Mesh[];
-
-    // Find meshes in selection box
-    const meshesInBox = selectableMeshes.filter(mesh =>
-      isMeshInSelectionBox(mesh, x1, y1, x2, y2, isWindowSelect)
+      !m.name.includes('preview')
     );
 
-    // Apply selection based on mode
-    if (mode === 'replace') {
-      clearSelection();
-      meshesInBox.forEach(m => addToSelection(m));
-    } else if (mode === 'add') {
-      meshesInBox.forEach(m => addToSelection(m));
-    } else if (mode === 'toggle') {
-      meshesInBox.forEach(m => toggleSelection(m));
-    } else if (mode === 'subtract') {
-      meshesInBox.forEach(m => removeFromSelection(m));
+    // Find meshes within the selection box
+    const boxLeft = Math.min(x1, x2);
+    const boxRight = Math.max(x1, x2);
+    const boxTop = Math.min(y1, y2);
+    const boxBottom = Math.max(y1, y2);
+
+    const meshesInBox = selectableMeshes.filter(mesh =>
+      isMeshInSelectionBox(mesh as Mesh, boxLeft, boxTop, boxRight, boxBottom, isWindowSelect)
+    );
+
+    // Get IDs of selected meshes
+    const selectedIds = meshesInBox.map(m => m.id);
+
+    // Apply selection using SelectionManager
+    const manager = selectionManagerRef.current;
+    if (manager && selectedIds.length > 0) {
+      manager.selectIds(selectedIds, mode);
+    } else if (manager && mode === 'replace') {
+      manager.clear();
     }
-
-    // Update primary selection (first selected)
-    const selState = selectionStateRef.current;
-    if (selState.selectedIds.size > 0) {
-      const firstId = Array.from(selState.selectedIds)[0];
-      const firstMesh = scene.getMeshById(firstId) as Mesh;
-      if (firstMesh) {
-        setSelectedMesh(firstMesh);
-        if (gizmoManagerRef.current) {
-          gizmoManagerRef.current.attachToMesh(firstMesh);
-        }
-      }
-    }
-  }, [clearSelection, addToSelection, toggleSelection, removeFromSelection, isMeshInSelectionBox]);
-
-  // Create/update visual selection box
-  const updateSelectionBox = useCallback((x1: number, y1: number, x2: number, y2: number, visible: boolean) => {
-    const selState = selectionStateRef.current;
-
-    if (!visible) {
-      if (selState.selectionBoxElement) {
-        selState.selectionBoxElement.style.display = 'none';
-      }
-      return;
-    }
-
-    // Create selection box element if not exists
-    if (!selState.selectionBoxElement) {
-      const box = document.createElement('div');
-      box.style.position = 'fixed';
-      box.style.pointerEvents = 'none';
-      box.style.zIndex = '9999';
-      document.body.appendChild(box);
-      selState.selectionBoxElement = box;
-    }
-
-    const box = selState.selectionBoxElement;
-    const isWindowSelect = x2 > x1;
-
-    // Different styles for window vs crossing
-    if (isWindowSelect) {
-      // Window select: solid blue border, transparent fill
-      box.style.border = '1px solid #3b82f6';
-      box.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
-    } else {
-      // Crossing select: dashed green border, transparent fill
-      box.style.border = '1px dashed #22c55e';
-      box.style.backgroundColor = 'rgba(34, 197, 94, 0.1)';
-    }
-
-    // Position box
-    box.style.left = `${Math.min(x1, x2)}px`;
-    box.style.top = `${Math.min(y1, y2)}px`;
-    box.style.width = `${Math.abs(x2 - x1)}px`;
-    box.style.height = `${Math.abs(y2 - y1)}px`;
-    box.style.display = 'block';
-  }, []);
+  }, [isMeshInSelectionBox]);
 
   // Select all meshes
   const selectAll = useCallback(() => {
     const scene = sceneRef.current;
-    if (!scene) return;
+    const manager = selectionManagerRef.current;
+    if (!scene || !manager) return;
 
-    clearSelection();
+    const allIds: string[] = [];
     scene.meshes.forEach(mesh => {
       if (mesh.isPickable &&
         !mesh.name.includes('ground') &&
         !mesh.name.includes('Axis') &&
         !mesh.name.includes('preview')) {
-        addToSelection(mesh as Mesh);
+        allIds.push(mesh.id);
       }
     });
-  }, [clearSelection, addToSelection]);
+    manager.selectIds(allIds, 'replace');
+  }, []);
 
   // ==================== END SELECTION SYSTEM ====================
+
+  // Update visual selection box (moved outside useEffect for proper hook usage)
+  const updateSelectionBox = useCallback((startX: number, startY: number, currentX: number, currentY: number, visible: boolean) => {
+    const boxState = selectionBoxRef.current;
+
+    if (!visible) {
+      if (boxState.element) {
+        boxState.element.remove();
+        boxState.element = null;
+      }
+      return;
+    }
+
+    if (!boxState.element) {
+      const box = document.createElement('div');
+      box.className = styles.selectionBox;
+      canvasRef.current?.parentElement?.appendChild(box);
+      boxState.element = box;
+    }
+
+    const width = Math.abs(currentX - startX);
+    const height = Math.abs(currentY - startY);
+    const left = Math.min(currentX, startX);
+    const top = Math.min(currentY, startY);
+
+    if (boxState.element) {
+      boxState.element.style.left = `${left}px`;
+      boxState.element.style.top = `${top}px`;
+      boxState.element.style.width = `${width}px`;
+      boxState.element.style.height = `${height}px`;
+
+      const isCrossing = currentX < startX;
+      boxState.element.className = `${styles.selectionBox} ${isCrossing ? styles.selectionBoxCrossing : styles.selectionBoxWindow}`;
+    }
+  }, []);
 
   // Initialize Babylon.js scene
   useEffect(() => {
@@ -2067,94 +2101,6 @@ const CustomModelingPage: React.FC = () => {
       }
     }
 
-    // Update visual selection box
-    const updateSelectionBox = useCallback((startX: number, startY: number, currentX: number, currentY: number, visible: boolean) => {
-      const boxState = selectionBoxRef.current;
-
-      if (!visible) {
-        if (boxState.element) {
-          boxState.element.remove();
-          boxState.element = null;
-        }
-        return;
-      }
-
-      if (!boxState.element) {
-        const box = document.createElement('div');
-        box.className = styles.selectionBox;
-        canvasRef.current?.parentElement?.appendChild(box);
-        boxState.element = box;
-      }
-
-      const width = Math.abs(currentX - startX);
-      const height = Math.abs(currentY - startY);
-      const left = Math.min(currentX, startX);
-      const top = Math.min(currentY, startY);
-
-      if (boxState.element) {
-        boxState.element.style.left = `${left}px`;
-        boxState.element.style.top = `${top}px`;
-        boxState.element.style.width = `${width}px`;
-        boxState.element.style.height = `${height}px`;
-
-        const isCrossing = currentX < startX;
-        boxState.element.className = `${styles.selectionBox} ${isCrossing ? styles.selectionBoxCrossing : styles.selectionBoxWindow}`;
-      }
-    }, []);
-
-    // Perform box selection logic
-    const performBoxSelection = useCallback((startX: number, startY: number, endX: number, endY: number, mode: 'replace' | 'add' | 'subtract' | 'toggle') => {
-      const scene = sceneRef.current;
-      const manager = selectionManagerRef.current;
-      if (!scene || !manager) return;
-
-      const isCrossing = endX < startX; // Right-to-Left
-
-      const minX = Math.min(startX, endX);
-      const maxX = Math.max(startX, endX);
-      const minY = Math.min(startY, endY);
-      const maxY = Math.max(startY, endY);
-
-      const pickedIds: string[] = [];
-
-      scene.meshes.forEach(mesh => {
-        if (!mesh.isPickable || !mesh.isVisible || !mesh.metadata) return;
-        if (mesh.metadata.type !== 'face' && mesh.metadata.type !== 'edge') return;
-
-        const boundingInfo = mesh.getBoundingInfo();
-        const vectors = boundingInfo.boundingBox.vectorsWorld;
-
-        let allInside = true;
-        let anyInside = false;
-
-        for (const v of vectors) {
-          const screenPos = Vector3.Project(
-            v,
-            Matrix.Identity(),
-            scene.getTransformMatrix(),
-            cameraRef.current!.viewport.toGlobal(engineRef.current!.getRenderWidth(), engineRef.current!.getRenderHeight())
-          );
-
-          const x = screenPos.x;
-          const y = screenPos.y;
-
-          if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
-            anyInside = true;
-          } else {
-            allInside = false;
-          }
-        }
-
-        if (isCrossing) {
-          if (anyInside) pickedIds.push(mesh.id);
-        } else {
-          if (allInside) pickedIds.push(mesh.id);
-        }
-      });
-
-      manager.selectIds(pickedIds, mode);
-    }, []);
-
     const handlePointerDown = (evt: PointerEvent) => {
       // Close context menu on any click
       if (selectionState.contextMenu) {
@@ -2394,65 +2340,6 @@ const CustomModelingPage: React.FC = () => {
           ppState.axisLocked = false;
           ppState.lockedDistance = 0;
           ppState.lastClickTime = now;
-        }
-      } else if (activeTool === 'select') {
-        const selState = selectionStateRef.current;
-        const now = Date.now();
-
-        // Pick mesh under cursor
-        const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
-          mesh.isPickable && mesh.name !== 'ground' && mesh.name !== 'groundPicker' &&
-          !mesh.name.includes('Axis') && !mesh.name.includes('preview')
-        );
-
-        if (pickResult?.hit && pickResult.pickedMesh) {
-          const mesh = pickResult.pickedMesh as Mesh;
-
-          // Check for double/triple click (same mesh within 300ms)
-          const isSameMesh = selState.lastClickId === mesh.id;
-          const timeDiff = now - selState.lastClickTime;
-
-          if (isSameMesh && timeDiff < 300) {
-            selState.clickCount++;
-            if (selState.clickCount === 2) {
-              handleDoubleClick(mesh);
-            } else if (selState.clickCount >= 3) {
-              handleTripleClick(mesh);
-              selState.clickCount = 0;
-            }
-          } else {
-            selState.clickCount = 1;
-
-            // Modifier keys
-            const isShift = evt.shiftKey;
-            const isCtrl = evt.ctrlKey || evt.metaKey;
-
-            if (isShift && isCtrl) {
-              removeFromSelection(mesh);
-            } else if (isShift) {
-              toggleSelection(mesh);
-            } else if (isCtrl) {
-              addToSelection(mesh);
-              setSelectedMesh(mesh);
-              if (gizmoManagerRef.current) {
-                gizmoManagerRef.current.attachToMesh(mesh);
-              }
-            } else {
-              selectSingle(mesh);
-            }
-          }
-
-          selState.lastClickId = mesh.id;
-          selState.lastClickTime = now;
-        } else {
-          // Empty space - start box selection
-          selState.isDragging = true;
-          selState.dragStartX = evt.clientX;
-          selState.dragStartY = evt.clientY;
-          selState.dragCurrentX = evt.clientX;
-          selState.dragCurrentY = evt.clientY;
-          selState.lastClickId = null;
-          selState.clickCount = 0;
         }
       } else if (activeTool === 'eraser') {
         const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
@@ -2773,6 +2660,206 @@ const CustomModelingPage: React.FC = () => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
       const key = e.key.toLowerCase();
+      const drawState = drawingStateRef.current;
+      const isDrawingTool = ['line', 'rectangle', 'circle', 'polygon'].includes(activeTool);
+
+      // SketchUp-style dimension input: type numbers while drawing
+      if (isDrawingTool && drawState.isDrawing && drawState.startPoint) {
+        // Numbers, comma, period, minus for dimension input
+        if (/^[0-9]$/.test(e.key) || e.key === ',' || e.key === '.' || e.key === '-') {
+          e.preventDefault();
+          setMeasurementInput(prev => prev + e.key);
+          return;
+        }
+        // Backspace to delete last character from input
+        if (e.key === 'Backspace' && measurementInput.length > 0) {
+          e.preventDefault();
+          setMeasurementInput(prev => prev.slice(0, -1));
+          return;
+        }
+        // Enter to apply dimensions and finalize
+        if (e.key === 'Enter' && measurementInput.length > 0) {
+          e.preventDefault();
+          const scene = sceneRef.current;
+          if (!scene || !drawState.startPoint) return;
+
+          const start = drawState.startPoint;
+
+          if (activeTool === 'line') {
+            // Line: single number = length in mm
+            const lengthMm = parseFloat(measurementInput);
+            if (!isNaN(lengthMm) && lengthMm > 0) {
+              const lengthUnits = lengthMm * MM_TO_UNIT;
+              let endPoint: Vector3;
+
+              // Use current direction if we have a current point
+              if (drawState.currentPoint) {
+                const dir = drawState.currentPoint.subtract(start);
+                const currentLen = dir.length();
+                if (currentLen > 0.01) {
+                  endPoint = start.add(dir.normalize().scale(lengthUnits));
+                } else {
+                  // Default to X axis if no direction
+                  endPoint = new Vector3(start.x + lengthUnits, start.y, start.z);
+                }
+              } else {
+                // Default to X axis
+                endPoint = new Vector3(start.x + lengthUnits, start.y, start.z);
+              }
+
+              // Finalize the line
+              if (drawState.previewMesh) {
+                drawState.previewMesh.dispose();
+                drawState.previewMesh = null;
+              }
+              finalizeLine(scene, start, endPoint);
+
+              // Continue drawing from endpoint (SketchUp style)
+              lineInferenceRef.current.lastEndpoint = endPoint;
+              drawState.startPoint = endPoint;
+              drawState.currentPoint = null;
+              drawState.isDrawing = true;
+            }
+          } else if (activeTool === 'rectangle') {
+            // Rectangle: "width,height" or "size" for square
+            const parts = measurementInput.split(',');
+            const widthMm = parseFloat(parts[0]);
+            const heightMm = parts.length > 1 ? parseFloat(parts[1]) : widthMm;
+
+            if (!isNaN(widthMm) && widthMm > 0) {
+              const widthUnits = widthMm * MM_TO_UNIT;
+              const heightUnits = heightMm * MM_TO_UNIT;
+              const mods = shapeModifiersRef.current;
+
+              let endX: number, endZ: number;
+              if (mods.drawFromCenter) {
+                endX = start.x + widthUnits / 2;
+                endZ = start.z + heightUnits / 2;
+              } else {
+                endX = start.x + widthUnits;
+                endZ = start.z + heightUnits;
+              }
+
+              const endPoint = new Vector3(endX, 0, endZ);
+
+              // Finalize the rectangle
+              if (drawState.previewMesh) {
+                drawState.previewMesh.dispose();
+                drawState.previewMesh = null;
+              }
+              finalizeRectangle(scene, start, endPoint);
+
+              // Reset drawing state
+              drawState.isDrawing = false;
+              drawState.startPoint = null;
+              drawState.currentPoint = null;
+              setIsDrawing(false);
+            }
+          } else if (activeTool === 'circle') {
+            // Circle: single number = radius in mm
+            const radiusMm = parseFloat(measurementInput);
+            if (!isNaN(radiusMm) && radiusMm > 0) {
+              const radiusUnits = radiusMm * MM_TO_UNIT;
+              const endPoint = new Vector3(start.x + radiusUnits, 0, start.z);
+
+              if (drawState.previewMesh) {
+                drawState.previewMesh.dispose();
+                drawState.previewMesh = null;
+              }
+              finalizeCircle(scene, start, endPoint);
+
+              drawState.isDrawing = false;
+              drawState.startPoint = null;
+              drawState.currentPoint = null;
+              setIsDrawing(false);
+            }
+          } else if (activeTool === 'polygon') {
+            // Polygon: "radius" or "sides,radius"
+            const parts = measurementInput.split(',');
+            let sides = currentMeasurement.sides || 6;
+            let radiusMm: number;
+
+            if (parts.length > 1) {
+              sides = parseInt(parts[0]) || 6;
+              radiusMm = parseFloat(parts[1]);
+            } else {
+              radiusMm = parseFloat(parts[0]);
+            }
+
+            if (!isNaN(radiusMm) && radiusMm > 0) {
+              const radiusUnits = radiusMm * MM_TO_UNIT;
+              const endPoint = new Vector3(start.x + radiusUnits, 0, start.z);
+
+              if (drawState.previewMesh) {
+                drawState.previewMesh.dispose();
+                drawState.previewMesh = null;
+              }
+              finalizePolygon(scene, start, endPoint, sides);
+
+              drawState.isDrawing = false;
+              drawState.startPoint = null;
+              drawState.currentPoint = null;
+              setIsDrawing(false);
+            }
+          }
+
+          setMeasurementInput('');
+          return;
+        }
+      }
+
+      // Push/Pull tool: dimension input while extruding
+      if (activeTool === 'pushpull') {
+        const ppState = pushPullStateRef.current;
+        if (ppState.isExtruding && ppState.baseFace && ppState.baseFaceNormal) {
+          // Numbers, period, minus for dimension input
+          if (/^[0-9]$/.test(e.key) || e.key === '.' || e.key === '-') {
+            e.preventDefault();
+            setMeasurementInput(prev => prev + e.key);
+            return;
+          }
+          // Backspace to delete last character
+          if (e.key === 'Backspace' && measurementInput.length > 0) {
+            e.preventDefault();
+            setMeasurementInput(prev => prev.slice(0, -1));
+            return;
+          }
+          // Enter to apply extrusion distance
+          if (e.key === 'Enter' && measurementInput.length > 0) {
+            e.preventDefault();
+            const scene = sceneRef.current;
+            if (!scene) return;
+
+            const distanceMm = parseFloat(measurementInput);
+            if (!isNaN(distanceMm)) {
+              const distanceUnits = distanceMm * MM_TO_UNIT;  // Convert mm to units
+
+              // Cleanup preview mesh
+              if (ppState.previewMesh) {
+                ppState.previewMesh.dispose();
+                ppState.previewMesh = null;
+              }
+
+              // Apply the extrusion
+              applyPushPull(ppState.baseFace, distanceUnits, ppState.baseFaceNormal);
+
+              // Store last distance for double-click repeat
+              ppState.lastExtrudeDistance = distanceUnits;
+
+              // Reset push/pull state
+              ppState.isExtruding = false;
+              ppState.baseFace = null;
+              ppState.baseFaceNormal = null;
+              ppState.baseFaceCenter = null;
+              ppState.baseClickPoint = null;
+              ppState.axisLocked = false;
+              ppState.lockedDistance = 0;
+            }
+            setMeasurementInput('');
+            return;
+          }
+        }
+      }
 
       // Push/Pull tool: Shift locks the axis direction
       if (activeTool === 'pushpull' && e.key === 'Shift') {
@@ -2978,6 +3065,7 @@ const CustomModelingPage: React.FC = () => {
           lineInferenceRef.current = resetLineInf;
           setLineInferenceUI(resetLineInf);
           setLineMeasurement(0);
+          setMeasurementInput('');  // Clear dimension input
           deselectMesh();
           clearSelection();  // Clear multi-selection
           setActiveTool('select');
@@ -3009,7 +3097,7 @@ const CustomModelingPage: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [selectedMesh, zoomExtents, activeTool, selectAll, clearSelection]);
+  }, [selectedMesh, zoomExtents, activeTool, selectAll, clearSelection, measurementInput, finalizeLine, finalizeRectangle, finalizeCircle, finalizePolygon, currentMeasurement.sides, applyPushPull]);
 
   const selectMesh = (mesh: Mesh) => {
     if (highlightLayerRef.current && selectedMesh) {
