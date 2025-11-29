@@ -6,7 +6,7 @@ import { FaTape } from 'react-icons/fa';
 import { IoHandRightOutline } from 'react-icons/io5';
 import { GrRotateRight } from 'react-icons/gr';
 import { BsEraser, BsPaintBucket } from 'react-icons/bs';
-import { ColorWheel } from './components/ColorWheel';
+import { IroColorPicker } from './components/IroColorPicker';
 import styles from './CustomModelingPage.module.css';
 import {
   Engine,
@@ -2183,13 +2183,28 @@ const CustomModelingPage: React.FC = () => {
       // Handle Select Tool (Box Selection & Click)
       if (activeTool === 'select') {
         const boxState = selectionBoxRef.current;
+        const now = Date.now();
 
         // Handle Click Selection
         if (pickInfo.hit && pickInfo.pickedMesh) {
           const mesh = pickInfo.pickedMesh as Mesh;
           // Skip ground/helper meshes
           if (mesh.name !== 'ground' && mesh.name !== 'groundPicker' && !mesh.name.startsWith('snap')) {
-            selectMesh(mesh);
+            // Double-click: Select all children (faces + edges of solid)
+            const isDoubleClick = (now - (boxState as any).lastClickTime) < 300;
+            if (isDoubleClick && mesh.metadata?.type === 'solid') {
+              // Select solid and highlight all its edges
+              selectMesh(mesh);
+              // Also highlight all child edges
+              mesh.getChildMeshes().forEach((child: any) => {
+                if (child.metadata?.type === 'edge') {
+                  child.color = new Color3(0.2, 0.4, 1.0);
+                }
+              });
+            } else {
+              selectMesh(mesh);
+            }
+            (boxState as any).lastClickTime = now;
           }
         } else {
           // Clicked empty space
@@ -2265,6 +2280,13 @@ const CustomModelingPage: React.FC = () => {
         // Use active snap point if available, otherwise get ground point
         const rawPoint = getGroundPoint(scene, scene.pointerX, scene.pointerY);
         const point = activeSnapPointRef.current ? activeSnapPointRef.current.clone() : rawPoint;
+        // DEBUG: Log clicked point values
+        console.log('[CLICK DEBUG]', {
+          hasActiveSnap: !!activeSnapPointRef.current,
+          activeSnap: activeSnapPointRef.current ? { x: activeSnapPointRef.current.x, y: activeSnapPointRef.current.y, z: activeSnapPointRef.current.z } : null,
+          rawPoint: rawPoint ? { x: rawPoint.x, y: rawPoint.y, z: rawPoint.z } : null,
+          point: point ? { x: point.x, y: point.y, z: point.z } : null,
+        });
         if (point) {
           if (!state.isDrawing) {
             // First click: Start drawing
@@ -2443,6 +2465,10 @@ const CustomModelingPage: React.FC = () => {
           );
           const nearestSnap = findNearestSnapPoint(rawPoint);
           if (nearestSnap) {
+            // DEBUG: Log snap point values
+            if (nearestSnap.y !== 0) {
+              console.warn('[SNAP BUG] Snap point has non-zero Y:', nearestSnap.x, nearestSnap.y, nearestSnap.z);
+            }
             activeSnapPointRef.current = nearestSnap.clone();  // Save for click handling
             showSnapIndicator(nearestSnap);
           } else {
@@ -3151,14 +3177,26 @@ const CustomModelingPage: React.FC = () => {
   }, [selectedMesh, zoomExtents, activeTool, selectAll, clearSelection, finalizeLine, finalizeRectangle, finalizeCircle, finalizePolygon, currentMeasurement.sides, applyPushPull]);
 
   const selectMesh = (mesh: Mesh) => {
-    if (highlightLayerRef.current && selectedMesh) {
-      highlightLayerRef.current.removeMesh(selectedMesh);
+    // Remove selection from previous mesh
+    if (selectedMesh) {
+      selectedMesh.disableEdgesRendering();
+      // Restore edge line color if it was an edge
+      if (selectedMesh.metadata?.type === 'edge') {
+        (selectedMesh as any).color = new Color3(0.15, 0.15, 0.15);
+      }
     }
 
     setSelectedMesh(mesh);
 
-    if (highlightLayerRef.current) {
-      highlightLayerRef.current.addMesh(mesh, Color3.FromHexString('#6366f1'));
+    // Show selection with blue edges (not emissive glow)
+    if (mesh.metadata?.type === 'edge') {
+      // For edge lines, change color to blue
+      (mesh as any).color = new Color3(0.2, 0.4, 1.0);
+    } else {
+      // For faces/solids, show edge rendering
+      mesh.enableEdgesRendering();
+      mesh.edgesWidth = 3.0;
+      mesh.edgesColor = new Color4(0.2, 0.4, 1.0, 1.0);
     }
 
     if (gizmoManagerRef.current) {
@@ -3172,7 +3210,6 @@ const CustomModelingPage: React.FC = () => {
       mesh.refreshBoundingInfo();
       const boundingInfo = mesh.getBoundingInfo();
       const size = boundingInfo.boundingBox.extendSizeWorld;
-      // Width (X) and Depth (Z) in mm
       const widthMm = Math.round(size.x * 2 * UNIT_TO_MM);
       const heightMm = Math.round(size.z * 2 * UNIT_TO_MM);
       setCurrentMeasurement({ width: widthMm, height: heightMm });
@@ -3180,8 +3217,20 @@ const CustomModelingPage: React.FC = () => {
   };
 
   const deselectMesh = () => {
-    if (highlightLayerRef.current && selectedMesh) {
-      highlightLayerRef.current.removeMesh(selectedMesh);
+    if (selectedMesh) {
+      selectedMesh.disableEdgesRendering();
+      // Restore edge line color if it was an edge
+      if (selectedMesh.metadata?.type === 'edge') {
+        (selectedMesh as any).color = new Color3(0.15, 0.15, 0.15);
+      }
+      // Restore child edge colors if it was a solid
+      if (selectedMesh.metadata?.type === 'solid') {
+        selectedMesh.getChildMeshes().forEach((child: any) => {
+          if (child.metadata?.type === 'edge') {
+            child.color = new Color3(0.15, 0.15, 0.15);
+          }
+        });
+      }
     }
     setSelectedMesh(null);
     setMeshProperties(null);
@@ -3622,24 +3671,26 @@ const CustomModelingPage: React.FC = () => {
                   <span className={styles.sectionTitle}>Material Editor</span>
                 </div>
 
-                <ColorWheel
-                  color={selectedColor}
-                  onChange={(newColor) => {
-                    setSelectedColor(newColor);
-                    // If paint tool is active and a mesh is selected, apply immediately
-                    if (activeTool === 'paint' && selectedMesh && sceneRef.current) {
-                      const material = selectedMesh.material as StandardMaterial;
-                      if (material && material.diffuseColor) {
-                        material.diffuseColor = Color3.FromHexString(newColor);
-                      } else {
-                        const newMat = new StandardMaterial(`paintMat_${Date.now()}`, sceneRef.current);
-                        newMat.diffuseColor = Color3.FromHexString(newColor);
-                        newMat.specularColor = new Color3(0.2, 0.2, 0.2);
-                        selectedMesh.material = newMat;
+                <div className="custom-color-picker">
+                  <HexColorPicker
+                    color={selectedColor}
+                    onChange={(newColor) => {
+                      setSelectedColor(newColor);
+                      // If paint tool is active and a mesh is selected, apply immediately
+                      if (activeTool === 'paint' && selectedMesh && sceneRef.current) {
+                        const material = selectedMesh.material as StandardMaterial;
+                        if (material && material.diffuseColor) {
+                          material.diffuseColor = Color3.FromHexString(newColor);
+                        } else {
+                          const newMat = new StandardMaterial(`paintMat_${Date.now()}`, sceneRef.current);
+                          newMat.diffuseColor = Color3.FromHexString(newColor);
+                          newMat.specularColor = new Color3(0.2, 0.2, 0.2);
+                          selectedMesh.material = newMat;
+                        }
                       }
-                    }
-                  }}
-                />
+                    }}
+                  />
+                </div>
 
                 <div className={styles.sectionHeader} style={{ marginTop: '24px' }}>
                   <span className={styles.sectionTitle}>Quick Palette</span>
