@@ -23,6 +23,7 @@ import {
   HighlightLayer,
   LinesMesh,
 } from '@babylonjs/core';
+import { AdvancedDynamicTexture, Ellipse } from '@babylonjs/gui';
 
 type ToolType = 'select' | 'eraser' | 'line' | 'arc' | 'rectangle' | 'circle' | 'polygon' | 'pushpull' | 'rotate' | 'move' | 'scale' | 'offset' | 'tape' | 'text' | 'paint' | 'orbit' | 'pan' | 'zoom' | 'zoomExtents' | 'makeComponent' | 'freehand' | 'rotatedRect' | 'arc2pt' | 'arc3pt' | 'pie' | 'followMe' | 'outerShell' | 'dimension' | 'protractor' | 'text3d' | 'axes' | 'section' | 'solidTools' | 'zoomWindow' | 'zoomPrevious' | 'lookAround' | 'walk' | 'tag' | 'positionCamera' | 'flip';
 
@@ -65,6 +66,10 @@ const CustomModelingPage: React.FC = () => {
   const originMarkerRef = useRef<Mesh | null>(null);
   const snapIndicatorRef = useRef<Mesh | null>(null);
   const snapPointsRef = useRef<Vector3[]>([]);  // Store snap point positions (not meshes)
+
+  // HUD overlay refs for Drawing Cursor System
+  const hudTextureRef = useRef<AdvancedDynamicTexture | null>(null);
+  const pointerCircleRef = useRef<Ellipse | null>(null);
 
   // Pan state for custom pan tool handling
   const panStateRef = useRef<{
@@ -1160,6 +1165,21 @@ const CustomModelingPage: React.FC = () => {
     snapIndicator.isVisible = false; // Hidden by default
     snapIndicatorRef.current = snapIndicator;
 
+    // HUD overlay for Drawing Cursor System
+    const hudTexture = AdvancedDynamicTexture.CreateFullscreenUI('HUD', true, scene);
+    hudTextureRef.current = hudTexture;
+
+    // Pointer circle - 16px diameter, blue color
+    const pointerCircle = new Ellipse('pointerCircle');
+    pointerCircle.width = '16px';
+    pointerCircle.height = '16px';
+    pointerCircle.color = 'rgba(0, 122, 255, 0.9)';
+    pointerCircle.thickness = 2;
+    pointerCircle.background = 'rgba(0, 122, 255, 0.3)';
+    pointerCircle.isVisible = false; // Hidden by default, shown for drawing tools
+    hudTexture.addControl(pointerCircle);
+    pointerCircleRef.current = pointerCircle;
+
     // Highlight layer
     highlightLayerRef.current = new HighlightLayer('highlight', scene);
 
@@ -1203,6 +1223,37 @@ const CustomModelingPage: React.FC = () => {
     gm.positionGizmoEnabled = activeTool === 'move';
     gm.rotationGizmoEnabled = activeTool === 'rotate';
     gm.scaleGizmoEnabled = activeTool === 'scale';
+  }, [activeTool]);
+
+  // Update HUD pointer circle visibility based on active tool
+  useEffect(() => {
+    const scene = sceneRef.current;
+    const pointerCircle = pointerCircleRef.current;
+    if (!scene || !pointerCircle) return;
+
+    // Drawing tools that should show the HUD pointer circle
+    const isDrawingTool = ['line', 'rectangle', 'circle', 'polygon', 'arc', 'freehand'].includes(activeTool);
+    pointerCircle.isVisible = isDrawingTool;
+
+    // Set up pointer move observer for HUD position update
+    const observer = scene.onPointerObservable.add((pointerInfo) => {
+      if (!pointerCircle.isVisible) return;
+      // Filter for move events (type 4 is POINTERMOVE)
+      if (pointerInfo.type !== 4) return;
+
+      // Get screen position from pointer info
+      const screenX = scene.pointerX;
+      const screenY = scene.pointerY;
+
+      // Update HUD circle position (centered on cursor)
+      // Note: Babylon.GUI positions are relative to canvas, so we use left/top
+      pointerCircle.left = screenX;
+      pointerCircle.top = screenY;
+    });
+
+    return () => {
+      scene.onPointerObservable.remove(observer);
+    };
   }, [activeTool]);
 
   // Update scene colors when theme changes
