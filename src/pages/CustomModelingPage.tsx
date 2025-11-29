@@ -519,30 +519,37 @@ const CustomModelingPage: React.FC = () => {
         centerZ = start.z + (signZ * depth / 2);
       }
 
-      const rect = MeshBuilder.CreateGround('previewRect', { width, height: depth }, scene);
-      rect.position = new Vector3(centerX, 0.01, centerZ);
-      const mat = new StandardMaterial('previewMat', scene);
+      // Create wireframe rectangle (4 lines) to avoid z-fighting
+      const halfW = width / 2;
+      const halfD = depth / 2;
+      const y = 0.02;  // Slightly above ground
+
+      const corners = [
+        new Vector3(centerX - halfW, y, centerZ - halfD),
+        new Vector3(centerX + halfW, y, centerZ - halfD),
+        new Vector3(centerX + halfW, y, centerZ + halfD),
+        new Vector3(centerX - halfW, y, centerZ + halfD),
+        new Vector3(centerX - halfW, y, centerZ - halfD),  // Close the loop
+      ];
+
+      const rect = MeshBuilder.CreateLines('previewRect', {
+        points: corners,
+        updatable: false,
+      }, scene);
 
       // Change color based on modifiers
       if (mods.drawFromCenter && mods.lockSquare) {
-        mat.diffuseColor = new Color3(0.9, 0.5, 0.9); // Purple for both
+        rect.color = new Color3(0.9, 0.5, 0.9); // Purple for both
       } else if (mods.drawFromCenter) {
-        mat.diffuseColor = new Color3(0.9, 0.6, 0.4); // Orange for center
+        rect.color = new Color3(0.9, 0.6, 0.4); // Orange for center
       } else if (mods.lockSquare) {
-        mat.diffuseColor = new Color3(0.4, 0.9, 0.5); // Green for square
+        rect.color = new Color3(0.4, 0.9, 0.5); // Green for square
       } else {
-        mat.diffuseColor = new Color3(0.4, 0.5, 0.9); // Blue default
+        rect.color = new Color3(0.4, 0.6, 1); // Blue default
       }
-      mat.alpha = 0.4;
-      rect.material = mat;
       rect.isPickable = false;
 
-      // Enable edge rendering for preview outline
-      rect.enableEdgesRendering();
-      rect.edgesWidth = 2.0;
-      rect.edgesColor = new Color4(0.4, 0.6, 1, 1);
-
-      state.previewMesh = rect;
+      state.previewMesh = rect as unknown as Mesh;
     }
   }, []);
 
@@ -937,20 +944,54 @@ const CustomModelingPage: React.FC = () => {
     });
   }, []);
 
-  // Show snap indicator - change HUD pointer circle to green
-  const showSnapIndicator = useCallback((_position: Vector3) => {
+  // Show snap indicator - create/move 3D mesh to snap position (magnetic snap visual)
+  const showSnapIndicator = useCallback((position: Vector3) => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    // Create snap indicator mesh if it doesn't exist
+    if (!snapIndicatorRef.current) {
+      // Create a bright green disc at ground level
+      const disc = MeshBuilder.CreateDisc('snapIndicator', {
+        radius: 0.15,
+        tessellation: 32,
+      }, scene);
+      disc.rotation.x = Math.PI / 2;  // Lay flat on ground
+      disc.position.y = 0.02;  // Slightly above ground to avoid z-fighting
+      disc.isPickable = false;
+
+      const mat = new StandardMaterial('snapIndicatorMat', scene);
+      mat.diffuseColor = new Color3(0, 1, 0.5);  // Bright green
+      mat.emissiveColor = new Color3(0, 0.8, 0.4);  // Glow effect
+      mat.alpha = 0.9;
+      disc.material = mat;
+
+      snapIndicatorRef.current = disc;
+    }
+
+    // Move to snap position and show
+    snapIndicatorRef.current.position.x = position.x;
+    snapIndicatorRef.current.position.z = position.z;
+    snapIndicatorRef.current.setEnabled(true);
+
+    // Also change HUD color as secondary feedback
     const pointerCircle = pointerCircleRef.current;
     if (pointerCircle) {
-      pointerCircle.color = 'rgba(0, 255, 136, 0.9)';  // Bright green when snapped
+      pointerCircle.color = 'rgba(0, 255, 136, 0.9)';
       pointerCircle.background = 'rgba(0, 255, 136, 0.4)';
     }
   }, []);
 
-  // Hide snap indicator - reset HUD pointer circle to blue
+  // Hide snap indicator - hide 3D mesh
   const hideSnapIndicator = useCallback(() => {
+    if (snapIndicatorRef.current) {
+      snapIndicatorRef.current.setEnabled(false);
+    }
+
+    // Reset HUD color
     const pointerCircle = pointerCircleRef.current;
     if (pointerCircle) {
-      pointerCircle.color = 'rgba(0, 122, 255, 0.9)';  // Default blue
+      pointerCircle.color = 'rgba(0, 122, 255, 0.9)';
       pointerCircle.background = 'rgba(0, 122, 255, 0.3)';
     }
   }, []);
