@@ -1175,9 +1175,13 @@ const CustomModelingPage: React.FC = () => {
     engine.runRenderLoop(() => {
       // Keep snap indicator same screen size regardless of zoom
       const indicator = snapIndicatorRef.current;
-      if (indicator && indicator.isVisible && camera) {
-        const scale = camera.radius * 0.008; // Adjust multiplier for desired size
+      if (indicator && camera) {
+        const scale = camera.radius * 0.03; // Scale based on camera distance
         indicator.scaling.setAll(scale);
+        // Adjust y position based on scale to keep it just above ground
+        if (indicator.isVisible) {
+          indicator.position.y = scale * 0.5;
+        }
       }
       scene.render();
     });
