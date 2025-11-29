@@ -855,7 +855,7 @@
   cursor: default;
 }
 .canvas[data-tool="pan"]:active {
-  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' width='24' height='24' fill='none' stroke='white' stroke-width='32' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M80 320V144a32 32 0 0 1 32-32 32 32 0 0 1 32 32v112'/%3E%3Cpath d='M144 256V80a32 32 0 0 1 32-32 32 32 0 0 1 32 32v160'/%3E%3Cpath d='M272 241V96a32 32 0 0 1 32-32 32 32 0 0 1 32 32v160'/%3E%3Cpath d='M336 240V128a32 32 0 0 1 32-32 32 32 0 0 1 32 32v208c0 117.4-64 176-152 176s-123.5-39.57-144-96'/%3E%3C/svg%3E") 12 12, grabbing;
+  cursor: grabbing;
 }
 .canvas[data-tool="zoom"] {
   cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24' fill='none' stroke='white' stroke-width='1.5'%3E%3Ccircle cx='10' cy='10' r='6'/%3E%3Cline x1='14' y1='14' x2='20' y2='20' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='10' y1='7' x2='10' y2='13'/%3E%3Cline x1='7' y1='10' x2='13' y2='10'/%3E%3C/svg%3E") 10 10, zoom-in;
@@ -918,7 +918,7 @@
   cursor: default;
 }
 .light .canvas[data-tool="pan"]:active {
-  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' width='24' height='24' fill='none' stroke='black' stroke-width='32' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M80 320V144a32 32 0 0 1 32-32 32 32 0 0 1 32 32v112'/%3E%3Cpath d='M144 256V80a32 32 0 0 1 32-32 32 32 0 0 1 32 32v160'/%3E%3Cpath d='M272 241V96a32 32 0 0 1 32-32 32 32 0 0 1 32 32v160'/%3E%3Cpath d='M336 240V128a32 32 0 0 1 32-32 32 32 0 0 1 32 32v208c0 117.4-64 176-152 176s-123.5-39.57-144-96'/%3E%3C/svg%3E") 12 12, grabbing;
+  cursor: grabbing;
 }
 .light .canvas[data-tool="zoom"] {
   cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24' fill='none' stroke='black' stroke-width='1.5'%3E%3Ccircle cx='10' cy='10' r='6'/%3E%3Cline x1='14' y1='14' x2='20' y2='20' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='10' y1='7' x2='10' y2='13'/%3E%3Cline x1='7' y1='10' x2='13' y2='10'/%3E%3C/svg%3E") 10 10, zoom-in;
