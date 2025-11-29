@@ -1246,8 +1246,7 @@ const CustomModelingPage: React.FC = () => {
   }, []);
 
   // Push/Pull functionality - SketchUp-style face extrusion
-  // Creates 6 individual faces and 12 edges, all parented to a TransformNode
-  // Each face and edge is individually selectable, but they move together as a group
+  // Creates a single solid box with edge lines (no z-fighting)
   const applyPushPull = useCallback((face: Mesh, distance: number, faceNormal: Vector3): Mesh | null => {
     if (!face.metadata || face.metadata.type !== 'face') return null;
     if (Math.abs(distance) < 0.001) return null;
@@ -1257,73 +1256,38 @@ const CustomModelingPage: React.FC = () => {
     const baseCenter = face.position.clone();
 
     meshCounterRef.current++;
-    const groupId = meshCounterRef.current;
-
-    // Create TransformNode as parent group
-    const solidGroup = new TransformNode(`SolidGroup_${groupId}`, scene);
-    solidGroup.position = new Vector3(
-      baseCenter.x,
-      baseCenter.y + distance / 2,
-      baseCenter.z
-    );
+    const solidId = meshCounterRef.current;
 
     const hw = width / 2;
     const hh = Math.abs(distance) / 2;
     const hd = depth / 2;
 
-    // Helper to create a face
-    const createFace = (name: string, w: number, h: number, pos: Vector3, rot: Vector3): Mesh => {
-      const f = MeshBuilder.CreateGround(name, { width: w, height: h }, scene);
-      f.position = pos;
-      f.rotation = rot;
+    // Create a single solid box (no z-fighting)
+    const solid = MeshBuilder.CreateBox(`Solid_${solidId}`, {
+      width: width,
+      height: Math.abs(distance),
+      depth: depth,
+    }, scene);
 
-      const mat = new StandardMaterial(`${name}_Mat`, scene);
-      mat.diffuseColor = Color3.FromHexString(selectedColor);
-      mat.specularColor = new Color3(0.2, 0.2, 0.2);
-      mat.backFaceCulling = false;
-      f.material = mat;
-      f.parent = solidGroup;
-      f.isPickable = true;
+    solid.position = new Vector3(
+      baseCenter.x,
+      baseCenter.y + distance / 2,
+      baseCenter.z
+    );
 
-      f.metadata = {
-        type: 'face',
-        width: w,
-        depth: h,
-        groupId: groupId,
-        groupNode: solidGroup,
-      };
+    const mat = new StandardMaterial(`Solid_${solidId}_Mat`, scene);
+    mat.diffuseColor = Color3.FromHexString(selectedColor);
+    mat.specularColor = new Color3(0.2, 0.2, 0.2);
+    solid.material = mat;
 
-      return f;
+    solid.metadata = {
+      type: 'solid',
+      width: width,
+      height: Math.abs(distance),
+      depth: depth,
     };
 
-    // Create 6 faces (local coords relative to solidGroup center)
-    const faces: Mesh[] = [];
-
-    // Bottom face (Y = -hh)
-    faces.push(createFace(`Face_Bottom_${groupId}`, width, depth,
-      new Vector3(0, -hh, 0), Vector3.Zero()));
-
-    // Top face (Y = +hh)
-    faces.push(createFace(`Face_Top_${groupId}`, width, depth,
-      new Vector3(0, hh, 0), Vector3.Zero()));
-
-    // Front face (Z = -hd)
-    faces.push(createFace(`Face_Front_${groupId}`, width, Math.abs(distance),
-      new Vector3(0, 0, -hd), new Vector3(-Math.PI / 2, 0, 0)));
-
-    // Back face (Z = +hd)
-    faces.push(createFace(`Face_Back_${groupId}`, width, Math.abs(distance),
-      new Vector3(0, 0, hd), new Vector3(Math.PI / 2, 0, 0)));
-
-    // Left face (X = -hw)
-    faces.push(createFace(`Face_Left_${groupId}`, Math.abs(distance), depth,
-      new Vector3(-hw, 0, 0), new Vector3(0, 0, Math.PI / 2)));
-
-    // Right face (X = +hw)
-    faces.push(createFace(`Face_Right_${groupId}`, Math.abs(distance), depth,
-      new Vector3(hw, 0, 0), new Vector3(0, 0, -Math.PI / 2)));
-
-    // 8 corners relative to group center
+    // 8 corners relative to solid center (for edge lines)
     const corners = [
       new Vector3(-hw, -hh, -hd), // 0
       new Vector3(-hw, -hh, +hd), // 1
@@ -1343,18 +1307,14 @@ const CustomModelingPage: React.FC = () => {
     ];
 
     edgeIndices.forEach((indices, i) => {
-      const edge = MeshBuilder.CreateLines(`Edge_${groupId}_${i}`, {
+      const edge = MeshBuilder.CreateLines(`Edge_${solidId}_${i}`, {
         points: [corners[indices[0]], corners[indices[1]]],
         updatable: false
       }, scene);
       edge.color = new Color3(0.15, 0.15, 0.15);
-      edge.isPickable = true;
-      edge.parent = solidGroup;
-      edge.metadata = {
-        type: 'edge',
-        groupId: groupId,
-        groupNode: solidGroup,
-      };
+      edge.isPickable = false;
+      edge.parent = solid; // Parent to solid so edges move with it
+      edge.metadata = { type: 'edge', parentSolidId: solid.id };
     });
 
     // Dispose the original face and its edges
@@ -1369,8 +1329,7 @@ const CustomModelingPage: React.FC = () => {
     // Store last extrusion distance
     pushPullStateRef.current.lastExtrudeDistance = distance;
 
-    // Return the top face as primary result
-    return faces[1]; // Top face
+    return solid;
   }, [selectedColor]);
 
   // Create/update push/pull preview mesh (wireframe box)
@@ -3165,15 +3124,8 @@ const CustomModelingPage: React.FC = () => {
       highlightLayerRef.current.addMesh(mesh, Color3.FromHexString('#6366f1'));
     }
 
-    // If mesh is part of a group (solid), attach gizmo to parent group
-    // so the whole solid moves together
     if (gizmoManagerRef.current) {
-      if (mesh.metadata?.groupNode) {
-        // Attach to parent TransformNode for group movement
-        gizmoManagerRef.current.attachToNode(mesh.metadata.groupNode);
-      } else {
-        gizmoManagerRef.current.attachToMesh(mesh);
-      }
+      gizmoManagerRef.current.attachToMesh(mesh);
     }
 
     updateMeshProperties(mesh);
@@ -3302,7 +3254,7 @@ const CustomModelingPage: React.FC = () => {
     { id: 'zoom', icon: <svg viewBox="0 0 24 24" fill="none"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="1.5" /><line x1="14" y1="14" x2="20" y2="20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /><line x1="10" y1="7" x2="10" y2="13" stroke="currentColor" strokeWidth="1.5" /><line x1="7" y1="10" x2="13" y2="10" stroke="currentColor" strokeWidth="1.5" /></svg>, title: 'Zoom (Z)' },
     { id: 'zoomExtents', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 1" /><path d="M4 8V4H8M16 4H20V8M20 16V20H16M8 20H4V16" stroke="currentColor" strokeWidth="1.5" /></svg>, title: 'Zoom Extents (Shift+Z)' },
     { type: 'divider' },
-    { id: 'section', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="8" width="16" height="8" fill="currentColor" opacity="0.2" stroke="currentColor" strokeWidth="1.5" /><line x1="4" y1="12" x2="20" y2="12" stroke="#f97316" strokeWidth="2" /></svg>, title: 'Section Plane' },
+    { id: 'section', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="12" r="9" strokeWidth="1.5" /><line x1="0" y1="12" x2="19" y2="12" strokeWidth="2" /><path d="M19 12 L15 8 V16 Z" fill="currentColor" stroke="none" /><text x="11" y="9.5" fontSize="8" textAnchor="middle" fill="currentColor" stroke="none" fontFamily="serif" fontWeight="bold">C</text><text x="11" y="19" fontSize="6" textAnchor="middle" fill="currentColor" stroke="none" fontFamily="serif">A-5</text></svg>, title: 'Section Plane' },
     { id: 'text', icon: <svg viewBox="0 0 24 24" fill="none"><text x="12" y="17" fontSize="14" textAnchor="middle" fill="currentColor" fontWeight="bold">T</text></svg>, title: 'Text' },
   ];
 
