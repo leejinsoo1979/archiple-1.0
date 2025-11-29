@@ -2406,21 +2406,25 @@ const CustomModelingPage: React.FC = () => {
     meshCounterRef.current++;
     const offsetId = meshCounterRef.current;
 
-    // Build vertex positions for mesh using earcut
+    // Calculate inner face center (average of offset vertices)
+    const innerCenterX = offsetVertices.reduce((sum, v) => sum + v.x, 0) / offsetVertices.length;
+    const innerCenterZ = offsetVertices.reduce((sum, v) => sum + v.z, 0) / offsetVertices.length;
+
+    // Build vertex positions for mesh using earcut (relative to inner center)
     const flatPoints: number[] = [];
     offsetVertices.forEach(v => {
-      flatPoints.push(v.x - center.x, v.z - center.z);
+      flatPoints.push(v.x - innerCenterX, v.z - innerCenterZ);
     });
 
     const indices = earcut(flatPoints);
 
-    // Build vertex positions for mesh
+    // Build vertex positions for mesh (relative to inner center)
     const meshPositions: number[] = [];
     const meshIndices: number[] = [];
     const meshNormals: number[] = [];
 
     offsetVertices.forEach(v => {
-      meshPositions.push(v.x, yPos, v.z);
+      meshPositions.push(v.x - innerCenterX, 0, v.z - innerCenterZ);
       meshNormals.push(0, 1, 0);
     });
 
@@ -2433,14 +2437,17 @@ const CustomModelingPage: React.FC = () => {
     vertexData.normals = meshNormals;
     vertexData.applyToMesh(innerFace);
 
+    // Set mesh position to inner center (for correct push/pull positioning)
+    innerFace.position = new Vector3(innerCenterX, yPos, innerCenterZ);
+
     const innerMat = new StandardMaterial(`OffsetMat_${offsetId}`, scene);
     innerMat.diffuseColor = Color3.FromHexString(selectedColor);
     innerMat.specularColor = new Color3(0.2, 0.2, 0.2);
     innerMat.backFaceCulling = false;
     innerFace.material = innerMat;
     innerFace.isPickable = true;
-    // Store shape data for push/pull polygon extrusion
-    const innerShape = offsetVertices.map(v => ({ x: v.x - center.x, z: v.z - center.z }));
+    // Store shape data for push/pull polygon extrusion (relative to inner center)
+    const innerShape = offsetVertices.map(v => ({ x: v.x - innerCenterX, z: v.z - innerCenterZ }));
     innerFace.metadata = {
       type: 'face',
       isPolygon: true,
@@ -2448,7 +2455,7 @@ const CustomModelingPage: React.FC = () => {
       shape: innerShape,
       holes: []
     };
-    console.log('[Offset] Created inner face:', { id: innerFace.id, name: innerFace.name, metadata: innerFace.metadata });
+    console.log('[Offset] Created inner face:', { id: innerFace.id, name: innerFace.name, position: innerFace.position, metadata: innerFace.metadata });
 
     // Create ring faces (trapezoid segments between original and offset edges)
     // Each segment: orig[i], orig[i+1], offset[i+1], offset[i]
@@ -2462,12 +2469,16 @@ const CustomModelingPage: React.FC = () => {
       meshCounterRef.current++;
       const ringId = meshCounterRef.current;
 
-      // Build quad face (2 triangles)
+      // Calculate ring face center
+      const ringCenterX = (orig1.x + orig2.x + offs2.x + offs1.x) / 4;
+      const ringCenterZ = (orig1.z + orig2.z + offs2.z + offs1.z) / 4;
+
+      // Build quad face (2 triangles) - vertices relative to ring center
       const ringPositions = [
-        orig1.x, yPos, orig1.z,  // 0
-        orig2.x, yPos, orig2.z,  // 1
-        offs2.x, yPos, offs2.z,  // 2
-        offs1.x, yPos, offs1.z,  // 3
+        orig1.x - ringCenterX, 0, orig1.z - ringCenterZ,  // 0
+        orig2.x - ringCenterX, 0, orig2.z - ringCenterZ,  // 1
+        offs2.x - ringCenterX, 0, offs2.z - ringCenterZ,  // 2
+        offs1.x - ringCenterX, 0, offs1.z - ringCenterZ,  // 3
       ];
       const ringIndices = [0, 1, 2, 0, 2, 3];  // Two triangles
       const ringNormals = [
@@ -2484,15 +2495,16 @@ const CustomModelingPage: React.FC = () => {
       ringVertexData.normals = ringNormals;
       ringVertexData.applyToMesh(ringFace);
 
+      // Set mesh position to ring center (for correct push/pull positioning)
+      ringFace.position = new Vector3(ringCenterX, yPos, ringCenterZ);
+
       const ringMat = new StandardMaterial(`OffsetRingMat_${ringId}`, scene);
       ringMat.diffuseColor = Color3.FromHexString(selectedColor);
       ringMat.specularColor = new Color3(0.2, 0.2, 0.2);
       ringMat.backFaceCulling = false;
       ringFace.material = ringMat;
       ringFace.isPickable = true;
-      // Calculate ring face center for shape metadata
-      const ringCenterX = (orig1.x + orig2.x + offs2.x + offs1.x) / 4;
-      const ringCenterZ = (orig1.z + orig2.z + offs2.z + offs1.z) / 4;
+      // Shape data relative to ring center
       const ringShape = [
         { x: orig1.x - ringCenterX, z: orig1.z - ringCenterZ },
         { x: orig2.x - ringCenterX, z: orig2.z - ringCenterZ },
@@ -2506,7 +2518,7 @@ const CustomModelingPage: React.FC = () => {
         shape: ringShape,
         holes: []
       };
-      console.log('[Offset] Created ring face:', { id: ringFace.id, name: ringFace.name, i, metadata: ringFace.metadata });
+      console.log('[Offset] Created ring face:', { id: ringFace.id, name: ringFace.name, i, position: ringFace.position, metadata: ringFace.metadata });
 
       // Create connecting edge (between original and offset vertex)
       const connectEdge = MeshBuilder.CreateLines(`OffsetConnect_${ringId}`, {
