@@ -6,6 +6,7 @@ import { FaTape } from 'react-icons/fa';
 import { IoHandRightOutline } from 'react-icons/io5';
 import { GrRotateRight } from 'react-icons/gr';
 import { BsEraser, BsPaintBucket } from 'react-icons/bs';
+import { ColorWheel } from './components/ColorWheel';
 import styles from './CustomModelingPage.module.css';
 import {
   Engine,
@@ -191,6 +192,12 @@ const CustomModelingPage: React.FC = () => {
   const [showMeasurementInput, setShowMeasurementInput] = useState(false);
   const measurementInputRef = useRef<HTMLInputElement>(null);
   const measurementInputValueRef = useRef<string>(''); // Track current value for keyboard handler
+
+  // Dashed axis refs for dynamic update based on camera distance
+  const xAxisNegRef = useRef<LinesMesh | null>(null);
+  const yAxisNegRef = useRef<LinesMesh | null>(null);
+  const zAxisNegRef = useRef<LinesMesh | null>(null);
+  const lastCameraRadiusRef = useRef<number>(0);
 
   // Shape modifiers state for UI display (mirrors ref for rendering)
   const [shapeModifiersUI, setShapeModifiersUI] = useState<ShapeModifiers>({
@@ -1279,7 +1286,7 @@ const CustomModelingPage: React.FC = () => {
     mat.diffuseColor = Color3.FromHexString(selectedColor);
     mat.specularColor = new Color3(0.2, 0.2, 0.2);
     solid.material = mat;
-    solid.isPickable = false; // Visual only, faces are pickable
+    solid.isPickable = true;
 
     solid.metadata = {
       type: 'solid',
@@ -1287,39 +1294,6 @@ const CustomModelingPage: React.FC = () => {
       height: Math.abs(distance),
       depth: depth,
     };
-
-    // Create 6 invisible pickable face meshes (for selection)
-    const createPickFace = (name: string, w: number, h: number, pos: Vector3, rot: Vector3, normal: Vector3) => {
-      const f = MeshBuilder.CreateGround(name, { width: w, height: h }, scene);
-      f.position = pos;
-      f.rotation = rot;
-      f.parent = solid;
-      f.isPickable = true;
-      f.visibility = 0; // Invisible but pickable
-
-      f.metadata = {
-        type: 'face',
-        width: w,
-        depth: h,
-        normal: normal,
-        parentSolid: solid,
-      };
-      return f;
-    };
-
-    // 6 faces (local coords, parented to solid)
-    createPickFace(`Face_Top_${solidId}`, width, depth,
-      new Vector3(0, hh + 0.001, 0), Vector3.Zero(), new Vector3(0, 1, 0));
-    createPickFace(`Face_Bottom_${solidId}`, width, depth,
-      new Vector3(0, -hh - 0.001, 0), new Vector3(Math.PI, 0, 0), new Vector3(0, -1, 0));
-    createPickFace(`Face_Front_${solidId}`, width, Math.abs(distance),
-      new Vector3(0, 0, -hd - 0.001), new Vector3(-Math.PI / 2, 0, 0), new Vector3(0, 0, -1));
-    createPickFace(`Face_Back_${solidId}`, width, Math.abs(distance),
-      new Vector3(0, 0, hd + 0.001), new Vector3(Math.PI / 2, 0, 0), new Vector3(0, 0, 1));
-    createPickFace(`Face_Left_${solidId}`, Math.abs(distance), depth,
-      new Vector3(-hw - 0.001, 0, 0), new Vector3(0, 0, Math.PI / 2), new Vector3(-1, 0, 0));
-    createPickFace(`Face_Right_${solidId}`, Math.abs(distance), depth,
-      new Vector3(hw + 0.001, 0, 0), new Vector3(0, 0, -Math.PI / 2), new Vector3(1, 0, 0));
 
     // 8 corners relative to solid center (for edge lines)
     const corners = [
@@ -1940,14 +1914,71 @@ const CustomModelingPage: React.FC = () => {
     xAxisPos.color = new Color3(0.9, 0.2, 0.2);
     xAxisPos.isPickable = false;
 
-    const xAxisNeg = MeshBuilder.CreateDashedLines('xAxisNeg', {
-      points: [Vector3.Zero(), new Vector3(-axisLength, 0, 0)],
-      dashSize: 0.1,
-      gapSize: 0.1,
-      dashNb: 5000,
-    }, scene);
-    xAxisNeg.color = new Color3(0.5, 0.2, 0.2);
-    xAxisNeg.isPickable = false;
+    // Helper function to create/update dashed axes with screen-space consistent dash pattern
+    const DASH_REFERENCE_RADIUS = 20; // Reference camera radius for dash size calculation
+    const BASE_DASH_SIZE = 0.15; // Base dash size at reference radius (in world units)
+
+    const createOrUpdateDashedAxes = (cameraRadius: number) => {
+      // Calculate dash size proportional to camera distance for consistent screen appearance
+      const dashScale = cameraRadius / DASH_REFERENCE_RADIUS;
+      const dashSize = BASE_DASH_SIZE * dashScale;
+      const gapSize = dashSize; // Equal dash and gap for consistent pattern
+      // dashNb is the number of dashes - calculate based on axis length and dash size
+      const dashNb = Math.ceil(axisLength / (dashSize + gapSize));
+
+      // Dispose old meshes
+      if (xAxisNegRef.current) xAxisNegRef.current.dispose();
+      if (yAxisNegRef.current) yAxisNegRef.current.dispose();
+      if (zAxisNegRef.current) zAxisNegRef.current.dispose();
+
+      // X axis negative (red dashed)
+      const xAxisNeg = MeshBuilder.CreateDashedLines('xAxisNeg', {
+        points: [Vector3.Zero(), new Vector3(-axisLength, 0, 0)],
+        dashSize,
+        gapSize,
+        dashNb,
+      }, scene);
+      xAxisNeg.color = new Color3(0.5, 0.2, 0.2);
+      xAxisNeg.isPickable = false;
+      xAxisNegRef.current = xAxisNeg;
+
+      // Y axis negative (green dashed - Z in world space)
+      const yAxisNeg = MeshBuilder.CreateDashedLines('yAxisNeg', {
+        points: [Vector3.Zero(), new Vector3(0, 0, -axisLength)],
+        dashSize,
+        gapSize,
+        dashNb,
+      }, scene);
+      yAxisNeg.color = new Color3(0.2, 0.4, 0.2);
+      yAxisNeg.isPickable = false;
+      yAxisNegRef.current = yAxisNeg;
+
+      // Z axis negative (blue dashed - Y in world space)
+      const zAxisNeg = MeshBuilder.CreateDashedLines('zAxisNeg', {
+        points: [Vector3.Zero(), new Vector3(0, -axisLength, 0)],
+        dashSize,
+        gapSize,
+        dashNb,
+      }, scene);
+      zAxisNeg.color = new Color3(0.2, 0.3, 0.5);
+      zAxisNeg.isPickable = false;
+      zAxisNegRef.current = zAxisNeg;
+    };
+
+    // Create initial dashed axes
+    createOrUpdateDashedAxes(camera.radius);
+    lastCameraRadiusRef.current = camera.radius;
+
+    // Add camera observer to update dashed axes when zoom changes significantly
+    camera.onViewMatrixChangedObservable.add(() => {
+      const currentRadius = camera.radius;
+      const lastRadius = lastCameraRadiusRef.current;
+      // Only update when radius changes by more than 10% to avoid excessive updates
+      if (Math.abs(currentRadius - lastRadius) / lastRadius > 0.1) {
+        createOrUpdateDashedAxes(currentRadius);
+        lastCameraRadiusRef.current = currentRadius;
+      }
+    });
 
     const yAxisPos = MeshBuilder.CreateLines('yAxisPos', {
       points: [Vector3.Zero(), new Vector3(0, 0, axisLength)],
@@ -1955,29 +1986,11 @@ const CustomModelingPage: React.FC = () => {
     yAxisPos.color = new Color3(0.2, 0.8, 0.2);
     yAxisPos.isPickable = false;
 
-    const yAxisNeg = MeshBuilder.CreateDashedLines('yAxisNeg', {
-      points: [Vector3.Zero(), new Vector3(0, 0, -axisLength)],
-      dashSize: 0.1,
-      gapSize: 0.1,
-      dashNb: 5000,
-    }, scene);
-    yAxisNeg.color = new Color3(0.2, 0.4, 0.2);
-    yAxisNeg.isPickable = false;
-
     const zAxisPos = MeshBuilder.CreateLines('zAxisPos', {
       points: [Vector3.Zero(), new Vector3(0, axisLength, 0)],
     }, scene);
     zAxisPos.color = new Color3(0.3, 0.5, 1);
     zAxisPos.isPickable = false;
-
-    const zAxisNeg = MeshBuilder.CreateDashedLines('zAxisNeg', {
-      points: [Vector3.Zero(), new Vector3(0, -axisLength, 0)],
-      dashSize: 0.1,
-      gapSize: 0.1,
-      dashNb: 5000,
-    }, scene);
-    zAxisNeg.color = new Color3(0.2, 0.3, 0.5);
-    zAxisNeg.isPickable = false;
 
     // Origin marker - no longer used, snap indicator will show when hovering near origin
     // Keeping the ref for backward compatibility but not creating visible marker
@@ -3155,22 +3168,12 @@ const CustomModelingPage: React.FC = () => {
 
     setSelectedMesh(mesh);
 
-    // For invisible faces, highlight the parent solid instead
     if (highlightLayerRef.current) {
-      if (mesh.metadata?.parentSolid && mesh.visibility === 0) {
-        highlightLayerRef.current.addMesh(mesh.metadata.parentSolid, Color3.FromHexString('#6366f1'));
-      } else {
-        highlightLayerRef.current.addMesh(mesh, Color3.FromHexString('#6366f1'));
-      }
+      highlightLayerRef.current.addMesh(mesh, Color3.FromHexString('#6366f1'));
     }
 
-    // Attach gizmo to parent solid if this is a face/edge of a solid
     if (gizmoManagerRef.current) {
-      if (mesh.metadata?.parentSolid) {
-        gizmoManagerRef.current.attachToMesh(mesh.metadata.parentSolid);
-      } else {
-        gizmoManagerRef.current.attachToMesh(mesh);
-      }
+      gizmoManagerRef.current.attachToMesh(mesh);
     }
 
     updateMeshProperties(mesh);
@@ -3189,12 +3192,7 @@ const CustomModelingPage: React.FC = () => {
 
   const deselectMesh = () => {
     if (highlightLayerRef.current && selectedMesh) {
-      // Remove highlight from parent solid if this was an invisible face
-      if (selectedMesh.metadata?.parentSolid && selectedMesh.visibility === 0) {
-        highlightLayerRef.current.removeMesh(selectedMesh.metadata.parentSolid);
-      } else {
-        highlightLayerRef.current.removeMesh(selectedMesh);
-      }
+      highlightLayerRef.current.removeMesh(selectedMesh);
     }
     setSelectedMesh(null);
     setMeshProperties(null);
@@ -3374,7 +3372,11 @@ const CustomModelingPage: React.FC = () => {
       <div className={styles.main}>
         {/* Viewport */}
         <div className={styles.viewport}>
-          <canvas ref={canvasRef} className={styles.canvas} data-tool={activeTool} />
+          <canvas
+            ref={canvasRef}
+            className={`${styles.canvas} ${activeTool === 'paint' ? styles.paintCursor : ''}`}
+            data-tool={activeTool}
+          />
 
           {/* Floating Left Toolbar */}
           <div className={styles.leftToolbar}>
@@ -3628,55 +3630,30 @@ const CustomModelingPage: React.FC = () => {
             {activeTab === 'materials' && (
               <div className={styles.panelSection}>
                 <div className={styles.sectionHeader}>
-                  <span className={styles.sectionTitle}>Current Color</span>
+                  <span className={styles.sectionTitle}>Material Editor</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-                  <div
-                    style={{
-                      width: '48px',
-                      height: '48px',
-                      backgroundColor: selectedColor,
-                      borderRadius: '8px',
-                      border: '2px solid rgba(255,255,255,0.2)',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-                    }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>Selected</div>
-                    <div style={{ fontSize: '14px', color: '#fff', fontWeight: 500 }}>{selectedColor}</div>
-                  </div>
-                  {selectedMesh && (
-                    <button
-                      onClick={() => {
-                        if (selectedMesh && sceneRef.current) {
-                          const material = selectedMesh.material as StandardMaterial;
-                          if (material && material.diffuseColor) {
-                            material.diffuseColor = Color3.FromHexString(selectedColor);
-                          } else {
-                            const newMat = new StandardMaterial(`paintMat_${Date.now()}`, sceneRef.current);
-                            newMat.diffuseColor = Color3.FromHexString(selectedColor);
-                            newMat.specularColor = new Color3(0.2, 0.2, 0.2);
-                            selectedMesh.material = newMat;
-                          }
-                        }
-                      }}
-                      style={{
-                        padding: '8px 16px',
-                        background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-                        border: 'none',
-                        borderRadius: '6px',
-                        color: '#fff',
-                        fontSize: '12px',
-                        fontWeight: 500,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Apply
-                    </button>
-                  )}
-                </div>
-                <div className={styles.sectionHeader}>
-                  <span className={styles.sectionTitle}>Color Palette</span>
+
+                <ColorWheel
+                  color={selectedColor}
+                  onChange={(newColor) => {
+                    setSelectedColor(newColor);
+                    // If paint tool is active and a mesh is selected, apply immediately
+                    if (activeTool === 'paint' && selectedMesh && sceneRef.current) {
+                      const material = selectedMesh.material as StandardMaterial;
+                      if (material && material.diffuseColor) {
+                        material.diffuseColor = Color3.FromHexString(newColor);
+                      } else {
+                        const newMat = new StandardMaterial(`paintMat_${Date.now()}`, sceneRef.current);
+                        newMat.diffuseColor = Color3.FromHexString(newColor);
+                        newMat.specularColor = new Color3(0.2, 0.2, 0.2);
+                        selectedMesh.material = newMat;
+                      }
+                    }
+                  }}
+                />
+
+                <div className={styles.sectionHeader} style={{ marginTop: '24px' }}>
+                  <span className={styles.sectionTitle}>Quick Palette</span>
                 </div>
                 <div className={styles.materialsGrid}>
                   {colorPalette.map((color, idx) => (
@@ -3686,7 +3663,6 @@ const CustomModelingPage: React.FC = () => {
                       style={{ backgroundColor: color }}
                       onClick={() => {
                         setSelectedColor(color);
-                        // If paint tool is active and a mesh is selected, apply immediately
                         if (activeTool === 'paint' && selectedMesh && sceneRef.current) {
                           const material = selectedMesh.material as StandardMaterial;
                           if (material && material.diffuseColor) {
@@ -3699,12 +3675,12 @@ const CustomModelingPage: React.FC = () => {
                           }
                         }
                       }}
-                      title={color}
                     />
                   ))}
                 </div>
               </div>
             )}
+
 
             {activeTab === 'components' && (
               <div className={styles.panelSection}>
@@ -3757,10 +3733,10 @@ const CustomModelingPage: React.FC = () => {
             )}
           </div>
         </div>
-      </div>
+      </div >
 
       {/* Status Bar */}
-      <div className={styles.statusBar}>
+      < div className={styles.statusBar} >
         <div className={styles.statusLeft}>
           <div className={styles.statusItem}>
             <div className={styles.statusDot} />
@@ -3983,25 +3959,27 @@ const CustomModelingPage: React.FC = () => {
             }}
           />
         </div>
-      </div>
-      {selectionState.contextMenu && (
-        <ModelingContextMenu
-          x={selectionState.contextMenu.x}
-          y={selectionState.contextMenu.y}
-          onClose={() => setSelectionState(prev => ({ ...prev, contextMenu: null }))}
-          onAction={handleContextMenuAction}
-          selectionCount={selectionState.selectedIds.length}
-          hasFaces={selectionState.selectedIds.some(id => sceneRef.current?.getMeshByID(id)?.metadata?.type === 'face')}
-          hasEdges={selectionState.selectedIds.some(id => sceneRef.current?.getMeshByID(id)?.metadata?.type === 'edge')}
-        />
-      )}
+      </div >
+      {
+        selectionState.contextMenu && (
+          <ModelingContextMenu
+            x={selectionState.contextMenu.x}
+            y={selectionState.contextMenu.y}
+            onClose={() => setSelectionState(prev => ({ ...prev, contextMenu: null }))}
+            onAction={handleContextMenuAction}
+            selectionCount={selectionState.selectedIds.length}
+            hasFaces={selectionState.selectedIds.some(id => sceneRef.current?.getMeshByID(id)?.metadata?.type === 'face')}
+            hasEdges={selectionState.selectedIds.some(id => sceneRef.current?.getMeshByID(id)?.metadata?.type === 'edge')}
+          />
+        )
+      }
 
       {/* Right-click handler for context menu */}
       <div
         style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
         onContextMenu={handleContextMenu}
       />
-    </div>
+    </div >
   );
 };
 
