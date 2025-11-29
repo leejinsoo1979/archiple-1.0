@@ -549,12 +549,12 @@ const CustomModelingPage: React.FC = () => {
     const length = Vector3.Distance(start, constrainedEnd);
     const edge = MeshBuilder.CreateBox(`Edge_${meshCounterRef.current}`, {
       width: length,
-      height: 0.02,
-      depth: 0.02,
+      height: 0.1,  // Increased from 0.02 for better visibility
+      depth: 0.1,   // Increased from 0.02 for better visibility
     }, scene);
 
     const midPoint = start.add(constrainedEnd).scale(0.5);
-    edge.position = new Vector3(midPoint.x, 0.01, midPoint.z);
+    edge.position = new Vector3(midPoint.x, 0.05, midPoint.z);  // Raised to half height
 
     const angle = Math.atan2(constrainedEnd.z - start.z, constrainedEnd.x - start.x);
     edge.rotation.y = -angle;
