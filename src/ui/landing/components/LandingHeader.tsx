@@ -20,10 +20,14 @@ const LandingHeader: React.FC<LandingHeaderProps> = ({ onLoginClick, onStartClic
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-    // Theme settings state
+    // Theme settings state - initialize from localStorage to prevent overwriting saved theme
     const [themeSettingsOpen, setThemeSettingsOpen] = useState(false);
-    const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
-    const [themeColor, setThemeColor] = useState<string>('#3dbc58'); // Default Archiple Green
+    const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
+        return (localStorage.getItem('themeMode') as 'light' | 'dark') || 'light';
+    });
+    const [themeColor, setThemeColor] = useState<string>(() => {
+        return localStorage.getItem('themeColor') || '#3dbc58'; // Default Archiple Green
+    });
 
     // Monitor authentication state
     useEffect(() => {
@@ -34,18 +38,6 @@ const LandingHeader: React.FC<LandingHeaderProps> = ({ onLoginClick, onStartClic
         return () => unsubscribe();
     }, []);
 
-    // Load theme from localStorage on mount
-    React.useEffect(() => {
-        const savedThemeMode = localStorage.getItem('themeMode') as 'light' | 'dark' | null;
-        const savedThemeColor = localStorage.getItem('themeColor');
-
-        if (savedThemeMode) {
-            setThemeMode(savedThemeMode);
-        }
-        if (savedThemeColor) {
-            setThemeColor(savedThemeColor);
-        }
-    }, []);
 
     // Apply theme to document root
     React.useEffect(() => {
@@ -324,7 +316,7 @@ const LandingHeader: React.FC<LandingHeaderProps> = ({ onLoginClick, onStartClic
                             /* Not logged in: Show login buttons */
                             <>
                                 <button className={styles.btnLogin} onClick={onLoginClick}>Login</button>
-                                <button className={styles.btnStart} onClick={onStartClick}>Start for Free</button>
+                                <button className={styles.btnStart} onClick={onStartClick}>Start</button>
                                 <button className={styles.btnDemo}>Book a Demo</button>
                             </>
                         )}
@@ -357,7 +349,7 @@ const LandingHeader: React.FC<LandingHeaderProps> = ({ onLoginClick, onStartClic
                         <a href="#" className={styles.mobileNavLink}>Education</a>
                         <div className={styles.mobileMenuDivider} />
                         <button className={styles.mobileBtn} onClick={onLoginClick}>Login</button>
-                        <button className={styles.mobileBtnPrimary} onClick={onStartClick}>Start for Free</button>
+                        <button className={styles.mobileBtnPrimary} onClick={onStartClick}>Start</button>
                     </div>
                 )}
             </nav>
