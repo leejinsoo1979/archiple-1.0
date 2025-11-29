@@ -1918,7 +1918,7 @@ const CustomModelingPage: React.FC = () => {
   }, []);
 
   // Push/Pull for polygon faces with holes (donut shapes)
-  // Only supports Y-axis extrusion (up/down) for ground-plane donut faces
+  // Uses ExtrudePolygon to create proper donut-shaped solid
   const applyPushPullPolygon = useCallback((face: Mesh, distance: number, faceNormal: Vector3, scene: Scene): Mesh | null => {
     const { shape, holes } = face.metadata;
     const baseCenter = face.getAbsolutePosition().clone();
@@ -1930,131 +1930,48 @@ const CustomModelingPage: React.FC = () => {
     // Assign earcut to window for Babylon.js polygon creation
     (window as any).earcut = earcut;
 
-    // Convert stored shape data back to Vector3 arrays (in world XZ coordinates)
+    // Convert stored shape data back to Vector3 arrays
     const outerShape = shape.map((p: { x: number; z: number }) => new Vector3(p.x, 0, p.z));
     const innerHoles = holes.map((hole: Array<{ x: number; z: number }>) =>
       hole.map((p: { x: number; z: number }) => new Vector3(p.x, 0, p.z))
     );
 
-    // Determine extrusion direction - positive distance = up, negative = down
-    const extrudeUp = distance > 0;
-    const bottomY = extrudeUp ? baseCenter.y : baseCenter.y - height;
-    const topY = extrudeUp ? baseCenter.y + height : baseCenter.y;
+    console.log('ExtrudePolygon - outerShape:', outerShape.map((v: Vector3) => `(${v.x.toFixed(3)}, ${v.z.toFixed(3)})`));
+    console.log('ExtrudePolygon - innerHoles:', innerHoles.map((hole: Vector3[]) => hole.map((v: Vector3) => `(${v.x.toFixed(3)}, ${v.z.toFixed(3)})`)));
 
-    // Create parent container at world origin (no rotation!)
-    const solid = new Mesh(`Solid_${solidId}`, scene);
-    solid.position = new Vector3(baseCenter.x, (bottomY + topY) / 2, baseCenter.z);
-    solid.isPickable = false;
-    solid.metadata = { type: 'solid', isPolygon: true };
+    try {
+      // Use ExtrudePolygon to create proper donut solid in one call
+      const extrudedMesh = MeshBuilder.ExtrudePolygon(
+        `Solid_${solidId}`,
+        {
+          shape: outerShape,
+          holes: innerHoles,
+          depth: height,
+          sideOrientation: Mesh.DOUBLESIDE
+        },
+        scene
+      );
 
-    // Helper to create face material
-    const createFaceMat = (name: string) => {
-      const mat = new StandardMaterial(name, scene);
+      // ExtrudePolygon creates mesh at Y=0 going down to Y=-depth
+      // Position it so bottom is at face level and top is at face level + height
+      extrudedMesh.position = new Vector3(baseCenter.x, baseCenter.y + height, baseCenter.z);
+
+      // Apply material
+      const mat = new StandardMaterial(`SolidMat_${solidId}`, scene);
       mat.diffuseColor = Color3.FromHexString(selectedColor);
       mat.specularColor = new Color3(0.2, 0.2, 0.2);
       mat.backFaceCulling = false;
-      return mat;
-    };
+      extrudedMesh.material = mat;
 
-    const hh = height / 2;
-
-    try {
-      // Create top face (donut) - normals face up
-      const topFace = MeshBuilder.CreatePolygon(
-        `Face_${solidId}_top`,
-        { shape: outerShape, holes: innerHoles, sideOrientation: Mesh.DOUBLESIDE },
-        scene
-      );
-      topFace.position = new Vector3(0, hh, 0);
-      topFace.material = createFaceMat(`FaceMat_${solidId}_top`);
-      topFace.isPickable = true;
-      topFace.parent = solid;
-      topFace.metadata = {
-        type: 'face',
+      extrudedMesh.isPickable = true;
+      extrudedMesh.metadata = {
+        type: 'solid',
         isPolygon: true,
         shape: shape,
-        holes: holes,
-        parentSolid: solid,
-        faceDir: 'top'
+        holes: holes
       };
 
-      // Create bottom face (donut) - flip to face down
-      const bottomFace = MeshBuilder.CreatePolygon(
-        `Face_${solidId}_bottom`,
-        { shape: outerShape, holes: innerHoles, sideOrientation: Mesh.DOUBLESIDE },
-        scene
-      );
-      bottomFace.position = new Vector3(0, -hh, 0);
-      bottomFace.rotation.z = Math.PI; // Flip around Z to face down
-      bottomFace.material = createFaceMat(`FaceMat_${solidId}_bottom`);
-      bottomFace.isPickable = true;
-      bottomFace.parent = solid;
-      bottomFace.metadata = {
-        type: 'face',
-        isPolygon: true,
-        shape: shape,
-        holes: holes,
-        parentSolid: solid,
-        faceDir: 'bottom'
-      };
-
-      // Create outer walls using world coordinates relative to solid center
-      for (let i = 0; i < outerShape.length; i++) {
-        const p1 = outerShape[i];
-        const p2 = outerShape[(i + 1) % outerShape.length];
-
-        const wallWidth = Vector3.Distance(p1, p2);
-        const wall = MeshBuilder.CreatePlane(`Face_${solidId}_outerWall_${i}`, {
-          width: wallWidth,
-          height: height,
-          sideOrientation: Mesh.DOUBLESIDE
-        }, scene);
-
-        // Position at midpoint of edge (relative to solid center)
-        const midX = (p1.x + p2.x) / 2;
-        const midZ = (p1.z + p2.z) / 2;
-        wall.position = new Vector3(midX, 0, midZ);
-
-        // Rotate to face outward from center
-        const angle = Math.atan2(p2.z - p1.z, p2.x - p1.x);
-        wall.rotation.y = -angle + Math.PI / 2;
-
-        wall.material = createFaceMat(`FaceMat_${solidId}_outerWall_${i}`);
-        wall.isPickable = true;
-        wall.parent = solid;
-        wall.metadata = { type: 'face', width: wallWidth, depth: height, parentSolid: solid, faceDir: 'side' };
-      }
-
-      // Create inner walls (around the hole)
-      for (let h = 0; h < innerHoles.length; h++) {
-        const hole = innerHoles[h];
-        for (let i = 0; i < hole.length; i++) {
-          const p1 = hole[i];
-          const p2 = hole[(i + 1) % hole.length];
-
-          const wallWidth = Vector3.Distance(p1, p2);
-          const wall = MeshBuilder.CreatePlane(`Face_${solidId}_innerWall_${h}_${i}`, {
-            width: wallWidth,
-            height: height,
-            sideOrientation: Mesh.DOUBLESIDE
-          }, scene);
-
-          const midX = (p1.x + p2.x) / 2;
-          const midZ = (p1.z + p2.z) / 2;
-          wall.position = new Vector3(midX, 0, midZ);
-
-          // Face inward (toward the hole center)
-          const angle = Math.atan2(p2.z - p1.z, p2.x - p1.x);
-          wall.rotation.y = -angle - Math.PI / 2;
-
-          wall.material = createFaceMat(`FaceMat_${solidId}_innerWall_${h}_${i}`);
-          wall.isPickable = true;
-          wall.parent = solid;
-          wall.metadata = { type: 'face', width: wallWidth, depth: height, parentSolid: solid, faceDir: 'side' };
-        }
-      }
-
-      // Create edges
+      // Create edges for visual clarity
       const createEdge = (ep1: Vector3, ep2: Vector3, idx: string) => {
         const edge = MeshBuilder.CreateTube(`Edge_${solidId}_${idx}`, {
           path: [ep1, ep2],
@@ -2067,17 +1984,17 @@ const CustomModelingPage: React.FC = () => {
         edgeMat.emissiveColor = new Color3(0.15, 0.15, 0.15);
         edge.material = edgeMat;
         edge.isPickable = true;
-        edge.parent = solid;
-        edge.metadata = { type: 'edge', parentSolid: solid };
+        edge.parent = extrudedMesh;
+        edge.metadata = { type: 'edge', parentSolid: extrudedMesh };
       };
 
-      // Outer edges
+      // Outer edges (Y=0 is top, Y=-height is bottom relative to mesh)
       for (let i = 0; i < outerShape.length; i++) {
         const p1 = outerShape[i];
         const p2 = outerShape[(i + 1) % outerShape.length];
-        createEdge(new Vector3(p1.x, hh, p1.z), new Vector3(p2.x, hh, p2.z), `outer_top_${i}`);
-        createEdge(new Vector3(p1.x, -hh, p1.z), new Vector3(p2.x, -hh, p2.z), `outer_bottom_${i}`);
-        createEdge(new Vector3(p1.x, -hh, p1.z), new Vector3(p1.x, hh, p1.z), `outer_vert_${i}`);
+        createEdge(new Vector3(p1.x, 0, p1.z), new Vector3(p2.x, 0, p2.z), `outer_top_${i}`);
+        createEdge(new Vector3(p1.x, -height, p1.z), new Vector3(p2.x, -height, p2.z), `outer_bottom_${i}`);
+        createEdge(new Vector3(p1.x, 0, p1.z), new Vector3(p1.x, -height, p1.z), `outer_vert_${i}`);
       }
 
       // Inner edges (around hole)
@@ -2086,9 +2003,9 @@ const CustomModelingPage: React.FC = () => {
         for (let i = 0; i < hole.length; i++) {
           const p1 = hole[i];
           const p2 = hole[(i + 1) % hole.length];
-          createEdge(new Vector3(p1.x, hh, p1.z), new Vector3(p2.x, hh, p2.z), `inner_${h}_top_${i}`);
-          createEdge(new Vector3(p1.x, -hh, p1.z), new Vector3(p2.x, -hh, p2.z), `inner_${h}_bottom_${i}`);
-          createEdge(new Vector3(p1.x, -hh, p1.z), new Vector3(p1.x, hh, p1.z), `inner_${h}_vert_${i}`);
+          createEdge(new Vector3(p1.x, 0, p1.z), new Vector3(p2.x, 0, p2.z), `inner_${h}_top_${i}`);
+          createEdge(new Vector3(p1.x, -height, p1.z), new Vector3(p2.x, -height, p2.z), `inner_${h}_bottom_${i}`);
+          createEdge(new Vector3(p1.x, 0, p1.z), new Vector3(p1.x, -height, p1.z), `inner_${h}_vert_${i}`);
         }
       }
 
@@ -2096,10 +2013,10 @@ const CustomModelingPage: React.FC = () => {
       face.getChildMeshes().forEach(child => child.dispose());
       face.dispose();
 
-      solid.computeWorldMatrix(true);
+      extrudedMesh.computeWorldMatrix(true);
 
-      console.log(`Created polygon solid with holes, height=${height}`);
-      return solid;
+      console.log(`Created extruded polygon solid, height=${height}`);
+      return extrudedMesh;
     } catch (e) {
       console.error('Failed to create polygon solid:', e);
       return null;
@@ -2337,8 +2254,21 @@ const CustomModelingPage: React.FC = () => {
     const yPos = center.y;
     const n = vertices.length;
 
+    // Helper: get perpendicular that points inward (toward center)
+    const getInwardNormal = (p1: Vector3, p2: Vector3): Vector3 => {
+      const edge = new Vector3(p2.x - p1.x, 0, p2.z - p1.z);
+      const perp = new Vector3(-edge.z, 0, edge.x).normalize();
+      // Check if perpendicular points toward center
+      const midpoint = new Vector3((p1.x + p2.x) / 2, yPos, (p1.z + p2.z) / 2);
+      const toCenter = new Vector3(center.x - midpoint.x, 0, center.z - midpoint.z);
+      // If perpendicular points away from center, flip it
+      if (perp.x * toCenter.x + perp.z * toCenter.z < 0) {
+        perp.scaleInPlace(-1);
+      }
+      return perp;
+    };
+
     // Calculate offset vertices using edge perpendicular method (parallel edges)
-    // For each vertex, find intersection of adjacent offset edges
     const offsetVertices: Vector3[] = [];
 
     for (let i = 0; i < n; i++) {
@@ -2346,15 +2276,11 @@ const CustomModelingPage: React.FC = () => {
       const curr = vertices[i];
       const next = vertices[(i + 1) % n];
 
-      // Edge vectors (in XZ plane)
-      const edge1 = new Vector3(curr.x - prev.x, 0, curr.z - prev.z);
-      const edge2 = new Vector3(next.x - curr.x, 0, next.z - curr.z);
+      // Get inward normals for both edges meeting at curr
+      const normal1 = getInwardNormal(prev, curr);
+      const normal2 = getInwardNormal(curr, next);
 
-      // Perpendicular inward normals (rotate 90 degrees in XZ plane)
-      const normal1 = new Vector3(-edge1.z, 0, edge1.x).normalize();
-      const normal2 = new Vector3(-edge2.z, 0, edge2.x).normalize();
-
-      // Offset the two edges
+      // Offset the two edges (positive distance = inward)
       const p1 = new Vector3(prev.x + normal1.x * distance, yPos, prev.z + normal1.z * distance);
       const p2 = new Vector3(curr.x + normal1.x * distance, yPos, curr.z + normal1.z * distance);
       const p3 = new Vector3(curr.x + normal2.x * distance, yPos, curr.z + normal2.z * distance);
@@ -2473,8 +2399,21 @@ const CustomModelingPage: React.FC = () => {
     const yPos = baseVertices[0].y;
     const n = baseVertices.length;
 
+    // Helper: get perpendicular that points inward (toward center)
+    const getInwardNormal = (p1: Vector3, p2: Vector3): Vector3 => {
+      const edge = new Vector3(p2.x - p1.x, 0, p2.z - p1.z);
+      const perp = new Vector3(-edge.z, 0, edge.x).normalize();
+      // Check if perpendicular points toward center
+      const midpoint = new Vector3((p1.x + p2.x) / 2, yPos, (p1.z + p2.z) / 2);
+      const toCenter = new Vector3(center.x - midpoint.x, 0, center.z - midpoint.z);
+      // If perpendicular points away from center, flip it
+      if (perp.x * toCenter.x + perp.z * toCenter.z < 0) {
+        perp.scaleInPlace(-1);
+      }
+      return perp;
+    };
+
     // Calculate offset vertices using edge perpendicular method (parallel edges)
-    // For each vertex, find intersection of adjacent offset edges
     const offsetVertices: Vector3[] = [];
 
     for (let i = 0; i < n; i++) {
@@ -2482,15 +2421,11 @@ const CustomModelingPage: React.FC = () => {
       const curr = baseVertices[i];
       const next = baseVertices[(i + 1) % n];
 
-      // Edge vectors (in XZ plane)
-      const edge1 = new Vector3(curr.x - prev.x, 0, curr.z - prev.z);
-      const edge2 = new Vector3(next.x - curr.x, 0, next.z - curr.z);
+      // Get inward normals for both edges meeting at curr
+      const normal1 = getInwardNormal(prev, curr);
+      const normal2 = getInwardNormal(curr, next);
 
-      // Perpendicular inward normals (rotate 90 degrees in XZ plane)
-      const normal1 = new Vector3(-edge1.z, 0, edge1.x).normalize();
-      const normal2 = new Vector3(-edge2.z, 0, edge2.x).normalize();
-
-      // Offset the two edges
+      // Offset the two edges (positive distance = inward)
       const p1 = new Vector3(prev.x + normal1.x * distance, yPos, prev.z + normal1.z * distance);
       const p2 = new Vector3(curr.x + normal1.x * distance, yPos, curr.z + normal1.z * distance);
       const p3 = new Vector3(curr.x + normal2.x * distance, yPos, curr.z + normal2.z * distance);
@@ -3156,7 +3091,7 @@ const CustomModelingPage: React.FC = () => {
       'camera',
       -Math.PI / 4,
       Math.PI / 3,
-      20,
+      10,
       Vector3.Zero(),
       scene
     );
