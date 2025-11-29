@@ -25,6 +25,7 @@ import {
   Ray,  // Required for scene.pick() to work
   Matrix,
   Material,
+  TransformNode,
 } from '@babylonjs/core';
 // Side-effect import for scene.pick() to work
 import '@babylonjs/core/Culling/ray';
@@ -189,6 +190,7 @@ const CustomModelingPage: React.FC = () => {
   const [measurementInput, setMeasurementInput] = useState<string>('');
   const [showMeasurementInput, setShowMeasurementInput] = useState(false);
   const measurementInputRef = useRef<HTMLInputElement>(null);
+  const measurementInputValueRef = useRef<string>(''); // Track current value for keyboard handler
 
   // Shape modifiers state for UI display (mirrors ref for rendering)
   const [shapeModifiersUI, setShapeModifiersUI] = useState<ShapeModifiers>({
@@ -1239,8 +1241,8 @@ const CustomModelingPage: React.FC = () => {
   }, []);
 
   // Push/Pull functionality - SketchUp-style face extrusion
-  // Extrudes a face along its normal direction by the specified distance
-  // Creates a single solid box with parented edge lines so they all move together
+  // Creates 6 individual faces and 12 edges, all parented to a TransformNode
+  // Each face and edge is individually selectable, but they move together as a group
   const applyPushPull = useCallback((face: Mesh, distance: number, faceNormal: Vector3): Mesh | null => {
     if (!face.metadata || face.metadata.type !== 'face') return null;
     if (Math.abs(distance) < 0.001) return null;
@@ -1250,52 +1252,82 @@ const CustomModelingPage: React.FC = () => {
     const baseCenter = face.position.clone();
 
     meshCounterRef.current++;
-    const solidId = meshCounterRef.current;
+    const groupId = meshCounterRef.current;
 
-    // Create a single solid box
-    const solid = MeshBuilder.CreateBox(`Solid_${solidId}`, {
-      width: width,
-      height: Math.abs(distance),
-      depth: depth
-    }, scene);
-
-    // Position the box: center is at half the extrusion height
-    const extrudeDir = faceNormal.scale(distance);
-    solid.position = new Vector3(
-      baseCenter.x + extrudeDir.x / 2,
-      baseCenter.y + extrudeDir.y / 2,
-      baseCenter.z + extrudeDir.z / 2
+    // Create TransformNode as parent group
+    const solidGroup = new TransformNode(`SolidGroup_${groupId}`, scene);
+    solidGroup.position = new Vector3(
+      baseCenter.x,
+      baseCenter.y + distance / 2,
+      baseCenter.z
     );
 
-    // Apply material
-    const mat = new StandardMaterial(`Solid_${solidId}_Mat`, scene);
-    mat.diffuseColor = Color3.FromHexString(selectedColor);
-    mat.specularColor = new Color3(0.2, 0.2, 0.2);
-    solid.material = mat;
-
-    solid.metadata = {
-      type: 'solid',
-      width: width,
-      height: Math.abs(distance),
-      depth: depth,
-      edgeIds: []
-    };
-
-    // Create edge lines parented to solid (so they move together)
     const hw = width / 2;
     const hh = Math.abs(distance) / 2;
     const hd = depth / 2;
 
-    // 8 corners relative to solid center (0,0,0)
+    // Helper to create a face
+    const createFace = (name: string, w: number, h: number, pos: Vector3, rot: Vector3): Mesh => {
+      const f = MeshBuilder.CreateGround(name, { width: w, height: h }, scene);
+      f.position = pos;
+      f.rotation = rot;
+
+      const mat = new StandardMaterial(`${name}_Mat`, scene);
+      mat.diffuseColor = Color3.FromHexString(selectedColor);
+      mat.specularColor = new Color3(0.2, 0.2, 0.2);
+      mat.backFaceCulling = false;
+      f.material = mat;
+      f.parent = solidGroup;
+      f.isPickable = true;
+
+      f.metadata = {
+        type: 'face',
+        width: w,
+        depth: h,
+        groupId: groupId,
+        groupNode: solidGroup,
+      };
+
+      return f;
+    };
+
+    // Create 6 faces (local coords relative to solidGroup center)
+    const faces: Mesh[] = [];
+
+    // Bottom face (Y = -hh)
+    faces.push(createFace(`Face_Bottom_${groupId}`, width, depth,
+      new Vector3(0, -hh, 0), Vector3.Zero()));
+
+    // Top face (Y = +hh)
+    faces.push(createFace(`Face_Top_${groupId}`, width, depth,
+      new Vector3(0, hh, 0), Vector3.Zero()));
+
+    // Front face (Z = -hd)
+    faces.push(createFace(`Face_Front_${groupId}`, width, Math.abs(distance),
+      new Vector3(0, 0, -hd), new Vector3(-Math.PI / 2, 0, 0)));
+
+    // Back face (Z = +hd)
+    faces.push(createFace(`Face_Back_${groupId}`, width, Math.abs(distance),
+      new Vector3(0, 0, hd), new Vector3(Math.PI / 2, 0, 0)));
+
+    // Left face (X = -hw)
+    faces.push(createFace(`Face_Left_${groupId}`, Math.abs(distance), depth,
+      new Vector3(-hw, 0, 0), new Vector3(0, 0, Math.PI / 2)));
+
+    // Right face (X = +hw)
+    faces.push(createFace(`Face_Right_${groupId}`, Math.abs(distance), depth,
+      new Vector3(hw, 0, 0), new Vector3(0, 0, -Math.PI / 2)));
+
+    // 8 corners relative to group center
     const corners = [
-      new Vector3(-hw, -hh, -hd), // 0: bottom-front-left
-      new Vector3(-hw, -hh, +hd), // 1: bottom-back-left
-      new Vector3(+hw, -hh, +hd), // 2: bottom-back-right
-      new Vector3(+hw, -hh, -hd), // 3: bottom-front-right
-      new Vector3(-hw, +hh, -hd), // 4: top-front-left
-      new Vector3(-hw, +hh, +hd), // 5: top-back-left
-      new Vector3(+hw, +hh, +hd), // 6: top-back-right
-      new Vector3(+hw, +hh, -hd), // 7: top-front-right
+      new Vector3(-hw, -hh, -hd), // 0
+      new Vector3(-hw, -hh, +hd), // 1
+      new Vector3(+hw, -hh, +hd), // 2
+      new Vector3(+hw, -hh, -hd), // 3
+      new Vector3(-hw, +hh, -hd), // 4
+      new Vector3(-hw, +hh, +hd), // 5
+      new Vector3(+hw, +hh, +hd), // 6
+      new Vector3(+hw, +hh, -hd), // 7
     ];
 
     // 12 edges
@@ -1306,20 +1338,23 @@ const CustomModelingPage: React.FC = () => {
     ];
 
     edgeIndices.forEach((indices, i) => {
-      const edge = MeshBuilder.CreateLines(`Edge_${solidId}_${i}`, {
+      const edge = MeshBuilder.CreateLines(`Edge_${groupId}_${i}`, {
         points: [corners[indices[0]], corners[indices[1]]],
         updatable: false
       }, scene);
       edge.color = new Color3(0.15, 0.15, 0.15);
-      edge.isPickable = false;
-      edge.parent = solid; // Parent to solid so edges move with it
-      edge.metadata = { type: 'edge', parentSolidId: solid.id };
-      solid.metadata.edgeIds.push(edge.id);
+      edge.isPickable = true;
+      edge.parent = solidGroup;
+      edge.metadata = {
+        type: 'edge',
+        groupId: groupId,
+        groupNode: solidGroup,
+      };
     });
 
     // Dispose the original face and its edges
     if (face.metadata?.edgeIds) {
-      face.metadata.edgeIds.forEach((edgeId: number) => {
+      face.metadata.edgeIds.forEach((edgeId: string) => {
         const edgeMesh = scene.getMeshById(edgeId);
         if (edgeMesh) edgeMesh.dispose();
       });
@@ -1329,7 +1364,8 @@ const CustomModelingPage: React.FC = () => {
     // Store last extrusion distance
     pushPullStateRef.current.lastExtrudeDistance = distance;
 
-    return solid;
+    // Return the top face as primary result
+    return faces[1]; // Top face
   }, [selectedColor]);
 
   // Create/update push/pull preview mesh (wireframe box)
@@ -3109,8 +3145,15 @@ const CustomModelingPage: React.FC = () => {
       highlightLayerRef.current.addMesh(mesh, Color3.FromHexString('#6366f1'));
     }
 
+    // If mesh is part of a group (solid), attach gizmo to parent group
+    // so the whole solid moves together
     if (gizmoManagerRef.current) {
-      gizmoManagerRef.current.attachToMesh(mesh);
+      if (mesh.metadata?.groupNode) {
+        // Attach to parent TransformNode for group movement
+        gizmoManagerRef.current.attachToNode(mesh.metadata.groupNode);
+      } else {
+        gizmoManagerRef.current.attachToMesh(mesh);
+      }
     }
 
     updateMeshProperties(mesh);
