@@ -73,6 +73,29 @@ const CustomModelingPage: React.FC = () => {
   const activeSnapPointRef = useRef<Vector3 | null>(null);  // Currently active snap point for click handling
   const hoveredFaceRef = useRef<Mesh | null>(null);  // Currently hovered face for push/pull highlight
 
+  // Push/Pull state ref for SketchUp-style extrusion
+  const pushPullStateRef = useRef<{
+    baseFace: Mesh | null;           // Selected face to extrude
+    baseFaceNormal: Vector3 | null;  // Face normal direction
+    baseFaceCenter: Vector3 | null;  // Face center point
+    baseClickPoint: Vector3 | null;  // Initial click point on face
+    isExtruding: boolean;            // Currently in extrusion mode
+    previewMesh: Mesh | null;        // Preview mesh during drag
+    lastExtrudeDistance: number;     // For double-click repeat
+    lastClickTime: number;           // For double-click detection
+    lastClickFace: Mesh | null;      // For double-click on same face
+  }>({
+    baseFace: null,
+    baseFaceNormal: null,
+    baseFaceCenter: null,
+    baseClickPoint: null,
+    isExtruding: false,
+    previewMesh: null,
+    lastExtrudeDistance: 0,
+    lastClickTime: 0,
+    lastClickFace: null,
+  });
+
   // HUD overlay refs for Drawing Cursor System
   const hudTextureRef = useRef<AdvancedDynamicTexture | null>(null);
   const pointerCircleRef = useRef<Ellipse | null>(null);
@@ -949,60 +972,18 @@ const CustomModelingPage: React.FC = () => {
     });
   }, []);
 
-  // Snap indicator ref for GUI element (screen-space, fixed size)
-  const snapDotRef = useRef<Ellipse | null>(null);
-
-  // Show snap indicator - GUI dot at screen position (fixed size, doesn't scale with zoom)
-  const showSnapIndicator = useCallback((position: Vector3) => {
-    const scene = sceneRef.current;
-    const guiTexture = guiTextureRef.current;
-    if (!scene || !guiTexture) return;
-
-    // Create snap dot GUI element if it doesn't exist
-    if (!snapDotRef.current) {
-      const dot = new Ellipse('snapDot');
-      dot.width = '10px';
-      dot.height = '10px';
-      dot.color = '#90EE90';  // Light green border
-      dot.thickness = 2;
-      dot.background = '#FFFFFF';  // White fill
-      dot.isVisible = false;
-      guiTexture.addControl(dot);
-      snapDotRef.current = dot;
-    }
-
-    // Convert 3D position to screen coordinates
-    const engine = scene.getEngine();
-    const camera = cameraRef.current;
-    if (!camera) return;
-
-    const screenPos = Vector3.Project(
-      new Vector3(position.x, 0, position.z),
-      Matrix.Identity(),
-      scene.getTransformMatrix(),
-      camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight())
-    );
-
-    // Position the dot at screen coordinates
-    snapDotRef.current.left = screenPos.x - engine.getRenderWidth() / 2;
-    snapDotRef.current.top = screenPos.y - engine.getRenderHeight() / 2;
-    snapDotRef.current.isVisible = true;
-
-    // Also change HUD cursor color
+  // Show snap indicator - change cursor color to green (cursor itself jumps to snap point)
+  const showSnapIndicator = useCallback((_position: Vector3) => {
+    // Cursor position is handled by pointer observer - just change color here
     const pointerCircle = pointerCircleRef.current;
     if (pointerCircle) {
-      pointerCircle.color = 'rgba(0, 255, 136, 0.9)';
-      pointerCircle.background = 'rgba(0, 255, 136, 0.4)';
+      pointerCircle.color = '#90EE90';  // Light green border
+      pointerCircle.background = '#FFFFFF';  // White fill when snapped
     }
   }, []);
 
-  // Hide snap indicator - hide GUI dot
+  // Hide snap indicator - reset cursor color
   const hideSnapIndicator = useCallback(() => {
-    if (snapDotRef.current) {
-      snapDotRef.current.isVisible = false;
-    }
-
-    // Reset HUD color
     const pointerCircle = pointerCircleRef.current;
     if (pointerCircle) {
       pointerCircle.color = 'rgba(0, 122, 255, 0.9)';
@@ -1040,35 +1021,162 @@ const CustomModelingPage: React.FC = () => {
     return nearest;
   }, []);
 
-  // Push/Pull functionality
-  const applyPushPull = useCallback((mesh: Mesh, height: number): Mesh | null => {
-    if (!mesh.metadata || mesh.metadata.type !== 'face') return null;
+  // Push/Pull functionality - SketchUp-style face extrusion
+  // Extrudes a face along its normal direction by the specified distance
+  const applyPushPull = useCallback((face: Mesh, distance: number, faceNormal: Vector3): Mesh | null => {
+    if (!face.metadata || face.metadata.type !== 'face') return null;
+    if (Math.abs(distance) < 0.001) return null;  // Ignore tiny extrusions
 
-    const scene = mesh.getScene();
-    const { width, depth } = mesh.metadata;
+    const scene = face.getScene();
+    const { width, depth } = face.metadata;
+
+    // Calculate extrusion direction (positive = extrude out, negative = would cut in)
+    const extrudeDir = faceNormal.scale(distance);
 
     meshCounterRef.current++;
-    const extruded = MeshBuilder.CreateBox(`Solid_${meshCounterRef.current}`, {
+
+    // Create the 3D solid (box for rectangular faces)
+    const solid = MeshBuilder.CreateBox(`Solid_${meshCounterRef.current}`, {
       width,
-      height: Math.abs(height),
+      height: Math.abs(distance),
       depth,
     }, scene);
 
-    extruded.position = new Vector3(
-      mesh.position.x,
-      Math.abs(height) / 2,
-      mesh.position.z
+    // Position: face center + half the extrusion in normal direction
+    // For upward extrusion from ground face (normal = 0,1,0):
+    // Position Y = face.position.y + distance/2
+    solid.position = new Vector3(
+      face.position.x + extrudeDir.x / 2,
+      face.position.y + Math.abs(distance) / 2,
+      face.position.z + extrudeDir.z / 2
     );
 
+    // Material
     const solidMat = new StandardMaterial(`solidMat_${meshCounterRef.current}`, scene);
     solidMat.diffuseColor = Color3.FromHexString(selectedColor);
     solidMat.specularColor = new Color3(0.2, 0.2, 0.2);
-    extruded.material = solidMat;
+    solid.material = solidMat;
 
-    mesh.dispose();
+    // Enable edge rendering
+    solid.enableEdgesRendering();
+    solid.edgesWidth = 1.5;
+    solid.edgesColor = new Color4(0.15, 0.15, 0.15, 1);
 
-    return extruded;
+    // Mark as solid with metadata
+    solid.metadata = {
+      type: 'solid',
+      originalFacePosition: face.position.clone(),
+      extrudeDistance: distance,
+      extrudeNormal: faceNormal.clone(),
+    };
+
+    // Dispose the original face
+    face.dispose();
+
+    // Store last extrusion distance for double-click repeat
+    pushPullStateRef.current.lastExtrudeDistance = distance;
+
+    return solid;
   }, [selectedColor]);
+
+  // Create/update push/pull preview mesh (wireframe box)
+  const updatePushPullPreview = useCallback((
+    scene: Scene,
+    face: Mesh,
+    distance: number,
+    faceNormal: Vector3
+  ) => {
+    const state = pushPullStateRef.current;
+    const { width, depth } = face.metadata;
+
+    // Dispose old preview
+    if (state.previewMesh) {
+      state.previewMesh.dispose();
+      state.previewMesh = null;
+    }
+
+    if (Math.abs(distance) < 0.001) return;
+
+    // Create preview box (wireframe)
+    const preview = MeshBuilder.CreateBox('pushPullPreview', {
+      width,
+      height: Math.abs(distance),
+      depth,
+    }, scene);
+
+    // Position same as final solid would be
+    const extrudeDir = faceNormal.scale(distance);
+    preview.position = new Vector3(
+      face.position.x + extrudeDir.x / 2,
+      face.position.y + Math.abs(distance) / 2,
+      face.position.z + extrudeDir.z / 2
+    );
+
+    // Wireframe material
+    const previewMat = new StandardMaterial('pushPullPreviewMat', scene);
+    previewMat.diffuseColor = new Color3(0.3, 0.6, 1);
+    previewMat.alpha = 0.3;
+    previewMat.wireframe = true;
+    preview.material = previewMat;
+
+    preview.isPickable = false;
+    state.previewMesh = preview;
+  }, []);
+
+  // Calculate extrusion distance from mouse position using dot product
+  // This gives the distance along the face normal direction
+  const calculateExtrudeDistance = useCallback((
+    scene: Scene,
+    basePoint: Vector3,
+    faceNormal: Vector3,
+    pointerX: number,
+    pointerY: number
+  ): number => {
+    // Create a ray from camera through mouse position
+    const camera = cameraRef.current;
+    if (!camera) return 0;
+
+    const ray = scene.createPickingRay(pointerX, pointerY, Matrix.Identity(), camera);
+
+    // Project the ray onto a plane that contains the base point and is perpendicular to
+    // the view direction but aligned with the face normal
+    // For simplicity, we use the distance moved along screen Y mapped to world units
+
+    // Alternative: Create a plane along the face normal and find intersection
+    // For ground faces (normal = Y), we want to track vertical mouse movement
+
+    // Simple approach: Use screen Y delta mapped to world distance
+    // This works well for ground faces looking from above
+    const screenDelta = pushPullStateRef.current.baseClickPoint
+      ? (pushPullStateRef.current.baseClickPoint.y - pointerY) * 0.02  // Scale factor
+      : 0;
+
+    // For more accurate calculation with arbitrary face normals:
+    // Project mouse ray onto the extrusion axis
+    if (faceNormal.y > 0.9) {
+      // Horizontal face (ground) - use screen Y for height
+      return screenDelta;
+    }
+
+    // For other orientations, calculate ray-plane intersection
+    // Create infinite line along face normal through base point
+    const planeNormal = Vector3.Cross(faceNormal, camera.getDirection(Vector3.Forward())).normalize();
+    if (planeNormal.length() < 0.001) {
+      // Face normal parallel to view - use screen delta
+      return screenDelta;
+    }
+
+    // Find where ray intersects the plane defined by base point and planeNormal
+    const denom = Vector3.Dot(ray.direction, planeNormal);
+    if (Math.abs(denom) < 0.0001) return screenDelta;
+
+    const t = Vector3.Dot(basePoint.subtract(ray.origin), planeNormal) / denom;
+    const hitPoint = ray.origin.add(ray.direction.scale(t));
+
+    // Project the hit point - base point vector onto face normal
+    const delta = hitPoint.subtract(basePoint);
+    return Vector3.Dot(delta, faceNormal);
+  }, []);
 
   // Zoom to fit all meshes
   const zoomExtents = useCallback(() => {
@@ -1249,8 +1357,7 @@ const CustomModelingPage: React.FC = () => {
     // Keeping the ref for backward compatibility but not creating visible marker
     originMarkerRef.current = null;
 
-    // Snap indicator - GUI dot created on demand in showSnapIndicator
-    snapDotRef.current = null;
+    // Snap indicator - cursor itself moves to snap point (magnetic snap)
 
     // HUD overlay for Drawing Cursor System
     const hudTexture = AdvancedDynamicTexture.CreateFullscreenUI('HUD', true, scene);
@@ -1318,20 +1425,32 @@ const CustomModelingPage: React.FC = () => {
     pointerCircle.isVisible = isDrawingTool;
 
     // Set up pointer move observer for HUD position update
+    // MAGNETIC SNAP: When snap is active, cursor JUMPS to snap point
     const observer = scene.onPointerObservable.add((pointerInfo) => {
       if (!pointerCircle.isVisible) return;
       // Filter for move events (type 4 is POINTERMOVE)
       if (pointerInfo.type !== 4) return;
 
-      // Get screen position from pointer info
-      const screenX = scene.pointerX;
-      const screenY = scene.pointerY;
+      const camera = cameraRef.current;
+      const engine = scene.getEngine();
 
-      // Update HUD circle position - offset to appear at cursor tip (pencil point)
-      // The pencil cursor hotspot is at bottom-left, so offset circle to that position
-      // Offset by half the circle size to center it on the cursor tip
-      pointerCircle.left = screenX - 8;  // Center horizontally on cursor
-      pointerCircle.top = screenY - 8;   // Center vertically on cursor
+      // Check if snap is active - if so, move cursor to snap point screen position
+      if (activeSnapPointRef.current && camera) {
+        // Convert 3D snap point to screen coordinates
+        const snapScreenPos = Vector3.Project(
+          new Vector3(activeSnapPointRef.current.x, 0, activeSnapPointRef.current.z),
+          Matrix.Identity(),
+          scene.getTransformMatrix(),
+          camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight())
+        );
+        // Move HUD cursor to snap point (MAGNETIC SNAP!)
+        pointerCircle.left = snapScreenPos.x - 8;
+        pointerCircle.top = snapScreenPos.y - 8;
+      } else {
+        // No snap - follow mouse
+        pointerCircle.left = scene.pointerX - 8;
+        pointerCircle.top = scene.pointerY - 8;
+      }
     });
 
     return () => {
@@ -1487,34 +1606,88 @@ const CustomModelingPage: React.FC = () => {
           }
         }
       } else if (activeTool === 'pushpull') {
-        if (!state.isDrawing) {
-          // First click: Select face to extrude
-          const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
-            mesh.metadata?.type === 'face'
-          );
+        const ppState = pushPullStateRef.current;
+        const now = Date.now();
+        const isDoubleClick = (now - ppState.lastClickTime) < 300;  // 300ms threshold
+
+        // Pick face under cursor
+        const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
+          mesh.metadata?.type === 'face'
+        );
+
+        if (!ppState.isExtruding) {
+          // Not currently extruding - check for face click
           if (pickResult?.hit && pickResult.pickedMesh) {
             const face = pickResult.pickedMesh as Mesh;
-            state.isDrawing = true;
-            state.startPoint = new Vector3(0, scene.pointerY, 0);
-            (state as DrawingState & { targetMesh?: Mesh }).targetMesh = face;
-          }
-        } else {
-          // Second click: Finalize extrusion
-          const targetMesh = (state as DrawingState & { targetMesh?: Mesh }).targetMesh;
-          if (targetMesh && state.startPoint) {
-            const deltaY = (state.startPoint.y - scene.pointerY) * 0.05;
-            if (Math.abs(deltaY) > 0.1) {
-              const solid = applyPushPull(targetMesh, deltaY);
+
+            // Check for double-click on a face - apply last extrusion distance
+            if (isDoubleClick && ppState.lastExtrudeDistance !== 0) {
+              // Double-click: Apply previous extrusion distance
+              const faceNormal = new Vector3(0, 1, 0);  // Ground face normal
+              const solid = applyPushPull(face, ppState.lastExtrudeDistance, faceNormal);
               if (solid) {
                 selectMesh(solid);
+                // Update measurement display
+                setMeasurementValue(Math.abs(ppState.lastExtrudeDistance * 1000).toFixed(0));
+              }
+            } else {
+              // First click: Start extrusion mode
+              ppState.baseFace = face;
+              ppState.baseFaceNormal = new Vector3(0, 1, 0);  // Ground faces have Y-up normal
+              ppState.baseFaceCenter = face.position.clone();
+              ppState.baseClickPoint = new Vector3(scene.pointerX, scene.pointerY, 0);
+              ppState.isExtruding = true;
+
+              // Highlight selected face
+              if (highlightLayerRef.current) {
+                highlightLayerRef.current.addMesh(face, new Color3(0.2, 0.5, 1));
               }
             }
+
+            ppState.lastClickTime = now;
+            ppState.lastClickFace = face;
           }
+        } else {
+          // Currently extruding - second click finalizes
+          if (ppState.baseFace && ppState.baseFaceNormal) {
+            // Calculate final extrusion distance
+            const distance = calculateExtrudeDistance(
+              scene,
+              ppState.baseFaceCenter!,
+              ppState.baseFaceNormal,
+              scene.pointerX,
+              scene.pointerY
+            );
+
+            if (Math.abs(distance) > 0.01) {
+              // Apply extrusion
+              const solid = applyPushPull(ppState.baseFace, distance, ppState.baseFaceNormal);
+              if (solid) {
+                selectMesh(solid);
+                // Update measurement display
+                setMeasurementValue(Math.abs(distance * 1000).toFixed(0));
+              }
+            }
+
+            // Clean up preview
+            if (ppState.previewMesh) {
+              ppState.previewMesh.dispose();
+              ppState.previewMesh = null;
+            }
+
+            // Remove face highlight
+            if (highlightLayerRef.current && ppState.baseFace && !ppState.baseFace.isDisposed()) {
+              highlightLayerRef.current.removeMesh(ppState.baseFace);
+            }
+          }
+
           // Reset state
-          state.isDrawing = false;
-          state.startPoint = null;
-          state.currentPoint = null;
-          (state as DrawingState & { targetMesh?: Mesh }).targetMesh = undefined;
+          ppState.baseFace = null;
+          ppState.baseFaceNormal = null;
+          ppState.baseFaceCenter = null;
+          ppState.baseClickPoint = null;
+          ppState.isExtruding = false;
+          ppState.lastClickTime = now;
         }
       } else if (activeTool === 'select') {
         const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
@@ -1602,33 +1775,50 @@ const CustomModelingPage: React.FC = () => {
           hideSnapIndicator();
         }
       } else if (activeTool === 'pushpull') {
-        // Push/pull tool: highlight face on hover (SketchUp-style)
+        const ppState = pushPullStateRef.current;
         activeSnapPointRef.current = null;
         hideSnapIndicator();
 
-        // Pick faces to highlight
-        const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) => {
-          return mesh.metadata?.type === 'face';
-        });
+        if (ppState.isExtruding && ppState.baseFace && ppState.baseFaceNormal && ppState.baseFaceCenter) {
+          // Currently extruding - update preview and measurement
+          const distance = calculateExtrudeDistance(
+            scene,
+            ppState.baseFaceCenter,
+            ppState.baseFaceNormal,
+            scene.pointerX,
+            scene.pointerY
+          );
 
-        if (pickResult?.hit && pickResult.pickedMesh && highlightLayerRef.current) {
-          const hoveredMesh = pickResult.pickedMesh as Mesh;
+          // Update preview mesh
+          updatePushPullPreview(scene, ppState.baseFace, distance, ppState.baseFaceNormal);
 
-          // Only update if hovering different face
-          if (hoveredFaceRef.current !== hoveredMesh) {
-            // Remove previous highlight
-            if (hoveredFaceRef.current) {
-              highlightLayerRef.current.removeMesh(hoveredFaceRef.current);
-            }
-            // Add new highlight (blue like SketchUp)
-            highlightLayerRef.current.addMesh(hoveredMesh, new Color3(0.4, 0.6, 1));
-            hoveredFaceRef.current = hoveredMesh;
-          }
+          // Update measurement display (convert to mm)
+          setMeasurementValue(Math.abs(distance * 1000).toFixed(0));
         } else {
-          // Not hovering over a face - clear highlight
-          if (hoveredFaceRef.current && highlightLayerRef.current) {
-            highlightLayerRef.current.removeMesh(hoveredFaceRef.current);
-            hoveredFaceRef.current = null;
+          // Not extruding - highlight faces on hover (SketchUp-style)
+          const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) => {
+            return mesh.metadata?.type === 'face';
+          });
+
+          if (pickResult?.hit && pickResult.pickedMesh && highlightLayerRef.current) {
+            const hoveredMesh = pickResult.pickedMesh as Mesh;
+
+            // Only update if hovering different face
+            if (hoveredFaceRef.current !== hoveredMesh) {
+              // Remove previous highlight
+              if (hoveredFaceRef.current) {
+                highlightLayerRef.current.removeMesh(hoveredFaceRef.current);
+              }
+              // Add new highlight (blue like SketchUp)
+              highlightLayerRef.current.addMesh(hoveredMesh, new Color3(0.4, 0.6, 1));
+              hoveredFaceRef.current = hoveredMesh;
+            }
+          } else {
+            // Not hovering over a face - clear highlight
+            if (hoveredFaceRef.current && highlightLayerRef.current) {
+              highlightLayerRef.current.removeMesh(hoveredFaceRef.current);
+              hoveredFaceRef.current = null;
+            }
           }
         }
       } else {
@@ -1734,7 +1924,7 @@ const CustomModelingPage: React.FC = () => {
         canvas.removeEventListener('pointerup', handlePointerUp);
       }
     };
-  }, [activeTool, selectedColor, getGroundPoint, updatePreviewLine, updatePreviewRectangle, updatePreviewCircle, updatePreviewPolygon, finalizeLine, finalizeRectangle, finalizeCircle, finalizePolygon, applyPushPull, zoomExtents, addLineSnapPoints, addRectangleSnapPoints, showSnapIndicator, hideSnapIndicator, findNearestSnapPoint]);
+  }, [activeTool, selectedColor, getGroundPoint, updatePreviewLine, updatePreviewRectangle, updatePreviewCircle, updatePreviewPolygon, finalizeLine, finalizeRectangle, finalizeCircle, finalizePolygon, applyPushPull, zoomExtents, addLineSnapPoints, addRectangleSnapPoints, showSnapIndicator, hideSnapIndicator, findNearestSnapPoint, updatePushPullPreview, calculateExtrudeDistance]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1966,6 +2156,17 @@ const CustomModelingPage: React.FC = () => {
     }
 
     updateMeshProperties(mesh);
+
+    // Show face dimensions in measurement box (mm)
+    if (mesh.metadata?.type === 'face') {
+      mesh.refreshBoundingInfo();
+      const boundingInfo = mesh.getBoundingInfo();
+      const size = boundingInfo.boundingBox.extendSizeWorld;
+      // Width (X) and Depth (Z) in mm
+      const widthMm = Math.round(size.x * 2 * UNIT_TO_MM);
+      const heightMm = Math.round(size.z * 2 * UNIT_TO_MM);
+      setCurrentMeasurement({ width: widthMm, height: heightMm });
+    }
   };
 
   const deselectMesh = () => {
@@ -2644,6 +2845,12 @@ const CustomModelingPage: React.FC = () => {
                 ? `반지름: ${Math.round(currentMeasurement.height)} mm`
                 : `반지름: ${Math.round(currentMeasurement.height)} mm, ${currentMeasurement.sides || 6}각형`
               }
+            </span>
+          )}
+          {/* Selected face measurement display */}
+          {selectedMesh?.metadata?.type === 'face' && !isDrawing && currentMeasurement.width > 0 && (
+            <span className={styles.measureDisplay}>
+              {Math.round(currentMeasurement.width)} x {Math.round(currentMeasurement.height)} mm
             </span>
           )}
           <input
