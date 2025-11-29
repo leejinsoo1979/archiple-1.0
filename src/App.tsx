@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import EditorPage from './pages/EditorPage'
 import PlayPage from './pages/PlayPage'
@@ -12,7 +13,29 @@ import WallEditorPage from './pages/WallEditorPage';
 import CustomModelingPage from './pages/CustomModelingPage';
 import './App.css'
 
+// Initialize theme from localStorage immediately
+const initializeTheme = () => {
+  const savedThemeMode = localStorage.getItem('themeMode') as 'light' | 'dark' | null;
+  const savedThemeColor = localStorage.getItem('themeColor');
+
+  if (savedThemeMode) {
+    document.documentElement.setAttribute('data-theme', savedThemeMode);
+  }
+  if (savedThemeColor) {
+    document.documentElement.style.setProperty('--theme-color', savedThemeColor);
+    document.documentElement.style.setProperty('--primary', savedThemeColor);
+  }
+};
+
+// Run immediately on module load
+initializeTheme();
+
 function App() {
+  // Also run on mount to ensure theme is applied
+  useEffect(() => {
+    initializeTheme();
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>

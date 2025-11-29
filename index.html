@@ -12,6 +12,7 @@
         var themeColor = localStorage.getItem('themeColor') || '#3fae7a';
         document.documentElement.setAttribute('data-theme', themeMode);
         document.documentElement.style.setProperty('--theme-color', themeColor);
+        document.documentElement.style.setProperty('--primary', themeColor);
       })();
     </script>
     <!-- OpenCV.js for image processing -->

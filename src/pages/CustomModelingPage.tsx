@@ -902,7 +902,7 @@ const CustomModelingPage: React.FC = () => {
   const showSnapIndicator = useCallback((position: Vector3) => {
     const indicator = snapIndicatorRef.current;
     if (indicator) {
-      indicator.position = new Vector3(position.x, 0.12, position.z);
+      indicator.position = new Vector3(position.x, 0.02, position.z);
       indicator.isVisible = true;
     }
   }, []);
@@ -1147,15 +1147,14 @@ const CustomModelingPage: React.FC = () => {
 
     // Snap indicator - hidden by default, shown when hovering near snap points with drawing tools
     const snapIndicator = MeshBuilder.CreateSphere('snapIndicator', {
-      diameter: 0.35,
-      segments: 24,
+      diameter: 0.12,
+      segments: 16,
     }, scene);
-    snapIndicator.position = new Vector3(0, 0.15, 0);
+    snapIndicator.position = new Vector3(0, 0.02, 0);
     const snapMat = new StandardMaterial('snapMat', scene);
-    snapMat.diffuseColor = new Color3(0, 1.0, 0.4); // Bright cyan-green
-    snapMat.emissiveColor = new Color3(0.2, 1.0, 0.5); // Strong neon glow
-    snapMat.specularColor = new Color3(1, 1, 1);
-    snapMat.alpha = 0.95;
+    snapMat.diffuseColor = new Color3(0.1, 0.1, 0.1); // Black
+    snapMat.emissiveColor = new Color3(0, 0, 0);
+    snapMat.specularColor = new Color3(0, 0, 0);
     snapIndicator.material = snapMat;
     snapIndicator.isPickable = false;
     snapIndicator.isVisible = false; // Hidden by default
