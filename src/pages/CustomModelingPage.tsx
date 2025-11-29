@@ -2052,6 +2052,7 @@ const CustomModelingPage: React.FC = () => {
   // Push/Pull functionality - SketchUp-style face extrusion
   // Creates 6 individual pickable faces + 12 edges for full selectability
   const applyPushPull = useCallback((face: Mesh, distance: number, faceNormal: Vector3): Mesh | null => {
+    console.log('[PushPull] applyPushPull called:', { distance, faceNormal: faceNormal.toString(), faceDir: face.metadata?.faceDir });
     if (!face.metadata || face.metadata.type !== 'face') return null;
     if (Math.abs(distance) < 0.001) return null;
 
@@ -2262,6 +2263,7 @@ const CustomModelingPage: React.FC = () => {
   // Offset functionality - SketchUp-style face offset
   // Creates an inner or outer offset of a face with connecting edges
   const applyOffset = useCallback((face: Mesh, distance: number): Mesh | null => {
+    console.log('[Offset] applyOffset called:', { faceId: face.id, faceName: face.name, distance, metadata: face.metadata });
     if (!face.metadata || face.metadata.type !== 'face') return null;
     if (Math.abs(distance) < 0.001) return null;
 
@@ -2394,6 +2396,7 @@ const CustomModelingPage: React.FC = () => {
       shape: innerShape,
       holes: []
     };
+    console.log('[Offset] Created inner face:', { id: innerFace.id, name: innerFace.name, metadata: innerFace.metadata });
 
     // Create ring faces (trapezoid segments between original and offset edges)
     // Each segment: orig[i], orig[i+1], offset[i+1], offset[i]
@@ -2451,6 +2454,7 @@ const CustomModelingPage: React.FC = () => {
         shape: ringShape,
         holes: []
       };
+      console.log('[Offset] Created ring face:', { id: ringFace.id, name: ringFace.name, i, metadata: ringFace.metadata });
 
       // Create connecting edge (between original and offset vertex)
       const connectEdge = MeshBuilder.CreateLines(`OffsetConnect_${ringId}`, {
@@ -2476,9 +2480,12 @@ const CustomModelingPage: React.FC = () => {
       innerEdge.metadata = { type: 'edge' };
     }
 
-    // Delete the original face and its edges
+    // Delete the original face only (keep outer edges - they form ring boundary)
+    // Note: Original face's outer edges are now part of ring faces' outer boundary
+    console.log('[Offset] Disposing original face:', { id: face.id, name: face.name });
     face.getChildMeshes().forEach(child => child.dispose());
     face.dispose();
+    console.log('[Offset] Offset complete - created 1 inner face + ' + n + ' ring faces');
 
     // Store last offset distance
     offsetStateRef.current.lastOffsetDistance = distance;
@@ -2590,12 +2597,36 @@ const CustomModelingPage: React.FC = () => {
 
     const absDistance = Math.abs(distance);
     const normalizedNormal = faceNormal.normalize();
+    const absX = Math.abs(normalizedNormal.x);
+    const absY = Math.abs(normalizedNormal.y);
+    const absZ = Math.abs(normalizedNormal.z);
 
-    // Create preview box (same dimensions as solid, then rotate)
+    // Determine box dimensions based on face normal - NO ROTATION
+    // Same logic as applyPushPull
+    let boxWidth: number, boxHeight: number, boxDepth: number;
+
+    if (absY > absX && absY > absZ) {
+      // Y-axis face - extrude in Y direction
+      boxWidth = width;
+      boxHeight = absDistance;
+      boxDepth = depth;
+    } else if (absX > absZ) {
+      // X-axis face - extrude in X direction
+      boxWidth = absDistance;
+      boxHeight = depth;
+      boxDepth = width;
+    } else {
+      // Z-axis face - extrude in Z direction
+      boxWidth = width;
+      boxHeight = depth;
+      boxDepth = absDistance;
+    }
+
+    // Create preview box with correct dimensions (no rotation needed)
     const preview = MeshBuilder.CreateBox('pushPullPreview', {
-      width,
-      height: absDistance,
-      depth,
+      width: boxWidth,
+      height: boxHeight,
+      depth: boxDepth,
     }, scene);
 
     // Position using face's absolute position + half the extrude direction
@@ -2607,14 +2638,7 @@ const CustomModelingPage: React.FC = () => {
       faceAbsPos.z + extrudeDir.z
     );
 
-    // Rotate preview to match extrusion direction (same as solid)
-    if (Math.abs(normalizedNormal.x) > 0.9) {
-      preview.rotation.z = normalizedNormal.x > 0 ? -Math.PI / 2 : Math.PI / 2;
-    } else if (Math.abs(normalizedNormal.z) > 0.9) {
-      preview.rotation.x = normalizedNormal.z > 0 ? Math.PI / 2 : -Math.PI / 2;
-    } else if (normalizedNormal.y < -0.9) {
-      preview.rotation.x = Math.PI;
-    }
+    // NO ROTATION - dimensions already correct for world-aligned box
 
     // Semi-transparent preview material (becomes solid on click)
     const previewMat = new StandardMaterial('pushPullPreviewMat', scene);
@@ -4035,6 +4059,7 @@ const CustomModelingPage: React.FC = () => {
               scene.pointerY
             );
 
+            console.log('[PushPull] Finalize click - distance:', distance);
             if (Math.abs(distance) > 0.01) {
               // Apply extrusion
               const solid = applyPushPull(ppState.baseFace, distance, ppState.baseFaceNormal);
