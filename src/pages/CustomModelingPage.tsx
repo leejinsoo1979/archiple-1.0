@@ -240,10 +240,14 @@ const CustomModelingPage: React.FC = () => {
     return saved || 'dark';
   });
 
-  // Theme color - read from localStorage (from main Archiple tool)
+  // Theme color - read from CSS variable (set by App.tsx) or localStorage
   const [themeColor, setThemeColor] = useState<string>(() => {
+    // First try CSS variable from document root
+    const cssVar = getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim();
+    if (cssVar) return cssVar;
+    // Fallback to localStorage
     const saved = localStorage.getItem('themeColor');
-    return saved || '#6366F1';
+    return saved || '#3FAEA7'; // Default teal color
   });
 
   // Base snap threshold for origin and endpoints - will be scaled by camera distance
