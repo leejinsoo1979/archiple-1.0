@@ -1246,7 +1246,7 @@ const CustomModelingPage: React.FC = () => {
   }, []);
 
   // Push/Pull functionality - SketchUp-style face extrusion
-  // Creates a single solid box with edge lines (no z-fighting)
+  // Creates a solid box with invisible pickable faces and edge lines
   const applyPushPull = useCallback((face: Mesh, distance: number, faceNormal: Vector3): Mesh | null => {
     if (!face.metadata || face.metadata.type !== 'face') return null;
     if (Math.abs(distance) < 0.001) return null;
@@ -1262,7 +1262,7 @@ const CustomModelingPage: React.FC = () => {
     const hh = Math.abs(distance) / 2;
     const hd = depth / 2;
 
-    // Create a single solid box (no z-fighting)
+    // Create visual solid box (not pickable - faces will be pickable)
     const solid = MeshBuilder.CreateBox(`Solid_${solidId}`, {
       width: width,
       height: Math.abs(distance),
@@ -1279,6 +1279,7 @@ const CustomModelingPage: React.FC = () => {
     mat.diffuseColor = Color3.FromHexString(selectedColor);
     mat.specularColor = new Color3(0.2, 0.2, 0.2);
     solid.material = mat;
+    solid.isPickable = false; // Visual only, faces are pickable
 
     solid.metadata = {
       type: 'solid',
@@ -1286,6 +1287,39 @@ const CustomModelingPage: React.FC = () => {
       height: Math.abs(distance),
       depth: depth,
     };
+
+    // Create 6 invisible pickable face meshes (for selection)
+    const createPickFace = (name: string, w: number, h: number, pos: Vector3, rot: Vector3, normal: Vector3) => {
+      const f = MeshBuilder.CreateGround(name, { width: w, height: h }, scene);
+      f.position = pos;
+      f.rotation = rot;
+      f.parent = solid;
+      f.isPickable = true;
+      f.visibility = 0; // Invisible but pickable
+
+      f.metadata = {
+        type: 'face',
+        width: w,
+        depth: h,
+        normal: normal,
+        parentSolid: solid,
+      };
+      return f;
+    };
+
+    // 6 faces (local coords, parented to solid)
+    createPickFace(`Face_Top_${solidId}`, width, depth,
+      new Vector3(0, hh + 0.001, 0), Vector3.Zero(), new Vector3(0, 1, 0));
+    createPickFace(`Face_Bottom_${solidId}`, width, depth,
+      new Vector3(0, -hh - 0.001, 0), new Vector3(Math.PI, 0, 0), new Vector3(0, -1, 0));
+    createPickFace(`Face_Front_${solidId}`, width, Math.abs(distance),
+      new Vector3(0, 0, -hd - 0.001), new Vector3(-Math.PI / 2, 0, 0), new Vector3(0, 0, -1));
+    createPickFace(`Face_Back_${solidId}`, width, Math.abs(distance),
+      new Vector3(0, 0, hd + 0.001), new Vector3(Math.PI / 2, 0, 0), new Vector3(0, 0, 1));
+    createPickFace(`Face_Left_${solidId}`, Math.abs(distance), depth,
+      new Vector3(-hw - 0.001, 0, 0), new Vector3(0, 0, Math.PI / 2), new Vector3(-1, 0, 0));
+    createPickFace(`Face_Right_${solidId}`, Math.abs(distance), depth,
+      new Vector3(hw + 0.001, 0, 0), new Vector3(0, 0, -Math.PI / 2), new Vector3(1, 0, 0));
 
     // 8 corners relative to solid center (for edge lines)
     const corners = [
@@ -1312,9 +1346,9 @@ const CustomModelingPage: React.FC = () => {
         updatable: false
       }, scene);
       edge.color = new Color3(0.15, 0.15, 0.15);
-      edge.isPickable = false;
-      edge.parent = solid; // Parent to solid so edges move with it
-      edge.metadata = { type: 'edge', parentSolidId: solid.id };
+      edge.isPickable = true;
+      edge.parent = solid;
+      edge.metadata = { type: 'edge', parentSolid: solid };
     });
 
     // Dispose the original face and its edges
@@ -3120,12 +3154,23 @@ const CustomModelingPage: React.FC = () => {
     }
 
     setSelectedMesh(mesh);
+
+    // For invisible faces, highlight the parent solid instead
     if (highlightLayerRef.current) {
-      highlightLayerRef.current.addMesh(mesh, Color3.FromHexString('#6366f1'));
+      if (mesh.metadata?.parentSolid && mesh.visibility === 0) {
+        highlightLayerRef.current.addMesh(mesh.metadata.parentSolid, Color3.FromHexString('#6366f1'));
+      } else {
+        highlightLayerRef.current.addMesh(mesh, Color3.FromHexString('#6366f1'));
+      }
     }
 
+    // Attach gizmo to parent solid if this is a face/edge of a solid
     if (gizmoManagerRef.current) {
-      gizmoManagerRef.current.attachToMesh(mesh);
+      if (mesh.metadata?.parentSolid) {
+        gizmoManagerRef.current.attachToMesh(mesh.metadata.parentSolid);
+      } else {
+        gizmoManagerRef.current.attachToMesh(mesh);
+      }
     }
 
     updateMeshProperties(mesh);
@@ -3144,7 +3189,12 @@ const CustomModelingPage: React.FC = () => {
 
   const deselectMesh = () => {
     if (highlightLayerRef.current && selectedMesh) {
-      highlightLayerRef.current.removeMesh(selectedMesh);
+      // Remove highlight from parent solid if this was an invisible face
+      if (selectedMesh.metadata?.parentSolid && selectedMesh.visibility === 0) {
+        highlightLayerRef.current.removeMesh(selectedMesh.metadata.parentSolid);
+      } else {
+        highlightLayerRef.current.removeMesh(selectedMesh);
+      }
     }
     setSelectedMesh(null);
     setMeshProperties(null);
@@ -3254,7 +3304,7 @@ const CustomModelingPage: React.FC = () => {
     { id: 'zoom', icon: <svg viewBox="0 0 24 24" fill="none"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="1.5" /><line x1="14" y1="14" x2="20" y2="20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /><line x1="10" y1="7" x2="10" y2="13" stroke="currentColor" strokeWidth="1.5" /><line x1="7" y1="10" x2="13" y2="10" stroke="currentColor" strokeWidth="1.5" /></svg>, title: 'Zoom (Z)' },
     { id: 'zoomExtents', icon: <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 1" /><path d="M4 8V4H8M16 4H20V8M20 16V20H16M8 20H4V16" stroke="currentColor" strokeWidth="1.5" /></svg>, title: 'Zoom Extents (Shift+Z)' },
     { type: 'divider' },
-    { id: 'section', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="12" r="9" strokeWidth="1.5" /><line x1="0" y1="12" x2="19" y2="12" strokeWidth="2" /><path d="M19 12 L15 8 V16 Z" fill="currentColor" stroke="none" /><text x="11" y="9.5" fontSize="8" textAnchor="middle" fill="currentColor" stroke="none" fontFamily="serif" fontWeight="bold">C</text><text x="11" y="19" fontSize="6" textAnchor="middle" fill="currentColor" stroke="none" fontFamily="serif">A-5</text></svg>, title: 'Section Plane' },
+    { id: 'section', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="10.5" cy="12" r="7.5" strokeWidth="1.5" /><line x1="1.5" y1="12" x2="18" y2="12" strokeWidth="2" /><path d="M18 8 V16 L23.5 12 Z" fill="currentColor" stroke="none" /><text x="10.5" y="9" fontSize="7" textAnchor="middle" fill="currentColor" stroke="none" fontFamily="Times New Roman, serif" fontWeight="bold">C</text><text x="10.5" y="17.5" fontSize="5.5" textAnchor="middle" fill="currentColor" stroke="none" fontFamily="Times New Roman, serif" fontWeight="bold">A-5</text></svg>, title: 'Section Plane' },
     { id: 'text', icon: <svg viewBox="0 0 24 24" fill="none"><text x="12" y="17" fontSize="14" textAnchor="middle" fill="currentColor" fontWeight="bold">T</text></svg>, title: 'Text' },
   ];
 
