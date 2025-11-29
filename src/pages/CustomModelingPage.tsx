@@ -159,16 +159,17 @@ const CustomModelingPage: React.FC = () => {
 
   // Base snap threshold for origin and endpoints - will be scaled by camera distance
   // This makes snap feel consistent regardless of zoom level (like screen-space snapping)
-  const SNAP_THRESHOLD_BASE = 0.03;  // 3% of camera radius
+  // Higher value = more magnetic snap (SketchUp-like behavior)
+  const SNAP_THRESHOLD_BASE = 0.08;  // 8% of camera radius for strong magnetic snap
 
   // Unit conversion: 1 unit in 3D = 1000mm (1 meter)
   // So if user types 500mm, it becomes 0.5 units
   const MM_TO_UNIT = 0.001;
   const UNIT_TO_MM = 1000;
 
-  // Grid snap resolution: 0.1 units = 100mm for finer diagonal angle control
-  // This allows diagonal lines at many more angles (not just 45° multiples)
-  const GRID_SNAP = 0.1;
+  // Grid snap resolution: 0.01 units = 10mm for very fine control
+  // Nearly free-form drawing while maintaining minimal precision
+  const GRID_SNAP = 0.01;
 
   // Current measurement state for display
   const [currentMeasurement, setCurrentMeasurement] = useState<{
@@ -959,7 +960,8 @@ const CustomModelingPage: React.FC = () => {
     const camera = cameraRef.current;
     // Dynamic threshold: scales with camera distance for consistent "screen feel"
     // When zoomed out (large radius), larger threshold; when zoomed in, smaller threshold
-    const snapThreshold = camera ? Math.max(camera.radius * SNAP_THRESHOLD_BASE, 0.5) : 1.5;
+    // Minimum of 1.0 world units ensures snap works well even when zoomed in very close
+    const snapThreshold = camera ? Math.max(camera.radius * SNAP_THRESHOLD_BASE, 1.0) : 2.0;
 
     let nearest: Vector3 | null = null;
     let minDist = snapThreshold;
