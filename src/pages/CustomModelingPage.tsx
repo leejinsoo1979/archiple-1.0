@@ -1173,6 +1173,12 @@ const CustomModelingPage: React.FC = () => {
     gizmoManagerRef.current = gizmoManager;
 
     engine.runRenderLoop(() => {
+      // Keep snap indicator same screen size regardless of zoom
+      const indicator = snapIndicatorRef.current;
+      if (indicator && indicator.isVisible && camera) {
+        const scale = camera.radius * 0.008; // Adjust multiplier for desired size
+        indicator.scaling.setAll(scale);
+      }
       scene.render();
     });
 
