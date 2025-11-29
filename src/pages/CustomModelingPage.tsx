@@ -22,7 +22,10 @@ import {
   UtilityLayerRenderer,
   HighlightLayer,
   LinesMesh,
+  Ray,  // Required for scene.pick() to work
 } from '@babylonjs/core';
+// Side-effect import for scene.pick() to work
+import '@babylonjs/core/Culling/ray';
 import { AdvancedDynamicTexture, Ellipse, Control } from '@babylonjs/gui';
 
 type ToolType = 'select' | 'eraser' | 'line' | 'arc' | 'rectangle' | 'circle' | 'polygon' | 'pushpull' | 'rotate' | 'move' | 'scale' | 'offset' | 'tape' | 'text' | 'paint' | 'orbit' | 'pan' | 'zoom' | 'zoomExtents' | 'makeComponent' | 'freehand' | 'rotatedRect' | 'arc2pt' | 'arc3pt' | 'pie' | 'followMe' | 'outerShell' | 'dimension' | 'protractor' | 'text3d' | 'axes' | 'section' | 'solidTools' | 'zoomWindow' | 'zoomPrevious' | 'lookAround' | 'walk' | 'tag' | 'positionCamera' | 'flip';
@@ -66,6 +69,7 @@ const CustomModelingPage: React.FC = () => {
   const originMarkerRef = useRef<Mesh | null>(null);
   const snapIndicatorRef = useRef<Mesh | null>(null);
   const snapPointsRef = useRef<Vector3[]>([]);  // Store snap point positions (not meshes)
+  const activeSnapPointRef = useRef<Vector3 | null>(null);  // Currently active snap point for click handling
 
   // HUD overlay refs for Drawing Cursor System
   const hudTextureRef = useRef<AdvancedDynamicTexture | null>(null);
@@ -1298,7 +1302,9 @@ const CustomModelingPage: React.FC = () => {
       // Line tool with continuous drawing mode
       if (activeTool === 'line') {
         const lineInf = lineInferenceRef.current;
-        const point = getGroundPoint(scene, scene.pointerX, scene.pointerY);
+        // Use active snap point if available, otherwise get ground point
+        const rawPoint = getGroundPoint(scene, scene.pointerX, scene.pointerY);
+        const point = activeSnapPointRef.current ? activeSnapPointRef.current.clone() : rawPoint;
         if (point) {
           if (!state.isDrawing) {
             // First click: Start drawing
@@ -1342,7 +1348,9 @@ const CustomModelingPage: React.FC = () => {
           }
         }
       } else if (activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon') {
-        const point = getGroundPoint(scene, scene.pointerX, scene.pointerY);
+        // Use active snap point if available, otherwise get ground point
+        const rawPoint = getGroundPoint(scene, scene.pointerX, scene.pointerY);
+        const point = activeSnapPointRef.current ? activeSnapPointRef.current.clone() : rawPoint;
         if (point) {
           if (!state.isDrawing) {
             // First click: Start drawing
@@ -1464,6 +1472,7 @@ const CustomModelingPage: React.FC = () => {
       }
 
       // Show/hide snap indicator for drawing tools (SketchUp style)
+      // Also save active snap point for use in click handling
       if (activeTool === 'line' || activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'polygon') {
         const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) => mesh.name === 'groundPicker');
         if (pickResult?.hit && pickResult.pickedPoint) {
@@ -1474,29 +1483,39 @@ const CustomModelingPage: React.FC = () => {
           );
           const nearestSnap = findNearestSnapPoint(snappedPoint);
           if (nearestSnap) {
+            activeSnapPointRef.current = nearestSnap.clone();  // Save for click handling
             showSnapIndicator(nearestSnap);
           } else {
+            activeSnapPointRef.current = null;  // Clear when no snap
             hideSnapIndicator();
           }
         } else {
+          activeSnapPointRef.current = null;
           hideSnapIndicator();
         }
       } else {
         // Hide snap indicator when not using drawing tools
+        activeSnapPointRef.current = null;
         hideSnapIndicator();
       }
 
       const state = drawingStateRef.current;
       if (!state.isDrawing || !state.startPoint) return;
 
+      // Use active snap point if available for drawing previews
+      const getSnappedPoint = () => {
+        const rawPoint = getGroundPoint(scene, scene.pointerX, scene.pointerY);
+        return activeSnapPointRef.current ? activeSnapPointRef.current.clone() : rawPoint;
+      };
+
       if (activeTool === 'line') {
-        const point = getGroundPoint(scene, scene.pointerX, scene.pointerY);
+        const point = getSnappedPoint();
         if (point) {
           state.currentPoint = point;
           updatePreviewLine(scene, state.startPoint, point);
         }
       } else if (activeTool === 'rectangle') {
-        const point = getGroundPoint(scene, scene.pointerX, scene.pointerY);
+        const point = getSnappedPoint();
         if (point) {
           state.currentPoint = point;
           updatePreviewRectangle(scene, state.startPoint, point);
@@ -1516,7 +1535,7 @@ const CustomModelingPage: React.FC = () => {
           setCurrentMeasurement({ width: Math.round(w * UNIT_TO_MM), height: Math.round(h * UNIT_TO_MM) });
         }
       } else if (activeTool === 'circle') {
-        const point = getGroundPoint(scene, scene.pointerX, scene.pointerY);
+        const point = getSnappedPoint();
         if (point) {
           state.currentPoint = point;
           updatePreviewCircle(scene, state.startPoint, point);
@@ -1527,7 +1546,7 @@ const CustomModelingPage: React.FC = () => {
           setCurrentMeasurement({ width: 0, height: Math.round(radius * UNIT_TO_MM) });
         }
       } else if (activeTool === 'polygon') {
-        const point = getGroundPoint(scene, scene.pointerX, scene.pointerY);
+        const point = getSnappedPoint();
         if (point) {
           state.currentPoint = point;
           const sides = currentMeasurement.sides || 6;
