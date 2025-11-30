@@ -1381,78 +1381,6 @@ const CustomModelingPage: React.FC = () => {
     face.metadata.edgeIds = edgeIds;
   }, []);
 
-
-  const finalizeLine = useCallback((scene: Scene, start: Vector3, end: Vector3): Mesh => {
-    const lineInf = lineInferenceRef.current;
-
-    // Apply axis lock constraint
-    const constrainedEnd = applyAxisLock(start, end, lineInf.axisLock);
-
-    meshCounterRef.current++;
-
-    // Set edge color based on current axis color
-    let lineColor: Color3;
-    switch (lineInf.axisColor) {
-      case 'red':
-        lineColor = new Color3(0.9, 0.2, 0.2);
-        break;
-      case 'green':
-        lineColor = new Color3(0.2, 0.8, 0.2);
-        break;
-      case 'blue':
-        lineColor = new Color3(0.3, 0.5, 1);
-        break;
-      case 'magenta':
-        lineColor = new Color3(0.9, 0.3, 0.9);
-        break;
-      default:
-        lineColor = new Color3(0.1, 0.1, 0.1);  // Dark gray/black for no inference
-    }
-
-    // Create flat line on ground plane (Y=0.01 to avoid z-fighting)
-    const linePoints = [
-      new Vector3(start.x, 0.001, start.z),
-      new Vector3(constrainedEnd.x, 0.001, constrainedEnd.z)
-    ];
-
-    const edge = MeshBuilder.CreateLines(`Edge_${meshCounterRef.current}`, {
-      points: linePoints,
-      updatable: false
-    }, scene);
-
-    edge.color = lineColor;
-    edge.isPickable = true;
-    edge.intersectionThreshold = 0.3; // Make selection easier
-
-    // IMPORTANT: Force bounding info refresh for LinesMesh
-    // LinesMesh doesn't automatically compute proper bounding box
-    edge.refreshBoundingInfo();
-
-    // Store edge metadata for future operations
-    edge.metadata = {
-      type: 'edge',
-      startPoint: start.clone(),
-      endPoint: constrainedEnd.clone()
-    };
-
-    // Store the endpoint for continuous drawing mode
-    lineInf.lastEndpoint = constrainedEnd.clone();
-    setLineInferenceUI(prev => ({ ...prev, lastEndpoint: constrainedEnd.clone() }));
-
-    // Reset axis lock after finalizing (but keep continuous mode)
-    lineInf.axisLock = 'none';
-    lineInf.inferenceLocked = false;
-    setLineInferenceUI(prev => ({ ...prev, axisLock: 'none', inferenceLocked: false }));
-
-    // Try to split any face that this line crosses
-    splitFaceWithLine(scene, start, constrainedEnd);
-
-    // Try to detect and create face from closed loop
-    detectAndCreateFace(scene, constrainedEnd);
-
-    return edge as unknown as Mesh;
-  }, [applyAxisLock, splitFaceWithLine]);
-
   // Detect closed loops and create faces automatically
   const detectAndCreateFace = useCallback((scene: Scene, newEndpoint: Vector3) => {
     const EPSILON = 0.05;
@@ -1497,10 +1425,9 @@ const CustomModelingPage: React.FC = () => {
     const startKey = pointKey({ x: newEndpoint.x, z: newEndpoint.z });
     if (!graph.has(startKey)) return;
 
-    // DFS to find smallest cycle
+    // BFS to find smallest cycle
     const findCycle = (start: string): string[] | null => {
       const visited = new Set<string>();
-      const parent = new Map<string, string>();
 
       const queue: { node: string; path: string[] }[] = [{ node: start, path: [start] }];
 
@@ -1605,12 +1532,67 @@ const CustomModelingPage: React.FC = () => {
         edgeIds.push(...node.edges.map(e => e.id));
       }
       newFace.metadata.edgeIds = [...new Set(edgeIds)];
-
-      console.log('Auto-created face from closed loop with', cycle.length, 'vertices');
     } catch (e) {
       console.error('Failed to create face from closed loop:', e);
     }
   }, []);
+
+  const finalizeLine = useCallback((scene: Scene, start: Vector3, end: Vector3): Mesh => {
+    const lineInf = lineInferenceRef.current;
+
+    // Apply axis lock constraint
+    const constrainedEnd = applyAxisLock(start, end, lineInf.axisLock);
+
+    meshCounterRef.current++;
+
+    // Finalized lines are always black/dark gray
+    const lineColor = new Color3(0.1, 0.1, 0.1);
+
+    // Create line using actual Y coordinates (add small offset to avoid z-fighting with ground)
+    const startY = start.y === 0 ? 0.001 : start.y;
+    const endY = constrainedEnd.y === 0 ? 0.001 : constrainedEnd.y;
+    const linePoints = [
+      new Vector3(start.x, startY, start.z),
+      new Vector3(constrainedEnd.x, endY, constrainedEnd.z)
+    ];
+
+    const edge = MeshBuilder.CreateLines(`Edge_${meshCounterRef.current}`, {
+      points: linePoints,
+      updatable: false
+    }, scene);
+
+    edge.color = lineColor;
+    edge.isPickable = true;
+    edge.intersectionThreshold = 0.3; // Make selection easier
+
+    // IMPORTANT: Force bounding info refresh for LinesMesh
+    // LinesMesh doesn't automatically compute proper bounding box
+    edge.refreshBoundingInfo();
+
+    // Store edge metadata for future operations
+    edge.metadata = {
+      type: 'edge',
+      startPoint: start.clone(),
+      endPoint: constrainedEnd.clone()
+    };
+
+    // Store the endpoint for continuous drawing mode
+    lineInf.lastEndpoint = constrainedEnd.clone();
+    setLineInferenceUI(prev => ({ ...prev, lastEndpoint: constrainedEnd.clone() }));
+
+    // Reset axis lock after finalizing (but keep continuous mode)
+    lineInf.axisLock = 'none';
+    lineInf.inferenceLocked = false;
+    setLineInferenceUI(prev => ({ ...prev, axisLock: 'none', inferenceLocked: false }));
+
+    // Try to split any face that this line crosses
+    splitFaceWithLine(scene, start, constrainedEnd);
+
+    // Try to detect and create face from closed loop
+    detectAndCreateFace(scene, constrainedEnd);
+
+    return edge as unknown as Mesh;
+  }, [applyAxisLock, splitFaceWithLine, detectAndCreateFace]);
 
   // Finalize rectangle as face geometry with modifier support
   const finalizeRectangle = useCallback((scene: Scene, start: Vector3, end: Vector3): Mesh | null => {
@@ -4387,6 +4369,7 @@ const CustomModelingPage: React.FC = () => {
         const lineInf = lineInferenceRef.current;
         // Use getDrawingPoint which can pick on faces OR ground, preserving Y coordinate
         const point = getDrawingPoint(scene, scene.pointerX, scene.pointerY);
+        console.log('LINE CLICK:', { pointerX: scene.pointerX, pointerY: scene.pointerY, point, isDrawing: state.isDrawing });
         if (point) {
           if (!state.isDrawing) {
             // First click: Start drawing
