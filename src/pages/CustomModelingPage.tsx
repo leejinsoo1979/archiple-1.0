@@ -3400,6 +3400,7 @@ const CustomModelingPage: React.FC = () => {
 
   // Offset functionality - SketchUp-style face offset
   // Creates an inner or outer offset of a face with connecting edges
+  // Supports all face orientations: XZ (horizontal), XY (front/back), YZ (left/right)
   const applyOffset = useCallback((face: Mesh, distance: number): Mesh | null => {
     if (!face.metadata || face.metadata.type !== 'face') return null;
     if (Math.abs(distance) < 0.001) return null;
@@ -3427,31 +3428,95 @@ const CustomModelingPage: React.FC = () => {
 
     if (rawVertices.length < 3) return null;
 
-    // Calculate face center and Y position
+    // Calculate face center
     const center = rawVertices.reduce((acc, v) => acc.add(v), Vector3.Zero()).scale(1 / rawVertices.length);
-    const yPos = center.y;
 
-    // IMPORTANT: Sort vertices by angle from center (counter-clockwise order)
-    // This ensures correct polygon perimeter order for offset calculation
+    // Detect face plane type by analyzing vertex spread
+    // The axis with smallest spread is the face normal direction
+    const minX = Math.min(...rawVertices.map(v => v.x));
+    const maxX = Math.max(...rawVertices.map(v => v.x));
+    const minY = Math.min(...rawVertices.map(v => v.y));
+    const maxY = Math.max(...rawVertices.map(v => v.y));
+    const minZ = Math.min(...rawVertices.map(v => v.z));
+    const maxZ = Math.max(...rawVertices.map(v => v.z));
+
+    const spanX = maxX - minX;
+    const spanY = maxY - minY;
+    const spanZ = maxZ - minZ;
+
+    // Determine plane type: XZ (Y normal), XY (Z normal), or YZ (X normal)
+    type PlaneType = 'XZ' | 'XY' | 'YZ';
+    let planeType: PlaneType;
+    let fixedAxisValue: number;
+
+    if (spanY <= spanX && spanY <= spanZ) {
+      planeType = 'XZ'; // Horizontal face (normal along Y)
+      fixedAxisValue = center.y;
+    } else if (spanZ <= spanX && spanZ <= spanY) {
+      planeType = 'XY'; // Front/back face (normal along Z)
+      fixedAxisValue = center.z;
+    } else {
+      planeType = 'YZ'; // Left/right face (normal along X)
+      fixedAxisValue = center.x;
+    }
+
+    console.log(`[Offset] Detected plane type: ${planeType}, fixed axis value: ${fixedAxisValue}`);
+
+    // Helper functions for converting between 3D and 2D coordinates based on plane type
+    const get2D = (v: Vector3): { u: number; w: number } => {
+      switch (planeType) {
+        case 'XZ': return { u: v.x, w: v.z };
+        case 'XY': return { u: v.x, w: v.y };
+        case 'YZ': return { u: v.z, w: v.y };
+      }
+    };
+
+    const make3D = (u: number, w: number): Vector3 => {
+      switch (planeType) {
+        case 'XZ': return new Vector3(u, fixedAxisValue, w);
+        case 'XY': return new Vector3(u, w, fixedAxisValue);
+        case 'YZ': return new Vector3(fixedAxisValue, w, u);
+      }
+    };
+
+    // Convert center to 2D
+    const center2D = get2D(center);
+
+    // Sort vertices by angle from center in 2D (counter-clockwise order)
     const vertices = [...rawVertices].sort((a, b) => {
-      const angleA = Math.atan2(a.z - center.z, a.x - center.x);
-      const angleB = Math.atan2(b.z - center.z, b.x - center.x);
+      const a2D = get2D(a);
+      const b2D = get2D(b);
+      const angleA = Math.atan2(a2D.w - center2D.w, a2D.u - center2D.u);
+      const angleB = Math.atan2(b2D.w - center2D.w, b2D.u - center2D.u);
       return angleA - angleB;
     });
     const n = vertices.length;
 
-    // Helper: get perpendicular that points inward (toward center)
-    const getInwardNormal = (p1: Vector3, p2: Vector3): Vector3 => {
-      const edge = new Vector3(p2.x - p1.x, 0, p2.z - p1.z);
-      const perp = new Vector3(-edge.z, 0, edge.x).normalize();
-      // Check if perpendicular points toward center
-      const midpoint = new Vector3((p1.x + p2.x) / 2, yPos, (p1.z + p2.z) / 2);
-      const toCenter = new Vector3(center.x - midpoint.x, 0, center.z - midpoint.z);
-      // If perpendicular points away from center, flip it
-      if (perp.x * toCenter.x + perp.z * toCenter.z < 0) {
-        perp.scaleInPlace(-1);
+    // Helper: get perpendicular that points inward (toward center) in 2D
+    const getInwardNormal2D = (p1: Vector3, p2: Vector3): { u: number; w: number } => {
+      const p1_2D = get2D(p1);
+      const p2_2D = get2D(p2);
+      const edgeU = p2_2D.u - p1_2D.u;
+      const edgeW = p2_2D.w - p1_2D.w;
+      // Perpendicular in 2D: (-edgeW, edgeU)
+      let perpU = -edgeW;
+      let perpW = edgeU;
+      const len = Math.sqrt(perpU * perpU + perpW * perpW);
+      if (len > 0.0001) {
+        perpU /= len;
+        perpW /= len;
       }
-      return perp;
+      // Check if perpendicular points toward center
+      const midU = (p1_2D.u + p2_2D.u) / 2;
+      const midW = (p1_2D.w + p2_2D.w) / 2;
+      const toCenterU = center2D.u - midU;
+      const toCenterW = center2D.w - midW;
+      // If perpendicular points away from center, flip it
+      if (perpU * toCenterU + perpW * toCenterW < 0) {
+        perpU = -perpU;
+        perpW = -perpW;
+      }
+      return { u: perpU, w: perpW };
     };
 
     // Calculate offset vertices using edge perpendicular method (parallel edges)
@@ -3462,68 +3527,101 @@ const CustomModelingPage: React.FC = () => {
       const curr = vertices[i];
       const next = vertices[(i + 1) % n];
 
+      const prev2D = get2D(prev);
+      const curr2D = get2D(curr);
+      const next2D = get2D(next);
+
       // Get inward normals for both edges meeting at curr
-      const normal1 = getInwardNormal(prev, curr);
-      const normal2 = getInwardNormal(curr, next);
+      const normal1 = getInwardNormal2D(prev, curr);
+      const normal2 = getInwardNormal2D(curr, next);
 
       // Offset the two edges (positive distance = inward)
-      const p1 = new Vector3(prev.x + normal1.x * distance, yPos, prev.z + normal1.z * distance);
-      const p2 = new Vector3(curr.x + normal1.x * distance, yPos, curr.z + normal1.z * distance);
-      const p3 = new Vector3(curr.x + normal2.x * distance, yPos, curr.z + normal2.z * distance);
-      const p4 = new Vector3(next.x + normal2.x * distance, yPos, next.z + normal2.z * distance);
+      const p1_u = prev2D.u + normal1.u * distance;
+      const p1_w = prev2D.w + normal1.w * distance;
+      const p2_u = curr2D.u + normal1.u * distance;
+      const p2_w = curr2D.w + normal1.w * distance;
+      const p3_u = curr2D.u + normal2.u * distance;
+      const p3_w = curr2D.w + normal2.w * distance;
+      const p4_u = next2D.u + normal2.u * distance;
+      const p4_w = next2D.w + normal2.w * distance;
 
       // Find intersection of the two offset edges
-      const d1 = new Vector3(p2.x - p1.x, 0, p2.z - p1.z);
-      const d2 = new Vector3(p4.x - p3.x, 0, p4.z - p3.z);
+      const d1_u = p2_u - p1_u;
+      const d1_w = p2_w - p1_w;
+      const d2_u = p4_u - p3_u;
+      const d2_w = p4_w - p3_w;
 
-      const cross = d1.x * d2.z - d1.z * d2.x;
+      const cross = d1_u * d2_w - d1_w * d2_u;
 
+      let offsetU: number, offsetW: number;
       if (Math.abs(cross) < 0.0001) {
         // Parallel edges - use midpoint of offset points
-        offsetVertices.push(new Vector3((p2.x + p3.x) / 2, yPos, (p2.z + p3.z) / 2));
+        offsetU = (p2_u + p3_u) / 2;
+        offsetW = (p2_w + p3_w) / 2;
       } else {
         // Find intersection point
-        const t = ((p3.x - p1.x) * d2.z - (p3.z - p1.z) * d2.x) / cross;
-        offsetVertices.push(new Vector3(p1.x + t * d1.x, yPos, p1.z + t * d1.z));
+        const t = ((p3_u - p1_u) * d2_w - (p3_w - p1_w) * d2_u) / cross;
+        offsetU = p1_u + t * d1_u;
+        offsetW = p1_w + t * d1_w;
       }
+
+      offsetVertices.push(make3D(offsetU, offsetW));
     }
 
     meshCounterRef.current++;
     const offsetId = meshCounterRef.current;
 
-    // Calculate inner face center (average of offset vertices)
-    const innerCenterX = offsetVertices.reduce((sum, v) => sum + v.x, 0) / offsetVertices.length;
-    const innerCenterZ = offsetVertices.reduce((sum, v) => sum + v.z, 0) / offsetVertices.length;
+    // Calculate inner face center (average of offset vertices in 2D)
+    const innerCenter2D = {
+      u: offsetVertices.reduce((sum, v) => sum + get2D(v).u, 0) / offsetVertices.length,
+      w: offsetVertices.reduce((sum, v) => sum + get2D(v).w, 0) / offsetVertices.length
+    };
+    const innerCenter3D = make3D(innerCenter2D.u, innerCenter2D.w);
 
-    // Build vertex positions for mesh using earcut (relative to inner center)
+    // Build vertex positions for mesh using earcut (relative to inner center, in 2D)
     const flatPoints: number[] = [];
     offsetVertices.forEach(v => {
-      flatPoints.push(v.x - innerCenterX, v.z - innerCenterZ);
+      const v2D = get2D(v);
+      flatPoints.push(v2D.u - innerCenter2D.u, v2D.w - innerCenter2D.w);
     });
 
-    console.log("[Offset] calling earcut with", flatPoints.length, "points"); const indices = earcut(flatPoints); console.log("[Offset] earcut returned", indices.length, "indices");
+    console.log("[Offset] calling earcut with", flatPoints.length, "points");
+    const indices = earcut(flatPoints);
+    console.log("[Offset] earcut returned", indices.length, "indices");
 
-    // Build vertex positions for mesh (relative to inner center)
+    // Build vertex positions for mesh based on plane type
+    // Mesh local coordinates: always use (local_x, 0, local_z) for flat face
+    // Then position and rotate the mesh to correct world orientation
     const meshPositions: number[] = [];
     const meshIndices: number[] = [];
     const meshNormals: number[] = [];
 
+    // For mesh creation, use local 2D coordinates mapped to XZ plane (Y=0)
     offsetVertices.forEach(v => {
-      meshPositions.push(v.x - innerCenterX, 0, v.z - innerCenterZ);
-      meshNormals.push(0, 1, 0);
+      const v2D = get2D(v);
+      meshPositions.push(v2D.u - innerCenter2D.u, 0, v2D.w - innerCenter2D.w);
+      // Normal direction depends on plane type
+      meshNormals.push(0, 1, 0); // Local normal (will be rotated with mesh)
     });
 
     indices.forEach(i => meshIndices.push(i));
 
-    console.log("[Offset] Creating innerFace mesh"); const innerFace = new Mesh(`OffsetFace_${offsetId}`, scene);
+    console.log("[Offset] Creating innerFace mesh");
+    const innerFace = new Mesh(`OffsetFace_${offsetId}`, scene);
     const vertexData = new VertexData();
     vertexData.positions = meshPositions;
     vertexData.indices = meshIndices;
     vertexData.normals = meshNormals;
     vertexData.applyToMesh(innerFace);
 
-    // Set mesh position to inner center (for correct push/pull positioning)
-    innerFace.position = new Vector3(innerCenterX, yPos, innerCenterZ);
+    // Set mesh position and rotation based on plane type
+    innerFace.position = innerCenter3D.clone();
+    if (planeType === 'XY') {
+      innerFace.rotation.x = Math.PI / 2; // Rotate to face along Z axis
+    } else if (planeType === 'YZ') {
+      innerFace.rotation.z = Math.PI / 2; // Rotate to face along X axis
+    }
+    // XZ: no rotation needed (default horizontal)
 
     const innerMat = new StandardMaterial(`OffsetMat_${offsetId}`, scene);
     innerMat.diffuseColor = Color3.FromHexString(selectedColor);
@@ -3531,51 +3629,58 @@ const CustomModelingPage: React.FC = () => {
     innerMat.backFaceCulling = false;
     innerFace.material = innerMat;
     innerFace.isPickable = true;
-    // Store shape data for push/pull polygon extrusion (relative to inner center)
-    const innerShape = offsetVertices.map(v => ({ x: v.x - innerCenterX, z: v.z - innerCenterZ }));
+
+    // Store shape data for push/pull polygon extrusion
+    // Shape is stored in 2D local coordinates
+    const innerShape = offsetVertices.map(v => {
+      const v2D = get2D(v);
+      return { x: v2D.u - innerCenter2D.u, z: v2D.w - innerCenter2D.w };
+    });
     innerFace.metadata = {
       type: 'face',
       isPolygon: true,
       vertices: offsetVertices.length,
       shape: innerShape,
-      holes: []
+      holes: [],
+      planeType: planeType, // Store plane type for push/pull direction
+      fixedAxisValue: fixedAxisValue
     };
 
     // Create single ring face (donut shape) - outer boundary with inner hole
-    // This avoids 45-degree corner divisions
     meshCounterRef.current++;
     const ringId = meshCounterRef.current;
 
-    // Calculate ring center (average of all vertices)
+    // Calculate ring center (average of all vertices in 2D)
     const allVertices = [...vertices, ...offsetVertices];
-    const ringCenterX = allVertices.reduce((sum, v) => sum + v.x, 0) / allVertices.length;
-    const ringCenterZ = allVertices.reduce((sum, v) => sum + v.z, 0) / allVertices.length;
+    const ringCenter2D = {
+      u: allVertices.reduce((sum, v) => sum + get2D(v).u, 0) / allVertices.length,
+      w: allVertices.reduce((sum, v) => sum + get2D(v).w, 0) / allVertices.length
+    };
+    const ringCenter3D = make3D(ringCenter2D.u, ringCenter2D.w);
 
     // Build flat points for earcut: outer boundary + hole
-    // Outer boundary (original vertices) - CCW order
     const outerFlat: number[] = [];
     vertices.forEach(v => {
-      outerFlat.push(v.x - ringCenterX, v.z - ringCenterZ);
+      const v2D = get2D(v);
+      outerFlat.push(v2D.u - ringCenter2D.u, v2D.w - ringCenter2D.w);
     });
 
     // Inner hole (offset vertices) - must be CW (opposite winding)
-    // Reverse offset vertices to make them CW
     const holeFlat: number[] = [];
     const reversedOffset = [...offsetVertices].reverse();
     reversedOffset.forEach(v => {
-      holeFlat.push(v.x - ringCenterX, v.z - ringCenterZ);
+      const v2D = get2D(v);
+      holeFlat.push(v2D.u - ringCenter2D.u, v2D.w - ringCenter2D.w);
     });
 
     // Combine: outer points, then hole points
     const combinedFlat = [...outerFlat, ...holeFlat];
-    // Hole starts at index n (after outer vertices)
     const holeIndices = [n];
 
     // Triangulate with hole
     const ringTriIndicesRaw = earcut(combinedFlat, holeIndices);
 
-    // Reverse triangle winding order for correct front-face (CCW when viewed from above)
-    // This fixes picking - without this, triangles face downward and aren't pickable from above
+    // Reverse triangle winding order for correct front-face
     const ringTriIndices: number[] = [];
     for (let i = 0; i < ringTriIndicesRaw.length; i += 3) {
       ringTriIndices.push(ringTriIndicesRaw[i], ringTriIndicesRaw[i + 2], ringTriIndicesRaw[i + 1]);
@@ -3585,11 +3690,13 @@ const CustomModelingPage: React.FC = () => {
     const ringPositions: number[] = [];
     const ringNormals: number[] = [];
     vertices.forEach(v => {
-      ringPositions.push(v.x - ringCenterX, 0, v.z - ringCenterZ);
+      const v2D = get2D(v);
+      ringPositions.push(v2D.u - ringCenter2D.u, 0, v2D.w - ringCenter2D.w);
       ringNormals.push(0, 1, 0);
     });
     reversedOffset.forEach(v => {
-      ringPositions.push(v.x - ringCenterX, 0, v.z - ringCenterZ);
+      const v2D = get2D(v);
+      ringPositions.push(v2D.u - ringCenter2D.u, 0, v2D.w - ringCenter2D.w);
       ringNormals.push(0, 1, 0);
     });
 
@@ -3600,8 +3707,13 @@ const CustomModelingPage: React.FC = () => {
     ringVertexData.normals = ringNormals;
     ringVertexData.applyToMesh(ringFace);
 
-    // Set mesh position to ring center
-    ringFace.position = new Vector3(ringCenterX, yPos, ringCenterZ);
+    // Set mesh position and rotation based on plane type
+    ringFace.position = ringCenter3D.clone();
+    if (planeType === 'XY') {
+      ringFace.rotation.x = Math.PI / 2;
+    } else if (planeType === 'YZ') {
+      ringFace.rotation.z = Math.PI / 2;
+    }
 
     const ringMat = new StandardMaterial(`OffsetRingMat_${ringId}`, scene);
     ringMat.diffuseColor = Color3.FromHexString(selectedColor);
@@ -3611,14 +3723,22 @@ const CustomModelingPage: React.FC = () => {
     ringFace.isPickable = true;
 
     // Store shape data for push/pull: outer shape with inner hole
-    const outerShape = vertices.map(v => ({ x: v.x - ringCenterX, z: v.z - ringCenterZ }));
-    const holeShape = reversedOffset.map(v => ({ x: v.x - ringCenterX, z: v.z - ringCenterZ }));
+    const outerShape = vertices.map(v => {
+      const v2D = get2D(v);
+      return { x: v2D.u - ringCenter2D.u, z: v2D.w - ringCenter2D.w };
+    });
+    const holeShape = reversedOffset.map(v => {
+      const v2D = get2D(v);
+      return { x: v2D.u - ringCenter2D.u, z: v2D.w - ringCenter2D.w };
+    });
     ringFace.metadata = {
       type: 'face',
       isPolygon: true,
       vertices: vertices.length + offsetVertices.length,
       shape: outerShape,
-      holes: [holeShape]
+      holes: [holeShape],
+      planeType: planeType,
+      fixedAxisValue: fixedAxisValue
     };
 
     // Create inner face edges (inner offset boundary)
@@ -3627,7 +3747,7 @@ const CustomModelingPage: React.FC = () => {
       const p2 = offsetVertices[(i + 1) % offsetVertices.length];
 
       const innerEdge = MeshBuilder.CreateLines(`OffsetInnerEdge_${offsetId}_${i}`, {
-        points: [new Vector3(p1.x, yPos, p1.z), new Vector3(p2.x, yPos, p2.z)],
+        points: [p1.clone(), p2.clone()],
         updatable: false
       }, scene);
       innerEdge.color = new Color3(0.15, 0.15, 0.15);
@@ -3635,13 +3755,13 @@ const CustomModelingPage: React.FC = () => {
       innerEdge.metadata = { type: 'edge' };
     }
 
-    // Create outer ring edges (original face boundary - must recreate since original face will be disposed)
+    // Create outer ring edges (original face boundary)
     for (let i = 0; i < vertices.length; i++) {
       const p1 = vertices[i];
       const p2 = vertices[(i + 1) % vertices.length];
 
       const outerEdge = MeshBuilder.CreateLines(`OffsetOuterEdge_${ringId}_${i}`, {
-        points: [new Vector3(p1.x, yPos, p1.z), new Vector3(p2.x, yPos, p2.z)],
+        points: [p1.clone(), p2.clone()],
         updatable: false
       }, scene);
       outerEdge.color = new Color3(0.15, 0.15, 0.15);
@@ -3649,7 +3769,7 @@ const CustomModelingPage: React.FC = () => {
       outerEdge.metadata = { type: 'edge' };
     }
 
-    // Delete the original face (its edges are now recreated as outer ring edges)
+    // Delete the original face
     face.getChildMeshes().forEach(child => child.dispose());
     face.dispose();
 
@@ -4130,14 +4250,42 @@ const CustomModelingPage: React.FC = () => {
     // Get the parent solid of the base face (to exclude from snap calculation)
     const parentSolid = baseFace.parent as Mesh | null;
 
-    // Helper: Check if a point is visible from camera (not behind the camera)
-    const isVisibleFromCamera = (point: Vector3): boolean => {
+    // Helper: Check if a point is actually visible from camera (not occluded by other geometry)
+    const isVisibleFromCamera = (point: Vector3, excludeMesh?: Mesh | null): boolean => {
       if (!camera) return true;
       const cameraPos = camera.position;
+
+      // First check: is point in front of camera?
       const cameraDir = camera.getDirection(Vector3.Forward());
       const toPoint = point.subtract(cameraPos);
-      // Point is visible if it's in front of camera (dot product > 0)
-      return Vector3.Dot(toPoint, cameraDir) > 0;
+      if (Vector3.Dot(toPoint, cameraDir) <= 0) return false;
+
+      // Second check: raycast from camera to point to see if anything blocks it
+      const direction = toPoint.normalize();
+      const distanceToPoint = toPoint.length();
+      const ray = new Ray(cameraPos, direction, distanceToPoint + 0.1);
+
+      // Pick with predicate to exclude certain meshes
+      const pickResult = scene.pickWithRay(ray, (mesh) => {
+        // Skip non-solid geometry
+        if (!mesh.metadata?.type) return false;
+        if (mesh.metadata.type !== 'face') return false;
+        if (mesh.name.includes('preview')) return false;
+        // Skip the base face we're extruding from
+        if (mesh === baseFace) return false;
+        // Skip excluded mesh (the mesh containing the target point)
+        if (excludeMesh && mesh === excludeMesh) return false;
+        // Skip faces from the same solid as the base face
+        if (parentSolid && mesh.parent === parentSolid) return false;
+        return true;
+      });
+
+      // If ray hit something closer than the target point, it's occluded
+      if (pickResult?.hit && pickResult.distance < distanceToPoint - 0.01) {
+        return false;
+      }
+
+      return true;
     };
 
     // 1. Ground plane snap (Y = 0)
@@ -4166,8 +4314,36 @@ const CustomModelingPage: React.FC = () => {
       const face = mesh as Mesh;
       const faceCenter = face.getAbsolutePosition();
 
-      // Skip faces that are not visible from camera
-      if (!isVisibleFromCamera(faceCenter)) return;
+      // Skip faces that are facing away from the camera (back faces)
+      // A face is visible only if its normal points toward the camera
+      if (camera) {
+        // Get face normal from metadata
+        let faceNormal: Vector3 | null = null;
+        if (face.metadata?.faceNormal) {
+          const fn = face.metadata.faceNormal;
+          faceNormal = new Vector3(fn.x, fn.y, fn.z);
+        } else if (face.metadata?.faceDir) {
+          const dir = face.metadata.faceDir;
+          switch (dir) {
+            case 'top': faceNormal = new Vector3(0, 1, 0); break;
+            case 'bottom': faceNormal = new Vector3(0, -1, 0); break;
+            case 'front': faceNormal = new Vector3(0, 0, 1); break;
+            case 'back': faceNormal = new Vector3(0, 0, -1); break;
+            case 'right': faceNormal = new Vector3(1, 0, 0); break;
+            case 'left': faceNormal = new Vector3(-1, 0, 0); break;
+          }
+        }
+
+        if (faceNormal) {
+          const toCamera = camera.position.subtract(faceCenter).normalize();
+          const dotProduct = Vector3.Dot(faceNormal, toCamera);
+          // If dot product is negative or zero, the face is facing away from camera
+          if (dotProduct <= 0) return;
+        }
+      }
+
+      // Skip faces that are not visible from camera (occluded by other geometry)
+      if (!isVisibleFromCamera(faceCenter, face)) return;
 
       // Calculate the distance from base face to this face along the normal direction
       const delta = faceCenter.subtract(baseFaceCenter);
@@ -4492,14 +4668,14 @@ const CustomModelingPage: React.FC = () => {
           });
 
           if (meshesToMerge.length > 0) {
-            // Merge all meshes into one
+            // Merge all meshes into one - don't dispose source immediately to avoid WebGL context issues
             const mergedMesh = Mesh.MergeMeshes(
               meshesToMerge,
-              true,  // disposeSource - dispose original meshes
-              true,  // allow32BitsIndices
+              false,  // disposeSource - we'll dispose manually after
+              true,   // allow32BitsIndices
               undefined, // parent
-              false, // subdivideWithSubMeshes
-              true   // multiMultiMaterials
+              false,  // subdivideWithSubMeshes
+              true    // multiMultiMaterials
             );
 
             if (mergedMesh) {
@@ -4521,6 +4697,16 @@ const CustomModelingPage: React.FC = () => {
                 groupName: groupName,
                 originalMeshCount: meshesToMerge.length,
               };
+
+              // Dispose original meshes after merge is complete
+              // Use setTimeout to defer disposal to next frame to avoid WebGL issues
+              setTimeout(() => {
+                meshesToMerge.forEach(mesh => {
+                  if (mesh && !mesh.isDisposed()) {
+                    mesh.dispose();
+                  }
+                });
+              }, 0);
 
               // Add to groups list for UI
               const newGroup: MeshGroup = {
