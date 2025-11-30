@@ -128,6 +128,10 @@ const CustomModelingPage: React.FC = () => {
     segmentMode: boolean;            // Alt key active during start
     segmentPoint: Vector3 | null;    // 3D click point on face for segmentation
     segmentLine: LinesMesh | null;   // Visual preview line for segmentation
+    // Snap mode for SketchUp-style inference
+    snapDistance: number | null;     // Distance when snapped to an edge/face
+    snapIndicatorMesh: Mesh | null;  // Visual indicator for snap point
+    isSnapped: boolean;              // Whether currently snapped
   }>({
     baseFace: null,
     baseFaceNormal: null,
@@ -146,6 +150,9 @@ const CustomModelingPage: React.FC = () => {
     segmentMode: false,
     segmentPoint: null,
     segmentLine: null,
+    snapDistance: null,
+    snapIndicatorMesh: null,
+    isSnapped: false,
   });
 
   // Offset tool state ref for SketchUp-style face offset
@@ -3108,8 +3115,10 @@ const CustomModelingPage: React.FC = () => {
     let solidPosition: Vector3;
 
     // Check if operating on an existing solid's face
-    if (parentSolid && !parentSolid.isDisposed() && parentSolid.metadata && !copyMode) {
-      // Normal mode: modify the existing solid
+    // Skip for polygon solids (rooms with holes) - they don't have width/height/depth dimensions
+    // For polygon solid walls, treat them as free faces (create new extruded solid)
+    if (parentSolid && !parentSolid.isDisposed() && parentSolid.metadata && !copyMode && !parentSolid.metadata.isPolygon) {
+      // Normal mode: modify the existing solid (only for box solids with width/height/depth)
       const parentMeta = parentSolid.metadata;
       const parentPos = parentSolid.position.clone();
       const changeAmount = Math.abs(distance);
@@ -3730,6 +3739,105 @@ const CustomModelingPage: React.FC = () => {
       state.previewMesh = null;
     }
 
+    // Dispose old segment line
+    if (state.segmentLine) {
+      state.segmentLine.dispose();
+      state.segmentLine = null;
+    }
+
+    // Calculate face normal direction for segment line
+    const normalizedNormalForSegment = faceNormal.normalize();
+    const absXSeg = Math.abs(normalizedNormalForSegment.x);
+    const absYSeg = Math.abs(normalizedNormalForSegment.y);
+    const absZSeg = Math.abs(normalizedNormalForSegment.z);
+
+    // Segmentation mode: Draw dividing line at click point (even when distance is small)
+    console.log('[PushPull] Checking segment mode:', state.segmentMode, 'segmentPoint:', state.segmentPoint ? 'yes' : 'no');
+    if (state.segmentMode && state.segmentPoint) {
+      const segPoint = state.segmentPoint;
+      const facePos = face.getAbsolutePosition();
+      const lineLength = Math.max(width || 1, depth || 1, 1) * 1.5;
+      const lineColor = new Color3(0.2, 0.5, 1); // Blue segmentation line
+
+      let lineStart: Vector3;
+      let lineEnd: Vector3;
+
+      if (absYSeg > absXSeg && absYSeg > absZSeg) {
+        // Top/bottom face - draw line in XZ plane (perpendicular to Y)
+        lineStart = new Vector3(segPoint.x, segPoint.y, facePos.z - lineLength / 2);
+        lineEnd = new Vector3(segPoint.x, segPoint.y, facePos.z + lineLength / 2);
+      } else if (absXSeg > absZSeg) {
+        // Left/right face - draw line in YZ plane (perpendicular to X)
+        lineStart = new Vector3(segPoint.x, facePos.y - lineLength / 2, segPoint.z);
+        lineEnd = new Vector3(segPoint.x, facePos.y + lineLength / 2, segPoint.z);
+      } else {
+        // Front/back face - draw line in XY plane (perpendicular to Z)
+        lineStart = new Vector3(facePos.x - lineLength / 2, segPoint.y, segPoint.z);
+        lineEnd = new Vector3(facePos.x + lineLength / 2, segPoint.y, segPoint.z);
+      }
+
+      console.log('[PushPull] Segment line points:', lineStart.toString(), 'to', lineEnd.toString());
+
+      // Create the segmentation line using tube for better visibility
+      const segmentLine = MeshBuilder.CreateTube('segmentLine', {
+        path: [lineStart, lineEnd],
+        radius: 0.02,  // Visible thickness
+        tessellation: 8,
+        updatable: false,
+      }, scene);
+      const segLineMat = new StandardMaterial('segLineMat', scene);
+      segLineMat.emissiveColor = lineColor;  // Emissive so it's always visible
+      segLineMat.disableLighting = true;
+      segmentLine.material = segLineMat;
+      segmentLine.isPickable = false;
+      segmentLine.renderingGroupId = 1;  // Render on top
+
+      // Only create extruded line and connectors when distance > 0
+      if (Math.abs(distance) > 0.001) {
+        const extrudedStart = lineStart.add(faceNormal.scale(distance));
+        const extrudedEnd = lineEnd.add(faceNormal.scale(distance));
+
+        const segmentLineExtruded = MeshBuilder.CreateTube('segmentLineExtruded', {
+          path: [extrudedStart, extrudedEnd],
+          radius: 0.02,
+          tessellation: 8,
+          updatable: false,
+        }, scene);
+        segmentLineExtruded.material = segLineMat;
+        segmentLineExtruded.isPickable = false;
+        segmentLineExtruded.renderingGroupId = 1;
+
+        const connectLine1 = MeshBuilder.CreateTube('segmentConnect1', {
+          path: [lineStart, extrudedStart],
+          radius: 0.02,
+          tessellation: 8,
+          updatable: false,
+        }, scene);
+        connectLine1.material = segLineMat;
+        connectLine1.isPickable = false;
+        connectLine1.renderingGroupId = 1;
+
+        const connectLine2 = MeshBuilder.CreateTube('segmentConnect2', {
+          path: [lineEnd, extrudedEnd],
+          radius: 0.02,
+          tessellation: 8,
+          updatable: false,
+        }, scene);
+        connectLine2.material = segLineMat;
+        connectLine2.isPickable = false;
+        connectLine2.renderingGroupId = 1;
+
+        // Parent all segment lines to main segment line for easy cleanup
+        segmentLineExtruded.parent = segmentLine;
+        connectLine1.parent = segmentLine;
+        connectLine2.parent = segmentLine;
+      }
+
+      state.segmentLine = segmentLine;
+      console.log('[PushPull] Segment line created at:', segPoint.toString());
+    }
+
+    // Early return if distance is too small (but segment line already drawn above)
     if (Math.abs(distance) < 0.001) return;
 
     // Handle polygon faces (non-rectangular shapes)
@@ -3905,84 +4013,6 @@ const CustomModelingPage: React.FC = () => {
 
     preview.isPickable = false;
     state.previewMesh = preview;
-
-    // Segmentation mode: Draw dividing line at click point
-    if (state.segmentMode && state.segmentPoint) {
-      // Dispose old segment line
-      if (state.segmentLine) {
-        state.segmentLine.dispose();
-        state.segmentLine = null;
-      }
-
-      const segPoint = state.segmentPoint;
-      const facePos = face.getAbsolutePosition();
-
-      // Determine line direction based on face normal (perpendicular to push direction)
-      // For Y-normal faces (top/bottom), line is along X or Z axis through click point
-      // For X-normal faces (left/right), line is along Y or Z axis
-      // For Z-normal faces (front/back), line is along X or Y axis
-
-      let lineStart: Vector3;
-      let lineEnd: Vector3;
-      const lineLength = Math.max(boxWidth, boxHeight, boxDepth) * 1.5;
-      const lineColor = new Color3(0.2, 0.5, 1); // Blue segmentation line
-
-      if (absY > absX && absY > absZ) {
-        // Top/bottom face - draw line in XZ plane
-        // Line goes through segment point, perpendicular to a chosen axis (use X axis)
-        lineStart = new Vector3(segPoint.x, segPoint.y, facePos.z - lineLength / 2);
-        lineEnd = new Vector3(segPoint.x, segPoint.y, facePos.z + lineLength / 2);
-      } else if (absX > absZ) {
-        // Left/right face - draw line in YZ plane
-        lineStart = new Vector3(segPoint.x, facePos.y - lineLength / 2, segPoint.z);
-        lineEnd = new Vector3(segPoint.x, facePos.y + lineLength / 2, segPoint.z);
-      } else {
-        // Front/back face - draw line in XY plane
-        lineStart = new Vector3(facePos.x - lineLength / 2, segPoint.y, segPoint.z);
-        lineEnd = new Vector3(facePos.x + lineLength / 2, segPoint.y, segPoint.z);
-      }
-
-      // Create the segmentation line
-      const segmentLine = MeshBuilder.CreateLines('segmentLine', {
-        points: [lineStart, lineEnd],
-        updatable: false,
-      }, scene);
-      segmentLine.color = lineColor;
-      segmentLine.isPickable = false;
-
-      // Also create the line at the extruded position
-      const extrudedStart = lineStart.add(faceNormal.scale(distance));
-      const extrudedEnd = lineEnd.add(faceNormal.scale(distance));
-      const segmentLineExtruded = MeshBuilder.CreateLines('segmentLineExtruded', {
-        points: [extrudedStart, extrudedEnd],
-        updatable: false,
-      }, scene);
-      segmentLineExtruded.color = lineColor;
-      segmentLineExtruded.isPickable = false;
-
-      // Create vertical connecting lines at both ends
-      const connectLine1 = MeshBuilder.CreateLines('segmentConnect1', {
-        points: [lineStart, extrudedStart],
-        updatable: false,
-      }, scene);
-      connectLine1.color = lineColor;
-      connectLine1.isPickable = false;
-
-      const connectLine2 = MeshBuilder.CreateLines('segmentConnect2', {
-        points: [lineEnd, extrudedEnd],
-        updatable: false,
-      }, scene);
-      connectLine2.color = lineColor;
-      connectLine2.isPickable = false;
-
-      // Parent all segment lines to main segment line for easy cleanup
-      segmentLineExtruded.parent = segmentLine;
-      connectLine1.parent = segmentLine;
-      connectLine2.parent = segmentLine;
-
-      state.segmentLine = segmentLine;
-      console.log('[PushPull] Segment line created at:', segPoint.toString());
-    }
   }, [selectedColor]);
 
   // Calculate extrusion distance from mouse position using dot product
@@ -4055,6 +4085,112 @@ const CustomModelingPage: React.FC = () => {
     const hitPoint = ray.origin.add(ray.direction.scale(t));
     const delta = hitPoint.subtract(basePoint);
     return Vector3.Dot(delta, normalizedNormal);
+  }, []);
+
+  // Find snap distances for Push/Pull tool
+  // Returns an array of potential snap distances based on other geometry in the scene
+  const findPushPullSnapDistances = useCallback((
+    baseFace: Mesh,
+    baseFaceCenter: Vector3,
+    baseFaceNormal: Vector3,
+    scene: Scene
+  ): { distance: number; type: 'edge' | 'face' | 'ground' }[] => {
+    const snapDistances: { distance: number; type: 'edge' | 'face' | 'ground' }[] = [];
+    const normalizedNormal = baseFaceNormal.normalize();
+
+    // Get the parent solid of the base face (to exclude from snap calculation)
+    const parentSolid = baseFace.parent as Mesh | null;
+
+    // 1. Ground plane snap (Y = 0)
+    if (Math.abs(normalizedNormal.y) > 0.9) {
+      // For top/bottom faces, snap to ground level
+      const groundDistance = -baseFaceCenter.y / normalizedNormal.y;
+      if (groundDistance !== 0) {
+        snapDistances.push({ distance: groundDistance, type: 'ground' });
+      }
+    }
+
+    // 2. Find all faces in the scene that could be snap targets
+    scene.meshes.forEach(mesh => {
+      // Skip non-faces and preview meshes
+      if (!mesh.metadata?.type || mesh.metadata.type !== 'face') return;
+      if (mesh.name.includes('preview')) return;
+      // Skip the base face itself
+      if (mesh === baseFace) return;
+      // Skip faces belonging to the same solid
+      if (parentSolid && mesh.parent === parentSolid) return;
+
+      const face = mesh as Mesh;
+      const faceCenter = face.getAbsolutePosition();
+
+      // Calculate the distance from base face to this face along the normal direction
+      const delta = faceCenter.subtract(baseFaceCenter);
+      const distanceAlongNormal = Vector3.Dot(delta, normalizedNormal);
+
+      // Only include if the face is in front of the push direction
+      if (distanceAlongNormal !== 0) {
+        snapDistances.push({ distance: distanceAlongNormal, type: 'face' });
+      }
+    });
+
+    // 3. Find all edges in the scene for edge snapping
+    scene.meshes.forEach(mesh => {
+      if (!mesh.metadata?.type || mesh.metadata.type !== 'edge') return;
+      if (mesh.name.includes('preview')) return;
+      // Skip edges belonging to the same solid
+      if (parentSolid && mesh.parent === parentSolid) return;
+
+      // Get edge vertices from the line mesh
+      const positions = mesh.getVerticesData('position');
+      if (!positions || positions.length < 6) return;
+
+      // Get edge endpoints
+      const p1 = new Vector3(positions[0], positions[1], positions[2]);
+      const p2 = new Vector3(positions[3], positions[4], positions[5]);
+
+      // Calculate distances to edge endpoints along the normal
+      [p1, p2].forEach(point => {
+        const delta = point.subtract(baseFaceCenter);
+        const distanceAlongNormal = Vector3.Dot(delta, normalizedNormal);
+
+        if (distanceAlongNormal !== 0) {
+          // Check if this snap distance is close to the extrusion path
+          // (point should be near the line from baseFaceCenter in normal direction)
+          const projectedPoint = baseFaceCenter.add(normalizedNormal.scale(distanceAlongNormal));
+          const lateralDistance = Vector3.Distance(point, projectedPoint);
+
+          // Only snap if the point is relatively close to the extrusion path
+          if (lateralDistance < 5.0) {
+            snapDistances.push({ distance: distanceAlongNormal, type: 'edge' });
+          }
+        }
+      });
+    });
+
+    // Remove duplicates and sort by absolute distance
+    const uniqueDistances = new Map<number, { distance: number; type: 'edge' | 'face' | 'ground' }>();
+    snapDistances.forEach(snap => {
+      const roundedDist = Math.round(snap.distance * 1000) / 1000; // Round to 0.001 precision
+      if (!uniqueDistances.has(roundedDist)) {
+        uniqueDistances.set(roundedDist, snap);
+      }
+    });
+
+    return Array.from(uniqueDistances.values()).sort((a, b) => Math.abs(a.distance) - Math.abs(b.distance));
+  }, []);
+
+  // Check if current distance should snap to any snap point
+  const checkPushPullSnap = useCallback((
+    currentDistance: number,
+    snapDistances: { distance: number; type: 'edge' | 'face' | 'ground' }[],
+    snapThreshold: number
+  ): { snapped: boolean; distance: number; type: 'edge' | 'face' | 'ground' | null } => {
+    for (const snap of snapDistances) {
+      if (Math.abs(currentDistance - snap.distance) < snapThreshold) {
+        return { snapped: true, distance: snap.distance, type: snap.type };
+      }
+    }
+    return { snapped: false, distance: currentDistance, type: null };
   }, []);
 
   // Zoom to fit all meshes
@@ -4186,8 +4322,9 @@ const CustomModelingPage: React.FC = () => {
     manager.selectIds(connected, 'add');
   }, []);
 
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+  const handleContextMenu = useCallback((e: MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     if (selectionState.selectedIds.length > 0) {
       setSelectionState(prev => ({
         ...prev,
@@ -4201,15 +4338,176 @@ const CustomModelingPage: React.FC = () => {
     if (!manager) return;
 
     switch (action) {
-      case 'invert':
-        // Get all selectable mesh IDs
+      case 'element-info':
+        console.log('Element info:', selectionState.selectedIds);
+        break;
+
+      case 'delete':
+        selectionState.selectedIds.forEach(id => {
+          const mesh = sceneRef.current?.getMeshByID(id);
+          if (mesh) mesh.dispose();
+        });
+        manager.clear();
+        break;
+
+      case 'hide':
+        selectionState.selectedIds.forEach(id => {
+          const mesh = sceneRef.current?.getMeshByID(id);
+          if (mesh) {
+            mesh.isVisible = false;
+            mesh.isPickable = false;
+          }
+        });
+        manager.clear();
+        break;
+
+      case 'select-all': {
+        const allSelectableIds: string[] = [];
+        sceneRef.current?.meshes.forEach(m => {
+          if (m.isPickable && m.metadata && !m.name.includes('ground') && !m.name.includes('preview')) {
+            allSelectableIds.push(m.id);
+          }
+        });
+        manager.selectIds(allSelectableIds, 'replace');
+        break;
+      }
+
+      case 'invert': {
         const allIds: string[] = [];
         sceneRef.current?.meshes.forEach(m => {
-          if (m.isPickable && m.metadata) allIds.push(m.id);
+          if (m.isPickable && m.metadata && !m.name.includes('ground') && !m.name.includes('preview')) {
+            allIds.push(m.id);
+          }
         });
         manager.invertSelection(allIds);
         break;
-      case 'connected-faces':
+      }
+
+      case 'deselect-all':
+        manager.clear();
+        break;
+
+      case 'select-vertices': {
+        const vertexIds: string[] = [];
+        sceneRef.current?.meshes.forEach(m => {
+          if (m.metadata?.type === 'vertex' && m.isPickable) {
+            vertexIds.push(m.id);
+          }
+        });
+        manager.selectIds(vertexIds, 'replace');
+        break;
+      }
+
+      case 'select-edges': {
+        const edgeIds: string[] = [];
+        sceneRef.current?.meshes.forEach(m => {
+          if (m.metadata?.type === 'edge' && m.isPickable) {
+            edgeIds.push(m.id);
+          }
+        });
+        manager.selectIds(edgeIds, 'replace');
+        break;
+      }
+
+      case 'select-faces': {
+        const faceIds: string[] = [];
+        sceneRef.current?.meshes.forEach(m => {
+          if (m.metadata?.type === 'face' && m.isPickable) {
+            faceIds.push(m.id);
+          }
+        });
+        manager.selectIds(faceIds, 'replace');
+        break;
+      }
+
+      case 'create-component':
+        console.log('Create component from selection:', selectionState.selectedIds);
+        break;
+
+      case 'create-group':
+        console.log('Create group from selection:', selectionState.selectedIds);
+        break;
+
+      case 'intersect-model':
+      case 'intersect-selection':
+      case 'intersect-context':
+        console.log('Intersect faces:', action);
+        break;
+
+      case 'reverse-faces':
+        selectionState.selectedIds.forEach(id => {
+          const mesh = sceneRef.current?.getMeshByID(id) as Mesh | null;
+          if (mesh && mesh.metadata?.type === 'face') {
+            const indices = mesh.getIndices();
+            const positions = mesh.getVerticesData('position');
+            if (indices && positions) {
+              const newIndices = [...indices];
+              for (let i = 0; i < newIndices.length; i += 3) {
+                const temp = newIndices[i + 1];
+                newIndices[i + 1] = newIndices[i + 2];
+                newIndices[i + 2] = temp;
+              }
+              mesh.setIndices(newIndices, positions.length / 3);
+            }
+          }
+        });
+        break;
+
+      case 'flip-red-axis':
+      case 'flip-green-axis':
+      case 'flip-blue-axis': {
+        const axis = action === 'flip-red-axis' ? 'x' : action === 'flip-green-axis' ? 'y' : 'z';
+        selectionState.selectedIds.forEach(id => {
+          const mesh = sceneRef.current?.getMeshByID(id);
+          if (mesh) {
+            const scaling = mesh.scaling.clone();
+            if (axis === 'x') scaling.x *= -1;
+            else if (axis === 'y') scaling.y *= -1;
+            else scaling.z *= -1;
+            mesh.scaling = scaling;
+          }
+        });
+        break;
+      }
+
+      case 'weld-edges':
+        console.log('Weld edges:', selectionState.selectedIds);
+        break;
+
+      case 'soften-smooth-edges':
+        console.log('Soften/smooth edges:', selectionState.selectedIds);
+        break;
+
+      case 'zoom-selection': {
+        const camera = sceneRef.current?.activeCamera;
+        if (camera && selectionState.selectedIds.length > 0) {
+          const meshes = selectionState.selectedIds
+            .map(id => sceneRef.current?.getMeshByID(id))
+            .filter(m => m != null);
+          if (meshes.length > 0) {
+            let minX = Infinity, minY = Infinity, minZ = Infinity;
+            let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+            meshes.forEach(mesh => {
+              const bb = mesh!.getBoundingInfo().boundingBox;
+              minX = Math.min(minX, bb.minimumWorld.x);
+              minY = Math.min(minY, bb.minimumWorld.y);
+              minZ = Math.min(minZ, bb.minimumWorld.z);
+              maxX = Math.max(maxX, bb.maximumWorld.x);
+              maxY = Math.max(maxY, bb.maximumWorld.y);
+              maxZ = Math.max(maxZ, bb.maximumWorld.z);
+            });
+            const center = new Vector3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
+            const size = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+            if ((camera as ArcRotateCamera).setTarget) {
+              (camera as ArcRotateCamera).setTarget(center);
+              (camera as ArcRotateCamera).radius = size * 2;
+            }
+          }
+        }
+        break;
+      }
+
+      case 'connected-faces': {
         const newFaces = new Set<string>();
         selectionState.selectedIds.forEach(id => {
           const connected = manager.getConnectedGeometry(id, 'edge-faces');
@@ -4217,7 +4515,9 @@ const CustomModelingPage: React.FC = () => {
         });
         manager.selectIds(Array.from(newFaces), 'add');
         break;
-      case 'all-connected':
+      }
+
+      case 'all-connected': {
         const allConnected = new Set<string>();
         selectionState.selectedIds.forEach(id => {
           const connected = manager.getConnectedGeometry(id, 'all');
@@ -4225,7 +4525,9 @@ const CustomModelingPage: React.FC = () => {
         });
         manager.selectIds(Array.from(allConnected), 'add');
         break;
-      case 'bounding-edges':
+      }
+
+      case 'bounding-edges': {
         const edges = new Set<string>();
         selectionState.selectedIds.forEach(id => {
           const connected = manager.getConnectedGeometry(id, 'face-edges');
@@ -4233,16 +4535,9 @@ const CustomModelingPage: React.FC = () => {
         });
         manager.selectIds(Array.from(edges), 'add');
         break;
+      }
+
       case 'same-material':
-        // Implementation for same material
-        break;
-      case 'delete':
-        // Implementation for delete
-        selectionState.selectedIds.forEach(id => {
-          const mesh = sceneRef.current?.getMeshByID(id);
-          if (mesh) mesh.dispose();
-        });
-        manager.clear();
         break;
     }
     setSelectionState(prev => ({ ...prev, contextMenu: null }));
@@ -5260,8 +5555,21 @@ const CustomModelingPage: React.FC = () => {
               selectedFaces.push(mesh);
               // Use the first face's normal as the primary direction
               if (!primaryNormal) {
-                // Try to get normal from metadata first
-                if (mesh.metadata?.normal) {
+                // Try to get normal from faceDir metadata (most reliable for Push/Pull generated faces)
+                const faceDir = mesh.metadata?.faceDir;
+                if (faceDir) {
+                  // Map faceDir to normal vector
+                  switch (faceDir) {
+                    case 'top': primaryNormal = new Vector3(0, 1, 0); break;
+                    case 'bottom': primaryNormal = new Vector3(0, -1, 0); break;
+                    case 'front': primaryNormal = new Vector3(0, 0, 1); break;
+                    case 'back': primaryNormal = new Vector3(0, 0, -1); break;
+                    case 'right': primaryNormal = new Vector3(1, 0, 0); break;
+                    case 'left': primaryNormal = new Vector3(-1, 0, 0); break;
+                  }
+                  console.log('[Move] Using faceDir:', faceDir, 'normal:', primaryNormal?.toString());
+                } else if (mesh.metadata?.normal) {
+                  // Try to get normal from metadata
                   primaryNormal = (mesh.metadata.normal as Vector3).clone();
                 } else {
                   // Calculate normal from face geometry
@@ -5272,7 +5580,7 @@ const CustomModelingPage: React.FC = () => {
                   }
                 }
               }
-              console.log('[Move] Found face:', id, 'normal:', primaryNormal?.toString());
+              console.log('[Move] Found face:', id, 'faceDir:', mesh.metadata?.faceDir, 'normal:', primaryNormal?.toString());
             }
           });
 
@@ -6317,6 +6625,31 @@ const CustomModelingPage: React.FC = () => {
             }
           }
 
+          // SketchUp-style snap: Check if we should snap to edges/faces/ground
+          const camera = cameraRef.current;
+          const snapThreshold = camera ? camera.radius * 0.015 : 0.3; // Dynamic threshold based on zoom
+          const snapDistances = findPushPullSnapDistances(ppState.baseFace, ppState.baseFaceCenter, ppState.baseFaceNormal, scene);
+          const snapResult = checkPushPullSnap(distance, snapDistances, snapThreshold);
+
+          if (snapResult.snapped) {
+            distance = snapResult.distance;
+            ppState.isSnapped = true;
+            ppState.snapDistance = distance;
+
+            // Show snap indicator based on type
+            if (snapResult.type === 'ground') {
+              showSnapIndicator('origin');  // Green for ground
+            } else if (snapResult.type === 'edge') {
+              showSnapIndicator('endpoint');  // Green for edge
+            } else if (snapResult.type === 'face') {
+              showSnapIndicator('midpoint');  // Cyan for face
+            }
+          } else {
+            ppState.isSnapped = false;
+            ppState.snapDistance = null;
+            hideSnapIndicator();
+          }
+
           // Update preview mesh
           updatePushPullPreview(scene, ppState.baseFace, distance, ppState.baseFaceNormal);
 
@@ -6591,6 +6924,7 @@ const CustomModelingPage: React.FC = () => {
       canvas.addEventListener('pointerdown', handlePointerDown);
       canvas.addEventListener('pointermove', handlePointerMove);
       canvas.addEventListener('pointerup', handlePointerUp);
+      canvas.addEventListener('contextmenu', handleContextMenu);
     }
 
     return () => {
@@ -6598,9 +6932,10 @@ const CustomModelingPage: React.FC = () => {
         canvas.removeEventListener('pointerdown', handlePointerDown);
         canvas.removeEventListener('pointermove', handlePointerMove);
         canvas.removeEventListener('pointerup', handlePointerUp);
+        canvas.removeEventListener('contextmenu', handleContextMenu);
       }
     };
-  }, [activeTool, selectedColor, getGroundPoint, updatePreviewLine, updatePreviewRectangle, updatePreviewCircle, updatePreviewPolygon, finalizeLine, finalizeRectangle, finalizeCircle, finalizePolygon, applyPushPull, applyOffset, zoomExtents, addLineSnapPoints, addRectangleSnapPoints, showSnapIndicator, hideSnapIndicator, findNearestSnapPoint, updatePushPullPreview, calculateExtrudeDistance, handleSelectionClick, handleDoubleClick, handleTripleClick, clearSelection, performBoxSelection, updateSelectionBox]);
+  }, [activeTool, selectedColor, getGroundPoint, updatePreviewLine, updatePreviewRectangle, updatePreviewCircle, updatePreviewPolygon, finalizeLine, finalizeRectangle, finalizeCircle, finalizePolygon, applyPushPull, applyOffset, zoomExtents, addLineSnapPoints, addRectangleSnapPoints, showSnapIndicator, hideSnapIndicator, findNearestSnapPoint, updatePushPullPreview, calculateExtrudeDistance, handleSelectionClick, handleDoubleClick, handleTripleClick, clearSelection, performBoxSelection, updateSelectionBox, handleContextMenu]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -6697,6 +7032,8 @@ const CustomModelingPage: React.FC = () => {
             moveState.inferredAxis = null;
             moveState.inputBuffer = '';
             moveState.lastMoveDistance = 0;
+            // Clear UI display
+            setMeasurementInput('');
           }
           return;
         }
@@ -6732,6 +7069,8 @@ const CustomModelingPage: React.FC = () => {
           moveState.inferredAxis = null;
           moveState.inputBuffer = '';
           moveState.lastMoveDistance = 0;
+          // Clear UI display
+          setMeasurementInput('');
           return;
         }
       }
@@ -8672,15 +9011,11 @@ const CustomModelingPage: React.FC = () => {
             selectionCount={selectionState.selectedIds.length}
             hasFaces={selectionState.selectedIds.some(id => sceneRef.current?.getMeshByID(id)?.metadata?.type === 'face')}
             hasEdges={selectionState.selectedIds.some(id => sceneRef.current?.getMeshByID(id)?.metadata?.type === 'edge')}
+            theme={themeMode}
           />
         )
       }
 
-      {/* Right-click handler for context menu */}
-      <div
-        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
-        onContextMenu={handleContextMenu}
-      />
     </div >
   );
 };
