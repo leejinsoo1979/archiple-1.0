@@ -45,6 +45,17 @@ import earcut from 'earcut';
 
 type ToolType = 'select' | 'eraser' | 'line' | 'arc' | 'rectangle' | 'circle' | 'polygon' | 'pushpull' | 'rotate' | 'move' | 'scale' | 'offset' | 'tape' | 'text' | 'paint' | 'orbit' | 'pan' | 'zoom' | 'zoomExtents' | 'makeComponent' | 'freehand' | 'rotatedRect' | 'arc2pt' | 'arc3pt' | 'pie' | 'followMe' | 'outerShell' | 'dimension' | 'protractor' | 'text3d' | 'axes' | 'section' | 'solidTools' | 'zoomWindow' | 'zoomPrevious' | 'lookAround' | 'walk' | 'tag' | 'positionCamera' | 'flip';
 
+// Group system interface
+interface MeshGroup {
+  id: string;
+  name: string;
+  meshIds: string[];
+  isVisible: boolean;
+  isLocked: boolean;
+  isExpanded: boolean;
+  color: string;
+}
+
 // Drawing state interface
 interface DrawingState {
   isDrawing: boolean;
@@ -127,7 +138,7 @@ const CustomModelingPage: React.FC = () => {
     // Segmentation mode (Alt key): divide face at click point
     segmentMode: boolean;            // Alt key active during start
     segmentPoint: Vector3 | null;    // 3D click point on face for segmentation
-    segmentLine: LinesMesh | null;   // Visual preview line for segmentation
+    segmentLine: Mesh | LinesMesh | null;   // Visual preview line for segmentation
     // Snap mode for SketchUp-style inference
     snapDistance: number | null;     // Distance when snapped to an edge/face
     snapIndicatorMesh: Mesh | null;  // Visual indicator for snap point
@@ -185,6 +196,10 @@ const CustomModelingPage: React.FC = () => {
     selectedIds: [],
     contextMenu: null,
   });
+
+  // Group system state
+  const [groups, setGroups] = useState<MeshGroup[]>([]);
+  const groupCounterRef = useRef(0);
 
   const selectionBoxRef = useRef<{
     startX: number;
@@ -331,7 +346,7 @@ const CustomModelingPage: React.FC = () => {
   const [selectedMesh, setSelectedMesh] = useState<Mesh | null>(null);
   const selectedMeshRef = useRef<Mesh | null>(null);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'info' | 'materials' | 'components'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'materials' | 'components' | 'groups'>('info');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [cameraMode, setCameraMode] = useState<'perspective' | 'orthographic' | 'twoPoint'>('perspective');
   const [selectedColor, setSelectedColor] = useState('#E5E7EB');
@@ -3347,12 +3362,18 @@ const CustomModelingPage: React.FC = () => {
       // Copy mode: Keep original solid completely intact (no dispose)
       // The new extruded solid is created separately, original remains unchanged
       console.log('[PushPull] Copy mode - keeping original solid intact');
-    } else if (parentSolid && !parentSolid.isDisposed()) {
-      // Normal mode: Face belongs to an existing solid - dispose entire parent solid
-      // This handles both pull (extending) and push (cutting into) cases
+    } else if (parentSolid && !parentSolid.isDisposed() && !parentSolid.metadata?.isPolygon) {
+      // Normal mode: Face belongs to an existing BOX solid - dispose entire parent solid
+      // This handles both pull (extending) and push (cutting into) cases for simple boxes
       console.log('[PushPull] Disposing parent solid:', parentSolid.name, 'children:', parentSolid.getChildMeshes().length);
       parentSolid.getChildMeshes().forEach(child => child.dispose());
       parentSolid.dispose();
+    } else if (parentSolid && !parentSolid.isDisposed() && parentSolid.metadata?.isPolygon) {
+      // Polygon solid (room with walls): Only dispose the selected face, keep parent solid intact
+      // This allows Push/Pull on individual wall faces without destroying the entire room
+      console.log('[PushPull] Polygon solid - disposing only selected face:', face.name);
+      face.getChildMeshes().forEach(child => child.dispose());
+      face.dispose();
     } else {
       // Free-standing face (e.g., ground rectangle) - just dispose the face
       face.getChildMeshes().forEach(child => child.dispose());
@@ -3752,36 +3773,41 @@ const CustomModelingPage: React.FC = () => {
     const absZSeg = Math.abs(normalizedNormalForSegment.z);
 
     // Segmentation mode: Draw dividing line at click point (even when distance is small)
-    console.log('[PushPull] Checking segment mode:', state.segmentMode, 'segmentPoint:', state.segmentPoint ? 'yes' : 'no');
     if (state.segmentMode && state.segmentPoint) {
       const segPoint = state.segmentPoint;
       const facePos = face.getAbsolutePosition();
-      const lineLength = Math.max(width || 1, depth || 1, 1) * 1.5;
+      // Get face dimensions from bounding box for accurate size
+      const boundingInfo = face.getBoundingInfo();
+      const extendSize = boundingInfo.boundingBox.extendSize;
+      const faceHeight = extendSize.y * 2;
+      const faceWidthX = extendSize.x * 2;
+      const faceWidthZ = extendSize.z * 2;
       const lineColor = new Color3(0.2, 0.5, 1); // Blue segmentation line
 
       let lineStart: Vector3;
       let lineEnd: Vector3;
 
       if (absYSeg > absXSeg && absYSeg > absZSeg) {
-        // Top/bottom face - draw line in XZ plane (perpendicular to Y)
-        lineStart = new Vector3(segPoint.x, segPoint.y, facePos.z - lineLength / 2);
-        lineEnd = new Vector3(segPoint.x, segPoint.y, facePos.z + lineLength / 2);
+        // Top/bottom face (Y-normal) - draw line in XZ plane
+        const halfLen = faceWidthZ / 2 + 0.02;
+        lineStart = new Vector3(segPoint.x, segPoint.y, facePos.z - halfLen);
+        lineEnd = new Vector3(segPoint.x, segPoint.y, facePos.z + halfLen);
       } else if (absXSeg > absZSeg) {
-        // Left/right face - draw line in YZ plane (perpendicular to X)
-        lineStart = new Vector3(segPoint.x, facePos.y - lineLength / 2, segPoint.z);
-        lineEnd = new Vector3(segPoint.x, facePos.y + lineLength / 2, segPoint.z);
+        // Left/right face (X-normal) - draw vertical line in YZ plane
+        const halfLen = faceHeight / 2 + 0.02;
+        lineStart = new Vector3(segPoint.x, facePos.y - halfLen, segPoint.z);
+        lineEnd = new Vector3(segPoint.x, facePos.y + halfLen, segPoint.z);
       } else {
-        // Front/back face - draw line in XY plane (perpendicular to Z)
-        lineStart = new Vector3(facePos.x - lineLength / 2, segPoint.y, segPoint.z);
-        lineEnd = new Vector3(facePos.x + lineLength / 2, segPoint.y, segPoint.z);
+        // Front/back face (Z-normal) - draw horizontal line in XY plane
+        const halfLen = faceWidthX / 2 + 0.02;
+        lineStart = new Vector3(facePos.x - halfLen, segPoint.y, segPoint.z);
+        lineEnd = new Vector3(facePos.x + halfLen, segPoint.y, segPoint.z);
       }
-
-      console.log('[PushPull] Segment line points:', lineStart.toString(), 'to', lineEnd.toString());
 
       // Create the segmentation line using tube for better visibility
       const segmentLine = MeshBuilder.CreateTube('segmentLine', {
         path: [lineStart, lineEnd],
-        radius: 0.02,  // Visible thickness
+        radius: 0.015,  // Visible thickness
         tessellation: 8,
         updatable: false,
       }, scene);
@@ -3834,7 +3860,6 @@ const CustomModelingPage: React.FC = () => {
       }
 
       state.segmentLine = segmentLine;
-      console.log('[PushPull] Segment line created at:', segPoint.toString());
     }
 
     // Early return if distance is too small (but segment line already drawn above)
@@ -3885,7 +3910,8 @@ const CustomModelingPage: React.FC = () => {
     let previewPosition: Vector3;
 
     // Check if operating on an existing solid's face
-    if (parentSolid && !parentSolid.isDisposed() && parentSolid.metadata) {
+    // Skip for polygon solids (rooms) - they don't have width/height/depth, use free face preview instead
+    if (parentSolid && !parentSolid.isDisposed() && parentSolid.metadata && !parentSolid.metadata.isPolygon) {
       const parentMeta = parentSolid.metadata;
       const parentPos = parentSolid.position.clone();
       const changeAmount = Math.abs(distance);
@@ -4089,6 +4115,7 @@ const CustomModelingPage: React.FC = () => {
 
   // Find snap distances for Push/Pull tool
   // Returns an array of potential snap distances based on other geometry in the scene
+  // Only considers geometry visible from the current camera view
   const findPushPullSnapDistances = useCallback((
     baseFace: Mesh,
     baseFaceCenter: Vector3,
@@ -4097,16 +4124,32 @@ const CustomModelingPage: React.FC = () => {
   ): { distance: number; type: 'edge' | 'face' | 'ground' }[] => {
     const snapDistances: { distance: number; type: 'edge' | 'face' | 'ground' }[] = [];
     const normalizedNormal = baseFaceNormal.normalize();
+    const camera = cameraRef.current;
+
 
     // Get the parent solid of the base face (to exclude from snap calculation)
     const parentSolid = baseFace.parent as Mesh | null;
+
+    // Helper: Check if a point is visible from camera (not behind the camera)
+    const isVisibleFromCamera = (point: Vector3): boolean => {
+      if (!camera) return true;
+      const cameraPos = camera.position;
+      const cameraDir = camera.getDirection(Vector3.Forward());
+      const toPoint = point.subtract(cameraPos);
+      // Point is visible if it's in front of camera (dot product > 0)
+      return Vector3.Dot(toPoint, cameraDir) > 0;
+    };
 
     // 1. Ground plane snap (Y = 0)
     if (Math.abs(normalizedNormal.y) > 0.9) {
       // For top/bottom faces, snap to ground level
       const groundDistance = -baseFaceCenter.y / normalizedNormal.y;
       if (groundDistance !== 0) {
-        snapDistances.push({ distance: groundDistance, type: 'ground' });
+        // Check if ground point would be visible
+        const groundPoint = baseFaceCenter.add(normalizedNormal.scale(groundDistance));
+        if (isVisibleFromCamera(groundPoint)) {
+          snapDistances.push({ distance: groundDistance, type: 'ground' });
+        }
       }
     }
 
@@ -4122,6 +4165,9 @@ const CustomModelingPage: React.FC = () => {
 
       const face = mesh as Mesh;
       const faceCenter = face.getAbsolutePosition();
+
+      // Skip faces that are not visible from camera
+      if (!isVisibleFromCamera(faceCenter)) return;
 
       // Calculate the distance from base face to this face along the normal direction
       const delta = faceCenter.subtract(baseFaceCenter);
@@ -4150,6 +4196,9 @@ const CustomModelingPage: React.FC = () => {
 
       // Calculate distances to edge endpoints along the normal
       [p1, p2].forEach(point => {
+        // Skip points that are not visible from camera
+        if (!isVisibleFromCamera(point)) return;
+
         const delta = point.subtract(baseFaceCenter);
         const distanceAlongNormal = Vector3.Dot(delta, normalizedNormal);
 
@@ -4424,9 +4473,73 @@ const CustomModelingPage: React.FC = () => {
         console.log('Create component from selection:', selectionState.selectedIds);
         break;
 
-      case 'create-group':
-        console.log('Create group from selection:', selectionState.selectedIds);
+      case 'create-group': {
+        if (selectionState.selectedIds.length > 0 && sceneRef.current) {
+          const scene = sceneRef.current;
+          groupCounterRef.current += 1;
+          const groupColors = ['#4da6ff', '#ff6b6b', '#51cf66', '#fcc419', '#cc5de8', '#ff922b', '#20c997', '#748ffc'];
+          const groupColor = groupColors[groupCounterRef.current % groupColors.length];
+          const groupName = `그룹 ${groupCounterRef.current}`;
+          const groupId = `group_${groupCounterRef.current}`;
+
+          // Collect meshes to merge
+          const meshesToMerge: Mesh[] = [];
+          selectionState.selectedIds.forEach(id => {
+            const mesh = scene.getMeshByID(id) as Mesh | null;
+            if (mesh && mesh.geometry) {
+              meshesToMerge.push(mesh);
+            }
+          });
+
+          if (meshesToMerge.length > 0) {
+            // Merge all meshes into one
+            const mergedMesh = Mesh.MergeMeshes(
+              meshesToMerge,
+              true,  // disposeSource - dispose original meshes
+              true,  // allow32BitsIndices
+              undefined, // parent
+              false, // subdivideWithSubMeshes
+              true   // multiMultiMaterials
+            );
+
+            if (mergedMesh) {
+              mergedMesh.name = groupName;
+              mergedMesh.id = groupId;
+              mergedMesh.isPickable = true;
+
+              // Create material for the merged mesh
+              const mat = new StandardMaterial(`groupMat_${groupCounterRef.current}`, scene);
+              mat.diffuseColor = Color3.FromHexString(groupColor);
+              mat.specularColor = new Color3(0.1, 0.1, 0.1);
+              mat.backFaceCulling = false;
+              mergedMesh.material = mat;
+
+              // Store group metadata
+              mergedMesh.metadata = {
+                type: 'group',
+                groupId: groupId,
+                groupName: groupName,
+                originalMeshCount: meshesToMerge.length,
+              };
+
+              // Add to groups list for UI
+              const newGroup: MeshGroup = {
+                id: groupId,
+                name: groupName,
+                meshIds: [groupId], // Now just the merged mesh ID
+                isVisible: true,
+                isLocked: false,
+                isExpanded: true,
+                color: groupColor,
+              };
+              setGroups(prev => [...prev, newGroup]);
+            }
+          }
+
+          selectionManagerRef.current?.clear();
+        }
         break;
+      }
 
       case 'intersect-model':
       case 'intersect-selection':
@@ -6157,7 +6270,6 @@ const CustomModelingPage: React.FC = () => {
                 );
                 if (pickResult?.hit && pickResult.pickedPoint) {
                   ppState.segmentPoint = pickResult.pickedPoint.clone();
-                  console.log('[PushPull] Segment mode enabled, point:', ppState.segmentPoint.toString());
                 }
               } else {
                 ppState.segmentMode = false;
@@ -6632,6 +6744,10 @@ const CustomModelingPage: React.FC = () => {
           const snapResult = checkPushPullSnap(distance, snapDistances, snapThreshold);
 
           if (snapResult.snapped) {
+            // Only log when snap state changes
+            if (!ppState.isSnapped || ppState.snapDistance !== snapResult.distance) {
+              console.log(`[PushPull] SNAPPED to ${snapResult.type} at distance: ${snapResult.distance.toFixed(3)}`);
+            }
             distance = snapResult.distance;
             ppState.isSnapped = true;
             ppState.snapDistance = distance;
@@ -8529,6 +8645,7 @@ const CustomModelingPage: React.FC = () => {
             <div className={styles.rightPanelTabs}>
               <button className={`${styles.tabBtn} ${activeTab === 'info' ? styles.active : ''}`} onClick={() => setActiveTab('info')}>Info</button>
               <button className={`${styles.tabBtn} ${activeTab === 'materials' ? styles.active : ''}`} onClick={() => setActiveTab('materials')}>Materials</button>
+              <button className={`${styles.tabBtn} ${activeTab === 'groups' ? styles.active : ''}`} onClick={() => setActiveTab('groups')}>Groups</button>
               <button className={`${styles.tabBtn} ${activeTab === 'components' ? styles.active : ''}`} onClick={() => setActiveTab('components')}>Add</button>
             </div>
           </div>
@@ -8690,6 +8807,169 @@ const CustomModelingPage: React.FC = () => {
               </div>
             )}
 
+
+            {activeTab === 'groups' && (
+              <div className={styles.panelSection}>
+                <div className={styles.sectionHeader}>
+                  <span className={styles.sectionTitle}>그룹 레이어</span>
+                  <span className={styles.groupCount}>{groups.length}개</span>
+                </div>
+                {groups.length === 0 ? (
+                  <div className={styles.emptyState}>
+                    <svg className={styles.emptyIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                    </svg>
+                    <div className={styles.emptyText}>그룹이 없습니다.<br />객체를 선택하고 우클릭 → 그룹 만들기</div>
+                  </div>
+                ) : (
+                  <div className={styles.groupList}>
+                    {groups.map((group) => (
+                      <div key={group.id} className={styles.groupItem}>
+                        <div
+                          className={styles.groupHeader}
+                          onClick={() => {
+                            setGroups(prev => prev.map(g =>
+                              g.id === group.id ? { ...g, isExpanded: !g.isExpanded } : g
+                            ));
+                          }}
+                        >
+                          <div className={styles.groupLeft}>
+                            <svg
+                              className={`${styles.groupExpandIcon} ${group.isExpanded ? styles.expanded : ''}`}
+                              viewBox="0 0 24 24"
+                              width="14"
+                              height="14"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <path d="M9 18l6-6-6-6" />
+                            </svg>
+                            <div className={styles.groupColorDot} style={{ background: group.color }} />
+                            <span className={styles.groupName}>{group.name}</span>
+                            <span className={styles.groupMeshCount}>({group.meshIds.length})</span>
+                          </div>
+                          <div className={styles.groupActions}>
+                            <button
+                              className={styles.groupActionBtn}
+                              title={group.isVisible ? '숨기기' : '보이기'}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setGroups(prev => prev.map(g => {
+                                  if (g.id === group.id) {
+                                    g.meshIds.forEach(meshId => {
+                                      const mesh = sceneRef.current?.getMeshByID(meshId);
+                                      if (mesh) {
+                                        mesh.isVisible = !g.isVisible;
+                                        mesh.isPickable = !g.isVisible;
+                                      }
+                                    });
+                                    return { ...g, isVisible: !g.isVisible };
+                                  }
+                                  return g;
+                                }));
+                              }}
+                            >
+                              {group.isVisible ? (
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                  <circle cx="12" cy="12" r="3" />
+                                </svg>
+                              ) : (
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" />
+                                  <line x1="1" y1="1" x2="23" y2="23" />
+                                </svg>
+                              )}
+                            </button>
+                            <button
+                              className={styles.groupActionBtn}
+                              title={group.isLocked ? '잠금 해제' : '잠금'}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setGroups(prev => prev.map(g => {
+                                  if (g.id === group.id) {
+                                    g.meshIds.forEach(meshId => {
+                                      const mesh = sceneRef.current?.getMeshByID(meshId);
+                                      if (mesh) {
+                                        mesh.isPickable = g.isLocked;
+                                      }
+                                    });
+                                    return { ...g, isLocked: !g.isLocked };
+                                  }
+                                  return g;
+                                }));
+                              }}
+                            >
+                              {group.isLocked ? (
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                  <path d="M7 11V7a5 5 0 0110 0v4" />
+                                </svg>
+                              ) : (
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                  <path d="M7 11V7a5 5 0 019.9-1" />
+                                </svg>
+                              )}
+                            </button>
+                            <button
+                              className={styles.groupActionBtn}
+                              title="그룹 선택"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                selectionManagerRef.current?.selectIds(group.meshIds, 'replace');
+                              }}
+                            >
+                              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
+                              </svg>
+                            </button>
+                            <button
+                              className={`${styles.groupActionBtn} ${styles.deleteBtn}`}
+                              title="그룹 해제"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                group.meshIds.forEach(meshId => {
+                                  const mesh = sceneRef.current?.getMeshByID(meshId);
+                                  if (mesh && mesh.metadata) {
+                                    delete mesh.metadata.groupId;
+                                  }
+                                });
+                                setGroups(prev => prev.filter(g => g.id !== group.id));
+                              }}
+                            >
+                              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M18 6L6 18M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                        {group.isExpanded && (
+                          <div className={styles.groupChildren}>
+                            {group.meshIds.map((meshId) => {
+                              const mesh = sceneRef.current?.getMeshByID(meshId);
+                              return (
+                                <div
+                                  key={meshId}
+                                  className={`${styles.groupChild} ${selectionState.selectedIds.includes(meshId) ? styles.selected : ''}`}
+                                  onClick={() => selectionManagerRef.current?.select(meshId, 'toggle')}
+                                >
+                                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                    <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
+                                  </svg>
+                                  <span>{mesh?.name || meshId}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {activeTab === 'components' && (
               <div className={styles.panelSection}>
