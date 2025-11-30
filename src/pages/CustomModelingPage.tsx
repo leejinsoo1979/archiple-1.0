@@ -30,8 +30,10 @@ import {
   LinesMesh,
   Ray,  // Required for scene.pick() to work
   Matrix,
+  Quaternion,
   Material,
   TransformNode,
+  VertexData,
 } from '@babylonjs/core';
 // Side-effect import for scene.pick() to work
 import '@babylonjs/core/Culling/ray';
@@ -119,6 +121,7 @@ const CustomModelingPage: React.FC = () => {
     lastClickFace: Mesh | null;      // For double-click on same face
     axisLocked: boolean;             // Shift key locks the axis direction
     lockedDistance: number;          // Distance when axis was locked
+    copyMode: boolean;               // Option key: create copy instead of modifying original
   }>({
     baseFace: null,
     baseFaceNormal: null,
@@ -131,6 +134,7 @@ const CustomModelingPage: React.FC = () => {
     lastClickFace: null,
     axisLocked: false,
     lockedDistance: 0,
+    copyMode: false,
   });
 
   // Offset tool state ref for SketchUp-style face offset
@@ -223,6 +227,17 @@ const CustomModelingPage: React.FC = () => {
     inferredAxis: null,
   });
 
+  // Edge drag state for move tool stretching
+  const edgeDragStateRef = useRef<{
+    isDragging: boolean;
+    startPosition: Vector3 | null;
+    edgeMesh: Mesh | null;
+  }>({
+    isDragging: false,
+    startPosition: null,
+    edgeMesh: null
+  });
+
   // Measurement input state for rectangle dimensions
   const [measurementInput, setMeasurementInput] = useState<string>('');
   const [showMeasurementInput, setShowMeasurementInput] = useState(false);
@@ -260,6 +275,7 @@ const CustomModelingPage: React.FC = () => {
   const [isDrawing, setIsDrawing] = useState(false);
 
   const [activeTool, setActiveTool] = useState<ToolType>('select');
+  const [pushpullCopyMode, setPushpullCopyMode] = useState(false);  // Option key held for copy mode
   const [selectedMesh, setSelectedMesh] = useState<Mesh | null>(null);
   const selectedMeshRef = useRef<Mesh | null>(null);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
@@ -475,8 +491,8 @@ const CustomModelingPage: React.FC = () => {
       for (const snapPoint of snapPointsRef.current) {
         const dist = Vector3.Distance(rawPoint, snapPoint.position);
         if (dist < snapThreshold) {
-          // FORCE Y=0 for ground plane drawing - snap points may have non-zero Y from 3D objects
-          return new Vector3(snapPoint.position.x, 0, snapPoint.position.z);
+          // Preserve actual Y coordinate for 3D snapping (top edges, etc.)
+          return snapPoint.position.clone();
         }
       }
 
@@ -541,11 +557,11 @@ const CustomModelingPage: React.FC = () => {
         return Vector3.Zero();
       }
 
-      // Snap to existing snap points
+      // Snap to existing snap points (preserve Y for 3D snapping)
       for (const snapPoint of snapPointsRef.current) {
         const dist = Vector3.Distance(rawPoint, snapPoint.position);
         if (dist < snapThreshold) {
-          return new Vector3(snapPoint.position.x, 0, snapPoint.position.z);
+          return snapPoint.position.clone();
         }
       }
 
@@ -597,8 +613,10 @@ const CustomModelingPage: React.FC = () => {
     const screenDy = pointerY - startScreenPos.y; // Positive = mouse below start, Negative = mouse above start
 
     // Y-axis inference: Mouse is close horizontally but moving vertically on screen
+    // SKIP Y-axis inference if drawing on ground plane (startPoint.y near 0)
     const screenSnapThreshold = 80; // pixels
-    if (screenDx < screenSnapThreshold && Math.abs(screenDy) > 5) {
+    const isOnGroundPlane = Math.abs(startPoint.y) < 0.1;
+    if (!isOnGroundPlane && screenDx < screenSnapThreshold && Math.abs(screenDy) > 5) {
       // Project mouse onto a vertical plane passing through startPoint
       const ray = scene.createPickingRay(pointerX, pointerY, Matrix.Identity(), camera);
       const cameraPos = camera.position;
@@ -630,25 +648,34 @@ const CustomModelingPage: React.FC = () => {
 
     if (groundPickResult?.hit && groundPickResult.pickedPoint) {
       const groundPoint = groundPickResult.pickedPoint;
+
       const dx = Math.abs(groundPoint.x - startPoint.x);
       const dz = Math.abs(groundPoint.z - startPoint.z);
+      const totalDist = dx + dz;
 
-      // X-axis inference: If close to start's Z
-      if (dz < snapThreshold) {
-        const xValue = Math.round(groundPoint.x / GRID_SNAP) * GRID_SNAP;
-        return {
-          point: new Vector3(xValue, startPoint.y, startPoint.z),
-          inferredAxis: 'x'
-        };
-      }
+      // Only apply axis inference if moved enough from start point
+      if (totalDist > snapThreshold * 0.2) {
+        const ratio = totalDist > 0.01 ? Math.min(dx, dz) / Math.max(dx, dz) : 1;
 
-      // Z-axis inference: If close to start's X
-      if (dx < snapThreshold) {
-        const zValue = Math.round(groundPoint.z / GRID_SNAP) * GRID_SNAP;
-        return {
-          point: new Vector3(startPoint.x, startPoint.y, zValue),
-          inferredAxis: 'z'
-        };
+        // Aggressive axis snapping - snap unless moving at ~45 degrees
+        // ratio < 0.85 means one axis is dominant
+        if (ratio < 0.85) {
+          if (dx > dz) {
+            // X-axis inference (red): Lock Z, allow X to vary
+            const xValue = Math.round(groundPoint.x / GRID_SNAP) * GRID_SNAP;
+            return {
+              point: new Vector3(xValue, startPoint.y, startPoint.z),
+              inferredAxis: 'x'
+            };
+          } else {
+            // Z-axis inference (green): Lock X, allow Z to vary
+            const zValue = Math.round(groundPoint.z / GRID_SNAP) * GRID_SNAP;
+            return {
+              point: new Vector3(startPoint.x, startPoint.y, zValue),
+              inferredAxis: 'z'
+            };
+          }
+        }
       }
 
       // Default: Use ground point
@@ -884,10 +911,12 @@ const CustomModelingPage: React.FC = () => {
     lineInf.inferenceType = inferenceType;
     setLineInferenceUI(prev => ({ ...prev, axisColor, inferenceType }));
 
-    // Create line with appropriate color (flat on ground plane at Y=0.01)
+    // Create line with appropriate color (use actual Y coordinates for 3D preview)
+    const startY = start.y === 0 ? 0.001 : start.y;
+    const endY = constrainedEnd.y === 0 ? 0.001 : constrainedEnd.y;
     const linePoints = [
-      new Vector3(start.x, 0.001, start.z),
-      new Vector3(constrainedEnd.x, 0.001, constrainedEnd.z)
+      new Vector3(start.x, startY, start.z),
+      new Vector3(constrainedEnd.x, endY, constrainedEnd.z)
     ];
     const line = MeshBuilder.CreateLines('previewLine', {
       points: linePoints,
@@ -1149,7 +1178,7 @@ const CustomModelingPage: React.FC = () => {
           const p2 = localPoints[(i + 1) % localPoints.length];
           const edge = MeshBuilder.CreateTube(`Edge_${meshCounterRef.current}_${i}`, {
             path: [new Vector3(p1.x, 0.001, p1.z), new Vector3(p2.x, 0.001, p2.z)],
-            radius: 0.005,
+            radius: 0.015,
             tessellation: 4,
             cap: 0
           }, scene);
@@ -1279,7 +1308,7 @@ const CustomModelingPage: React.FC = () => {
           const p2 = outerLocal[(i + 1) % outerLocal.length];
           const edge = MeshBuilder.CreateTube(`Edge_${meshCounterRef.current}_outer_${i}`, {
             path: [new Vector3(p1.x, 0.001, p1.z), new Vector3(p2.x, 0.001, p2.z)],
-            radius: 0.005,
+            radius: 0.015,
             tessellation: 4,
             cap: 0
           }, scene);
@@ -1333,7 +1362,7 @@ const CustomModelingPage: React.FC = () => {
       const edge = MeshBuilder.CreateTube(`Edge_${meshCounterRef.current}_${i}`, {
         path: [new Vector3(p1.x - face.position.x, 0.001, p1.z - face.position.z), 
                new Vector3(p2.x - face.position.x, 0.001, p2.z - face.position.z)],
-        radius: 0.005,
+        radius: 0.015,
         tessellation: 4,
         cap: 0
       }, scene);
@@ -1343,7 +1372,14 @@ const CustomModelingPage: React.FC = () => {
       edge.material = edgeMat;
       edge.isPickable = true;
       edge.parent = face;
-      edge.metadata = { type: 'edge', parentFace: face };
+      edge.metadata = {
+        type: 'edge',
+        parentFace: face,
+        edgeIndex: i,
+        vertexIndices: [i, (i + 1) % points.length],
+        localStart: points[i].clone(),
+        localEnd: points[(i + 1) % points.length].clone()
+      };
       edgeIds.push(edge.id);
     }
     face.metadata.edgeIds = edgeIds;
@@ -1365,7 +1401,7 @@ const CustomModelingPage: React.FC = () => {
     edgePairs.forEach((pair, idx) => {
       const edge = MeshBuilder.CreateTube(`Edge_${meshCounterRef.current}_${idx}`, {
         path: [corners[pair[0]], corners[pair[1]]],
-        radius: 0.005,
+        radius: 0.015,
         tessellation: 4,
         cap: 0
       }, scene);
@@ -1375,10 +1411,127 @@ const CustomModelingPage: React.FC = () => {
       edge.material = edgeMat;
       edge.isPickable = true;
       edge.parent = face;
-      edge.metadata = { type: 'edge', parentFace: face };
+      edge.metadata = {
+        type: 'edge',
+        parentFace: face,
+        edgeIndex: idx,
+        vertexIndices: pair,
+        localStart: corners[pair[0]].clone(),
+        localEnd: corners[pair[1]].clone()
+      };
       edgeIds.push(edge.id);
     });
     face.metadata.edgeIds = edgeIds;
+  }, []);
+
+  // Stretch face geometry by moving an edge
+  const stretchFaceByEdge = useCallback((scene: Scene, edgeMesh: Mesh, delta: Vector3) => {
+    const parentFace = edgeMesh.metadata?.parentFace as Mesh;
+    if (!parentFace || parentFace.metadata?.type !== 'face') return;
+
+    const edgeIndex = edgeMesh.metadata?.edgeIndex as number;
+    const vertexIndices = edgeMesh.metadata?.vertexIndices as number[];
+    if (edgeIndex === undefined || !vertexIndices) return;
+
+    // Get current corners from face metadata or calculate from geometry
+    let corners = parentFace.metadata?.corners as Vector3[] | undefined;
+    if (!corners) {
+      // Fallback: calculate from face dimensions
+      const width = parentFace.metadata?.width || 1;
+      const depth = parentFace.metadata?.depth || 1;
+      const halfW = width / 2;
+      const halfD = depth / 2;
+      corners = [
+        new Vector3(-halfW, 0.001, -halfD),
+        new Vector3(+halfW, 0.001, -halfD),
+        new Vector3(+halfW, 0.001, +halfD),
+        new Vector3(-halfW, 0.001, +halfD),
+      ];
+    }
+
+    // Clone corners to modify
+    const newCorners = corners.map(c => c.clone());
+
+    // Move the vertices that belong to this edge
+    vertexIndices.forEach(vi => {
+      newCorners[vi].addInPlace(delta);
+    });
+
+    // Calculate new face dimensions from corners
+    const minX = Math.min(...newCorners.map(c => c.x));
+    const maxX = Math.max(...newCorners.map(c => c.x));
+    const minZ = Math.min(...newCorners.map(c => c.z));
+    const maxZ = Math.max(...newCorners.map(c => c.z));
+
+    const newWidth = maxX - minX;
+    const newDepth = maxZ - minZ;
+    const newCenterX = (minX + maxX) / 2 + parentFace.position.x;
+    const newCenterZ = (minZ + maxZ) / 2 + parentFace.position.z;
+
+    // Don't allow negative or zero dimensions
+    if (newWidth <= 0.01 || newDepth <= 0.01) return;
+
+    // Remove old edges
+    const oldEdgeIds = parentFace.metadata?.edgeIds as string[] || [];
+    oldEdgeIds.forEach(edgeId => {
+      const oldEdge = scene.getMeshById(edgeId);
+      if (oldEdge) oldEdge.dispose();
+    });
+
+    // Update face geometry by scaling and repositioning
+    const oldWidth = parentFace.metadata?.width || 1;
+    const oldDepth = parentFace.metadata?.depth || 1;
+    parentFace.scaling.x = newWidth / oldWidth;
+    parentFace.scaling.z = newDepth / oldDepth;
+    parentFace.position.x = newCenterX;
+    parentFace.position.z = newCenterZ;
+
+    // Recalculate local corners for new edges (after scaling)
+    const halfW = newWidth / 2;
+    const halfD = newDepth / 2;
+    const edgeY = 0.001;
+    const localCorners = [
+      new Vector3(-halfW / parentFace.scaling.x, edgeY, -halfD / parentFace.scaling.z),
+      new Vector3(+halfW / parentFace.scaling.x, edgeY, -halfD / parentFace.scaling.z),
+      new Vector3(+halfW / parentFace.scaling.x, edgeY, +halfD / parentFace.scaling.z),
+      new Vector3(-halfW / parentFace.scaling.x, edgeY, +halfD / parentFace.scaling.z),
+    ];
+
+    // Create new edges
+    const newEdgeIds: string[] = [];
+    const edgePairs = [[0, 1], [1, 2], [2, 3], [3, 0]];
+    edgePairs.forEach((pair, idx) => {
+      const newEdge = MeshBuilder.CreateTube(`Edge_stretched_${idx}`, {
+        path: [localCorners[pair[0]], localCorners[pair[1]]],
+        radius: 0.015,
+        tessellation: 4,
+        cap: 0
+      }, scene);
+      const edgeMat = new StandardMaterial(`EdgeMat_stretched_${idx}`, scene);
+      edgeMat.diffuseColor = new Color3(0.15, 0.15, 0.15);
+      edgeMat.emissiveColor = new Color3(0.15, 0.15, 0.15);
+      newEdge.material = edgeMat;
+      newEdge.isPickable = true;
+      newEdge.parent = parentFace;
+      newEdge.metadata = {
+        type: 'edge',
+        parentFace: parentFace,
+        edgeIndex: idx,
+        vertexIndices: pair,
+        localStart: localCorners[pair[0]].clone(),
+        localEnd: localCorners[pair[1]].clone()
+      };
+      newEdgeIds.push(newEdge.id);
+    });
+
+    // Update face metadata
+    parentFace.metadata.edgeIds = newEdgeIds;
+    parentFace.metadata.width = newWidth;
+    parentFace.metadata.depth = newDepth;
+    parentFace.metadata.corners = localCorners.map(c => c.clone());
+
+    // Refresh bounding info
+    parentFace.refreshBoundingInfo();
   }, []);
 
   // Detect closed loops and create faces automatically
@@ -1396,11 +1549,11 @@ const CustomModelingPage: React.FC = () => {
 
     if (edges.length < 3) return; // Need at least 3 edges for a face
 
-    // Build adjacency graph from edges
-    type Point = { x: number; z: number };
-    const pointKey = (p: Point) => `${p.x.toFixed(3)},${p.z.toFixed(3)}`;
+    // Build adjacency graph from edges (2D on XZ plane)
+    type Point2D = { x: number; z: number };
+    const pointKey = (p: Point2D) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`;
 
-    const graph = new Map<string, { point: Point; neighbors: Set<string>; edges: Mesh[] }>();
+    const graph = new Map<string, { point: Point2D; neighbors: Set<string>; edges: Mesh[] }>();
 
     for (const edge of edges) {
       const start = edge.metadata.startPoint as Vector3;
@@ -1427,24 +1580,22 @@ const CustomModelingPage: React.FC = () => {
 
     // BFS to find smallest cycle
     const findCycle = (start: string): string[] | null => {
-      const visited = new Set<string>();
-
       const queue: { node: string; path: string[] }[] = [{ node: start, path: [start] }];
 
       while (queue.length > 0) {
         const { node, path } = queue.shift()!;
+        const pathSet = new Set(path);
 
         const nodeData = graph.get(node);
         if (!nodeData) continue;
 
         for (const neighbor of nodeData.neighbors) {
           if (neighbor === start && path.length >= 3) {
-            // Found a cycle!
-            return path;
+            return path; // Found a cycle
           }
 
-          if (!visited.has(neighbor) && neighbor !== path[path.length - 2]) {
-            visited.add(neighbor);
+          // Skip if neighbor is already in current path (would create loop)
+          if (!pathSet.has(neighbor)) {
             queue.push({ node: neighbor, path: [...path, neighbor] });
           }
         }
@@ -1455,19 +1606,18 @@ const CustomModelingPage: React.FC = () => {
     const cycle = findCycle(startKey);
     if (!cycle || cycle.length < 3) return;
 
-    // Convert cycle to polygon points
+    // Convert cycle to polygon points (2D on XZ plane)
     const polygonPoints: Vector3[] = cycle.map(key => {
       const node = graph.get(key)!;
       return new Vector3(node.point.x, 0, node.point.z);
     });
 
-    // Check if face already exists at these points
+    // Check if face already exists
     const existingFaces = scene.meshes.filter(m =>
       m.metadata?.type === 'face' && !m.parent
     );
 
     for (const face of existingFaces) {
-      // Simple check - if face center is near polygon center, skip
       const faceCenter = face.getBoundingInfo().boundingBox.centerWorld;
       const polyCenter = polygonPoints.reduce(
         (acc, p) => ({ x: acc.x + p.x, z: acc.z + p.z }),
@@ -1480,60 +1630,66 @@ const CustomModelingPage: React.FC = () => {
         Math.pow(faceCenter.x - polyCenter.x, 2) +
         Math.pow(faceCenter.z - polyCenter.z, 2)
       );
-      if (dist < EPSILON) return; // Face already exists
+      if (dist < EPSILON) return;
     }
 
-    // Create the face
+    // Create 2D face on XZ plane
     try {
       meshCounterRef.current++;
 
-      // Convert to local coordinates for polygon creation
-      const localPoints = polygonPoints.map(p => new Vector3(p.x, 0, p.z));
+      // Calculate center of polygon for proper positioning
+      const xs = polygonPoints.map(p => p.x);
+      const zs = polygonPoints.map(p => p.z);
+      const centerX = (Math.min(...xs) + Math.max(...xs)) / 2;
+      const centerZ = (Math.min(...zs) + Math.max(...zs)) / 2;
+      const width = Math.max(...xs) - Math.min(...xs);
+      const depth = Math.max(...zs) - Math.min(...zs);
+
+      // Convert to relative coordinates (relative to center)
+      const relativeShape = polygonPoints.map(p => new Vector3(p.x - centerX, 0, p.z - centerZ));
 
       const newFace = MeshBuilder.CreatePolygon(
         `Face_${meshCounterRef.current}`,
         {
-          shape: localPoints,
+          shape: relativeShape,
           sideOrientation: Mesh.DOUBLESIDE
         },
         scene,
         earcut
       );
 
-      newFace.position.y = 0.001;
+      // Position mesh at center of polygon
+      newFace.position = new Vector3(centerX, 0.001, centerZ);
 
       const faceMat = new StandardMaterial(`FaceMat_${meshCounterRef.current}`, scene);
-      faceMat.diffuseColor = new Color3(0.85, 0.85, 0.85);
-      faceMat.emissiveColor = new Color3(0.1, 0.1, 0.1);
+      faceMat.diffuseColor = new Color3(1, 1, 1);  // White
+      faceMat.emissiveColor = new Color3(0.8, 0.8, 0.8);  // Very bright emissive
       faceMat.backFaceCulling = false;
       newFace.material = faceMat;
 
       newFace.isPickable = true;
 
-      // Calculate width and depth for push/pull
-      const xs = polygonPoints.map(p => p.x);
-      const zs = polygonPoints.map(p => p.z);
-      const width = Math.max(...xs) - Math.min(...xs);
-      const depth = Math.max(...zs) - Math.min(...zs);
-
+      // Store shape as RELATIVE coordinates for push/pull compatibility
       newFace.metadata = {
         type: 'face',
         originalY: 0.001,
         width: width,
         depth: depth,
         isPolygon: true,
-        polygonPoints: localPoints.map(p => ({ x: p.x, z: p.z }))
+        shape: relativeShape.map(p => ({ x: p.x, z: p.z })),
+        holes: []  // No holes for simple closed loop
       };
 
-      // Collect edge IDs that form this face
       const edgeIds: string[] = [];
       for (let i = 0; i < cycle.length; i++) {
         const node = graph.get(cycle[i])!;
         edgeIds.push(...node.edges.map(e => e.id));
       }
       newFace.metadata.edgeIds = [...new Set(edgeIds)];
+
+      console.log(`Face created at center (${centerX.toFixed(2)}, ${centerZ.toFixed(2)}), size ${width.toFixed(2)}x${depth.toFixed(2)}`);
     } catch (e) {
-      console.error('Failed to create face from closed loop:', e);
+      console.error('Failed to create face:', e);
     }
   }, []);
 
@@ -1575,6 +1731,18 @@ const CustomModelingPage: React.FC = () => {
       startPoint: start.clone(),
       endPoint: constrainedEnd.clone()
     };
+
+    // Add endpoints to snap points for future line connections
+    const addSnapPoint = (pos: Vector3) => {
+      const exists = snapPointsRef.current.some(sp =>
+        Vector3.Distance(sp.position, pos) < 0.01
+      );
+      if (!exists) {
+        snapPointsRef.current.push({ position: pos.clone(), type: 'endpoint' });
+      }
+    };
+    addSnapPoint(start);
+    addSnapPoint(constrainedEnd);
 
     // Store the endpoint for continuous drawing mode
     lineInf.lastEndpoint = constrainedEnd.clone();
@@ -1677,7 +1845,7 @@ const CustomModelingPage: React.FC = () => {
     edgePairs.forEach((pair, idx) => {
       const edge = MeshBuilder.CreateTube(`Edge_${meshCounterRef.current}_${idx}`, {
         path: [corners[pair[0]], corners[pair[1]]],
-        radius: 0.005,
+        radius: 0.015,
         tessellation: 4,
         cap: 0
       }, scene);
@@ -1688,12 +1856,20 @@ const CustomModelingPage: React.FC = () => {
       edge.material = edgeMat;
       edge.isPickable = true;
       edge.parent = face;
-      edge.metadata = { type: 'edge', parentFace: face };
+      edge.metadata = {
+        type: 'edge',
+        parentFace: face,
+        edgeIndex: idx,
+        vertexIndices: pair,
+        localStart: corners[pair[0]].clone(),
+        localEnd: corners[pair[1]].clone()
+      };
       edgeIds.push(edge.id);
     });
 
-    // Store edge references in face metadata
+    // Store edge references and corners in face metadata
     face.metadata.edgeIds = edgeIds;
+    face.metadata.corners = corners.map(c => c.clone());
 
     // Reset modifiers after finalizing
     const resetMods = {
@@ -2170,6 +2346,59 @@ const CustomModelingPage: React.FC = () => {
     });
   }, []);
 
+  // Add snap points for 3D solid (8 corners + 12 edge midpoints)
+  const addSolidSnapPoints = useCallback((solid: Mesh) => {
+    if (!solid.metadata || solid.metadata.type !== 'solid') return;
+
+    const { width, height, depth } = solid.metadata;
+    const pos = solid.position;
+    const hw = width / 2;
+    const hh = height / 2;
+    const hd = depth / 2;
+
+    // 8 corners in world coordinates
+    const corners = [
+      new Vector3(pos.x - hw, pos.y - hh, pos.z - hd), // 0: bottom back left
+      new Vector3(pos.x - hw, pos.y - hh, pos.z + hd), // 1: bottom front left
+      new Vector3(pos.x + hw, pos.y - hh, pos.z + hd), // 2: bottom front right
+      new Vector3(pos.x + hw, pos.y - hh, pos.z - hd), // 3: bottom back right
+      new Vector3(pos.x - hw, pos.y + hh, pos.z - hd), // 4: top back left
+      new Vector3(pos.x - hw, pos.y + hh, pos.z + hd), // 5: top front left
+      new Vector3(pos.x + hw, pos.y + hh, pos.z + hd), // 6: top front right
+      new Vector3(pos.x + hw, pos.y + hh, pos.z - hd), // 7: top back right
+    ];
+
+    // 12 edge indices for midpoint calculation
+    const edgeIndices = [
+      [0, 1], [1, 2], [2, 3], [3, 0], // bottom ring
+      [4, 5], [5, 6], [6, 7], [7, 4], // top ring
+      [0, 4], [1, 5], [2, 6], [3, 7], // vertical edges
+    ];
+
+    // Add corners as endpoints
+    corners.forEach(corner => {
+      const exists = snapPointsRef.current.some(p => Vector3.Distance(p.position, corner) < 0.1);
+      if (!exists) {
+        snapPointsRef.current.push({ position: corner, type: 'endpoint' });
+      }
+    });
+
+    // Add edge midpoints
+    edgeIndices.forEach(([i, j]) => {
+      const midpoint = corners[i].add(corners[j]).scale(0.5);
+      const exists = snapPointsRef.current.some(p => Vector3.Distance(p.position, midpoint) < 0.1);
+      if (!exists) {
+        snapPointsRef.current.push({ position: midpoint, type: 'midpoint' });
+      }
+    });
+
+    console.log('[Snap] Added solid snap points:', {
+      corners: corners.length,
+      midpoints: edgeIndices.length,
+      total: snapPointsRef.current.length
+    });
+  }, []);
+
   // Show snap indicator - change cursor color based on snap type
   // Endpoint/Origin: Green, Midpoint: Cyan (sky blue), On-edge: Red
   const showSnapIndicator = useCallback((snapType: 'endpoint' | 'midpoint' | 'origin' | 'onedge') => {
@@ -2219,16 +2448,16 @@ const CustomModelingPage: React.FC = () => {
 
     // Check all snap points (endpoints, midpoints, etc.)
     for (const snapPoint of snapPointsRef.current) {
-      // Use 2D distance (XZ plane) for ground-level drawing
-      // This allows snapping to 3D object corners/edges projected to ground
+      // Use 2D distance (XZ plane) for snap detection in screen space
+      // But preserve the actual 3D position (including Y) for proper snapping
       const dx = position.x - snapPoint.position.x;
       const dz = position.z - snapPoint.position.z;
       const dist2D = Math.sqrt(dx * dx + dz * dz);
       if (dist2D < minDist) {
         minDist = dist2D;
-        // FORCE Y=0 for ground plane - snap points project to ground
+        // Preserve actual Y coordinate for 3D snapping (top edges, etc.)
         nearest = {
-          position: new Vector3(snapPoint.position.x, 0, snapPoint.position.z),
+          position: snapPoint.position.clone(),
           type: snapPoint.type
         };
       }
@@ -2302,9 +2531,10 @@ const CustomModelingPage: React.FC = () => {
       // Position so bottom is at original face level, top is at face level + height
       extrudedMesh.position = new Vector3(baseCenter.x, baseCenter.y + height, baseCenter.z);
 
-      // Apply material with selected color
+      // Apply white material for extruded solid
       const mat = new StandardMaterial(`SolidMat_${solidId}`, scene);
-      mat.diffuseColor = Color3.FromHexString(selectedColor);
+      mat.diffuseColor = new Color3(1, 1, 1);  // White
+      mat.emissiveColor = new Color3(0.7, 0.7, 0.7);  // Bright emissive
       mat.specularColor = new Color3(0.2, 0.2, 0.2);
       mat.backFaceCulling = false;
       extrudedMesh.material = mat;
@@ -2321,7 +2551,7 @@ const CustomModelingPage: React.FC = () => {
       const createEdge = (ep1: Vector3, ep2: Vector3, idx: string) => {
         const edge = MeshBuilder.CreateTube(`Edge_${solidId}_${idx}`, {
           path: [ep1, ep2],
-          radius: 0.005,
+          radius: 0.015,
           tessellation: 4,
           cap: 0
         }, scene);
@@ -2371,8 +2601,9 @@ const CustomModelingPage: React.FC = () => {
 
   // Push/Pull functionality - SketchUp-style face extrusion
   // Creates 6 individual pickable faces + 12 edges for full selectability
-  const applyPushPull = useCallback((face: Mesh, distance: number, faceNormal: Vector3): Mesh | null => {
-    console.log('[PushPull] applyPushPull called:', { distance, faceNormal: faceNormal.toString(), faceDir: face.metadata?.faceDir });
+  // copyMode: When true, creates a separate solid without modifying the original (Option key)
+  const applyPushPull = useCallback((face: Mesh, distance: number, faceNormal: Vector3, copyMode: boolean = false): Mesh | null => {
+    console.log('[PushPull] applyPushPull called:', { distance, faceNormal: faceNormal.toString(), faceDir: face.metadata?.faceDir, copyMode });
     if (!face.metadata || face.metadata.type !== 'face') return null;
     if (Math.abs(distance) < 0.001) return null;
 
@@ -2497,10 +2728,11 @@ const CustomModelingPage: React.FC = () => {
       depth: boxDepth,
     };
 
-    // Helper to create individual face material
+    // Helper to create individual face material (white)
     const createFaceMat = (name: string) => {
       const mat = new StandardMaterial(name, scene);
-      mat.diffuseColor = Color3.FromHexString(selectedColor);
+      mat.diffuseColor = new Color3(1, 1, 1);  // White
+      mat.emissiveColor = new Color3(0.7, 0.7, 0.7);  // Bright emissive
       mat.specularColor = new Color3(0.2, 0.2, 0.2);
       mat.backFaceCulling = false;
       return mat;
@@ -2583,7 +2815,7 @@ const CustomModelingPage: React.FC = () => {
     edgeIndices.forEach((indices, i) => {
       const edge = MeshBuilder.CreateTube(`Edge_${solidId}_${i}`, {
         path: [corners[indices[0]], corners[indices[1]]],
-        radius: 0.005,
+        radius: 0.015,
         tessellation: 4,
         cap: 0
       }, scene);
@@ -2754,7 +2986,7 @@ const CustomModelingPage: React.FC = () => {
       flatPoints.push(v.x - innerCenterX, v.z - innerCenterZ);
     });
 
-    const indices = earcut(flatPoints);
+    console.log("[Offset] calling earcut with", flatPoints.length, "points"); const indices = earcut(flatPoints); console.log("[Offset] earcut returned", indices.length, "indices");
 
     // Build vertex positions for mesh (relative to inner center)
     const meshPositions: number[] = [];
@@ -2768,8 +3000,8 @@ const CustomModelingPage: React.FC = () => {
 
     indices.forEach(i => meshIndices.push(i));
 
-    const innerFace = new Mesh(`OffsetFace_${offsetId}`, scene);
-    const vertexData = new (window as any).BABYLON.VertexData();
+    console.log("[Offset] Creating innerFace mesh"); const innerFace = new Mesh(`OffsetFace_${offsetId}`, scene);
+    const vertexData = new VertexData();
     vertexData.positions = meshPositions;
     vertexData.indices = meshIndices;
     vertexData.normals = meshNormals;
@@ -2827,7 +3059,7 @@ const CustomModelingPage: React.FC = () => {
       ];
 
       const ringFace = new Mesh(`OffsetRing_${ringId}`, scene);
-      const ringVertexData = new (window as any).BABYLON.VertexData();
+      const ringVertexData = new VertexData();
       ringVertexData.positions = ringPositions;
       ringVertexData.indices = ringIndices;
       ringVertexData.normals = ringNormals;
@@ -2999,6 +3231,41 @@ const CustomModelingPage: React.FC = () => {
     }
 
     if (Math.abs(distance) < 0.001) return;
+
+    // Handle polygon faces (non-rectangular shapes)
+    if (face.metadata?.isPolygon && face.metadata?.shape) {
+      const baseCenter = face.getAbsolutePosition().clone();
+      const height = Math.abs(distance);
+
+      // Convert shape to Vector3 array
+      const shape = face.metadata.shape.map((p: { x: number; z: number }) =>
+        new Vector3(p.x, 0, p.z)
+      );
+      const holes = (face.metadata.holes || []).map((hole: Array<{ x: number; z: number }>) =>
+        hole.map((p: { x: number; z: number }) => new Vector3(p.x, 0, p.z))
+      );
+
+      try {
+        (window as any).earcut = earcut;
+        const preview = MeshBuilder.ExtrudePolygon(
+          'pushPullPreview',
+          { shape, holes, depth: height, sideOrientation: Mesh.DOUBLESIDE },
+          scene
+        );
+        preview.position = new Vector3(baseCenter.x, baseCenter.y + height, baseCenter.z);
+
+        const previewMat = new StandardMaterial('pushPullPreviewMat', scene);
+        previewMat.diffuseColor = new Color3(1, 1, 1);
+        previewMat.emissiveColor = new Color3(0.5, 0.5, 0.5);
+        previewMat.alpha = 0.5;
+        preview.material = previewMat;
+        preview.isPickable = false;
+        state.previewMesh = preview;
+      } catch (e) {
+        console.error('Failed to create polygon preview:', e);
+      }
+      return;
+    }
 
     const normalizedNormal = faceNormal.normalize();
     const absX = Math.abs(normalizedNormal.x);
@@ -3608,9 +3875,36 @@ const CustomModelingPage: React.FC = () => {
     const manager = selectionManagerRef.current;
     if (manager && selectedIds.length > 0) {
       manager.selectIds(selectedIds, mode);
+
+      // Apply visual feedback for selected meshes
+      meshesInBox.forEach(mesh => {
+        if ((mesh as Mesh).metadata?.type === 'face') {
+          // Highlight face
+          (mesh as Mesh).renderOverlay = true;
+          (mesh as Mesh).overlayColor = new Color3(0.2, 0.4, 1.0);
+          (mesh as Mesh).overlayAlpha = 0.4;
+          if ((mesh as Mesh).material) {
+            ((mesh as Mesh).material as StandardMaterial).emissiveColor = new Color3(0.1, 0.2, 0.5);
+          }
+        } else if ((mesh as Mesh).metadata?.type === 'edge') {
+          // Highlight edge
+          if ((mesh as Mesh).material) {
+            const mat = (mesh as Mesh).material as StandardMaterial;
+            mat.diffuseColor = new Color3(0.2, 0.4, 1.0);
+            mat.emissiveColor = new Color3(0.2, 0.4, 1.0);
+          }
+        }
+      });
+
+      // Select the first mesh for property panel display
+      if (meshesInBox.length > 0) {
+        selectMesh(meshesInBox[0] as Mesh);
+      }
     } else if (manager && mode === 'replace') {
       manager.clear();
+      deselectMesh();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMeshInSelectionBox]);
 
   // Select all meshes
@@ -3978,12 +4272,13 @@ const CustomModelingPage: React.FC = () => {
     // Highlight layer
     highlightLayerRef.current = new HighlightLayer('highlight', scene);
 
-    // Create hover highlight material for push/pull tool (blue tint)
+    // Create hover highlight material for push/pull tool (SketchUp-style blue highlight)
     const hoverMaterial = new StandardMaterial('hoverHighlightMaterial', scene);
-    hoverMaterial.diffuseColor = new Color3(0.6, 0.75, 1.0);  // Light blue tint
-    hoverMaterial.specularColor = new Color3(0, 0, 0);  // No specular
+    hoverMaterial.diffuseColor = new Color3(0.4, 0.6, 1.0);  // Saturated blue
+    hoverMaterial.emissiveColor = new Color3(0.3, 0.5, 0.9);  // Strong blue emissive for visibility
+    hoverMaterial.specularColor = new Color3(0.2, 0.2, 0.2);  // Slight specular
     hoverMaterial.backFaceCulling = false;  // Show both sides of faces
-    hoverMaterial.alpha = 1.0;  // Fully opaque to prevent disappearing
+    hoverMaterial.alpha = 1.0;  // Fully opaque
     dottedHoverMaterialRef.current = hoverMaterial;
 
     // Gizmo manager
@@ -4019,6 +4314,83 @@ const CustomModelingPage: React.FC = () => {
     gm.scaleGizmoEnabled = activeTool === 'scale';
   }, [activeTool]);
 
+  // Set up gizmo drag observers for edge stretching
+  useEffect(() => {
+    const gm = gizmoManagerRef.current;
+    const scene = sceneRef.current;
+    if (!gm || !scene) return;
+
+    // We need to wait for the position gizmo to be enabled
+    // Check periodically until it's available
+    let observers: { drag?: any; dragEnd?: any } = {};
+
+    const setupObservers = () => {
+      const posGizmo = gm.gizmos.positionGizmo;
+      if (!posGizmo) return false;
+
+      // On drag start - record initial position if it's an edge
+      observers.drag = posGizmo.onDragStartObservable.add(() => {
+        const attachedMesh = gm.attachedMesh;
+        if (attachedMesh && attachedMesh.metadata?.type === 'edge') {
+          edgeDragStateRef.current = {
+            isDragging: true,
+            startPosition: attachedMesh.absolutePosition.clone(),
+            edgeMesh: attachedMesh as Mesh
+          };
+        }
+      });
+
+      // On drag end - calculate delta and stretch face
+      observers.dragEnd = posGizmo.onDragEndObservable.add(() => {
+        const dragState = edgeDragStateRef.current;
+        if (dragState.isDragging && dragState.edgeMesh && dragState.startPosition) {
+          const endPosition = dragState.edgeMesh.absolutePosition.clone();
+          const delta = endPosition.subtract(dragState.startPosition);
+
+          // Only stretch if there's actual movement
+          if (delta.length() > 0.001) {
+            // Reset edge position before stretching (gizmo moved it, we'll update face instead)
+            dragState.edgeMesh.position = Vector3.Zero();
+
+            stretchFaceByEdge(scene, dragState.edgeMesh, delta);
+          }
+        }
+
+        // Reset drag state
+        edgeDragStateRef.current = {
+          isDragging: false,
+          startPosition: null,
+          edgeMesh: null
+        };
+      });
+
+      return true;
+    };
+
+    // Try to set up immediately
+    if (!setupObservers()) {
+      // If gizmo not ready, try again when tool changes
+      const checkInterval = setInterval(() => {
+        if (setupObservers()) {
+          clearInterval(checkInterval);
+        }
+      }, 100);
+
+      // Clean up interval after 5 seconds
+      setTimeout(() => clearInterval(checkInterval), 5000);
+    }
+
+    return () => {
+      const posGizmo = gm.gizmos.positionGizmo;
+      if (posGizmo && observers.drag) {
+        posGizmo.onDragStartObservable.remove(observers.drag);
+      }
+      if (posGizmo && observers.dragEnd) {
+        posGizmo.onDragEndObservable.remove(observers.dragEnd);
+      }
+    };
+  }, [stretchFaceByEdge]);
+
   // Update HUD pointer circle visibility based on active tool
   useEffect(() => {
     const scene = sceneRef.current;
@@ -4041,9 +4413,9 @@ const CustomModelingPage: React.FC = () => {
 
       // Check if snap is active - if so, move cursor to snap point screen position
       if (activeSnapPointRef.current && camera) {
-        // Convert 3D snap point to screen coordinates
+        // Convert 3D snap point to screen coordinates (preserve Y for 3D snapping!)
         const snapScreenPos = Vector3.Project(
-          new Vector3(activeSnapPointRef.current.position.x, 0, activeSnapPointRef.current.position.z),
+          activeSnapPointRef.current.position,  // Use full 3D position including Y
           Matrix.Identity(),
           scene.getTransformMatrix(),
           camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight())
@@ -4196,10 +4568,14 @@ const CustomModelingPage: React.FC = () => {
           // Check if we clicked on a face or edge (part of a solid)
           const isFaceOrEdge = mesh.metadata?.type === 'face' || mesh.metadata?.type === 'edge';
 
-          // If NOT clicking on a face or edge, deselect all solids
+          // If NOT clicking on a face or edge, DON'T clear immediately
+          // Wait for pointerUp to determine if it was a click or start of drag selection
+          // Track that we clicked on empty space for pointerUp handling
           if (!isFaceOrEdge) {
-            clearAllSolidHighlights();
+            (boxState as any).clickedOnEmptySpace = true;
+            // Don't clear highlights here - let pointerUp handle it
           } else {
+            (boxState as any).clickedOnEmptySpace = false;
             const timeSinceLastClick = now - ((boxState as any).lastClickTime || 0);
             const isSameMesh = (boxState as any).lastClickedMeshId === mesh.id;
             const isCtrlPressed = evt.ctrlKey || evt.metaKey;
@@ -4345,8 +4721,9 @@ const CustomModelingPage: React.FC = () => {
             (boxState as any).lastClickTime = now;
           }
         } else {
-          // Clicked empty space - deselect all using the robust helper
-          clearAllSolidHighlights();
+          // Clicked truly empty space (not even ground)
+          // Track for pointerUp - don't clear yet in case starting a drag
+          (boxState as any).clickedOnEmptySpace = true;
         }
 
         // Start box selection
@@ -4367,9 +4744,18 @@ const CustomModelingPage: React.FC = () => {
       // Line tool with continuous drawing mode
       if (activeTool === 'line') {
         const lineInf = lineInferenceRef.current;
-        // Use getDrawingPoint which can pick on faces OR ground, preserving Y coordinate
-        const point = getDrawingPoint(scene, scene.pointerX, scene.pointerY);
-        console.log('LINE CLICK:', { pointerX: scene.pointerX, pointerY: scene.pointerY, point, isDrawing: state.isDrawing });
+
+        // For second click (when drawing), use Y-axis inference; for first click use regular picking
+        let point: Vector3 | null;
+        if (state.isDrawing && state.startPoint) {
+          // Second click: Use Y-axis inference to get correct endpoint (including vertical lines)
+          const result = getDrawingPointWithYInference(scene, scene.pointerX, scene.pointerY, state.startPoint);
+          point = result.point;
+        } else {
+          // First click: Use regular drawing point
+          point = getDrawingPoint(scene, scene.pointerX, scene.pointerY);
+        }
+
         if (point) {
           if (!state.isDrawing) {
             // First click: Start drawing
@@ -4384,6 +4770,8 @@ const CustomModelingPage: React.FC = () => {
             state.currentPoint = point;
           } else {
             // Second click: Finalize line and continue
+            // Update currentPoint to clicked point (in case mouse move didn't update it)
+            state.currentPoint = point;
             if (state.startPoint && state.currentPoint) {
               if (Vector3.Distance(state.startPoint, state.currentPoint) > 0.1) {
                 finalizeLine(scene, state.startPoint, state.currentPoint);
@@ -4528,6 +4916,8 @@ const CustomModelingPage: React.FC = () => {
                 ppState.lastExtrudeDistance = distance;
                 // Update measurement display
                 setMeasurementInput(Math.abs(distance * 1000).toFixed(0));
+                // Add snap points for the new solid's vertices (including top edges)
+                addSolidSnapPoints(solid);
               }
             }
 
@@ -4829,9 +5219,9 @@ const CustomModelingPage: React.FC = () => {
         }
 
         if (nearestSnap) {
-          // FORCE Y=0 for ground plane drawing - snap points project to ground
+          // Preserve actual Y coordinate for 3D snapping (top edges, etc.)
           activeSnapPointRef.current = {
-            position: new Vector3(nearestSnap.position.x, 0, nearestSnap.position.z),
+            position: nearestSnap.position.clone(),
             type: nearestSnap.type
           };
           showSnapIndicator(nearestSnap.type);
@@ -5095,11 +5485,26 @@ const CustomModelingPage: React.FC = () => {
               mode
             );
           } else {
-            // Clicked on empty space without dragging - clear selection (unless modifier held)
-            if (!isShift && !isCtrl) {
+            // Clicked without dragging
+            // Only clear selection if clicked on empty space and no modifier held
+            if ((boxState as any).clickedOnEmptySpace && !isShift && !isCtrl) {
+              // Clear both SelectionManager and visual highlights
               selectionManagerRef.current?.clear();
+              deselectMesh();
+              // Clear all face/edge highlights
+              scene.meshes.forEach(m => {
+                if (m.metadata?.type === 'face') {
+                  m.renderOverlay = false;
+                  if (m.material) {
+                    (m.material as StandardMaterial).emissiveColor = Color3.Black();
+                  }
+                }
+              });
             }
           }
+
+          // Reset clickedOnEmptySpace flag
+          (boxState as any).clickedOnEmptySpace = false;
 
           // Hide selection box and reset state
           boxState.isDragging = false;
@@ -5135,6 +5540,13 @@ const CustomModelingPage: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      // Alt/Option key: Enable copy mode for push/pull tool
+      if (e.key === 'Alt' && activeTool === 'pushpull') {
+        pushPullStateRef.current.copyMode = true;
+        setPushpullCopyMode(true);
+        return;
+      }
 
       const key = e.key.toLowerCase();
       const drawState = drawingStateRef.current;
@@ -5635,6 +6047,11 @@ const CustomModelingPage: React.FC = () => {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      // Release Alt/Option key: Disable copy mode for push/pull
+      if (e.key === 'Alt' && activeTool === 'pushpull') {
+        pushPullStateRef.current.copyMode = false;
+        setPushpullCopyMode(false);
+      }
       // Release Shift key: Unlock push/pull axis
       if (e.key === 'Shift' && activeTool === 'pushpull') {
         pushPullStateRef.current.axisLocked = false;
@@ -5839,7 +6256,7 @@ const CustomModelingPage: React.FC = () => {
     { type: 'divider' },
     { id: 'paint', icon: <BsPaintBucket size={18} />, title: 'Paint (B)' },
     { id: 'move', icon: <BiMove size={18} />, title: 'Move (M)' },
-    { id: 'pushpull', icon: <PushPullIcon size={18} />, title: 'Push/Pull (P)' },
+    { id: 'pushpull', icon: <div style={{ position: 'relative' }}><PushPullIcon size={18} />{pushpullCopyMode && <span style={{ position: 'absolute', top: -4, left: -4, fontSize: 10, fontWeight: 'bold', color: '#22c55e' }}>+</span>}</div>, title: 'Push/Pull (P)' },
     { id: 'rotate', icon: <GrRotateRight size={18} />, title: 'Rotate (Q)' },
     { id: 'scale', icon: <LuScaling size={18} />, title: 'Scale (S)' },
     { id: 'offset', icon: <LuSquareSquare size={18} />, title: 'Offset (F)' },
@@ -6306,7 +6723,10 @@ const CustomModelingPage: React.FC = () => {
               <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5" /></svg>
             </button>
             <button className={`${styles.topToolBtn} ${activeTool === 'pushpull' ? styles.active : ''}`} onClick={() => setActiveTool('pushpull')} title="Push/Pull">
-              <PushPullIcon size={16} />
+              <div style={{ position: 'relative' }}>
+                <PushPullIcon size={16} />
+                {pushpullCopyMode && <span style={{ position: 'absolute', top: -6, left: -6, fontSize: 10, fontWeight: 'bold', color: '#22c55e' }}>+</span>}
+              </div>
             </button>
             <div className={styles.topToolDivider} />
             <button className={`${styles.topToolBtn} ${activeTool === 'orbit' ? styles.active : ''}`} onClick={() => setActiveTool('orbit')} title="Orbit">
