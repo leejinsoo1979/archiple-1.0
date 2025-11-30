@@ -258,7 +258,7 @@ const CustomModelingPage: React.FC = () => {
     isMoving: boolean;
     startPoint: Vector3 | null;
     targetMesh: Mesh | null;
-    previewLine: Mesh | null;
+    previewLine: LinesMesh | null;
     originalPosition: Vector3 | null;
     inferredAxis: 'x' | 'y' | 'z' | null;
     inputBuffer: string;  // For numeric distance input
@@ -2845,11 +2845,11 @@ const CustomModelingPage: React.FC = () => {
 
       // Build flat points for earcut
       const outerFlat: number[] = [];
-      outerShape.forEach(v => outerFlat.push(v.x, v.z));
+      outerShape.forEach((v: Vector3) => outerFlat.push(v.x, v.z));
 
       const holeFlat: number[] = [];
       if (innerHoles.length > 0) {
-        innerHoles[0].forEach(v => holeFlat.push(v.x, v.z));
+        innerHoles[0].forEach((v: Vector3) => holeFlat.push(v.x, v.z));
       }
 
       const combinedFlat = [...outerFlat, ...holeFlat];
@@ -2862,12 +2862,12 @@ const CustomModelingPage: React.FC = () => {
       const normals: number[] = [];
       const normalY = flipNormal ? -1 : 1;
 
-      outerShape.forEach(v => {
+      outerShape.forEach((v: Vector3) => {
         positions.push(v.x, yPos, v.z);
         normals.push(0, normalY, 0);
       });
       if (innerHoles.length > 0) {
-        innerHoles[0].forEach(v => {
+        innerHoles[0].forEach((v: Vector3) => {
           positions.push(v.x, yPos, v.z);
           normals.push(0, normalY, 0);
         });
@@ -3064,7 +3064,7 @@ const CustomModelingPage: React.FC = () => {
 
       solid.computeWorldMatrix(true);
 
-      console.log(`[PushPullPolygon] Created solid with ${outerShape.length} outer walls + ${innerHoles.reduce((sum, h) => sum + h.length, 0)} inner walls`);
+      console.log(`[PushPullPolygon] Created solid with ${outerShape.length} outer walls + ${innerHoles.reduce((sum: number, h: Vector3[]) => sum + h.length, 0)} inner walls`);
       return solid;
     } catch (e) {
       console.error('Failed to create polygon solid:', e);
@@ -3371,7 +3371,6 @@ const CustomModelingPage: React.FC = () => {
   // Offset functionality - SketchUp-style face offset
   // Creates an inner or outer offset of a face with connecting edges
   const applyOffset = useCallback((face: Mesh, distance: number): Mesh | null => {
-    console.log('[Offset] applyOffset called:', { faceId: face.id, faceName: face.name, distance, metadata: face.metadata });
     if (!face.metadata || face.metadata.type !== 'face') return null;
     if (Math.abs(distance) < 0.001) return null;
 
@@ -3511,7 +3510,6 @@ const CustomModelingPage: React.FC = () => {
       shape: innerShape,
       holes: []
     };
-    console.log('[Offset] Created inner face:', { id: innerFace.id, name: innerFace.name, position: innerFace.position, metadata: innerFace.metadata });
 
     // Create single ring face (donut shape) - outer boundary with inner hole
     // This avoids 45-degree corner divisions
@@ -3592,7 +3590,6 @@ const CustomModelingPage: React.FC = () => {
       shape: outerShape,
       holes: [holeShape]
     };
-    console.log('[Offset] Created ring face:', { id: ringFace.id, name: ringFace.name, position: ringFace.position });
 
     // Create inner face edges (inner offset boundary)
     for (let i = 0; i < offsetVertices.length; i++) {
@@ -3623,10 +3620,8 @@ const CustomModelingPage: React.FC = () => {
     }
 
     // Delete the original face (its edges are now recreated as outer ring edges)
-    console.log('[Offset] Disposing original face:', { id: face.id, name: face.name });
     face.getChildMeshes().forEach(child => child.dispose());
     face.dispose();
-    console.log('[Offset] Offset complete - created 1 inner face + 1 ring face (donut)');
 
     // Store last offset distance
     offsetStateRef.current.lastOffsetDistance = distance;
@@ -5281,7 +5276,7 @@ const CustomModelingPage: React.FC = () => {
             }
           });
 
-          console.log('[Move] Selected faces:', selectedFaces.length, 'primaryNormal:', primaryNormal?.toString());
+          console.log('[Move] Selected faces:', selectedFaces.length, 'primaryNormal:', primaryNormal ? (primaryNormal as Vector3).toString() : 'null');
 
           // If we have selected faces, enter vertex mode (face expansion)
           if (selectedFaces.length > 0 && primaryNormal) {
@@ -5312,7 +5307,7 @@ const CustomModelingPage: React.FC = () => {
             }, scene);
             moveState.previewLine.color = new Color3(0.2, 0.6, 1.0);
 
-            console.log('[Move] Started vertex mode, faces:', selectedFaces.length, 'normal:', primaryNormal.toString());
+            console.log('[Move] Started vertex mode, faces:', selectedFaces.length, 'normal:', (primaryNormal as Vector3).toString());
             return;
           }
 
@@ -5973,11 +5968,7 @@ const CustomModelingPage: React.FC = () => {
               });
 
               // Check for double-click - apply last offset distance
-              console.log('[Offset] Click detected, isDoubleClick:', isDoubleClick,
-                         'lastOffsetDistance:', osState.lastOffsetDistance,
-                         'timeSinceLast:', now - osState.lastClickTime);
               if (isDoubleClick && osState.lastOffsetDistance !== 0) {
-                console.log('[Offset] Double-click! Applying last distance:', osState.lastOffsetDistance);
                 applyOffset(face, osState.lastOffsetDistance);
                 setMeasurementInput(Math.abs(osState.lastOffsetDistance * 1000).toFixed(0));
               } else {
@@ -6637,12 +6628,16 @@ const CustomModelingPage: React.FC = () => {
         if (/^[0-9]$/.test(e.key) || e.key === '.' || e.key === '-') {
           e.preventDefault();
           moveState.inputBuffer += e.key;
+          // Update UI display
+          setMeasurementInput(moveState.inputBuffer);
           return;
         }
         // Backspace to delete
         if (e.key === 'Backspace' && moveState.inputBuffer.length > 0) {
           e.preventDefault();
           moveState.inputBuffer = moveState.inputBuffer.slice(0, -1);
+          // Update UI display
+          setMeasurementInput(moveState.inputBuffer);
           return;
         }
         // Enter to apply exact distance
@@ -8633,7 +8628,6 @@ const CustomModelingPage: React.FC = () => {
                     const inputValue = parseFloat(measurementInput);
                     if (!isNaN(inputValue) && inputValue > 0) {
                       const distanceUnits = inputValue * MM_TO_UNIT;  // mm to units
-                      console.log('[Offset] Input Enter - applying', inputValue, 'mm =', distanceUnits, 'units');
 
                       // Cleanup preview mesh
                       if (osState.previewMesh) {
