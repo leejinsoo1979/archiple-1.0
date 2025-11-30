@@ -124,6 +124,10 @@ const CustomModelingPage: React.FC = () => {
     lockedDistance: number;          // Distance when axis was locked
     copyMode: boolean;               // Option key: create copy instead of modifying original
     inputBuffer: string;             // For numeric distance input
+    // Segmentation mode (Alt key): divide face at click point
+    segmentMode: boolean;            // Alt key active during start
+    segmentPoint: Vector3 | null;    // 3D click point on face for segmentation
+    segmentLine: LinesMesh | null;   // Visual preview line for segmentation
   }>({
     baseFace: null,
     baseFaceNormal: null,
@@ -139,6 +143,9 @@ const CustomModelingPage: React.FC = () => {
     lockedDistance: 0,
     copyMode: false,
     inputBuffer: '',
+    segmentMode: false,
+    segmentPoint: null,
+    segmentLine: null,
   });
 
   // Offset tool state ref for SketchUp-style face offset
@@ -177,28 +184,11 @@ const CustomModelingPage: React.FC = () => {
     startY: number;
     isDragging: boolean;
     element: HTMLDivElement | null;
-    // Drag-to-expand state (SketchUp style)
-    isExpandDragging: boolean;
-    expandStartPoint: Vector3 | null;
-    expandTargetFaces: Mesh[];
-    expandNormal: Vector3 | null;
-    expandOriginalPositions: Map<string, Float32Array>;
-    expandPreviewMesh: Mesh | null;
-    inferredAxis: 'x' | 'y' | 'z' | null;
-    inputBuffer: string;
   }>({
     startX: 0,
     startY: 0,
     isDragging: false,
     element: null,
-    isExpandDragging: false,
-    expandStartPoint: null,
-    expandTargetFaces: [],
-    expandNormal: null,
-    expandOriginalPositions: new Map(),
-    expandPreviewMesh: null,
-    inferredAxis: null,
-    inputBuffer: ''
   });
 
   // Initialize SelectionManager
@@ -272,6 +262,12 @@ const CustomModelingPage: React.FC = () => {
     originalPosition: Vector3 | null;
     inferredAxis: 'x' | 'y' | 'z' | null;
     inputBuffer: string;  // For numeric distance input
+    // Face/edge vertex movement (SketchUp-style expansion)
+    isVertexMode: boolean;  // true when moving selected faces/edges vertices
+    targetFaces: Mesh[];  // Selected faces to move
+    faceNormal: Vector3 | null;  // Normal direction for movement
+    originalVertexPositions: Map<string, Float32Array>;  // Original positions per face
+    lastMoveDistance: number;  // Last computed distance for keyboard Enter
   }>({
     isMoving: false,
     startPoint: null,
@@ -279,7 +275,12 @@ const CustomModelingPage: React.FC = () => {
     previewLine: null,
     originalPosition: null,
     inferredAxis: null,
-    inputBuffer: ''
+    inputBuffer: '',
+    isVertexMode: false,
+    targetFaces: [],
+    faceNormal: null,
+    originalVertexPositions: new Map(),
+    lastMoveDistance: 0
   });
 
   // Measurement input state for rectangle dimensions
@@ -2486,6 +2487,308 @@ const CustomModelingPage: React.FC = () => {
     return sum > 0;
   };
 
+  // Push/Pull for circle faces - creates cylinder solid
+  const applyPushPullCircle = useCallback((face: Mesh, distance: number, faceNormal: Vector3, scene: Scene): Mesh | null => {
+    const { radius } = face.metadata;
+    const baseCenter = face.getAbsolutePosition().clone();
+    const height = Math.abs(distance);
+
+    meshCounterRef.current++;
+    const solidId = meshCounterRef.current;
+
+    console.log('[PushPullCircle] Creating cylinder, radius:', radius, 'height:', height);
+
+    // Create parent solid container
+    const solid = new Mesh(`Solid_${solidId}`, scene);
+    solid.position = new Vector3(baseCenter.x, height / 2, baseCenter.z);
+    solid.isPickable = false;
+    solid.metadata = {
+      type: 'solid',
+      shapeType: 'cylinder',
+      radius: radius,
+      height: height
+    };
+
+    // Helper to create face material
+    const createFaceMat = (name: string) => {
+      const mat = new StandardMaterial(name, scene);
+      mat.diffuseColor = new Color3(1, 1, 1);
+      mat.emissiveColor = new Color3(0.7, 0.7, 0.7);
+      mat.specularColor = new Color3(0.2, 0.2, 0.2);
+      mat.backFaceCulling = false;
+      return mat;
+    };
+
+    const tessellation = 48;
+    const hh = height / 2;
+
+    // Create top face (disc at Y = +hh)
+    const topFace = MeshBuilder.CreateDisc(`Face_${solidId}_top`, {
+      radius: radius,
+      tessellation: tessellation
+    }, scene);
+    topFace.rotation.x = -Math.PI / 2; // Face up
+    topFace.position = new Vector3(0, hh, 0);
+    topFace.material = createFaceMat(`FaceMat_${solidId}_top`);
+    topFace.isPickable = true;
+    topFace.parent = solid;
+    topFace.metadata = {
+      type: 'face',
+      shapeType: 'circle',
+      radius: radius,
+      parentSolid: solid,
+      faceDir: 'top'
+    };
+
+    // Create bottom face (disc at Y = -hh)
+    const bottomFace = MeshBuilder.CreateDisc(`Face_${solidId}_bottom`, {
+      radius: radius,
+      tessellation: tessellation
+    }, scene);
+    bottomFace.rotation.x = Math.PI / 2; // Face down
+    bottomFace.position = new Vector3(0, -hh, 0);
+    bottomFace.material = createFaceMat(`FaceMat_${solidId}_bottom`);
+    bottomFace.isPickable = true;
+    bottomFace.parent = solid;
+    bottomFace.metadata = {
+      type: 'face',
+      shapeType: 'circle',
+      radius: radius,
+      parentSolid: solid,
+      faceDir: 'bottom'
+    };
+
+    // Create cylindrical wall (using tube or custom mesh)
+    const wallFace = MeshBuilder.CreateCylinder(`Face_${solidId}_wall`, {
+      diameter: radius * 2,
+      height: height,
+      tessellation: tessellation,
+      cap: Mesh.NO_CAP
+    }, scene);
+    wallFace.position = new Vector3(0, 0, 0);
+    wallFace.material = createFaceMat(`FaceMat_${solidId}_wall`);
+    wallFace.isPickable = true;
+    wallFace.parent = solid;
+    wallFace.metadata = {
+      type: 'face',
+      shapeType: 'cylinderWall',
+      radius: radius,
+      height: height,
+      parentSolid: solid,
+      faceDir: 'wall'
+    };
+
+    // Create edge circles at top and bottom
+    const segments = tessellation;
+    const topCirclePoints: Vector3[] = [];
+    const bottomCirclePoints: Vector3[] = [];
+    for (let i = 0; i <= segments; i++) {
+      const angle = (i / segments) * Math.PI * 2;
+      topCirclePoints.push(new Vector3(
+        Math.cos(angle) * radius,
+        hh,
+        Math.sin(angle) * radius
+      ));
+      bottomCirclePoints.push(new Vector3(
+        Math.cos(angle) * radius,
+        -hh,
+        Math.sin(angle) * radius
+      ));
+    }
+
+    const topEdge = MeshBuilder.CreateLines(`Edge_${solidId}_top`, {
+      points: topCirclePoints,
+      updatable: false
+    }, scene);
+    topEdge.color = new Color3(0.1, 0.1, 0.1);
+    topEdge.isPickable = false;
+    topEdge.parent = solid;
+
+    const bottomEdge = MeshBuilder.CreateLines(`Edge_${solidId}_bottom`, {
+      points: bottomCirclePoints,
+      updatable: false
+    }, scene);
+    bottomEdge.color = new Color3(0.1, 0.1, 0.1);
+    bottomEdge.isPickable = false;
+    bottomEdge.parent = solid;
+
+    // Dispose original face and its edge children
+    face.getChildMeshes().forEach(child => child.dispose());
+    face.dispose();
+
+    solid.computeWorldMatrix(true);
+
+    console.log('[PushPullCircle] Created cylinder solid');
+    return solid;
+  }, []);
+
+  // Push/Pull for regular polygon faces (hexagon, pentagon, etc.) - creates prism solid
+  const applyPushPullRegularPolygon = useCallback((face: Mesh, distance: number, faceNormal: Vector3, scene: Scene): Mesh | null => {
+    const { radius, sides } = face.metadata;
+    const baseCenter = face.getAbsolutePosition().clone();
+    const height = Math.abs(distance);
+
+    meshCounterRef.current++;
+    const solidId = meshCounterRef.current;
+
+    console.log('[PushPullPolygon] Creating prism, radius:', radius, 'sides:', sides, 'height:', height);
+
+    // Create parent solid container
+    const solid = new Mesh(`Solid_${solidId}`, scene);
+    solid.position = new Vector3(baseCenter.x, height / 2, baseCenter.z);
+    solid.isPickable = false;
+    solid.metadata = {
+      type: 'solid',
+      shapeType: 'prism',
+      radius: radius,
+      sides: sides,
+      height: height
+    };
+
+    // Helper to create face material
+    const createFaceMat = (name: string) => {
+      const mat = new StandardMaterial(name, scene);
+      mat.diffuseColor = new Color3(1, 1, 1);
+      mat.emissiveColor = new Color3(0.7, 0.7, 0.7);
+      mat.specularColor = new Color3(0.2, 0.2, 0.2);
+      mat.backFaceCulling = false;
+      return mat;
+    };
+
+    const hh = height / 2;
+
+    // Create polygon vertices
+    const vertices: Vector3[] = [];
+    for (let i = 0; i < sides; i++) {
+      const angle = (i / sides) * Math.PI * 2;
+      vertices.push(new Vector3(
+        Math.cos(angle) * radius,
+        0,
+        Math.sin(angle) * radius
+      ));
+    }
+
+    // Create top face (polygon disc at Y = +hh)
+    const topFace = MeshBuilder.CreateDisc(`Face_${solidId}_top`, {
+      radius: radius,
+      tessellation: sides
+    }, scene);
+    topFace.rotation.x = -Math.PI / 2; // Face up
+    topFace.position = new Vector3(0, hh, 0);
+    topFace.material = createFaceMat(`FaceMat_${solidId}_top`);
+    topFace.isPickable = true;
+    topFace.parent = solid;
+    topFace.metadata = {
+      type: 'face',
+      shapeType: 'polygon',
+      radius: radius,
+      sides: sides,
+      parentSolid: solid,
+      faceDir: 'top'
+    };
+
+    // Create bottom face (polygon disc at Y = -hh)
+    const bottomFace = MeshBuilder.CreateDisc(`Face_${solidId}_bottom`, {
+      radius: radius,
+      tessellation: sides
+    }, scene);
+    bottomFace.rotation.x = Math.PI / 2; // Face down
+    bottomFace.position = new Vector3(0, -hh, 0);
+    bottomFace.material = createFaceMat(`FaceMat_${solidId}_bottom`);
+    bottomFace.isPickable = true;
+    bottomFace.parent = solid;
+    bottomFace.metadata = {
+      type: 'face',
+      shapeType: 'polygon',
+      radius: radius,
+      sides: sides,
+      parentSolid: solid,
+      faceDir: 'bottom'
+    };
+
+    // Create wall faces for each side of the prism
+    for (let i = 0; i < sides; i++) {
+      const p1 = vertices[i];
+      const p2 = vertices[(i + 1) % sides];
+
+      // Calculate wall dimensions
+      const wallWidth = Vector3.Distance(p1, p2);
+      const wallCenterX = (p1.x + p2.x) / 2;
+      const wallCenterZ = (p1.z + p2.z) / 2;
+
+      // Calculate wall normal (outward facing)
+      const wallDir = p2.subtract(p1).normalize();
+      const wallNormal = new Vector3(-wallDir.z, 0, wallDir.x); // Perpendicular to wall direction
+
+      // Create wall face as a plane
+      const wallFace = MeshBuilder.CreatePlane(`Face_${solidId}_wall_${i}`, {
+        width: wallWidth,
+        height: height,
+        sideOrientation: Mesh.DOUBLESIDE
+      }, scene);
+
+      // Position and rotate the wall
+      wallFace.position = new Vector3(wallCenterX, 0, wallCenterZ);
+      // Calculate rotation angle from the wall normal
+      const rotAngle = Math.atan2(wallNormal.x, wallNormal.z);
+      wallFace.rotation.y = rotAngle;
+
+      wallFace.material = createFaceMat(`FaceMat_${solidId}_wall_${i}`);
+      wallFace.isPickable = true;
+      wallFace.parent = solid;
+      wallFace.metadata = {
+        type: 'face',
+        width: wallWidth,
+        depth: height,
+        parentSolid: solid,
+        faceDir: `wall_${i}`,
+        faceNormal: { x: wallNormal.x, y: 0, z: wallNormal.z }
+      };
+
+      // Create edges for this wall
+      const topP1 = new Vector3(p1.x, hh, p1.z);
+      const topP2 = new Vector3(p2.x, hh, p2.z);
+      const bottomP1 = new Vector3(p1.x, -hh, p1.z);
+      const bottomP2 = new Vector3(p2.x, -hh, p2.z);
+
+      // Top edge
+      const topEdge = MeshBuilder.CreateLines(`Edge_${solidId}_top_${i}`, {
+        points: [topP1, topP2],
+        updatable: false
+      }, scene);
+      topEdge.color = new Color3(0.1, 0.1, 0.1);
+      topEdge.isPickable = false;
+      topEdge.parent = solid;
+
+      // Bottom edge
+      const bottomEdge = MeshBuilder.CreateLines(`Edge_${solidId}_bottom_${i}`, {
+        points: [bottomP1, bottomP2],
+        updatable: false
+      }, scene);
+      bottomEdge.color = new Color3(0.1, 0.1, 0.1);
+      bottomEdge.isPickable = false;
+      bottomEdge.parent = solid;
+
+      // Vertical edge
+      const vertEdge = MeshBuilder.CreateLines(`Edge_${solidId}_vert_${i}`, {
+        points: [bottomP1, topP1],
+        updatable: false
+      }, scene);
+      vertEdge.color = new Color3(0.1, 0.1, 0.1);
+      vertEdge.isPickable = false;
+      vertEdge.parent = solid;
+    }
+
+    // Dispose original face and its edge children
+    face.getChildMeshes().forEach(child => child.dispose());
+    face.dispose();
+
+    solid.computeWorldMatrix(true);
+
+    console.log('[PushPullPolygon] Created prism solid with', sides, 'sides');
+    return solid;
+  }, []);
+
   // Push/Pull for polygon faces with holes (donut shapes)
   // Uses ExtrudePolygon - shape must be CCW, holes must be CW
   const applyPushPullPolygon = useCallback((face: Mesh, distance: number, faceNormal: Vector3, scene: Scene): Mesh | null => {
@@ -3497,7 +3800,13 @@ const CustomModelingPage: React.FC = () => {
         // PUSH: Show SHRUNK solid preview
         if (absY > absX && absY > absZ) {
           const newHeight = origHeight - changeAmount;
-          if (newHeight <= 0.001) return;
+          if (newHeight <= 0.001) {
+            // Restore visibility and return early
+            parentSolid.setEnabled(true);
+            parentSolid.getChildMeshes().forEach(child => child.setEnabled(true));
+            state.hiddenSolid = null;
+            return;
+          }
           boxWidth = origWidth;
           boxHeight = newHeight;
           boxDepth = origDepth;
@@ -3505,7 +3814,13 @@ const CustomModelingPage: React.FC = () => {
           previewPosition = parentPos.add(shift);
         } else if (absX > absZ) {
           const newWidth = origWidth - changeAmount;
-          if (newWidth <= 0.001) return;
+          if (newWidth <= 0.001) {
+            // Restore visibility and return early
+            parentSolid.setEnabled(true);
+            parentSolid.getChildMeshes().forEach(child => child.setEnabled(true));
+            state.hiddenSolid = null;
+            return;
+          }
           boxWidth = newWidth;
           boxHeight = origHeight;
           boxDepth = origDepth;
@@ -3513,7 +3828,13 @@ const CustomModelingPage: React.FC = () => {
           previewPosition = parentPos.add(shift);
         } else {
           const newDepth = origDepth - changeAmount;
-          if (newDepth <= 0.001) return;
+          if (newDepth <= 0.001) {
+            // Restore visibility and return early
+            parentSolid.setEnabled(true);
+            parentSolid.getChildMeshes().forEach(child => child.setEnabled(true));
+            state.hiddenSolid = null;
+            return;
+          }
           boxWidth = origWidth;
           boxHeight = origHeight;
           boxDepth = newDepth;
@@ -3589,6 +3910,84 @@ const CustomModelingPage: React.FC = () => {
 
     preview.isPickable = false;
     state.previewMesh = preview;
+
+    // Segmentation mode: Draw dividing line at click point
+    if (state.segmentMode && state.segmentPoint) {
+      // Dispose old segment line
+      if (state.segmentLine) {
+        state.segmentLine.dispose();
+        state.segmentLine = null;
+      }
+
+      const segPoint = state.segmentPoint;
+      const facePos = face.getAbsolutePosition();
+
+      // Determine line direction based on face normal (perpendicular to push direction)
+      // For Y-normal faces (top/bottom), line is along X or Z axis through click point
+      // For X-normal faces (left/right), line is along Y or Z axis
+      // For Z-normal faces (front/back), line is along X or Y axis
+
+      let lineStart: Vector3;
+      let lineEnd: Vector3;
+      const lineLength = Math.max(boxWidth, boxHeight, boxDepth) * 1.5;
+      const lineColor = new Color3(0.2, 0.5, 1); // Blue segmentation line
+
+      if (absY > absX && absY > absZ) {
+        // Top/bottom face - draw line in XZ plane
+        // Line goes through segment point, perpendicular to a chosen axis (use X axis)
+        lineStart = new Vector3(segPoint.x, segPoint.y, facePos.z - lineLength / 2);
+        lineEnd = new Vector3(segPoint.x, segPoint.y, facePos.z + lineLength / 2);
+      } else if (absX > absZ) {
+        // Left/right face - draw line in YZ plane
+        lineStart = new Vector3(segPoint.x, facePos.y - lineLength / 2, segPoint.z);
+        lineEnd = new Vector3(segPoint.x, facePos.y + lineLength / 2, segPoint.z);
+      } else {
+        // Front/back face - draw line in XY plane
+        lineStart = new Vector3(facePos.x - lineLength / 2, segPoint.y, segPoint.z);
+        lineEnd = new Vector3(facePos.x + lineLength / 2, segPoint.y, segPoint.z);
+      }
+
+      // Create the segmentation line
+      const segmentLine = MeshBuilder.CreateLines('segmentLine', {
+        points: [lineStart, lineEnd],
+        updatable: false,
+      }, scene);
+      segmentLine.color = lineColor;
+      segmentLine.isPickable = false;
+
+      // Also create the line at the extruded position
+      const extrudedStart = lineStart.add(faceNormal.scale(distance));
+      const extrudedEnd = lineEnd.add(faceNormal.scale(distance));
+      const segmentLineExtruded = MeshBuilder.CreateLines('segmentLineExtruded', {
+        points: [extrudedStart, extrudedEnd],
+        updatable: false,
+      }, scene);
+      segmentLineExtruded.color = lineColor;
+      segmentLineExtruded.isPickable = false;
+
+      // Create vertical connecting lines at both ends
+      const connectLine1 = MeshBuilder.CreateLines('segmentConnect1', {
+        points: [lineStart, extrudedStart],
+        updatable: false,
+      }, scene);
+      connectLine1.color = lineColor;
+      connectLine1.isPickable = false;
+
+      const connectLine2 = MeshBuilder.CreateLines('segmentConnect2', {
+        points: [lineEnd, extrudedEnd],
+        updatable: false,
+      }, scene);
+      connectLine2.color = lineColor;
+      connectLine2.isPickable = false;
+
+      // Parent all segment lines to main segment line for easy cleanup
+      segmentLineExtruded.parent = segmentLine;
+      connectLine1.parent = segmentLine;
+      connectLine2.parent = segmentLine;
+
+      state.segmentLine = segmentLine;
+      console.log('[PushPull] Segment line created at:', segPoint.toString());
+    }
   }, [selectedColor]);
 
   // Calculate extrusion distance from mouse position using dot product
@@ -4845,6 +5244,7 @@ const CustomModelingPage: React.FC = () => {
       if (activeTool === 'move') {
         const moveState = moveToolStateRef.current;
         const groundPicker = groundPickerRef.current;
+        const manager = selectionManagerRef.current;
 
         // Get click position on ground plane (use predicate that checks name)
         const groundPick = scene.pick(scene.pointerX, scene.pointerY, (m) => m.name === 'groundPicker');
@@ -4852,7 +5252,71 @@ const CustomModelingPage: React.FC = () => {
 
         if (!moveState.isMoving) {
           // First click: Start move operation
-          // Need a selected mesh first
+          // Check if there are selected faces (for vertex mode - expansion/contraction)
+          const selectedIds = manager?.getSelectedIds() || [];
+          const selectedFaces: Mesh[] = [];
+          let primaryNormal: Vector3 | null = null;
+
+          console.log('[Move] Checking selected IDs:', selectedIds);
+
+          selectedIds.forEach(id => {
+            const mesh = scene.getMeshById(id) as Mesh | null;
+            if (mesh && mesh.metadata?.type === 'face') {
+              selectedFaces.push(mesh);
+              // Use the first face's normal as the primary direction
+              if (!primaryNormal) {
+                // Try to get normal from metadata first
+                if (mesh.metadata?.normal) {
+                  primaryNormal = (mesh.metadata.normal as Vector3).clone();
+                } else {
+                  // Calculate normal from face geometry
+                  const normals = mesh.getVerticesData('normal');
+                  if (normals && normals.length >= 3) {
+                    // Use the first vertex normal (they should all be the same for a flat face)
+                    primaryNormal = new Vector3(normals[0], normals[1], normals[2]).normalize();
+                  }
+                }
+              }
+              console.log('[Move] Found face:', id, 'normal:', primaryNormal?.toString());
+            }
+          });
+
+          console.log('[Move] Selected faces:', selectedFaces.length, 'primaryNormal:', primaryNormal?.toString());
+
+          // If we have selected faces, enter vertex mode (face expansion)
+          if (selectedFaces.length > 0 && primaryNormal) {
+            const startPoint = clickPoint || pickInfo.pickedPoint;
+            if (!startPoint) return;
+
+            moveState.isMoving = true;
+            moveState.isVertexMode = true;
+            moveState.startPoint = startPoint.clone();
+            moveState.targetFaces = selectedFaces;
+            moveState.faceNormal = primaryNormal;
+            moveState.originalVertexPositions = new Map();
+            moveState.inferredAxis = null;
+            moveState.inputBuffer = '';
+
+            // Store original vertex positions for all selected faces
+            selectedFaces.forEach(face => {
+              const positions = face.getVerticesData('position');
+              if (positions) {
+                moveState.originalVertexPositions.set(face.id, new Float32Array(positions));
+              }
+            });
+
+            // Create preview line
+            moveState.previewLine = MeshBuilder.CreateLines('movePreviewLine', {
+              points: [startPoint, startPoint],
+              updatable: true
+            }, scene);
+            moveState.previewLine.color = new Color3(0.2, 0.6, 1.0);
+
+            console.log('[Move] Started vertex mode, faces:', selectedFaces.length, 'normal:', primaryNormal.toString());
+            return;
+          }
+
+          // Normal mesh move mode (no selected faces)
           const selected = selectedMeshRef.current;
 
           if (!selected) {
@@ -4880,6 +5344,7 @@ const CustomModelingPage: React.FC = () => {
           }
 
           moveState.isMoving = true;
+          moveState.isVertexMode = false;
           moveState.startPoint = startPoint.clone();
           moveState.targetMesh = meshToMove;
           moveState.originalPosition = meshToMove.position.clone();
@@ -4896,38 +5361,76 @@ const CustomModelingPage: React.FC = () => {
           // Second click: Complete move operation
           const endPoint = activeSnapPointRef.current?.position || clickPoint;
 
-          if (!endPoint || !moveState.targetMesh || !moveState.startPoint) {
+          if (!endPoint || !moveState.startPoint) {
             // Cancel if no valid endpoint
             if (moveState.previewLine) moveState.previewLine.dispose();
             moveState.isMoving = false;
+            moveState.isVertexMode = false;
             moveState.startPoint = null;
             moveState.targetMesh = null;
+            moveState.targetFaces = [];
+            moveState.faceNormal = null;
+            moveState.originalVertexPositions = new Map();
             moveState.previewLine = null;
             moveState.originalPosition = null;
             return;
           }
 
-          // Calculate delta and apply
-          let delta = endPoint.subtract(moveState.startPoint);
+          if (moveState.isVertexMode && moveState.targetFaces.length > 0 && moveState.faceNormal) {
+            // Vertex mode: Apply the solid modification using applyPushPull
+            const primaryFace = moveState.targetFaces[0];
+            const distance = moveState.lastMoveDistance;
 
-          // Apply axis inference if active
-          if (moveState.inferredAxis) {
-            if (moveState.inferredAxis === 'x') delta = new Vector3(delta.x, 0, 0);
-            else if (moveState.inferredAxis === 'y') delta = new Vector3(0, delta.y, 0);
-            else if (moveState.inferredAxis === 'z') delta = new Vector3(0, 0, delta.z);
+            // Clean up push/pull preview before applying (it may have created a preview mesh)
+            const ppState = pushPullStateRef.current;
+            if (ppState.previewMesh) {
+              ppState.previewMesh.dispose();
+              ppState.previewMesh = null;
+            }
+            // Restore hidden solid if any
+            if (ppState.hiddenSolid) {
+              ppState.hiddenSolid.setEnabled(true);
+              ppState.hiddenSolid.getChildMeshes().forEach(child => child.setEnabled(true));
+              ppState.hiddenSolid = null;
+            }
+
+            // Apply the modification
+            if (Math.abs(distance) > 0.001) {
+              applyPushPull(primaryFace, distance, moveState.faceNormal, false);
+              console.log('[Move] Applied vertex mode solid modification:', Math.round(distance * UNIT_TO_MM), 'mm');
+            }
+
+            // Clear selection after modification
+            const manager = selectionManagerRef.current;
+            if (manager) manager.clear();
+          } else if (moveState.targetMesh) {
+            // Normal mode: Calculate delta and apply
+            let delta = endPoint.subtract(moveState.startPoint);
+
+            // Apply axis inference if active
+            if (moveState.inferredAxis) {
+              if (moveState.inferredAxis === 'x') delta = new Vector3(delta.x, 0, 0);
+              else if (moveState.inferredAxis === 'y') delta = new Vector3(0, delta.y, 0);
+              else if (moveState.inferredAxis === 'z') delta = new Vector3(0, 0, delta.z);
+            }
+
+            // Apply the move
+            moveState.targetMesh.position.addInPlace(delta);
           }
-
-          // Apply the move
-          moveState.targetMesh.position.addInPlace(delta);
 
           // Cleanup
           if (moveState.previewLine) moveState.previewLine.dispose();
           moveState.isMoving = false;
+          moveState.isVertexMode = false;
           moveState.startPoint = null;
           moveState.targetMesh = null;
+          moveState.targetFaces = [];
+          moveState.faceNormal = null;
+          moveState.originalVertexPositions = new Map();
           moveState.previewLine = null;
           moveState.originalPosition = null;
           moveState.inferredAxis = null;
+          moveState.lastMoveDistance = 0;
         }
         return;
       }
@@ -4999,49 +5502,10 @@ const CustomModelingPage: React.FC = () => {
             // Don't clear highlights here - let pointerUp handle it
           } else {
             (boxState as any).clickedOnEmptySpace = false;
-            const manager = selectionManagerRef.current;
-
-            // Check if this face/edge is already selected - if so, start expand drag mode
-            const isAlreadySelected = manager?.isSelected(mesh.id);
-            if (isAlreadySelected && mesh.metadata?.type === 'face') {
-              // Start expand drag mode
-              const faceNormal = mesh.metadata?.normal as Vector3 | undefined;
-              if (faceNormal && pickInfo.pickedPoint) {
-                boxState.isExpandDragging = true;
-                boxState.expandStartPoint = pickInfo.pickedPoint.clone();
-                boxState.expandTargetFaces = [mesh];
-                boxState.expandNormal = faceNormal.clone();
-                boxState.expandOriginalPositions = new Map();
-                boxState.inferredAxis = null;
-                boxState.inputBuffer = '';
-
-                // Store original vertex positions
-                const positions = mesh.getVerticesData('position');
-                if (positions) {
-                  boxState.expandOriginalPositions.set(mesh.id, new Float32Array(positions));
-                }
-
-                // Also include all selected faces from manager
-                const selectedIds = manager?.getSelectedIds() || [];
-                selectedIds.forEach(id => {
-                  const selectedMesh = scene.getMeshById(id) as Mesh | null;
-                  if (selectedMesh && selectedMesh.metadata?.type === 'face' && selectedMesh.id !== mesh.id) {
-                    boxState.expandTargetFaces.push(selectedMesh);
-                    const pos = selectedMesh.getVerticesData('position');
-                    if (pos) {
-                      boxState.expandOriginalPositions.set(selectedMesh.id, new Float32Array(pos));
-                    }
-                  }
-                });
-
-                console.log('[Select] Started expand drag mode, faces:', boxState.expandTargetFaces.length, 'normal:', faceNormal.toString());
-                return; // Don't process normal selection
-              }
-            }
-
             const timeSinceLastClick = now - ((boxState as any).lastClickTime || 0);
             const isSameMesh = (boxState as any).lastClickedMeshId === mesh.id;
             const isCtrlPressed = evt.ctrlKey || evt.metaKey;
+            const manager = selectionManagerRef.current;
 
             // Track click count for same mesh within 400ms
             let clickCount = 1;
@@ -5374,12 +5838,28 @@ const CustomModelingPage: React.FC = () => {
                 faceDir: face.metadata?.faceDir,
                 hasParentSolid: !!face.metadata?.parentSolid,
                 parentSolidName: face.metadata?.parentSolid?.name
-              }));
+              }), 'altKey:', evt.altKey);
               ppState.baseFace = face;
               ppState.baseFaceNormal = getFaceNormal(face);
               ppState.baseFaceCenter = face.getAbsolutePosition().clone();
               ppState.baseClickPoint = new Vector3(scene.pointerX, scene.pointerY, 0);
               ppState.isExtruding = true;
+
+              // Alt key: Enable segmentation mode and capture click point on face
+              if (evt.altKey) {
+                ppState.segmentMode = true;
+                // Pick the 3D point on the face
+                const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
+                  mesh === face
+                );
+                if (pickResult?.hit && pickResult.pickedPoint) {
+                  ppState.segmentPoint = pickResult.pickedPoint.clone();
+                  console.log('[PushPull] Segment mode enabled, point:', ppState.segmentPoint.toString());
+                }
+              } else {
+                ppState.segmentMode = false;
+                ppState.segmentPoint = null;
+              }
             }
 
             ppState.lastClickTime = now;
@@ -5411,6 +5891,13 @@ const CustomModelingPage: React.FC = () => {
               }
             }
 
+            // Restore hidden solid visibility (must do before dispose in case of copyMode)
+            if (ppState.hiddenSolid && !ppState.hiddenSolid.isDisposed()) {
+              ppState.hiddenSolid.setEnabled(true);
+              ppState.hiddenSolid.getChildMeshes().forEach(child => child.setEnabled(true));
+            }
+            ppState.hiddenSolid = null;
+
             // Clean up preview
             if (ppState.previewMesh) {
               ppState.previewMesh.dispose();
@@ -5423,6 +5910,12 @@ const CustomModelingPage: React.FC = () => {
             }
           }
 
+          // Clean up segment line if any
+          if (ppState.segmentLine) {
+            ppState.segmentLine.dispose();
+            ppState.segmentLine = null;
+          }
+
           // Reset state
           ppState.baseFace = null;
           ppState.baseFaceNormal = null;
@@ -5431,6 +5924,8 @@ const CustomModelingPage: React.FC = () => {
           ppState.isExtruding = false;
           ppState.axisLocked = false;
           ppState.lockedDistance = 0;
+          ppState.segmentMode = false;
+          ppState.segmentPoint = null;
           ppState.lastClickTime = now;
         }
       } else if (activeTool === 'offset') {
@@ -5478,7 +5973,11 @@ const CustomModelingPage: React.FC = () => {
               });
 
               // Check for double-click - apply last offset distance
+              console.log('[Offset] Click detected, isDoubleClick:', isDoubleClick,
+                         'lastOffsetDistance:', osState.lastOffsetDistance,
+                         'timeSinceLast:', now - osState.lastClickTime);
               if (isDoubleClick && osState.lastOffsetDistance !== 0) {
+                console.log('[Offset] Double-click! Applying last distance:', osState.lastOffsetDistance);
                 applyOffset(face, osState.lastOffsetDistance);
                 setMeasurementInput(Math.abs(osState.lastOffsetDistance * 1000).toFixed(0));
               } else {
@@ -5488,6 +5987,10 @@ const CustomModelingPage: React.FC = () => {
                 osState.baseCenter = center;
                 osState.baseClickY = evt.clientY;
                 osState.isOffsetting = true;
+                // IMPORTANT: Clear keyboard input buffer when starting new offset
+                // This ensures keyboard input doesn't carry over from previous operations
+                measurementInputValueRef.current = '';
+                setMeasurementInput('');
               }
 
               osState.lastClickTime = now;
@@ -5604,7 +6107,7 @@ const CustomModelingPage: React.FC = () => {
       // Handle SketchUp-style Move tool preview
       if (activeTool === 'move') {
         const moveState = moveToolStateRef.current;
-        if (moveState.isMoving && moveState.startPoint && moveState.targetMesh && moveState.originalPosition) {
+        if (moveState.isMoving && moveState.startPoint) {
           const groundPicker = groundPickerRef.current;
           const groundPick = groundPicker ? scene.pick(scene.pointerX, scene.pointerY, (m) => m === groundPicker) : null;
           const currentPoint = activeSnapPointRef.current?.position || (groundPick?.hit ? groundPick.pickedPoint : null);
@@ -5654,8 +6157,26 @@ const CustomModelingPage: React.FC = () => {
               }
             }
 
-            // Real-time move preview
-            moveState.targetMesh.position = moveState.originalPosition.add(delta);
+            if (moveState.isVertexMode && moveState.faceNormal && moveState.targetFaces.length > 0) {
+              // Vertex mode: Show solid preview using updatePushPullPreview (like Push/Pull tool)
+              // Project delta onto normal to get distance along normal
+              const distance = Vector3.Dot(delta, moveState.faceNormal);
+
+              // Store the distance for finalization
+              moveState.lastMoveDistance = distance;
+
+              // Use the first selected face for preview (same as Push/Pull)
+              const primaryFace = moveState.targetFaces[0];
+              updatePushPullPreview(scene, primaryFace, distance, moveState.faceNormal);
+
+              // Update measurement display (distance in mm)
+              const distanceMM = Math.round(Math.abs(distance) * UNIT_TO_MM);
+              setCurrentMeasurement({ width: distanceMM, height: 0 });
+
+            } else if (moveState.targetMesh && moveState.originalPosition) {
+              // Normal mode: Real-time move preview (whole mesh)
+              moveState.targetMesh.position = moveState.originalPosition.add(delta);
+            }
           }
         }
       }
@@ -5853,8 +6374,13 @@ const CustomModelingPage: React.FC = () => {
           // Update preview mesh
           updateOffsetPreview(scene, osState.baseFace, osState.baseVertices, osState.baseCenter, distance);
 
-          // Update measurement display (convert to mm)
-          setMeasurementInput(Math.abs(distance * 1000).toFixed(0));
+          // SketchUp-style: Only update UI display if user hasn't started typing a number
+          // measurementInputValueRef holds user's keyboard input (takes priority over mouse)
+          if (measurementInputValueRef.current === '') {
+            // No keyboard input yet - show mouse-based distance
+            setMeasurementInput(Math.abs(distance * 1000).toFixed(0));
+          }
+          // If user has typed a number, keep showing their input (don't overwrite)
         } else {
           // Not offsetting - show dotted pattern on hovered face (SketchUp-style)
           const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) => {
@@ -6123,44 +6649,94 @@ const CustomModelingPage: React.FC = () => {
         if (e.key === 'Enter' && moveState.inputBuffer.length > 0) {
           e.preventDefault();
           const distance = parseFloat(moveState.inputBuffer);
-          if (!isNaN(distance) && moveState.targetMesh && moveState.originalPosition) {
-            // Apply exact distance along inferred axis (default to X if none)
-            const delta = new Vector3(0, 0, 0);
+          if (!isNaN(distance)) {
             const distanceUnits = distance * MM_TO_UNIT;
-            const axis = moveState.inferredAxis || 'x';
-            if (axis === 'x') delta.x = distanceUnits;
-            else if (axis === 'y') delta.y = distanceUnits;
-            else if (axis === 'z') delta.z = distanceUnits;
 
-            // Apply from original position
-            moveState.targetMesh.position = moveState.originalPosition.add(delta);
+            if (moveState.isVertexMode && moveState.faceNormal && moveState.targetFaces.length > 0) {
+              // Vertex mode: Apply exact distance using applyPushPull
+              const primaryFace = moveState.targetFaces[0];
+
+              // Clean up push/pull preview before applying
+              const ppState = pushPullStateRef.current;
+              if (ppState.previewMesh) {
+                ppState.previewMesh.dispose();
+                ppState.previewMesh = null;
+              }
+              // Restore hidden solid if any
+              if (ppState.hiddenSolid) {
+                ppState.hiddenSolid.setEnabled(true);
+                ppState.hiddenSolid.getChildMeshes().forEach(child => child.setEnabled(true));
+                ppState.hiddenSolid = null;
+              }
+
+              // Apply the solid modification
+              applyPushPull(primaryFace, distanceUnits, moveState.faceNormal, false);
+              console.log('[Move] Applied vertex mode solid modification:', distance, 'mm');
+
+              // Clear selection after modification
+              const manager = selectionManagerRef.current;
+              if (manager) manager.clear();
+            } else if (moveState.targetMesh && moveState.originalPosition) {
+              // Normal mode: Apply exact distance along inferred axis (default to X if none)
+              const delta = new Vector3(0, 0, 0);
+              const axis = moveState.inferredAxis || 'x';
+              if (axis === 'x') delta.x = distanceUnits;
+              else if (axis === 'y') delta.y = distanceUnits;
+              else if (axis === 'z') delta.z = distanceUnits;
+
+              // Apply from original position
+              moveState.targetMesh.position = moveState.originalPosition.add(delta);
+            }
 
             // Cleanup
             if (moveState.previewLine) moveState.previewLine.dispose();
             moveState.isMoving = false;
+            moveState.isVertexMode = false;
             moveState.startPoint = null;
             moveState.targetMesh = null;
+            moveState.targetFaces = [];
+            moveState.faceNormal = null;
+            moveState.originalVertexPositions = new Map();
             moveState.previewLine = null;
             moveState.originalPosition = null;
             moveState.inferredAxis = null;
             moveState.inputBuffer = '';
+            moveState.lastMoveDistance = 0;
           }
           return;
         }
         // Escape to cancel
         if (e.key === 'Escape') {
           e.preventDefault();
-          if (moveState.targetMesh && moveState.originalPosition) {
+          if (moveState.isVertexMode) {
+            // Clean up push/pull preview
+            const ppState = pushPullStateRef.current;
+            if (ppState.previewMesh) {
+              ppState.previewMesh.dispose();
+              ppState.previewMesh = null;
+            }
+            // Restore hidden solid if any
+            if (ppState.hiddenSolid) {
+              ppState.hiddenSolid.setEnabled(true);
+              ppState.hiddenSolid.getChildMeshes().forEach(child => child.setEnabled(true));
+              ppState.hiddenSolid = null;
+            }
+          } else if (moveState.targetMesh && moveState.originalPosition) {
             moveState.targetMesh.position = moveState.originalPosition.clone();
           }
           if (moveState.previewLine) moveState.previewLine.dispose();
           moveState.isMoving = false;
+          moveState.isVertexMode = false;
           moveState.startPoint = null;
           moveState.targetMesh = null;
+          moveState.targetFaces = [];
+          moveState.faceNormal = null;
+          moveState.originalVertexPositions = new Map();
           moveState.previewLine = null;
           moveState.originalPosition = null;
           moveState.inferredAxis = null;
           moveState.inputBuffer = '';
+          moveState.lastMoveDistance = 0;
           return;
         }
       }
@@ -6193,6 +6769,12 @@ const CustomModelingPage: React.FC = () => {
               if (result) {
                 ppState.lastExtrudeDistance = distanceUnits;
               }
+              // Restore hidden solid visibility
+              if (ppState.hiddenSolid && !ppState.hiddenSolid.isDisposed()) {
+                ppState.hiddenSolid.setEnabled(true);
+                ppState.hiddenSolid.getChildMeshes().forEach(child => child.setEnabled(true));
+              }
+              ppState.hiddenSolid = null;
               // Cleanup
               if (ppState.previewMesh) {
                 ppState.previewMesh.dispose();
@@ -6211,6 +6793,12 @@ const CustomModelingPage: React.FC = () => {
         // Escape to cancel
         if (e.key === 'Escape') {
           e.preventDefault();
+          // Restore hidden solid visibility
+          if (ppState.hiddenSolid && !ppState.hiddenSolid.isDisposed()) {
+            ppState.hiddenSolid.setEnabled(true);
+            ppState.hiddenSolid.getChildMeshes().forEach(child => child.setEnabled(true));
+          }
+          ppState.hiddenSolid = null;
           if (ppState.previewMesh) {
             ppState.previewMesh.dispose();
             ppState.previewMesh = null;
@@ -6437,14 +7025,24 @@ const CustomModelingPage: React.FC = () => {
         }
       }
 
-      // Offset tool: dimension input while offsetting
+      // Offset tool: dimension input while offsetting (SketchUp-style)
+      // When user types a number, it REPLACES the mouse-based distance
       if (activeTool === 'offset') {
         const osState = offsetStateRef.current;
         if (osState.isOffsetting && osState.baseFace) {
           // Numbers, period, minus for dimension input
           if (/^[0-9]$/.test(e.key) || e.key === '.' || e.key === '-') {
             e.preventDefault();
-            measurementInputValueRef.current += e.key;
+            // IMPORTANT: If this is the first digit typed, clear any mouse-based value
+            // This ensures keyboard input REPLACES (not appends to) the mouse distance
+            if (measurementInputValueRef.current === '' ||
+                !measurementInputValueRef.current.match(/^-?[\d.]+$/)) {
+              // First keystroke - start fresh
+              measurementInputValueRef.current = e.key;
+            } else {
+              // Continue typing
+              measurementInputValueRef.current += e.key;
+            }
             setMeasurementInput(measurementInputValueRef.current);
             return;
           }
@@ -8023,6 +8621,39 @@ const CustomModelingPage: React.FC = () => {
                       ppState.isExtruding = false;
                       ppState.axisLocked = false;
                       ppState.lockedDistance = 0;
+
+                      setMeasurementInput('');
+                    }
+                  }
+                }
+                // Offset tool: Apply entered distance (SketchUp-style)
+                if (activeTool === 'offset' && scene) {
+                  const osState = offsetStateRef.current;
+                  if (osState.isOffsetting && osState.baseFace) {
+                    const inputValue = parseFloat(measurementInput);
+                    if (!isNaN(inputValue) && inputValue > 0) {
+                      const distanceUnits = inputValue * MM_TO_UNIT;  // mm to units
+                      console.log('[Offset] Input Enter - applying', inputValue, 'mm =', distanceUnits, 'units');
+
+                      // Cleanup preview mesh
+                      if (osState.previewMesh) {
+                        osState.previewMesh.dispose();
+                        osState.previewMesh = null;
+                      }
+
+                      // Apply the offset
+                      applyOffset(osState.baseFace, distanceUnits);
+
+                      // Store last distance for double-click repeat
+                      osState.lastOffsetDistance = distanceUnits;
+                      // Update lastClickTime so next double-click is detected correctly
+                      osState.lastClickTime = Date.now();
+
+                      // Reset offset state
+                      osState.isOffsetting = false;
+                      osState.baseFace = null;
+                      osState.baseVertices = [];
+                      osState.baseCenter = null;
 
                       setMeasurementInput('');
                     }
