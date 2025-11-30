@@ -67,6 +67,7 @@ interface LineInference {
   inferenceType: 'none' | 'endpoint' | 'midpoint' | 'on-edge' | 'on-axis' | 'perpendicular' | 'parallel';
   continuousMode: boolean;  // After finalizing, start next line from endpoint
   lastEndpoint: Vector3 | null;  // For continuous drawing
+  inferredAxis: 'x' | 'y' | 'z' | null;  // Currently inferred drawing axis
 }
 
 const PushPullIcon = ({ size = 18, className = '' }: { size?: number, className?: string }) => (
@@ -219,6 +220,7 @@ const CustomModelingPage: React.FC = () => {
     inferenceType: 'none',
     continuousMode: true,  // SketchUp default is continuous
     lastEndpoint: null,
+    inferredAxis: null,
   });
 
   // Measurement input state for rectangle dimensions
@@ -248,6 +250,7 @@ const CustomModelingPage: React.FC = () => {
     inferenceType: 'none',
     continuousMode: true,
     lastEndpoint: null,
+    inferredAxis: null,
   });
 
   // Line measurement display state
@@ -489,6 +492,179 @@ const CustomModelingPage: React.FC = () => {
     }
     return null;
   }, []);
+
+  // Get drawing point for line tool - can pick on faces OR ground, preserves Y coordinate
+  const getDrawingPoint = useCallback((scene: Scene, pointerX: number, pointerY: number): Vector3 | null => {
+    const camera = cameraRef.current;
+    const snapThreshold = camera ? Math.max(camera.radius * SNAP_THRESHOLD_BASE, 1.0) : 2.0;
+
+    // Priority 1: Check for snap points (including 3D points with Y values)
+    if (activeSnapPointRef.current) {
+      return activeSnapPointRef.current.position.clone();
+    }
+
+    // Priority 2: Pick existing faces (allows drawing on 3D surfaces)
+    const facePickResult = scene.pick(pointerX, pointerY, (mesh) => {
+      return mesh.metadata?.type === 'face' && mesh.isPickable;
+    });
+
+    if (facePickResult?.hit && facePickResult.pickedPoint) {
+      const rawPoint = facePickResult.pickedPoint.clone();
+
+      // Check snap to existing snap points
+      for (const snapPoint of snapPointsRef.current) {
+        const dist = Vector3.Distance(rawPoint, snapPoint.position);
+        if (dist < snapThreshold) {
+          return snapPoint.position.clone();
+        }
+      }
+
+      // Grid snap on the face plane
+      return new Vector3(
+        Math.round(rawPoint.x / GRID_SNAP) * GRID_SNAP,
+        Math.round(rawPoint.y / GRID_SNAP) * GRID_SNAP,
+        Math.round(rawPoint.z / GRID_SNAP) * GRID_SNAP
+      );
+    }
+
+    // Priority 3: Fall back to ground plane
+    const groundPickResult = scene.pick(pointerX, pointerY, (mesh) => mesh.name === 'groundPicker');
+    if (groundPickResult?.hit && groundPickResult.pickedPoint) {
+      const rawPoint = new Vector3(
+        groundPickResult.pickedPoint.x,
+        0,
+        groundPickResult.pickedPoint.z
+      );
+
+      // Magnetic snap to origin
+      if (rawPoint.length() < snapThreshold) {
+        return Vector3.Zero();
+      }
+
+      // Snap to existing snap points
+      for (const snapPoint of snapPointsRef.current) {
+        const dist = Vector3.Distance(rawPoint, snapPoint.position);
+        if (dist < snapThreshold) {
+          return new Vector3(snapPoint.position.x, 0, snapPoint.position.z);
+        }
+      }
+
+      // Grid snap
+      return new Vector3(
+        Math.round(groundPickResult.pickedPoint.x / GRID_SNAP) * GRID_SNAP,
+        0,
+        Math.round(groundPickResult.pickedPoint.z / GRID_SNAP) * GRID_SNAP
+      );
+    }
+
+    return null;
+  }, []);
+
+  // Get drawing point with Y-axis inference (for line drawing)
+  // Uses screen coordinates to detect vertical (Y-axis) drawing intent
+  const getDrawingPointWithYInference = useCallback((
+    scene: Scene,
+    pointerX: number,
+    pointerY: number,
+    startPoint: Vector3 | null
+  ): { point: Vector3 | null; inferredAxis: 'x' | 'y' | 'z' | null } => {
+    const camera = cameraRef.current;
+    if (!camera) return { point: null, inferredAxis: null };
+
+    const snapThreshold = Math.max(camera.radius * SNAP_THRESHOLD_BASE, 1.0);
+
+    // If no start point, just use regular getDrawingPoint
+    if (!startPoint) {
+      return { point: getDrawingPoint(scene, pointerX, pointerY), inferredAxis: null };
+    }
+
+    // First, check if we're snapping to an existing snap point
+    if (activeSnapPointRef.current) {
+      return { point: activeSnapPointRef.current.position.clone(), inferredAxis: null };
+    }
+
+    // Convert startPoint to screen coordinates for Y-axis inference
+    const engine = scene.getEngine();
+    const startScreenPos = Vector3.Project(
+      startPoint,
+      Matrix.Identity(),
+      scene.getTransformMatrix(),
+      camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight())
+    );
+
+    // Calculate screen distance from start point
+    const screenDx = Math.abs(pointerX - startScreenPos.x);
+    const screenDy = pointerY - startScreenPos.y; // Positive = mouse below start, Negative = mouse above start
+
+    // Y-axis inference: Mouse is close horizontally but moving vertically on screen
+    const screenSnapThreshold = 80; // pixels
+    if (screenDx < screenSnapThreshold && Math.abs(screenDy) > 5) {
+      // Project mouse onto a vertical plane passing through startPoint
+      const ray = scene.createPickingRay(pointerX, pointerY, Matrix.Identity(), camera);
+      const cameraPos = camera.position;
+      const toCamera = cameraPos.subtract(startPoint);
+      let planeNormal = new Vector3(toCamera.x, 0, toCamera.z);
+
+      if (planeNormal.length() < 0.1) {
+        planeNormal = new Vector3(1, 0, 0);
+      } else {
+        planeNormal = planeNormal.normalize();
+      }
+
+      const denom = Vector3.Dot(ray.direction, planeNormal);
+      if (Math.abs(denom) > 0.0001) {
+        const t = Vector3.Dot(startPoint.subtract(ray.origin), planeNormal) / denom;
+        if (t > 0) {
+          const intersectPoint = ray.origin.add(ray.direction.scale(t));
+          const yValue = Math.round(intersectPoint.y / GRID_SNAP) * GRID_SNAP;
+          return {
+            point: new Vector3(startPoint.x, yValue, startPoint.z),
+            inferredAxis: 'y'
+          };
+        }
+      }
+    }
+
+    // Try to pick the ground
+    const groundPickResult = scene.pick(pointerX, pointerY, (mesh) => mesh.name === 'groundPicker');
+
+    if (groundPickResult?.hit && groundPickResult.pickedPoint) {
+      const groundPoint = groundPickResult.pickedPoint;
+      const dx = Math.abs(groundPoint.x - startPoint.x);
+      const dz = Math.abs(groundPoint.z - startPoint.z);
+
+      // X-axis inference: If close to start's Z
+      if (dz < snapThreshold) {
+        const xValue = Math.round(groundPoint.x / GRID_SNAP) * GRID_SNAP;
+        return {
+          point: new Vector3(xValue, startPoint.y, startPoint.z),
+          inferredAxis: 'x'
+        };
+      }
+
+      // Z-axis inference: If close to start's X
+      if (dx < snapThreshold) {
+        const zValue = Math.round(groundPoint.z / GRID_SNAP) * GRID_SNAP;
+        return {
+          point: new Vector3(startPoint.x, startPoint.y, zValue),
+          inferredAxis: 'z'
+        };
+      }
+
+      // Default: Use ground point
+      return {
+        point: new Vector3(
+          Math.round(groundPoint.x / GRID_SNAP) * GRID_SNAP,
+          startPoint.y,
+          Math.round(groundPoint.z / GRID_SNAP) * GRID_SNAP
+        ),
+        inferredAxis: null
+      };
+    }
+
+    // Fallback: return start point if nothing else works
+    return { point: startPoint.clone(), inferredAxis: null };
+  }, [getDrawingPoint]);
 
   // Parse measurement input (supports "1000, 500" or "1000" formats, default mm)
   const parseMeasurementInput = useCallback((input: string): { width?: number; height?: number; radius?: number; sides?: number } => {
@@ -1271,8 +1447,170 @@ const CustomModelingPage: React.FC = () => {
     // Try to split any face that this line crosses
     splitFaceWithLine(scene, start, constrainedEnd);
 
+    // Try to detect and create face from closed loop
+    detectAndCreateFace(scene, constrainedEnd);
+
     return edge as unknown as Mesh;
   }, [applyAxisLock, splitFaceWithLine]);
+
+  // Detect closed loops and create faces automatically
+  const detectAndCreateFace = useCallback((scene: Scene, newEndpoint: Vector3) => {
+    const EPSILON = 0.05;
+
+    // Get all standalone edge meshes (not parented to a face)
+    const edges = scene.meshes.filter(m =>
+      m.name.startsWith('Edge_') &&
+      m.metadata?.type === 'edge' &&
+      !m.parent &&
+      m.metadata?.startPoint &&
+      m.metadata?.endPoint
+    );
+
+    if (edges.length < 3) return; // Need at least 3 edges for a face
+
+    // Build adjacency graph from edges
+    type Point = { x: number; z: number };
+    const pointKey = (p: Point) => `${p.x.toFixed(3)},${p.z.toFixed(3)}`;
+
+    const graph = new Map<string, { point: Point; neighbors: Set<string>; edges: Mesh[] }>();
+
+    for (const edge of edges) {
+      const start = edge.metadata.startPoint as Vector3;
+      const end = edge.metadata.endPoint as Vector3;
+      const startKey = pointKey({ x: start.x, z: start.z });
+      const endKey = pointKey({ x: end.x, z: end.z });
+
+      if (!graph.has(startKey)) {
+        graph.set(startKey, { point: { x: start.x, z: start.z }, neighbors: new Set(), edges: [] });
+      }
+      if (!graph.has(endKey)) {
+        graph.set(endKey, { point: { x: end.x, z: end.z }, neighbors: new Set(), edges: [] });
+      }
+
+      graph.get(startKey)!.neighbors.add(endKey);
+      graph.get(startKey)!.edges.push(edge as Mesh);
+      graph.get(endKey)!.neighbors.add(startKey);
+      graph.get(endKey)!.edges.push(edge as Mesh);
+    }
+
+    // Find cycle starting from the new endpoint
+    const startKey = pointKey({ x: newEndpoint.x, z: newEndpoint.z });
+    if (!graph.has(startKey)) return;
+
+    // DFS to find smallest cycle
+    const findCycle = (start: string): string[] | null => {
+      const visited = new Set<string>();
+      const parent = new Map<string, string>();
+
+      const queue: { node: string; path: string[] }[] = [{ node: start, path: [start] }];
+
+      while (queue.length > 0) {
+        const { node, path } = queue.shift()!;
+
+        const nodeData = graph.get(node);
+        if (!nodeData) continue;
+
+        for (const neighbor of nodeData.neighbors) {
+          if (neighbor === start && path.length >= 3) {
+            // Found a cycle!
+            return path;
+          }
+
+          if (!visited.has(neighbor) && neighbor !== path[path.length - 2]) {
+            visited.add(neighbor);
+            queue.push({ node: neighbor, path: [...path, neighbor] });
+          }
+        }
+      }
+      return null;
+    };
+
+    const cycle = findCycle(startKey);
+    if (!cycle || cycle.length < 3) return;
+
+    // Convert cycle to polygon points
+    const polygonPoints: Vector3[] = cycle.map(key => {
+      const node = graph.get(key)!;
+      return new Vector3(node.point.x, 0, node.point.z);
+    });
+
+    // Check if face already exists at these points
+    const existingFaces = scene.meshes.filter(m =>
+      m.metadata?.type === 'face' && !m.parent
+    );
+
+    for (const face of existingFaces) {
+      // Simple check - if face center is near polygon center, skip
+      const faceCenter = face.getBoundingInfo().boundingBox.centerWorld;
+      const polyCenter = polygonPoints.reduce(
+        (acc, p) => ({ x: acc.x + p.x, z: acc.z + p.z }),
+        { x: 0, z: 0 }
+      );
+      polyCenter.x /= polygonPoints.length;
+      polyCenter.z /= polygonPoints.length;
+
+      const dist = Math.sqrt(
+        Math.pow(faceCenter.x - polyCenter.x, 2) +
+        Math.pow(faceCenter.z - polyCenter.z, 2)
+      );
+      if (dist < EPSILON) return; // Face already exists
+    }
+
+    // Create the face
+    try {
+      meshCounterRef.current++;
+
+      // Convert to local coordinates for polygon creation
+      const localPoints = polygonPoints.map(p => new Vector3(p.x, 0, p.z));
+
+      const newFace = MeshBuilder.CreatePolygon(
+        `Face_${meshCounterRef.current}`,
+        {
+          shape: localPoints,
+          sideOrientation: Mesh.DOUBLESIDE
+        },
+        scene,
+        earcut
+      );
+
+      newFace.position.y = 0.001;
+
+      const faceMat = new StandardMaterial(`FaceMat_${meshCounterRef.current}`, scene);
+      faceMat.diffuseColor = new Color3(0.85, 0.85, 0.85);
+      faceMat.emissiveColor = new Color3(0.1, 0.1, 0.1);
+      faceMat.backFaceCulling = false;
+      newFace.material = faceMat;
+
+      newFace.isPickable = true;
+
+      // Calculate width and depth for push/pull
+      const xs = polygonPoints.map(p => p.x);
+      const zs = polygonPoints.map(p => p.z);
+      const width = Math.max(...xs) - Math.min(...xs);
+      const depth = Math.max(...zs) - Math.min(...zs);
+
+      newFace.metadata = {
+        type: 'face',
+        originalY: 0.001,
+        width: width,
+        depth: depth,
+        isPolygon: true,
+        polygonPoints: localPoints.map(p => ({ x: p.x, z: p.z }))
+      };
+
+      // Collect edge IDs that form this face
+      const edgeIds: string[] = [];
+      for (let i = 0; i < cycle.length; i++) {
+        const node = graph.get(cycle[i])!;
+        edgeIds.push(...node.edges.map(e => e.id));
+      }
+      newFace.metadata.edgeIds = [...new Set(edgeIds)];
+
+      console.log('Auto-created face from closed loop with', cycle.length, 'vertices');
+    } catch (e) {
+      console.error('Failed to create face from closed loop:', e);
+    }
+  }, []);
 
   // Finalize rectangle as face geometry with modifier support
   const finalizeRectangle = useCallback((scene: Scene, start: Vector3, end: Vector3): Mesh | null => {
@@ -2517,7 +2855,9 @@ const CustomModelingPage: React.FC = () => {
       ringFace.position = new Vector3(ringCenterX, yPos, ringCenterZ);
 
       const ringMat = new StandardMaterial(`OffsetRingMat_${ringId}`, scene);
-      ringMat.diffuseColor = Color3.FromHexString(selectedColor);
+      // Make ring faces slightly darker to visualize separation
+      const baseColor = Color3.FromHexString(selectedColor);
+      ringMat.diffuseColor = new Color3(baseColor.r * 0.7, baseColor.g * 0.7, baseColor.b * 0.7);
       ringMat.specularColor = new Color3(0.2, 0.2, 0.2);
       ringMat.backFaceCulling = false;
       ringFace.material = ringMat;
@@ -4045,15 +4385,8 @@ const CustomModelingPage: React.FC = () => {
       // Line tool with continuous drawing mode
       if (activeTool === 'line') {
         const lineInf = lineInferenceRef.current;
-        // Use active snap point if available, otherwise get ground point
-        const rawPoint = getGroundPoint(scene, scene.pointerX, scene.pointerY);
-        // IMPORTANT: Force Y=0 for snap points to ensure drawing on ground plane
-        let point: Vector3 | null = null;
-        if (activeSnapPointRef.current) {
-          point = new Vector3(activeSnapPointRef.current.position.x, 0, activeSnapPointRef.current.position.z);
-        } else {
-          point = rawPoint;
-        }
+        // Use getDrawingPoint which can pick on faces OR ground, preserving Y coordinate
+        const point = getDrawingPoint(scene, scene.pointerX, scene.pointerY);
         if (point) {
           if (!state.isDrawing) {
             // First click: Start drawing
@@ -4663,10 +4996,13 @@ const CustomModelingPage: React.FC = () => {
       };
 
       if (activeTool === 'line') {
-        const point = getSnappedPoint();
+        // Line tool uses getDrawingPointWithYInference for 3D drawing support including Y-axis
+        const { point, inferredAxis } = getDrawingPointWithYInference(scene, scene.pointerX, scene.pointerY, state.startPoint);
         if (point) {
           state.currentPoint = point;
           updatePreviewLine(scene, state.startPoint, point);
+          // Store inferred axis for visual feedback (could show axis color)
+          lineInferenceRef.current.inferredAxis = inferredAxis;
         }
       } else if (activeTool === 'rectangle') {
         const point = getSnappedPoint();
@@ -5301,6 +5637,7 @@ const CustomModelingPage: React.FC = () => {
             inferenceType: 'none',
             continuousMode: true,
             lastEndpoint: null,
+            inferredAxis: null,
           };
           lineInferenceRef.current = resetLineInf;
           setLineInferenceUI(resetLineInf);
