@@ -116,12 +116,14 @@ const CustomModelingPage: React.FC = () => {
     baseClickPoint: Vector3 | null;  // Initial click point on face
     isExtruding: boolean;            // Currently in extrusion mode
     previewMesh: Mesh | null;        // Preview mesh during drag
+    hiddenSolid: Mesh | null;        // Solid hidden during preview to prevent z-fighting
     lastExtrudeDistance: number;     // For double-click repeat
     lastClickTime: number;           // For double-click detection
     lastClickFace: Mesh | null;      // For double-click on same face
     axisLocked: boolean;             // Shift key locks the axis direction
     lockedDistance: number;          // Distance when axis was locked
     copyMode: boolean;               // Option key: create copy instead of modifying original
+    inputBuffer: string;             // For numeric distance input
   }>({
     baseFace: null,
     baseFaceNormal: null,
@@ -129,12 +131,14 @@ const CustomModelingPage: React.FC = () => {
     baseClickPoint: null,
     isExtruding: false,
     previewMesh: null,
+    hiddenSolid: null,
     lastExtrudeDistance: 0,
     lastClickTime: 0,
     lastClickFace: null,
     axisLocked: false,
     lockedDistance: 0,
     copyMode: false,
+    inputBuffer: '',
   });
 
   // Offset tool state ref for SketchUp-style face offset
@@ -173,11 +177,28 @@ const CustomModelingPage: React.FC = () => {
     startY: number;
     isDragging: boolean;
     element: HTMLDivElement | null;
+    // Drag-to-expand state (SketchUp style)
+    isExpandDragging: boolean;
+    expandStartPoint: Vector3 | null;
+    expandTargetFaces: Mesh[];
+    expandNormal: Vector3 | null;
+    expandOriginalPositions: Map<string, Float32Array>;
+    expandPreviewMesh: Mesh | null;
+    inferredAxis: 'x' | 'y' | 'z' | null;
+    inputBuffer: string;
   }>({
     startX: 0,
     startY: 0,
     isDragging: false,
     element: null,
+    isExpandDragging: false,
+    expandStartPoint: null,
+    expandTargetFaces: [],
+    expandNormal: null,
+    expandOriginalPositions: new Map(),
+    expandPreviewMesh: null,
+    inferredAxis: null,
+    inputBuffer: ''
   });
 
   // Initialize SelectionManager
@@ -250,13 +271,15 @@ const CustomModelingPage: React.FC = () => {
     previewLine: Mesh | null;
     originalPosition: Vector3 | null;
     inferredAxis: 'x' | 'y' | 'z' | null;
+    inputBuffer: string;  // For numeric distance input
   }>({
     isMoving: false,
     startPoint: null,
     targetMesh: null,
     previewLine: null,
     originalPosition: null,
-    inferredAxis: null
+    inferredAxis: null,
+    inputBuffer: ''
   });
 
   // Measurement input state for rectangle dimensions
@@ -3268,7 +3291,7 @@ const CustomModelingPage: React.FC = () => {
     };
     console.log('[Offset] Created ring face:', { id: ringFace.id, name: ringFace.name, position: ringFace.position });
 
-    // Create inner face edges
+    // Create inner face edges (inner offset boundary)
     for (let i = 0; i < offsetVertices.length; i++) {
       const p1 = offsetVertices[i];
       const p2 = offsetVertices[(i + 1) % offsetVertices.length];
@@ -3282,8 +3305,21 @@ const CustomModelingPage: React.FC = () => {
       innerEdge.metadata = { type: 'edge' };
     }
 
-    // Delete the original face only (keep outer edges - they form ring boundary)
-    // Note: Original face's outer edges are now part of ring faces' outer boundary
+    // Create outer ring edges (original face boundary - must recreate since original face will be disposed)
+    for (let i = 0; i < vertices.length; i++) {
+      const p1 = vertices[i];
+      const p2 = vertices[(i + 1) % vertices.length];
+
+      const outerEdge = MeshBuilder.CreateLines(`OffsetOuterEdge_${ringId}_${i}`, {
+        points: [new Vector3(p1.x, yPos, p1.z), new Vector3(p2.x, yPos, p2.z)],
+        updatable: false
+      }, scene);
+      outerEdge.color = new Color3(0.15, 0.15, 0.15);
+      outerEdge.isPickable = true;
+      outerEdge.metadata = { type: 'edge' };
+    }
+
+    // Delete the original face (its edges are now recreated as outer ring edges)
     console.log('[Offset] Disposing original face:', { id: face.id, name: face.name });
     face.getChildMeshes().forEach(child => child.dispose());
     face.dispose();
@@ -3452,6 +3488,11 @@ const CustomModelingPage: React.FC = () => {
       const origHeight = parentMeta.height;
       const origDepth = parentMeta.depth;
 
+      // Hide original solid during preview to prevent z-fighting
+      parentSolid.setEnabled(false);
+      parentSolid.getChildMeshes().forEach(child => child.setEnabled(false));
+      state.hiddenSolid = parentSolid;
+
       if (isPush) {
         // PUSH: Show SHRUNK solid preview
         if (absY > absX && absY > absZ) {
@@ -3587,18 +3628,20 @@ const CustomModelingPage: React.FC = () => {
       return screenDeltaX * scaleFactor * sign;
     }
 
-    // For Z-axis faces (front/back) - use screen X or Y based on camera angle
+    // For Z-axis faces (front/back) - use whichever screen axis has more movement
     if (Math.abs(normalizedNormal.z) > 0.9) {
       const cameraRight = Vector3.Cross(camera.upVector, camera.getDirection(Vector3.Forward())).normalize();
       const dotRight = Vector3.Dot(normalizedNormal, cameraRight);
-      // Use X if face normal is perpendicular to camera, Y otherwise
-      if (Math.abs(dotRight) > 0.5) {
+      const cameraForward = camera.getDirection(Vector3.Forward());
+      const dotForward = Vector3.Dot(normalizedNormal, cameraForward);
+
+      // Use whichever screen direction has more movement
+      if (Math.abs(screenDeltaX) > Math.abs(screenDeltaY)) {
+        // User is moving horizontally - use X movement
         const sign = dotRight > 0 ? 1 : -1;
         return screenDeltaX * scaleFactor * sign;
       } else {
-        // Face is more aligned with camera forward - use screen Y
-        const cameraForward = camera.getDirection(Vector3.Forward());
-        const dotForward = Vector3.Dot(normalizedNormal, cameraForward);
+        // User is moving vertically - use Y movement
         const sign = dotForward > 0 ? -1 : 1;
         return screenDeltaY * scaleFactor * sign;
       }
@@ -4807,52 +4850,34 @@ const CustomModelingPage: React.FC = () => {
         const groundPick = scene.pick(scene.pointerX, scene.pointerY, (m) => m.name === 'groundPicker');
         const clickPoint = groundPick?.hit ? groundPick.pickedPoint : null;
 
-        console.log('[Move] groundPick hit:', groundPick?.hit, 'clickPoint:', clickPoint);
-        console.log('[Move] moveState.isMoving:', moveState.isMoving);
-
         if (!moveState.isMoving) {
           // First click: Start move operation
           // Need a selected mesh first
           const selected = selectedMeshRef.current;
-          console.log('[Move] First click - selected:', selected?.name, 'type:', selected?.metadata?.type);
 
           if (!selected) {
-            console.log('[Move] No selection - trying to select clicked mesh');
             // Try to select clicked mesh
             if (pickInfo.hit && pickInfo.pickedMesh) {
               const mesh = pickInfo.pickedMesh as Mesh;
-              console.log('[Move] Clicked mesh:', mesh.name, 'type:', mesh.metadata?.type);
               if (mesh.metadata?.type === 'face' || mesh.metadata?.type === 'edge' || mesh.metadata?.type === 'solid') {
                 selectMesh(mesh);
-                console.log('[Move] Selected mesh via click, will start move on next click');
               }
             }
             return;
           }
 
-          console.log('[Move] Have selection, proceeding to start move');
-
           // Get the actual mesh to move (parent face for edges)
           let meshToMove = selected;
           if (selected.metadata?.type === 'edge' && selected.parent) {
             meshToMove = selected.parent as Mesh;
-            console.log('[Move] Using parent for edge:', meshToMove.name);
           }
 
-          // Start point is either snap point or ground click or picked mesh point
-          try {
-            const snapPoint = snapPointRef.current?.position;
-            console.log('[Move] snapPoint raw:', snapPoint);
-            console.log('[Move] clickPoint raw:', clickPoint);
-            console.log('[Move] pickInfo.pickedPoint raw:', pickInfo.pickedPoint);
-
-            const startPoint = snapPoint || clickPoint || pickInfo.pickedPoint;
+          // Start point is either active snap point or ground click or picked mesh point
+          const snapPoint = activeSnapPointRef.current?.position;
+          const startPoint = snapPoint || clickPoint || pickInfo.pickedPoint;
           if (!startPoint) {
-            console.log('[Move] ERROR: No startPoint available, returning');
             return;
           }
-          console.log('[Move] Using startPoint:', `(${startPoint.x.toFixed(2)}, ${startPoint.y.toFixed(2)}, ${startPoint.z.toFixed(2)})`);
-          console.log('[Move] Starting move operation NOW!');
 
           moveState.isMoving = true;
           moveState.startPoint = startPoint.clone();
@@ -4869,14 +4894,9 @@ const CustomModelingPage: React.FC = () => {
 
         } else {
           // Second click: Complete move operation
-          console.log('[Move] Second click - completing move');
-          const endPoint = snapPointRef.current?.position || clickPoint;
-          console.log('[Move] endPoint:', endPoint ? `(${endPoint.x.toFixed(2)}, ${endPoint.y.toFixed(2)}, ${endPoint.z.toFixed(2)})` : 'null');
-          console.log('[Move] targetMesh:', moveState.targetMesh?.name);
-          console.log('[Move] startPoint:', moveState.startPoint ? `(${moveState.startPoint.x.toFixed(2)}, ${moveState.startPoint.y.toFixed(2)}, ${moveState.startPoint.z.toFixed(2)})` : 'null');
+          const endPoint = activeSnapPointRef.current?.position || clickPoint;
 
           if (!endPoint || !moveState.targetMesh || !moveState.startPoint) {
-            console.log('[Move] Missing required data, cancelling move');
             // Cancel if no valid endpoint
             if (moveState.previewLine) moveState.previewLine.dispose();
             moveState.isMoving = false;
@@ -4889,22 +4909,16 @@ const CustomModelingPage: React.FC = () => {
 
           // Calculate delta and apply
           let delta = endPoint.subtract(moveState.startPoint);
-          console.log('[Move] delta before axis:', `(${delta.x.toFixed(2)}, ${delta.y.toFixed(2)}, ${delta.z.toFixed(2)})`);
 
           // Apply axis inference if active
           if (moveState.inferredAxis) {
-            console.log('[Move] Applying axis constraint:', moveState.inferredAxis);
             if (moveState.inferredAxis === 'x') delta = new Vector3(delta.x, 0, 0);
             else if (moveState.inferredAxis === 'y') delta = new Vector3(0, delta.y, 0);
             else if (moveState.inferredAxis === 'z') delta = new Vector3(0, 0, delta.z);
           }
 
-          console.log('[Move] Final delta:', `(${delta.x.toFixed(2)}, ${delta.y.toFixed(2)}, ${delta.z.toFixed(2)})`);
-          console.log('[Move] Original position:', `(${moveState.targetMesh.position.x.toFixed(2)}, ${moveState.targetMesh.position.y.toFixed(2)}, ${moveState.targetMesh.position.z.toFixed(2)})`);
-
           // Apply the move
           moveState.targetMesh.position.addInPlace(delta);
-          console.log('[Move] New position:', `(${moveState.targetMesh.position.x.toFixed(2)}, ${moveState.targetMesh.position.y.toFixed(2)}, ${moveState.targetMesh.position.z.toFixed(2)})`);
 
           // Cleanup
           if (moveState.previewLine) moveState.previewLine.dispose();
@@ -4914,7 +4928,6 @@ const CustomModelingPage: React.FC = () => {
           moveState.previewLine = null;
           moveState.originalPosition = null;
           moveState.inferredAxis = null;
-          console.log('[Move] Move completed and state reset');
         }
         return;
       }
@@ -4986,10 +4999,49 @@ const CustomModelingPage: React.FC = () => {
             // Don't clear highlights here - let pointerUp handle it
           } else {
             (boxState as any).clickedOnEmptySpace = false;
+            const manager = selectionManagerRef.current;
+
+            // Check if this face/edge is already selected - if so, start expand drag mode
+            const isAlreadySelected = manager?.isSelected(mesh.id);
+            if (isAlreadySelected && mesh.metadata?.type === 'face') {
+              // Start expand drag mode
+              const faceNormal = mesh.metadata?.normal as Vector3 | undefined;
+              if (faceNormal && pickInfo.pickedPoint) {
+                boxState.isExpandDragging = true;
+                boxState.expandStartPoint = pickInfo.pickedPoint.clone();
+                boxState.expandTargetFaces = [mesh];
+                boxState.expandNormal = faceNormal.clone();
+                boxState.expandOriginalPositions = new Map();
+                boxState.inferredAxis = null;
+                boxState.inputBuffer = '';
+
+                // Store original vertex positions
+                const positions = mesh.getVerticesData('position');
+                if (positions) {
+                  boxState.expandOriginalPositions.set(mesh.id, new Float32Array(positions));
+                }
+
+                // Also include all selected faces from manager
+                const selectedIds = manager?.getSelectedIds() || [];
+                selectedIds.forEach(id => {
+                  const selectedMesh = scene.getMeshById(id) as Mesh | null;
+                  if (selectedMesh && selectedMesh.metadata?.type === 'face' && selectedMesh.id !== mesh.id) {
+                    boxState.expandTargetFaces.push(selectedMesh);
+                    const pos = selectedMesh.getVerticesData('position');
+                    if (pos) {
+                      boxState.expandOriginalPositions.set(selectedMesh.id, new Float32Array(pos));
+                    }
+                  }
+                });
+
+                console.log('[Select] Started expand drag mode, faces:', boxState.expandTargetFaces.length, 'normal:', faceNormal.toString());
+                return; // Don't process normal selection
+              }
+            }
+
             const timeSinceLastClick = now - ((boxState as any).lastClickTime || 0);
             const isSameMesh = (boxState as any).lastClickedMeshId === mesh.id;
             const isCtrlPressed = evt.ctrlKey || evt.metaKey;
-            const manager = selectionManagerRef.current;
 
             // Track click count for same mesh within 400ms
             let clickCount = 1;
@@ -5555,7 +5607,7 @@ const CustomModelingPage: React.FC = () => {
         if (moveState.isMoving && moveState.startPoint && moveState.targetMesh && moveState.originalPosition) {
           const groundPicker = groundPickerRef.current;
           const groundPick = groundPicker ? scene.pick(scene.pointerX, scene.pointerY, (m) => m === groundPicker) : null;
-          const currentPoint = snapPointRef.current?.position || (groundPick?.hit ? groundPick.pickedPoint : null);
+          const currentPoint = activeSnapPointRef.current?.position || (groundPick?.hit ? groundPick.pickedPoint : null);
 
           if (currentPoint) {
             // Calculate delta
@@ -6050,7 +6102,128 @@ const CustomModelingPage: React.FC = () => {
 
       const key = e.key.toLowerCase();
       const drawState = drawingStateRef.current;
+      const moveState = moveToolStateRef.current;
       const isDrawingTool = ['line', 'rectangle', 'circle', 'polygon'].includes(activeTool);
+
+      // SketchUp-style Move tool: numeric input for exact distance
+      if (activeTool === 'move' && moveState.isMoving) {
+        // Numbers, period, minus for distance input (allow input even without axis inferred)
+        if (/^[0-9]$/.test(e.key) || e.key === '.' || e.key === '-') {
+          e.preventDefault();
+          moveState.inputBuffer += e.key;
+          return;
+        }
+        // Backspace to delete
+        if (e.key === 'Backspace' && moveState.inputBuffer.length > 0) {
+          e.preventDefault();
+          moveState.inputBuffer = moveState.inputBuffer.slice(0, -1);
+          return;
+        }
+        // Enter to apply exact distance
+        if (e.key === 'Enter' && moveState.inputBuffer.length > 0) {
+          e.preventDefault();
+          const distance = parseFloat(moveState.inputBuffer);
+          if (!isNaN(distance) && moveState.targetMesh && moveState.originalPosition) {
+            // Apply exact distance along inferred axis (default to X if none)
+            const delta = new Vector3(0, 0, 0);
+            const distanceUnits = distance * MM_TO_UNIT;
+            const axis = moveState.inferredAxis || 'x';
+            if (axis === 'x') delta.x = distanceUnits;
+            else if (axis === 'y') delta.y = distanceUnits;
+            else if (axis === 'z') delta.z = distanceUnits;
+
+            // Apply from original position
+            moveState.targetMesh.position = moveState.originalPosition.add(delta);
+
+            // Cleanup
+            if (moveState.previewLine) moveState.previewLine.dispose();
+            moveState.isMoving = false;
+            moveState.startPoint = null;
+            moveState.targetMesh = null;
+            moveState.previewLine = null;
+            moveState.originalPosition = null;
+            moveState.inferredAxis = null;
+            moveState.inputBuffer = '';
+          }
+          return;
+        }
+        // Escape to cancel
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          if (moveState.targetMesh && moveState.originalPosition) {
+            moveState.targetMesh.position = moveState.originalPosition.clone();
+          }
+          if (moveState.previewLine) moveState.previewLine.dispose();
+          moveState.isMoving = false;
+          moveState.startPoint = null;
+          moveState.targetMesh = null;
+          moveState.previewLine = null;
+          moveState.originalPosition = null;
+          moveState.inferredAxis = null;
+          moveState.inputBuffer = '';
+          return;
+        }
+      }
+
+      // SketchUp-style Push/Pull tool: numeric input for exact distance
+      const ppState = pushPullStateRef.current;
+      if (activeTool === 'pushpull' && ppState.isExtruding && ppState.baseFace && ppState.baseFaceNormal) {
+        // Numbers, period, minus for distance input
+        if (/^[0-9]$/.test(e.key) || e.key === '.' || e.key === '-') {
+          e.preventDefault();
+          ppState.inputBuffer += e.key;
+          return;
+        }
+        // Backspace to delete
+        if (e.key === 'Backspace' && ppState.inputBuffer.length > 0) {
+          e.preventDefault();
+          ppState.inputBuffer = ppState.inputBuffer.slice(0, -1);
+          return;
+        }
+        // Enter to apply exact distance
+        if (e.key === 'Enter' && ppState.inputBuffer.length > 0) {
+          e.preventDefault();
+          const distance = parseFloat(ppState.inputBuffer);
+          if (!isNaN(distance)) {
+            const scene = sceneRef.current;
+            if (scene) {
+              const distanceUnits = distance * MM_TO_UNIT;
+              // Apply push/pull with exact distance
+              const result = applyPushPull(ppState.baseFace, distanceUnits, ppState.baseFaceNormal, ppState.copyMode);
+              if (result) {
+                ppState.lastExtrudeDistance = distanceUnits;
+              }
+              // Cleanup
+              if (ppState.previewMesh) {
+                ppState.previewMesh.dispose();
+                ppState.previewMesh = null;
+              }
+              ppState.isExtruding = false;
+              ppState.baseFace = null;
+              ppState.baseFaceNormal = null;
+              ppState.baseFaceCenter = null;
+              ppState.baseClickPoint = null;
+              ppState.inputBuffer = '';
+            }
+          }
+          return;
+        }
+        // Escape to cancel
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          if (ppState.previewMesh) {
+            ppState.previewMesh.dispose();
+            ppState.previewMesh = null;
+          }
+          ppState.isExtruding = false;
+          ppState.baseFace = null;
+          ppState.baseFaceNormal = null;
+          ppState.baseFaceCenter = null;
+          ppState.baseClickPoint = null;
+          ppState.inputBuffer = '';
+          return;
+        }
+      }
 
       // SketchUp-style dimension input: type numbers while drawing
       if (isDrawingTool && drawState.isDrawing && drawState.startPoint) {
