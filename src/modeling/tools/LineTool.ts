@@ -3,6 +3,11 @@
  *
  * Integrates with HalfEdgeMesh kernel for topology management.
  * Creates vertices and edges in the kernel, then renders via Babylon.js.
+ *
+ * Visual Features:
+ * - Rubber band preview line (instant feedback)
+ * - Axis inference with colored guide lines (Red=X, Blue=Y, Green=Z)
+ * - Status text feedback for snap/axis state
  */
 
 import {
@@ -34,15 +39,28 @@ export class LineTool extends BaseTool {
   private startVertexId: VertexID | null = null;
   private lastCreatedEdgeId: EdgeID | null = null;
 
-  // Inference colors
+  // Additional preview meshes for better UX
+  private axisGuideLine: LinesMesh | null = null;
+  private startPointMarker: Mesh | null = null;
+
+  // Inference colors (SketchUp standard)
   private readonly AXIS_COLORS = {
-    x: Color3.Red(),       // Red axis
-    y: Color3.Blue(),      // Blue axis (vertical)
-    z: Color3.Green(),     // Green axis
+    x: Color3.Red(),       // Red axis (horizontal X)
+    y: Color3.Blue(),      // Blue axis (vertical Y)
+    z: Color3.Green(),     // Green axis (horizontal Z)
     free: Color3.Black(),  // No axis lock
   };
 
+  // Axis names for status text
+  private readonly AXIS_NAMES = {
+    x: 'Red Axis (X)',
+    y: 'Blue Axis (Y)',
+    z: 'Green Axis (Z)',
+  };
+
   private readonly SNAP_THRESHOLD = 0.15; // 150mm
+  private readonly AXIS_DOMINANCE_THRESHOLD = 0.85; // 85% of movement must be on one axis
+  private readonly AXIS_GUIDE_LENGTH = 10; // Length of infinite axis guide line (10m)
 
   // ============================================
   // Lifecycle
@@ -53,11 +71,11 @@ export class LineTool extends BaseTool {
   }
 
   protected onDeactivate(): void {
-    this.cleanupPreview();
+    this.cleanupAllPreviews();
   }
 
   protected onReset(): void {
-    this.cleanupPreview();
+    this.cleanupAllPreviews();
     this.state = {
       isDrawing: false,
       startPoint: null,
@@ -101,6 +119,9 @@ export class LineTool extends BaseTool {
         this.startVertexId = vertex.id;
       }
 
+      // Create start point marker (small sphere)
+      this.createStartPointMarker(point);
+
       // Add inference point for SketchUp-style inference
       this.snapSystem?.addInferencePoint(point, 'lineStart');
 
@@ -127,23 +148,31 @@ export class LineTool extends BaseTool {
   onPointerMove(info: PointerInfo, pickResult: PickResultInfo): void {
     if (!this.scene || !this.state.isDrawing || !this.state.startPoint) return;
 
-    // Get the point (snapped if available)
-    let point = pickResult.snapped && pickResult.snapPoint
+    // Get the raw point (snapped if available)
+    let rawPoint = pickResult.snapped && pickResult.snapPoint
       ? pickResult.snapPoint.clone()
       : pickResult.pickedPoint?.clone();
 
-    if (!point) return;
+    if (!rawPoint) return;
 
-    // Apply axis inference
-    point = this.applyAxisInference(this.state.startPoint, point);
-    this.state.currentPoint = point;
+    // Store previous axis for comparison
+    const previousAxis = this.state.inferenceAxis;
 
-    // Update preview line
+    // Apply axis inference (modifies state.inferenceAxis)
+    const snappedPoint = this.applyAxisInference(this.state.startPoint, rawPoint);
+    this.state.currentPoint = snappedPoint;
+
+    // Update preview visuals immediately (rubber band effect)
     this.updatePreviewLine();
+    this.updateAxisGuideLine();
 
-    // Update input display
-    const distance = Vector3.Distance(this.state.startPoint, point);
-    this.setInput(distance.toFixed(3));
+    // Calculate distance for display
+    const distance = Vector3.Distance(this.state.startPoint, snappedPoint);
+    const distanceMM = (distance * 1000).toFixed(0);
+    this.setInput(`${distanceMM}mm`);
+
+    // Update status text with axis/snap feedback
+    this.updateStatusText(pickResult, distance);
 
     // Show snap indicator
     if (pickResult.snapped && pickResult.snapType) {
@@ -232,50 +261,79 @@ export class LineTool extends BaseTool {
   // ============================================
 
   private applyAxisInference(start: Vector3, end: Vector3): Vector3 {
-    // If axis is locked by arrow key
+    // If axis is manually locked by arrow key, enforce it
     if (this.state.inferenceAxis) {
-      switch (this.state.inferenceAxis) {
-        case 'x':
-          return new Vector3(end.x, start.y, start.z);
-        case 'y':
-          return new Vector3(start.x, end.y, start.z);
-        case 'z':
-          return new Vector3(start.x, start.y, end.z);
+      return this.constrainToAxis(start, end, this.state.inferenceAxis);
+    }
+
+    // Calculate movement deltas
+    const delta = end.subtract(start);
+    const dx = Math.abs(delta.x);
+    const dy = Math.abs(delta.y);
+    const dz = Math.abs(delta.z);
+    const totalMovement = dx + dy + dz;
+
+    // Too close to start point - no inference
+    if (totalMovement < 0.01) {
+      this.state.inferenceAxis = null;
+      return end;
+    }
+
+    // Calculate axis dominance ratios
+    const xRatio = dx / totalMovement;
+    const yRatio = dy / totalMovement;
+    const zRatio = dz / totalMovement;
+
+    // Find the dominant axis
+    const maxRatio = Math.max(xRatio, yRatio, zRatio);
+
+    // Only snap if one axis is clearly dominant
+    if (maxRatio >= this.AXIS_DOMINANCE_THRESHOLD) {
+      if (yRatio === maxRatio) {
+        // Y-Axis (BLUE) - Vertical movement priority
+        this.state.inferenceAxis = 'y';
+        return this.constrainToAxis(start, end, 'y');
+      } else if (xRatio === maxRatio) {
+        // X-Axis (RED)
+        this.state.inferenceAxis = 'x';
+        return this.constrainToAxis(start, end, 'x');
+      } else if (zRatio === maxRatio) {
+        // Z-Axis (GREEN)
+        this.state.inferenceAxis = 'z';
+        return this.constrainToAxis(start, end, 'z');
       }
     }
 
-    // Auto-detect axis alignment
-    const dx = Math.abs(end.x - start.x);
-    const dy = Math.abs(end.y - start.y);
-    const dz = Math.abs(end.z - start.z);
-    const total = dx + dy + dz;
-
-    if (total < 0.001) return end;
-
-    // Check if aligned to an axis
-    if (dx / total > 0.9 && dy < this.SNAP_THRESHOLD && dz < this.SNAP_THRESHOLD) {
-      this.state.inferenceAxis = 'x';
-      return new Vector3(end.x, start.y, start.z);
-    }
-    if (dy / total > 0.9 && dx < this.SNAP_THRESHOLD && dz < this.SNAP_THRESHOLD) {
-      this.state.inferenceAxis = 'y';
-      return new Vector3(start.x, end.y, start.z);
-    }
-    if (dz / total > 0.9 && dx < this.SNAP_THRESHOLD && dy < this.SNAP_THRESHOLD) {
-      this.state.inferenceAxis = 'z';
-      return new Vector3(start.x, start.y, end.z);
-    }
-
+    // No dominant axis - free movement
     this.state.inferenceAxis = null;
     return end;
   }
 
+  /**
+   * Constrain a point to move only along a specific axis from the start point
+   */
+  private constrainToAxis(start: Vector3, end: Vector3, axis: 'x' | 'y' | 'z'): Vector3 {
+    switch (axis) {
+      case 'x':
+        return new Vector3(end.x, start.y, start.z);
+      case 'y':
+        return new Vector3(start.x, end.y, start.z);
+      case 'z':
+        return new Vector3(start.x, start.y, end.z);
+    }
+  }
+
+  /**
+   * Update the rubber band preview line (from start to cursor)
+   * This provides instant visual feedback
+   */
   private updatePreviewLine(): void {
     if (!this.scene || !this.state.startPoint || !this.state.currentPoint) return;
 
-    // Remove existing preview
+    // Dispose existing preview immediately to prevent ghosting
     if (this.state.previewLine) {
       this.state.previewLine.dispose();
+      this.state.previewLine = null;
     }
 
     // Determine line color based on axis
@@ -284,13 +342,129 @@ export class LineTool extends BaseTool {
       color = this.AXIS_COLORS[this.state.inferenceAxis];
     }
 
-    // Create preview line
+    // Create rubber band line (from last click to current position)
     const points = [this.state.startPoint, this.state.currentPoint];
-    const lines = MeshBuilder.CreateLines('previewLine', { points }, this.scene);
-    lines.color = color;
-    lines.isPickable = false;
+    const previewLine = MeshBuilder.CreateLines('previewLine', { points }, this.scene);
+    previewLine.color = color;
+    previewLine.isPickable = false;
+    previewLine.renderingGroupId = 1; // Render on top
 
-    this.state.previewLine = lines;
+    this.state.previewLine = previewLine;
+  }
+
+  /**
+   * Update the axis guide line (infinite line along the snapped axis)
+   */
+  private updateAxisGuideLine(): void {
+    if (!this.scene || !this.state.startPoint) return;
+
+    // Dispose existing guide line
+    if (this.axisGuideLine) {
+      this.axisGuideLine.dispose();
+      this.axisGuideLine = null;
+    }
+
+    // Only show guide when axis is locked
+    if (!this.state.inferenceAxis) return;
+
+    const start = this.state.startPoint;
+    const axis = this.state.inferenceAxis;
+    const color = this.AXIS_COLORS[axis];
+
+    // Create axis direction vector
+    let direction: Vector3;
+    switch (axis) {
+      case 'x':
+        direction = new Vector3(1, 0, 0);
+        break;
+      case 'y':
+        direction = new Vector3(0, 1, 0);
+        break;
+      case 'z':
+        direction = new Vector3(0, 0, 1);
+        break;
+    }
+
+    // Create long guide line in both directions
+    const guideStart = start.subtract(direction.scale(this.AXIS_GUIDE_LENGTH));
+    const guideEnd = start.add(direction.scale(this.AXIS_GUIDE_LENGTH));
+
+    this.axisGuideLine = MeshBuilder.CreateDashedLines(
+      'axisGuideLine',
+      {
+        points: [guideStart, guideEnd],
+        dashSize: 0.05,
+        gapSize: 0.03,
+        dashNb: 200,
+      },
+      this.scene
+    );
+    this.axisGuideLine.color = color;
+    this.axisGuideLine.isPickable = false;
+    this.axisGuideLine.alpha = 0.6;
+  }
+
+  /**
+   * Update status text with current snap/axis state
+   */
+  private updateStatusText(pickResult: PickResultInfo, distance: number): void {
+    const distanceMM = (distance * 1000).toFixed(0);
+    let statusParts: string[] = [];
+
+    // Snap type feedback
+    if (pickResult.snapped && pickResult.snapType) {
+      const snapLabels: Record<string, string> = {
+        endpoint: 'Endpoint',
+        midpoint: 'Midpoint',
+        intersection: 'Intersection',
+        perpendicular: 'Perpendicular',
+        parallel: 'Parallel',
+        onEdge: 'On Edge',
+        onFace: 'On Face',
+        origin: 'Origin',
+        grid: 'Grid',
+      };
+      statusParts.push(snapLabels[pickResult.snapType] || pickResult.snapType);
+    }
+
+    // Axis inference feedback
+    if (this.state.inferenceAxis) {
+      statusParts.push(`On ${this.AXIS_NAMES[this.state.inferenceAxis]}`);
+    }
+
+    // Build status message
+    if (statusParts.length > 0) {
+      this.setStatus(`Line: ${distanceMM}mm - ${statusParts.join(', ')}`);
+    } else {
+      this.setStatus(`Line: ${distanceMM}mm - Click to finish, ESC to cancel`);
+    }
+  }
+
+  /**
+   * Create a small marker sphere at the start point
+   */
+  private createStartPointMarker(point: Vector3): void {
+    if (!this.scene) return;
+
+    // Dispose existing marker
+    if (this.startPointMarker) {
+      this.startPointMarker.dispose();
+    }
+
+    // Create small green sphere at start point
+    this.startPointMarker = MeshBuilder.CreateSphere(
+      'startPointMarker',
+      { diameter: 0.03 },
+      this.scene
+    );
+    this.startPointMarker.position = point.clone();
+    this.startPointMarker.isPickable = false;
+
+    // Green material
+    const material = new StandardMaterial('startMarkerMat', this.scene);
+    material.emissiveColor = new Color3(0, 0.8, 0);
+    material.disableLighting = true;
+    this.startPointMarker.material = material;
   }
 
   private finalizeLine(): void {
@@ -346,11 +520,42 @@ export class LineTool extends BaseTool {
     console.log(`[LineTool] Created line: ${(distance * 1000).toFixed(0)}mm`);
   }
 
+  /**
+   * Cleanup the rubber band preview line only
+   */
   private cleanupPreview(): void {
     if (this.state.previewLine) {
       this.state.previewLine.dispose();
       this.state.previewLine = null;
     }
+    this.hideSnap();
+  }
+
+  /**
+   * Cleanup all preview meshes (for reset/deactivate)
+   */
+  private cleanupAllPreviews(): void {
+    // Cleanup preview line
+    if (this.state.previewLine) {
+      this.state.previewLine.dispose();
+      this.state.previewLine = null;
+    }
+
+    // Cleanup axis guide line
+    if (this.axisGuideLine) {
+      this.axisGuideLine.dispose();
+      this.axisGuideLine = null;
+    }
+
+    // Cleanup start point marker
+    if (this.startPointMarker) {
+      if (this.startPointMarker.material) {
+        this.startPointMarker.material.dispose();
+      }
+      this.startPointMarker.dispose();
+      this.startPointMarker = null;
+    }
+
     this.hideSnap();
   }
 }
