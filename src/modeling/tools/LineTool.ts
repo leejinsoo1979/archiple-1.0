@@ -402,14 +402,31 @@ export class LineTool extends BaseTool {
    * Projects the axis lines to 2D screen coordinates and measures
    * the distance from the mouse cursor to each projected axis line.
    *
+   * Special handling for Y-axis (vertical):
+   * - When looking down at the floor, Y-axis appears as a point
+   * - In this case, we check if mouse is moving away from start point vertically on screen
+   *
    * @returns The closest axis if within threshold, null otherwise
    */
   private detectAxisFromScreenSpace(mouseX: number, mouseY: number): 'x' | 'y' | 'z' | null {
     if (!this.scene || !this.camera || !this.state.startPoint) return null;
 
     const startPoint = this.state.startPoint;
+    const engine = this.scene.getEngine();
+    const viewport = this.camera.viewport.toGlobal(
+      engine.getRenderWidth(),
+      engine.getRenderHeight()
+    );
 
-    // Define axis end points (extend in both directions)
+    // Project start point to screen
+    const startScreen = Vector3.Project(
+      startPoint,
+      this.scene.getTransformMatrix(),
+      this.scene.getProjectionMatrix(),
+      viewport
+    );
+
+    // Define axes with both positive and negative directions for better detection
     const axes: Array<{ name: 'x' | 'y' | 'z'; dir: Vector3 }> = [
       { name: 'x', dir: this.AXIS_DIRECTIONS.x },
       { name: 'y', dir: this.AXIS_DIRECTIONS.y },
@@ -420,35 +437,65 @@ export class LineTool extends BaseTool {
     let minDistance = this.AXIS_SCREEN_THRESHOLD;
 
     for (const axis of axes) {
-      // Create axis line endpoints (extend 10m in each direction)
-      const axisEnd = startPoint.add(axis.dir.scale(10));
+      // Create axis line endpoints (extend in BOTH directions for better detection)
+      const axisEndPositive = startPoint.add(axis.dir.scale(10));
+      const axisEndNegative = startPoint.subtract(axis.dir.scale(10));
 
-      // Project to screen coordinates
-      const startScreen = Vector3.Project(
-        startPoint,
+      const endScreenPos = Vector3.Project(
+        axisEndPositive,
         this.scene.getTransformMatrix(),
         this.scene.getProjectionMatrix(),
-        this.camera.viewport.toGlobal(
-          this.scene.getEngine().getRenderWidth(),
-          this.scene.getEngine().getRenderHeight()
-        )
+        viewport
       );
 
-      const endScreen = Vector3.Project(
-        axisEnd,
+      const endScreenNeg = Vector3.Project(
+        axisEndNegative,
         this.scene.getTransformMatrix(),
         this.scene.getProjectionMatrix(),
-        this.camera.viewport.toGlobal(
-          this.scene.getEngine().getRenderWidth(),
-          this.scene.getEngine().getRenderHeight()
-        )
+        viewport
       );
 
-      // Calculate distance from mouse to the 2D line segment
+      // Calculate screen-space line length
+      const lineLengthPos = Math.sqrt(
+        (endScreenPos.x - startScreen.x) ** 2 +
+        (endScreenPos.y - startScreen.y) ** 2
+      );
+      const lineLengthNeg = Math.sqrt(
+        (endScreenNeg.x - startScreen.x) ** 2 +
+        (endScreenNeg.y - startScreen.y) ** 2
+      );
+
+      // Use whichever direction gives longer screen projection
+      let axisEndScreen = lineLengthPos > lineLengthNeg ? endScreenPos : endScreenNeg;
+      let lineLength = Math.max(lineLengthPos, lineLengthNeg);
+
+      // Special case: If axis line is very short in screen space (viewing along axis)
+      // This happens when looking down at Y-axis from above
+      if (lineLength < 5) {
+        // For Y-axis when looking down, check if mouse is near the start point
+        // and prioritize Y-axis since user likely wants to draw vertically
+        if (axis.name === 'y') {
+          const distToStart = Math.sqrt(
+            (mouseX - startScreen.x) ** 2 +
+            (mouseY - startScreen.y) ** 2
+          );
+          // If mouse is very close to start point, consider Y-axis
+          if (distToStart < this.AXIS_SCREEN_THRESHOLD * 2) {
+            // Check if mouse moved UP on screen (lower Y value = up)
+            // This suggests user wants to draw along Y-axis
+            if (mouseY < startScreen.y - 10) {
+              return 'y'; // Prioritize Y-axis for upward mouse movement
+            }
+          }
+        }
+        continue; // Skip this axis if line is too short
+      }
+
+      // Calculate distance from mouse to the 2D line (use full line, not just segment)
       const dist = this.pointToLineDistance2D(
         mouseX, mouseY,
         startScreen.x, startScreen.y,
-        endScreen.x, endScreen.y
+        axisEndScreen.x, axisEndScreen.y
       );
 
       if (dist < minDistance) {
@@ -461,7 +508,8 @@ export class LineTool extends BaseTool {
   }
 
   /**
-   * Calculate perpendicular distance from a point to a 2D line segment
+   * Calculate perpendicular distance from a point to an infinite 2D line
+   * (not clamped to segment - treats line as infinite)
    */
   private pointToLineDistance2D(
     px: number, py: number,
@@ -477,14 +525,13 @@ export class LineTool extends BaseTool {
       return Math.sqrt((px - x1) ** 2 + (py - y1) ** 2);
     }
 
-    // Project point onto line, clamped to segment
-    let t = ((px - x1) * dx + (py - y1) * dy) / lengthSq;
-    t = Math.max(0, Math.min(1, t));
+    // Calculate perpendicular distance to infinite line (not segment)
+    // Using formula: |ax + by + c| / sqrt(a² + b²)
+    // Where line is: (y2-y1)x - (x2-x1)y + (x2-x1)y1 - (y2-y1)x1 = 0
+    const numerator = Math.abs(dy * px - dx * py + dx * y1 - dy * x1);
+    const denominator = Math.sqrt(lengthSq);
 
-    const nearestX = x1 + t * dx;
-    const nearestY = y1 + t * dy;
-
-    return Math.sqrt((px - nearestX) ** 2 + (py - nearestY) ** 2);
+    return numerator / denominator;
   }
 
   /**
