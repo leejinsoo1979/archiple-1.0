@@ -397,6 +397,16 @@ const FloorplanCanvas = ({
 
       // Mark renderer as dirty to trigger re-render
       renderer.markDirty();
+
+      // Notify parent for 3D sync
+      if (onDataChange) {
+        const floorplan = sceneManager.objectManager.getFloorplan();
+        const doors = sceneManager.objectManager.getAllDoors();
+        const windows = sceneManager.objectManager.getAllWindows();
+        const detectedRooms = sceneManager.objectManager.getAllRooms();
+        const babylonData = convertFloorplanToBabylon(floorplan, doors, windows, detectedRooms);
+        onDataChange(babylonData);
+      }
     });
     eventBus.on(FloorEvents.POINT_UPDATED, () => {
       try {
