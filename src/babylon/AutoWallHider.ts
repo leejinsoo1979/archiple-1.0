@@ -10,7 +10,10 @@
 import {
   Scene,
   ArcRotateCamera,
+  UniversalCamera,
+  Camera,
   AbstractMesh,
+  Vector3,
 } from '@babylonjs/core';
 
 export interface AutoWallHiderOptions {
@@ -26,6 +29,8 @@ export interface AutoWallHiderOptions {
   multiRay?: boolean;
   /** Camera beta angle threshold for showing ceiling (radians) */
   ceilingBetaThreshold?: number;
+  /** Always show ceiling (useful for play mode with FPS camera) */
+  alwaysShowCeiling?: boolean;
 }
 
 const DEFAULT_OPTIONS: AutoWallHiderOptions = {
@@ -35,6 +40,7 @@ const DEFAULT_OPTIONS: AutoWallHiderOptions = {
   fadeSpeed: 0.15,
   multiRay: true,
   ceilingBetaThreshold: Math.PI / 2, // Show ceiling when looking up (beta > 90 degrees)
+  alwaysShowCeiling: false,
 };
 
 export class AutoWallHider {
@@ -100,8 +106,9 @@ export class AutoWallHider {
    * Update wall visibility based on camera position
    * Uses wall normal direction - hides walls whose inside faces the camera
    * This creates the clean "corner view" like professional interior design tools
+   * Supports both ArcRotateCamera (edit mode) and UniversalCamera (play mode)
    */
-  public update(camera: ArcRotateCamera): void {
+  public update(camera: ArcRotateCamera | UniversalCamera | Camera): void {
     if (!this.enabled) return;
 
     // Throttle updates for performance
@@ -115,7 +122,8 @@ export class AutoWallHider {
     if (wallMeshes.length === 0) return;
 
     const camPos = camera.position;
-    const roomCenter = camera.target; // Use camera target as room center
+    // Get room center - ArcRotateCamera has target, UniversalCamera uses getTarget()
+    const roomCenter = (camera as ArcRotateCamera).target || camera.getTarget();
 
     // For each wall, hide if it's BETWEEN camera and room center
     for (const wall of wallMeshes) {
@@ -167,14 +175,51 @@ export class AutoWallHider {
 
   /**
    * Show ceiling when camera looks up (high beta angle)
+   * Supports both ArcRotateCamera (edit mode) and UniversalCamera (play mode)
    */
-  private updateCeilingVisibility(camera: ArcRotateCamera): void {
+  private updateCeilingVisibility(camera: ArcRotateCamera | UniversalCamera | Camera): void {
     const ceilingMeshes = this.getCeilingMeshes();
     if (ceilingMeshes.length === 0) return;
 
+    // Always show ceiling if option is set (useful for play mode)
+    if (this.options.alwaysShowCeiling) {
+      for (const ceiling of ceilingMeshes) {
+        ceiling.visibility = this.options.visibleVisibility!;
+        ceiling.isPickable = true;
+      }
+      return;
+    }
+
     const threshold = this.options.ceilingBetaThreshold!;
-    // beta > threshold means looking more upward
-    const shouldShow = camera.beta > threshold;
+    let shouldShow = false;
+
+    // Check camera type and calculate viewing angle accordingly
+    if ((camera as ArcRotateCamera).beta !== undefined) {
+      // ArcRotateCamera - use beta angle directly
+      const arcCamera = camera as ArcRotateCamera;
+      // beta > threshold means looking more upward (towards ceiling)
+      shouldShow = arcCamera.beta > threshold;
+    } else {
+      // UniversalCamera or other cameras - calculate angle from direction vector
+      // Get the camera's forward direction
+      const direction = camera.getDirection(Vector3.Forward());
+      // Calculate the vertical angle (pitch)
+      // direction.y > 0 means looking up, direction.y < 0 means looking down
+      // For ceiling visibility in FPS mode, show ceiling when looking up significantly
+      // or always show it since player is inside the room
+      const pitch = Math.asin(Math.max(-1, Math.min(1, direction.y)));
+      // Convert pitch to equivalent beta: beta = PI/2 - pitch
+      // When looking straight ahead: pitch=0, beta=PI/2
+      // When looking up: pitch>0, beta<PI/2
+      // When looking down: pitch<0, beta>PI/2
+      const equivalentBeta = Math.PI / 2 - pitch;
+      shouldShow = equivalentBeta > threshold;
+
+      // In play mode (FPS), always show ceiling since user is inside the room
+      // The ceiling should be visible when walking around
+      shouldShow = true;
+    }
+
     const targetVis = shouldShow ? this.options.visibleVisibility! : this.options.hiddenVisibility!;
 
     for (const ceiling of ceilingMeshes) {
@@ -310,10 +355,11 @@ export function tagAsWall(mesh: AbstractMesh, wallId?: string): void {
 
 /**
  * Helper: Create AutoWallHider with scene.onBeforeRenderObservable integration
+ * Supports both ArcRotateCamera (edit mode) and UniversalCamera (play mode)
  */
 export function createAutoWallHider(
   scene: Scene,
-  camera: ArcRotateCamera,
+  camera: ArcRotateCamera | UniversalCamera | Camera,
   options?: AutoWallHiderOptions
 ): AutoWallHider {
   const hider = new AutoWallHider(scene, options);

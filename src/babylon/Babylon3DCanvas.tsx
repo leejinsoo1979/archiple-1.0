@@ -1329,9 +1329,12 @@ const Babylon3DCanvas = forwardRef(function Babylon3DCanvas(
 
       engine.runRenderLoop(() => {
         // Update wall visibility based on camera angle (raycasting cutaway)
+        // Supports both ArcRotateCamera (edit mode) and UniversalCamera (play mode)
         const activeCamera = scene.activeCamera;
-        if (activeCamera instanceof ArcRotateCamera && autoWallHiderRef.current) {
-          autoWallHiderRef.current.update(activeCamera);
+        if (activeCamera && autoWallHiderRef.current) {
+          if (activeCamera instanceof ArcRotateCamera || activeCamera instanceof UniversalCamera) {
+            autoWallHiderRef.current.update(activeCamera);
+          }
         }
 
         // Update camera gizmo (throttled to every 3 frames for performance)
