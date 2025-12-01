@@ -106,4 +106,8 @@ export abstract class BaseTool implements IBaseTool {
   protected get selectionSystem() {
     return this.context?.selectionSystem ?? null;
   }
+
+  protected get kernel() {
+    return this.context?.kernel ?? null;
+  }
 }

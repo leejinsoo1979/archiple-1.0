@@ -1,5 +1,8 @@
 /**
  * Line Tool - SketchUp-style line drawing with inference
+ *
+ * Integrates with HalfEdgeMesh kernel for topology management.
+ * Creates vertices and edges in the kernel, then renders via Babylon.js.
  */
 
 import {
@@ -13,6 +16,7 @@ import {
 } from '@babylonjs/core';
 import { BaseTool } from './BaseTool';
 import { LineToolState, PickResultInfo } from '../types';
+import { VertexID, EdgeID } from '../core/kernel';
 
 export class LineTool extends BaseTool {
   name = 'line' as const;
@@ -25,6 +29,10 @@ export class LineTool extends BaseTool {
     previewLine: null,
     inferenceAxis: null,
   };
+
+  // Track kernel vertex IDs for continuous line drawing
+  private startVertexId: VertexID | null = null;
+  private lastCreatedEdgeId: EdgeID | null = null;
 
   // Inference colors
   private readonly AXIS_COLORS = {
@@ -57,6 +65,9 @@ export class LineTool extends BaseTool {
       previewLine: null,
       inferenceAxis: null,
     };
+    // Reset kernel tracking
+    this.startVertexId = null;
+    this.lastCreatedEdgeId = null;
   }
 
   // ============================================
@@ -78,6 +89,17 @@ export class LineTool extends BaseTool {
       this.state.isDrawing = true;
       this.state.startPoint = point.clone();
       this.state.currentPoint = point.clone();
+
+      // Add vertex to kernel (with auto-snap to existing vertices)
+      if (this.kernel) {
+        const snapType = pickResult.snapped ? pickResult.snapType : undefined;
+        const vertex = this.kernel.addVertex(point, {
+          snapThreshold: this.SNAP_THRESHOLD,
+          mergeCoincident: true,
+          metadata: snapType ? { snapType: snapType as 'endpoint' | 'midpoint' | 'intersection' | 'grid' } : undefined,
+        });
+        this.startVertexId = vertex.id;
+      }
 
       // Add inference point for SketchUp-style inference
       this.snapSystem?.addInferencePoint(point, 'lineStart');
@@ -281,7 +303,29 @@ export class LineTool extends BaseTool {
     // Minimum length check
     if (distance < 0.001) return;
 
-    // Create the actual edge
+    // Add to kernel topology
+    let endVertexId: VertexID | null = null;
+    if (this.kernel && this.startVertexId) {
+      // Add end vertex (with auto-snap to existing vertices)
+      const endVertex = this.kernel.addVertex(end, {
+        snapThreshold: this.SNAP_THRESHOLD,
+        mergeCoincident: true,
+      });
+      endVertexId = endVertex.id;
+
+      // Add edge between vertices
+      const edge = this.kernel.addEdge(this.startVertexId, endVertexId, {
+        createTwin: true,
+      });
+      this.lastCreatedEdgeId = edge?.id ?? null;
+
+      // Update start vertex for continuous drawing
+      this.startVertexId = endVertexId;
+
+      console.log(`[LineTool] Kernel: Added edge ${edge?.id} from ${this.startVertexId} to ${endVertexId}`);
+    }
+
+    // Create the visual edge (Babylon.js mesh)
     this.context.createEdge(start, end, {
       color: '#000000',
       metadata: {
@@ -289,6 +333,10 @@ export class LineTool extends BaseTool {
         startPoint: { x: start.x, y: start.y, z: start.z },
         endPoint: { x: end.x, y: end.y, z: end.z },
         length: distance,
+        // Link to kernel topology
+        kernelEdgeId: this.lastCreatedEdgeId,
+        kernelStartVertexId: this.startVertexId,
+        kernelEndVertexId: endVertexId,
       },
     });
 

@@ -3,6 +3,7 @@
  */
 
 import { Scene, Mesh, Vector3, ArcRotateCamera, PointerInfo } from '@babylonjs/core';
+import { HalfEdgeMesh } from '../core/kernel';
 
 // ============================================
 // Tool System Types
@@ -31,6 +32,9 @@ export interface ToolContext {
   scene: Scene;
   camera: ArcRotateCamera | null;
   canvas: HTMLCanvasElement | null;
+
+  // Geometry kernel (half-edge mesh for topology)
+  kernel: HalfEdgeMesh;
 
   // Snap system
   snapSystem: ISnapSystem;
