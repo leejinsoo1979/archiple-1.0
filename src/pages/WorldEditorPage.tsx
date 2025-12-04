@@ -3199,18 +3199,39 @@ const WorldEditorPage: React.FC = () => {
                         // Select all
                         const allIds = new Set(worldObjects.map(o => o.id));
                         setSelectedObjectIds(allIds);
-                        // Highlight all meshes
-                        if (highlightLayerRef.current) {
-                          const themeColorHex = themeColor || '#10b981';
-                          const r = parseInt(themeColorHex.slice(1, 3), 16) / 255;
-                          const g = parseInt(themeColorHex.slice(3, 5), 16) / 255;
-                          const b = parseInt(themeColorHex.slice(5, 7), 16) / 255;
-                          allIds.forEach(id => {
-                            const mesh = loadedAssetsRef.current.get(id);
-                            if (mesh) {
-                              highlightLayerRef.current!.addMesh(mesh as Mesh, new Color3(r, g, b));
+
+                        // Clear and rebuild selectedMeshesRef for multi-selection gizmo
+                        selectedMeshesRef.current.clear();
+
+                        // Highlight all meshes and add to selectedMeshesRef
+                        const themeColorHex = themeColor || '#10b981';
+                        const r = parseInt(themeColorHex.slice(1, 3), 16) / 255;
+                        const g = parseInt(themeColorHex.slice(3, 5), 16) / 255;
+                        const b = parseInt(themeColorHex.slice(5, 7), 16) / 255;
+
+                        let firstMesh: AbstractMesh | null = null;
+                        allIds.forEach(id => {
+                          const mesh = loadedAssetsRef.current.get(id);
+                          if (mesh) {
+                            // Add to selectedMeshesRef for gizmo multi-move
+                            selectedMeshesRef.current.add(mesh);
+
+                            // Highlight
+                            if (highlightLayerRef.current) {
+                              highlightLayerRef.current.addMesh(mesh as Mesh, new Color3(r, g, b));
                             }
-                          });
+
+                            // Track first mesh for gizmo attachment
+                            if (!firstMesh) {
+                              firstMesh = mesh;
+                            }
+                          }
+                        });
+
+                        // Attach gizmo to first mesh (others will follow via onDrag)
+                        if (firstMesh && gizmoManagerRef.current) {
+                          selectedMeshRef.current = firstMesh;
+                          gizmoManagerRef.current.attachToMesh(firstMesh);
                         }
                       }}
                     >
@@ -3222,6 +3243,10 @@ const WorldEditorPage: React.FC = () => {
                         // Deselect all
                         setSelectedObjectIds(new Set());
                         setLastSelectedId(null);
+
+                        // Clear multi-selection ref
+                        selectedMeshesRef.current.clear();
+
                         // Remove all highlights
                         if (highlightLayerRef.current) {
                           worldObjects.forEach(obj => {
@@ -3401,6 +3426,9 @@ const WorldEditorPage: React.FC = () => {
                         const rootIds = new Set(rootObjects.map(o => o.id));
                         setSelectedObjectIds(rootIds);
 
+                        // Clear and rebuild selectedMeshesRef for multi-selection gizmo
+                        selectedMeshesRef.current.clear();
+
                         // 기존 하이라이트 제거
                         if (highlightLayerRef.current) {
                           worldObjects.forEach(obj => {
@@ -3409,25 +3437,35 @@ const WorldEditorPage: React.FC = () => {
                           });
                         }
 
-                        // 부모 객체들만 하이라이트
-                        if (highlightLayerRef.current) {
-                          const themeColorHex = themeColor || '#10b981';
-                          const r = parseInt(themeColorHex.slice(1, 3), 16) / 255;
-                          const g = parseInt(themeColorHex.slice(3, 5), 16) / 255;
-                          const b = parseInt(themeColorHex.slice(5, 7), 16) / 255;
-                          rootIds.forEach(id => {
-                            const mesh = loadedAssetsRef.current.get(id);
-                            if (mesh) highlightLayerRef.current!.addMesh(mesh as Mesh, new Color3(r, g, b));
-                          });
-                        }
+                        // 부모 객체들만 하이라이트 & selectedMeshesRef에 추가
+                        const themeColorHex = themeColor || '#10b981';
+                        const r = parseInt(themeColorHex.slice(1, 3), 16) / 255;
+                        const g = parseInt(themeColorHex.slice(3, 5), 16) / 255;
+                        const b = parseInt(themeColorHex.slice(5, 7), 16) / 255;
 
-                        // 첫 번째 부모에 기즈모 붙이기
-                        if (rootObjects.length > 0) {
-                          const firstMesh = loadedAssetsRef.current.get(rootObjects[0].id);
-                          if (firstMesh) {
-                            selectedMeshRef.current = firstMesh;
-                            gizmoManagerRef.current?.attachToMesh(firstMesh);
+                        let firstMesh: AbstractMesh | null = null;
+                        rootIds.forEach(id => {
+                          const mesh = loadedAssetsRef.current.get(id);
+                          if (mesh) {
+                            // Add to selectedMeshesRef for gizmo multi-move
+                            selectedMeshesRef.current.add(mesh);
+
+                            // Highlight
+                            if (highlightLayerRef.current) {
+                              highlightLayerRef.current.addMesh(mesh as Mesh, new Color3(r, g, b));
+                            }
+
+                            // Track first mesh for gizmo attachment
+                            if (!firstMesh) {
+                              firstMesh = mesh;
+                            }
                           }
+                        });
+
+                        // Attach gizmo to first mesh (others will follow via onDrag)
+                        if (firstMesh && gizmoManagerRef.current) {
+                          selectedMeshRef.current = firstMesh;
+                          gizmoManagerRef.current.attachToMesh(firstMesh);
                         }
                       }}
                     >
@@ -3436,6 +3474,9 @@ const WorldEditorPage: React.FC = () => {
                     <button
                       className={styles.selectNoneBtn}
                       onClick={() => {
+                        // Clear multi-selection ref
+                        selectedMeshesRef.current.clear();
+
                         if (highlightLayerRef.current) {
                           worldObjects.forEach(obj => {
                             const mesh = loadedAssetsRef.current.get(obj.id);
@@ -3443,6 +3484,7 @@ const WorldEditorPage: React.FC = () => {
                           });
                         }
                         setSelectedObjectIds(new Set());
+                        selectedMeshRef.current = null;
                         gizmoManagerRef.current?.attachToMesh(null);
                       }}
                     >
