@@ -772,7 +772,19 @@ const WorldEditorPage: React.FC = () => {
           const delta = attachedMesh.position.subtract(lastPosition);
           selectedMeshesRef.current.forEach(mesh => {
             if (mesh !== attachedMesh) {
-              mesh.position.addInPlace(delta);
+              // Skip if parent is also selected (parent movement already moves this mesh)
+              let parentInSelection = false;
+              let parent = mesh.parent;
+              while (parent) {
+                if (selectedMeshesRef.current.has(parent as AbstractMesh)) {
+                  parentInSelection = true;
+                  break;
+                }
+                parent = parent.parent;
+              }
+              if (!parentInSelection) {
+                mesh.position.addInPlace(delta);
+              }
             }
           });
           lastPosition = attachedMesh.position.clone();
@@ -801,7 +813,19 @@ const WorldEditorPage: React.FC = () => {
           const delta = attachedMesh.rotation.subtract(lastRotation);
           selectedMeshesRef.current.forEach(mesh => {
             if (mesh !== attachedMesh) {
-              mesh.rotation.addInPlace(delta);
+              // Skip if parent is also selected
+              let parentInSelection = false;
+              let parent = mesh.parent;
+              while (parent) {
+                if (selectedMeshesRef.current.has(parent as AbstractMesh)) {
+                  parentInSelection = true;
+                  break;
+                }
+                parent = parent.parent;
+              }
+              if (!parentInSelection) {
+                mesh.rotation.addInPlace(delta);
+              }
             }
           });
           lastRotation = attachedMesh.rotation.clone();
@@ -835,9 +859,21 @@ const WorldEditorPage: React.FC = () => {
           );
           selectedMeshesRef.current.forEach(mesh => {
             if (mesh !== attachedMesh) {
-              mesh.scaling.x *= ratio.x;
-              mesh.scaling.y *= ratio.y;
-              mesh.scaling.z *= ratio.z;
+              // Skip if parent is also selected
+              let parentInSelection = false;
+              let parent = mesh.parent;
+              while (parent) {
+                if (selectedMeshesRef.current.has(parent as AbstractMesh)) {
+                  parentInSelection = true;
+                  break;
+                }
+                parent = parent.parent;
+              }
+              if (!parentInSelection) {
+                mesh.scaling.x *= ratio.x;
+                mesh.scaling.y *= ratio.y;
+                mesh.scaling.z *= ratio.z;
+              }
             }
           });
           lastScaling = attachedMesh.scaling.clone();
