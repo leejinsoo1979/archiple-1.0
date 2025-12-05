@@ -45,6 +45,9 @@ import '@babylonjs/loaders/OBJ';
 import { GridMaterial } from '@babylonjs/materials/grid';
 import { SkyMaterial } from '@babylonjs/materials/sky';
 import styles from './WorldEditorPage.module.css';
+import { MapSelector } from '../world/components';
+import type { SelectedArea } from '../world/components/MapSelector';
+import { fetchCityData, fetchVWorldCityData, generateCityMeshes, disposeCityMeshes, type CityMeshes } from '../world/utils';
 
 // ARCHIPLE WORLD Logo component with theme color support
 interface ArchipleWorldLogoProps {
@@ -97,6 +100,7 @@ interface BuildingOptions {
   lod: 'low' | 'medium' | 'high';
   showRoofs: boolean;
   colorMode: 'uniform' | 'height' | 'satellite';
+  dataSource: 'osm' | 'vworld';  // OSM (OpenStreetMap) or V-World (Korean National Spatial Data)
 }
 
 interface MeshOptions {
@@ -187,6 +191,7 @@ const WorldEditorPage: React.FC = () => {
       lod: 'medium',
       showRoofs: true,
       colorMode: 'height',
+      dataSource: 'vworld',  // Use V-World by default for Korean buildings
     },
     mesh: {
       hollow: false,
@@ -403,6 +408,12 @@ const WorldEditorPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'third-person' | 'first-person' | 'iso'>('third-person');
   const viewModeRef = useRef<'third-person' | 'first-person' | 'iso'>('third-person');
 
+  // Spawn point state (character start position)
+  const [spawnPoint, setSpawnPoint] = useState<{ x: number; y: number; z: number }>({ x: 0, y: 0, z: 0 });
+  const [isSettingSpawnPoint, setIsSettingSpawnPoint] = useState(false);
+  const isSettingSpawnPointRef = useRef(false);
+  const spawnMarkerRef = useRef<Mesh | null>(null);
+
   // Character refs
   const characterRef = useRef<AbstractMesh | null>(null);
   const characterRootRef = useRef<AbstractMesh | null>(null);
@@ -544,11 +555,13 @@ const WorldEditorPage: React.FC = () => {
     );
     arcCamera.attachControl(canvas3DRef.current, true);
     arcCamera.lowerRadiusLimit = 10;
-    arcCamera.upperRadiusLimit = 500;
+    arcCamera.upperRadiusLimit = 5000; // 10x zoom out for large world view
     arcCamera.lowerBetaLimit = 0.1; // Prevent looking from below
     arcCamera.upperBetaLimit = Math.PI / 2 - 0.1; // Prevent looking straight down
     arcCamera.wheelDeltaPercentage = 0.01;
     arcCamera.panningSensibility = 50;
+    arcCamera.minZ = 1; // Near clipping plane
+    arcCamera.maxZ = 10000; // Far clipping plane for large world view
     arcCameraRef.current = arcCamera;
 
     // Create 3rd person ArcRotateCamera (for play mode - FPS-style mouse rotation)
@@ -592,9 +605,11 @@ const WorldEditorPage: React.FC = () => {
       scene
     );
     isoCamera.lowerRadiusLimit = 15;
-    isoCamera.upperRadiusLimit = 100;
+    isoCamera.upperRadiusLimit = 2000; // 20x zoom out for large world view in ISO mode
     isoCamera.lowerBetaLimit = Math.PI / 6;  // Prevent looking from below
     isoCamera.upperBetaLimit = Math.PI / 2.5; // Prevent looking straight down
+    isoCamera.minZ = 1; // Near clipping plane
+    isoCamera.maxZ = 5000; // Far clipping plane for large world view
     isoCameraRef.current = isoCamera;
 
     // Create lights
@@ -894,6 +909,19 @@ const WorldEditorPage: React.FC = () => {
       if (playModeRef.current) return;
 
       if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
+        // Spawn point setting mode (use ref to get current value)
+        if (isSettingSpawnPointRef.current && pointerInfo.pickInfo?.hit && pointerInfo.pickInfo.pickedPoint) {
+          const point = pointerInfo.pickInfo.pickedPoint;
+          setSpawnPoint({ x: point.x, y: 0, z: point.z });
+          if (spawnMarkerRef.current) {
+            spawnMarkerRef.current.position.x = point.x;
+            spawnMarkerRef.current.position.z = point.z;
+          }
+          setIsSettingSpawnPoint(false);
+          console.log('[WorldEditor] Spawn point set to:', point.x, point.z);
+          return;
+        }
+
         // 허공 클릭 시 선택 해제
         if (!pointerInfo.pickInfo?.hit) {
           // Deselect all
@@ -1110,6 +1138,34 @@ const WorldEditorPage: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
 
+    // Create spawn point marker (character start position indicator)
+    const spawnMarker = MeshBuilder.CreateCylinder('spawnMarker', {
+      height: 0.1,
+      diameterTop: 1.5,
+      diameterBottom: 1.5,
+      tessellation: 32
+    }, scene);
+    spawnMarker.position = new Vector3(0, 0.05, 0);
+    const spawnMarkerMat = new StandardMaterial('spawnMarkerMat', scene);
+    spawnMarkerMat.diffuseColor = new Color3(0, 0.8, 1); // Cyan color
+    spawnMarkerMat.emissiveColor = new Color3(0, 0.4, 0.5);
+    spawnMarkerMat.alpha = 0.7;
+    spawnMarker.material = spawnMarkerMat;
+    spawnMarker.isPickable = false;
+    spawnMarkerRef.current = spawnMarker;
+
+    // Add arrow on spawn marker
+    const spawnArrow = MeshBuilder.CreateCylinder('spawnArrow', {
+      height: 1.5,
+      diameterTop: 0,
+      diameterBottom: 0.5,
+      tessellation: 8
+    }, scene);
+    spawnArrow.position = new Vector3(0, 0.85, 0);
+    spawnArrow.material = spawnMarkerMat;
+    spawnArrow.parent = spawnMarker;
+    spawnArrow.isPickable = false;
+
     // Render loop
     engine.runRenderLoop(() => {
       scene.render();
@@ -1211,10 +1267,140 @@ const WorldEditorPage: React.FC = () => {
     }
   }, [activeTool, selectedObjectIds]);
 
-  // Handle area selection (STEP 1)
-  const handleAreaSelect = useCallback((area: WorldArea) => {
+  // Reference to current city meshes for cleanup
+  const cityMeshesRef = useRef<CityMeshes | null>(null);
+
+  // Handle area selection (STEP 1) and generate 3D city from OSM data
+  const handleAreaSelect = useCallback(async (area: WorldArea) => {
     setWorldConfig(prev => ({ ...prev, area }));
-  }, []);
+    setMapImportOpen(false);
+
+    // Generate 3D city from OSM data
+    if (sceneRef.current) {
+      setIsLoading(true);
+      setLoadingMessage('Fetching OpenStreetMap data...');
+      setLoadingProgress(10);
+
+      try {
+        // Dispose existing city meshes if any
+        if (cityMeshesRef.current) {
+          disposeCityMeshes(cityMeshesRef.current);
+          cityMeshesRef.current = null;
+        }
+
+        // Also remove legacy terrain
+        const existingTerrain = sceneRef.current.getMeshByName('terrain');
+        if (existingTerrain) {
+          existingTerrain.dispose();
+        }
+
+        setLoadingProgress(20);
+
+        // Fetch data based on selected data source
+        const bounds = {
+          minLat: area.minLat,
+          minLng: area.minLng,
+          maxLat: area.maxLat,
+          maxLng: area.maxLng,
+        };
+
+        let cityData;
+        if (worldConfig.buildings.dataSource === 'vworld') {
+          setLoadingMessage('Downloading V-World building data (Korean National Spatial Data)...');
+          // Fetch V-World buildings + OSM roads/water
+          const vworldBuildings = await fetchVWorldCityData(bounds);
+          const osmData = await fetchCityData(bounds);
+
+          // Combine: V-World buildings + OSM roads/water/green
+          cityData = {
+            ...vworldBuildings,
+            roads: osmData.roads,
+            water: osmData.water,
+            green: osmData.green,
+          };
+          console.log(`[VWorld+OSM] Combined: ${cityData.buildings.length} buildings, ${cityData.roads.length} roads`);
+        } else {
+          setLoadingMessage('Downloading OSM building & road data...');
+          cityData = await fetchCityData(bounds);
+        }
+
+        setLoadingProgress(50);
+        setLoadingMessage(`Creating ${cityData.buildings.length} buildings...`);
+
+        // Generate 3D meshes from OSM data
+        const meshes = await generateCityMeshes(
+          cityData,
+          sceneRef.current,
+          {
+            buildingsEnabled: worldConfig.buildings.enabled,
+            roadsEnabled: true,
+            waterEnabled: true, // Re-enabled - only closed water bodies
+            greenEnabled: false, // Disabled - polygon issues causing cyan artifacts
+            groundEnabled: true,
+            terrainEnabled: true, // Enable real elevation terrain
+            buildingColor: '#e5e7eb', // Light gray buildings
+            roadColor: '#6b7280', // Medium gray roads
+            waterColor: '#60a5fa', // Blue water
+            greenColor: '#4ade80', // Green areas
+            groundColor: '#a3a87a', // Olive/tan terrain color
+            heightScale: worldConfig.terrain.verticalExaggeration,
+            terrainScale: worldConfig.terrain.verticalExaggeration, // 1:1 real terrain elevation
+            terrainResolution: 100, // Higher resolution for smoother terrain
+            useSatelliteTexture: true, // Enable satellite texture on terrain
+          }
+        );
+
+        cityMeshesRef.current = meshes;
+
+        setLoadingProgress(90);
+        setLoadingMessage('Finalizing city...');
+
+        // Add to world objects for hierarchy panel
+        const newObjects: WorldObject[] = [];
+
+        // Add city root
+        newObjects.push({
+          id: `city_${Date.now()}`,
+          name: area.name || 'Imported City',
+          type: 'group',
+          position: { x: 0, y: 0, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+          visible: true,
+          locked: false,
+        });
+
+        // Add summary info
+        console.log(`[City] Generated:`);
+        console.log(`  - Buildings: ${meshes.buildings.length}`);
+        console.log(`  - Roads: ${meshes.roads.length}`);
+        console.log(`  - Water: ${meshes.water.length}`);
+        console.log(`  - Green: ${meshes.green.length}`);
+
+        setWorldObjects(prev => [...prev, ...newObjects]);
+        setLoadingProgress(100);
+
+        // Move camera to view the city with terrain
+        const camera = sceneRef.current.activeCamera;
+        if (camera && camera instanceof ArcRotateCamera) {
+          // Set target higher to account for terrain elevation
+          camera.setTarget(new Vector3(0, 100, 0));
+          camera.radius = 1500; // Increased for terrain visibility
+          camera.alpha = Math.PI / 4;
+          camera.beta = Math.PI / 3.5; // Slightly lower angle to see terrain slope
+        }
+
+        setTimeout(() => {
+          setIsLoading(false);
+        }, 500);
+
+      } catch (error) {
+        console.error('Failed to generate city:', error);
+        setIsLoading(false);
+        setLoadingMessage('Failed to generate city. Please try a smaller area.');
+      }
+    }
+  }, [worldConfig.terrain.verticalExaggeration, worldConfig.buildings.enabled, worldConfig.buildings.dataSource]);
 
   // Proceed to next step
   const handleNextStep = useCallback(() => {
@@ -1302,6 +1488,11 @@ const WorldEditorPage: React.FC = () => {
       if (yAxis) yAxis.isVisible = !playMode;
       if (zAxis) zAxis.isVisible = !playMode;
 
+      // Hide spawn marker in play mode
+      if (spawnMarkerRef.current) {
+        spawnMarkerRef.current.isVisible = !playMode;
+      }
+
       // Detach gizmo in play mode
       const gizmoManager = gizmoManagerRef.current;
       if (gizmoManager) {
@@ -1347,7 +1538,8 @@ const WorldEditorPage: React.FC = () => {
         );
 
         const characterRoot = new Mesh('characterRoot', scene);
-        characterRoot.position = new Vector3(0, 0, 0);
+        // Use spawn point for character start position
+        characterRoot.position = new Vector3(spawnPoint.x, 0, spawnPoint.z);
         characterRoot.isVisible = false;
 
         // Setup meshes and calculate height
@@ -1813,6 +2005,11 @@ const WorldEditorPage: React.FC = () => {
   }, [playMode, currentStep]);
 
   // Handle camera switching when viewMode changes during play mode
+  // Sync isSettingSpawnPointRef with state
+  useEffect(() => {
+    isSettingSpawnPointRef.current = isSettingSpawnPoint;
+  }, [isSettingSpawnPoint]);
+
   useEffect(() => {
     if (!sceneReady) return;
     // Sync viewModeRef with viewMode state
@@ -2429,6 +2626,146 @@ const WorldEditorPage: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTool, cancelRoadDrawing]);
 
+  // Handle model file import
+  const handleModelFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !sceneRef.current) return;
+
+    const scene = sceneRef.current;
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+
+    // FBX는 Babylon.js에서 직접 지원하지 않음
+    if (ext === 'fbx') {
+      alert('FBX 파일은 직접 지원되지 않습니다.\nGLB/GLTF로 변환 후 사용하세요.\n\n변환 도구: https://products.aspose.app/3d/conversion/fbx-to-glb');
+      e.target.value = '';
+      return;
+    }
+
+    // 확장자에 따른 플러그인 힌트
+    let pluginExtension = '.glb';
+    if (ext === 'obj') pluginExtension = '.obj';
+    else if (ext === 'gltf') pluginExtension = '.gltf';
+    else if (ext === 'glb') pluginExtension = '.glb';
+
+    const fileUrl = URL.createObjectURL(file);
+    console.log('[WorldEditor] Loading model:', file.name, 'extension:', pluginExtension);
+
+    SceneLoader.ImportMesh(
+      '',
+      '',
+      fileUrl,
+      scene,
+      (meshes) => {
+        console.log(`[WorldEditor] ${ext.toUpperCase()} loaded:`, meshes.length, 'meshes');
+
+        // Create a root container for the imported model
+        const rootMesh = new Mesh(`imported_${file.name}_${Date.now()}`, scene);
+        rootMesh.position = new Vector3(0, 0, 0);
+        rootMesh.checkCollisions = true;
+
+        // Calculate bounding box for all meshes
+        let minX = Infinity, minY = Infinity, minZ = Infinity;
+        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+        meshes.forEach((mesh) => {
+          if (mesh.parent === null) {
+            mesh.parent = rootMesh;
+          }
+          mesh.checkCollisions = true;
+
+          const boundingInfo = mesh.getBoundingInfo();
+          if (boundingInfo) {
+            const min = boundingInfo.boundingBox.minimumWorld;
+            const max = boundingInfo.boundingBox.maximumWorld;
+            minX = Math.min(minX, min.x);
+            minY = Math.min(minY, min.y);
+            minZ = Math.min(minZ, min.z);
+            maxX = Math.max(maxX, max.x);
+            maxY = Math.max(maxY, max.y);
+            maxZ = Math.max(maxZ, max.z);
+          }
+        });
+
+        // Position model so its bottom is on the ground (Y=0)
+        if (minY !== Infinity) {
+          rootMesh.position.y = -minY;
+        }
+
+        // Generate unique ID for layer management
+        const uid = `imported_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        rootMesh.name = uid;
+
+        rootMesh.metadata = {
+          type: 'imported_model',
+          fileName: file.name,
+          fileType: ext,
+          boundingBox: { minX, minY, minZ, maxX, maxY, maxZ },
+          isMapElement: true,
+          hasCollision: true,
+          uid: uid
+        };
+
+        loadedAssetsRef.current.set(uid, rootMesh);
+
+        // ADD TO LAYERS
+        const newObjects: WorldObject[] = [];
+        const baseName = file.name.replace(/\.[^/.]+$/, '');
+
+        newObjects.push({
+          id: uid,
+          name: baseName,
+          type: 'group',
+          position: { x: rootMesh.position.x, y: rootMesh.position.y, z: rootMesh.position.z },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+          visible: true,
+          locked: false,
+          parentId: undefined,
+          children: [],
+        });
+
+        meshes.forEach((mesh, index) => {
+          if (mesh.name && mesh.name !== '__root__') {
+            const meshUid = `${uid}_mesh_${index}`;
+            mesh.metadata = { ...mesh.metadata, uid: meshUid, selectable: true };
+            loadedAssetsRef.current.set(meshUid, mesh);
+
+            newObjects.push({
+              id: meshUid,
+              name: mesh.name || `Mesh_${index}`,
+              type: 'mesh',
+              position: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
+              rotation: { x: 0, y: 0, z: 0 },
+              scale: { x: 1, y: 1, z: 1 },
+              visible: mesh.isVisible,
+              locked: false,
+              parentId: uid,
+            });
+          }
+        });
+
+        setWorldObjects(prev => [...prev, ...newObjects]);
+
+        console.log(`[WorldEditor] "${file.name}" loaded. Bounds:`, {
+          width: maxX - minX,
+          height: maxY - minY,
+          depth: maxZ - minZ
+        });
+
+        URL.revokeObjectURL(fileUrl);
+      },
+      undefined,
+      (_scene, message, exception) => {
+        console.error('[WorldEditor] Model load error:', message, exception);
+        URL.revokeObjectURL(fileUrl);
+        alert(`Failed to load ${ext.toUpperCase()} file: ${message}`);
+      },
+      pluginExtension
+    );
+
+    e.target.value = '';
+  };
+
   // Render step indicator
   const renderStepIndicator = () => (
     <div className={styles.stepIndicator}>
@@ -2762,157 +3099,6 @@ const WorldEditorPage: React.FC = () => {
             {/* Import Model Section */}
             <div className={styles.toolSection}>
               <h4>Import Model</h4>
-              <input
-                type="file"
-                id="model-file-input"
-                accept=".glb,.gltf,.obj,.fbx"
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file && sceneRef.current) {
-                    const scene = sceneRef.current;
-                    const ext = file.name.split('.').pop()?.toLowerCase() || '';
-
-                    // FBX는 Babylon.js에서 직접 지원하지 않음
-                    if (ext === 'fbx') {
-                      alert('FBX 파일은 직접 지원되지 않습니다.\nGLB/GLTF로 변환 후 사용하세요.\n\n변환 도구: https://products.aspose.app/3d/conversion/fbx-to-glb');
-                      e.target.value = '';
-                      return;
-                    }
-
-                    // 확장자에 따른 플러그인 힌트
-                    let pluginExtension = '.glb';
-                    if (ext === 'obj') pluginExtension = '.obj';
-                    else if (ext === 'gltf') pluginExtension = '.gltf';
-                    else if (ext === 'glb') pluginExtension = '.glb';
-
-                    const dataUrl = URL.createObjectURL(file);
-
-                    SceneLoader.ImportMesh(
-                      '',
-                      '',
-                      dataUrl,
-                      scene,
-                      (meshes) => {
-                        console.log(`${ext.toUpperCase()} loaded:`, meshes.length, 'meshes');
-
-                        // Create a root container for the imported model
-                        const rootMesh = new Mesh(`imported_${file.name}_${Date.now()}`, scene);
-                        rootMesh.position = new Vector3(0, 0, 0);
-                        rootMesh.checkCollisions = true;
-
-                        // Calculate bounding box for all meshes
-                        let minX = Infinity, minY = Infinity, minZ = Infinity;
-                        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-
-                        meshes.forEach((mesh) => {
-                          // Parent top-level meshes to root
-                          if (mesh.parent === null) {
-                            mesh.parent = rootMesh;
-                          }
-
-                          // Enable collision for all meshes (for character collision)
-                          mesh.checkCollisions = true;
-
-                          // Update bounding box
-                          const boundingInfo = mesh.getBoundingInfo();
-                          if (boundingInfo) {
-                            const min = boundingInfo.boundingBox.minimumWorld;
-                            const max = boundingInfo.boundingBox.maximumWorld;
-                            minX = Math.min(minX, min.x);
-                            minY = Math.min(minY, min.y);
-                            minZ = Math.min(minZ, min.z);
-                            maxX = Math.max(maxX, max.x);
-                            maxY = Math.max(maxY, max.y);
-                            maxZ = Math.max(maxZ, max.z);
-                          }
-                        });
-
-                        // Position model so its bottom is on the ground (Y=0)
-                        if (minY !== Infinity) {
-                          rootMesh.position.y = -minY;
-                        }
-
-                        // Generate unique ID for layer management
-                        const uid = `imported_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                        rootMesh.name = uid;
-
-                        // Store metadata for map usage
-                        rootMesh.metadata = {
-                          type: 'imported_model',
-                          fileName: file.name,
-                          fileType: ext,
-                          boundingBox: { minX, minY, minZ, maxX, maxY, maxZ },
-                          isMapElement: true,
-                          hasCollision: true,
-                          uid: uid
-                        };
-
-                        // Store in loadedAssetsRef for selection/gizmo
-                        loadedAssetsRef.current.set(uid, rootMesh);
-
-                        // ADD TO LAYERS - each mesh as separate layer item with hierarchy
-                        const newObjects: WorldObject[] = [];
-                        const baseName = file.name.replace(/\.[^/.]+$/, '');
-
-                        // Add root as parent group
-                        newObjects.push({
-                          id: uid,
-                          name: baseName,
-                          type: 'group',
-                          position: { x: rootMesh.position.x, y: rootMesh.position.y, z: rootMesh.position.z },
-                          rotation: { x: 0, y: 0, z: 0 },
-                          scale: { x: 1, y: 1, z: 1 },
-                          visible: true,
-                          locked: false,
-                          parentId: undefined,
-                          children: [],
-                        });
-
-                        // Add each child mesh as layer item
-                        meshes.forEach((mesh, index) => {
-                          if (mesh.name && mesh.name !== '__root__') {
-                            const meshUid = `${uid}_mesh_${index}`;
-                            mesh.metadata = { ...mesh.metadata, uid: meshUid, selectable: true };
-                            loadedAssetsRef.current.set(meshUid, mesh);
-
-                            newObjects.push({
-                              id: meshUid,
-                              name: mesh.name || `Mesh_${index}`,
-                              type: 'mesh',
-                              position: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
-                              rotation: { x: 0, y: 0, z: 0 },
-                              scale: { x: 1, y: 1, z: 1 },
-                              visible: mesh.isVisible,
-                              locked: false,
-                              parentId: uid,
-                            });
-                          }
-                        });
-
-                        setWorldObjects(prev => [...prev, ...newObjects]);
-
-                        console.log(`"${file.name}" loaded with collision enabled. Bounds:`, {
-                          width: maxX - minX,
-                          height: maxY - minY,
-                          depth: maxZ - minZ
-                        });
-
-                        URL.revokeObjectURL(dataUrl);
-                      },
-                      undefined,
-                      (scene, message, exception) => {
-                        console.error('Model load error:', message, exception);
-                        URL.revokeObjectURL(dataUrl);
-                        alert(`Failed to load ${ext.toUpperCase()} file: ${message}`);
-                      },
-                      pluginExtension
-                    );
-                  }
-                  // Reset input value to allow re-importing same file
-                  e.target.value = '';
-                }}
-              />
               <button
                 className={styles.toolBtnFull}
                 onClick={() => document.getElementById('model-file-input')?.click()}
@@ -4198,6 +4384,15 @@ const WorldEditorPage: React.FC = () => {
       data-theme={themeMode}
       style={{ '--theme-color': themeColor } as React.CSSProperties}
     >
+      {/* Hidden file input for model import - always in DOM */}
+      <input
+        type="file"
+        id="model-file-input"
+        accept=".glb,.gltf,.obj,.fbx"
+        style={{ display: 'none' }}
+        onChange={handleModelFileImport}
+      />
+
       {/* Header */}
       <header className={styles.header} style={{ '--theme-color': themeColor } as React.CSSProperties}>
         <div className={styles.headerLeft}>
@@ -4209,6 +4404,19 @@ const WorldEditorPage: React.FC = () => {
         </div>
 
         <div className={styles.headerRight}>
+          {/* Spawn Point Setting Button */}
+          {!playMode && (
+            <button
+              className={`${styles.spawnPointBtn} ${isSettingSpawnPoint ? styles.active : ''}`}
+              onClick={() => setIsSettingSpawnPoint(!isSettingSpawnPoint)}
+              title="클릭하여 캐릭터 시작 위치 설정"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+              </svg>
+              {isSettingSpawnPoint ? '위치 선택 중...' : '시작 위치'}
+            </button>
+          )}
           <button
             className={`${styles.playBtn} ${playMode ? styles.stopBtn : ''}`}
             onClick={() => setPlayMode(!playMode)}
@@ -4419,74 +4627,22 @@ const WorldEditorPage: React.FC = () => {
         </div>
       )}
 
-      {/* Map Import Modal */}
+      {/* Map Import Modal - MapSelector Component */}
       {mapImportOpen && (
-        <div className={styles.mapImportOverlay}>
-          <div className={styles.mapImportModal}>
-            <div className={styles.mapImportHeader}>
-              <h3>Import from Map</h3>
-              <button
-                className={styles.closeBtn}
-                onClick={() => setMapImportOpen(false)}
-              >
-                ×
-              </button>
-            </div>
-            <div className={styles.mapImportContent}>
-              {/* Map container for MapLibre GL */}
-              <div ref={mapContainerRef} className={styles.mapContainerModal}>
-                <div className={styles.mapPlaceholder}>
-                  <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                    <ellipse cx="12" cy="12" rx="10" ry="4" />
-                  </svg>
-                  <h3>Select Area on Map</h3>
-                  <p>Draw a rectangle to select the area you want to convert to 3D</p>
-                  <button
-                    className={styles.demoBtn}
-                    onClick={() => {
-                      handleAreaSelect({
-                        minLat: 37.566,
-                        minLng: 126.978,
-                        maxLat: 37.570,
-                        maxLng: 126.984,
-                        name: 'Seoul City Hall Area'
-                      });
-                      setMapImportOpen(false);
-                    }}
-                  >
-                    Use Demo Area (Seoul)
-                  </button>
-                </div>
-              </div>
-
-              {/* Area info panel */}
-              {worldConfig.area && (
-                <div className={styles.areaInfoPanelModal}>
-                  <h4>Selected Area</h4>
-                  <div className={styles.areaInfo}>
-                    <p><strong>Name:</strong> {worldConfig.area.name || 'Custom Area'}</p>
-                    <p><strong>Bounds:</strong></p>
-                    <p className={styles.coords}>
-                      SW: {worldConfig.area.minLat.toFixed(4)}, {worldConfig.area.minLng.toFixed(4)}<br />
-                      NE: {worldConfig.area.maxLat.toFixed(4)}, {worldConfig.area.maxLng.toFixed(4)}
-                    </p>
-                  </div>
-                  <button
-                    className={styles.primaryBtn}
-                    onClick={() => setMapImportOpen(false)}
-                  >
-                    <span>Generate 3D World</span>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M5 12h14M12 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <MapSelector
+          onAreaSelect={(area: SelectedArea) => {
+            handleAreaSelect({
+              minLat: area.minLat,
+              minLng: area.minLng,
+              maxLat: area.maxLat,
+              maxLng: area.maxLng,
+              name: area.name,
+            });
+          }}
+          onClose={() => setMapImportOpen(false)}
+          initialCenter={[126.978, 37.566]}
+          initialZoom={12}
+        />
       )}
 
       {/* Loading Overlay */}

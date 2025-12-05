@@ -145,6 +145,46 @@
   transform: translateY(-1px);
 }
 
+/* Spawn Point Button */
+.spawnPointBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s;
+  margin-right: 8px;
+}
+
+.spawnPointBtn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--theme-color);
+}
+
+.spawnPointBtn.active {
+  background: rgba(0, 200, 255, 0.2);
+  color: #00c8ff;
+  border-color: #00c8ff;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 200, 255, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(0, 200, 255, 0); }
+}
+
+.spawnPointBtn svg {
+  width: 14px;
+  height: 14px;
+}
+
 .playBtn {
   display: flex;
   align-items: center;
@@ -1026,11 +1066,11 @@
   transition: 0.2s;
 }
 
-.toggle input:checked + .toggleSlider {
+.toggle input:checked+.toggleSlider {
   background: var(--theme-color);
 }
 
-.toggle input:checked + .toggleSlider::before {
+.toggle input:checked+.toggleSlider::before {
   transform: translateX(18px);
 }
 
