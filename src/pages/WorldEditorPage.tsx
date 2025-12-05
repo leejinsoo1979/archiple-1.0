@@ -413,6 +413,7 @@ const WorldEditorPage: React.FC = () => {
   const [isSettingSpawnPoint, setIsSettingSpawnPoint] = useState(false);
   const isSettingSpawnPointRef = useRef(false);
   const spawnMarkerRef = useRef<Mesh | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Character refs
   const characterRef = useRef<AbstractMesh | null>(null);
@@ -3101,7 +3102,10 @@ const WorldEditorPage: React.FC = () => {
               <h4>Import Model</h4>
               <button
                 className={styles.toolBtnFull}
-                onClick={() => document.getElementById('model-file-input')?.click()}
+                onClick={() => {
+                  console.log('[WorldEditor] Import button clicked, fileInputRef:', fileInputRef.current);
+                  fileInputRef.current?.click();
+                }}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -4386,8 +4390,8 @@ const WorldEditorPage: React.FC = () => {
     >
       {/* Hidden file input for model import - always in DOM */}
       <input
+        ref={fileInputRef}
         type="file"
-        id="model-file-input"
         accept=".glb,.gltf,.obj,.fbx"
         style={{ display: 'none' }}
         onChange={handleModelFileImport}
