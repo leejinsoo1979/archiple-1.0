@@ -1605,9 +1605,9 @@ const WorldEditorPage: React.FC = () => {
       if (yAxis) yAxis.isVisible = !playMode;
       if (zAxis) zAxis.isVisible = !playMode;
 
-      // Hide spawn marker in play mode
+      // Hide spawn marker in play mode (setEnabled hides children too)
       if (spawnMarkerRef.current) {
-        spawnMarkerRef.current.isVisible = !playMode;
+        spawnMarkerRef.current.setEnabled(!playMode);
       }
 
       // Detach gizmo in play mode
