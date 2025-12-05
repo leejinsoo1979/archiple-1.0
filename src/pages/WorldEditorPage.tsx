@@ -2099,6 +2099,9 @@ const WorldEditorPage: React.FC = () => {
             runAnimationRef.current.start(true);
           } else if (targetAnim === 'walk' && walkAnimationRef.current) {
             walkAnimationRef.current.start(true);
+          } else if (targetAnim === 'jump') {
+            // 제자리 점프 시 idle 유지 (별도 점프 애니메이션 없음)
+            idleAnimationRef.current?.start(true);
           } else if (targetAnim === 'idle' && idleAnimationRef.current) {
             idleAnimationRef.current.start(true);
           }
