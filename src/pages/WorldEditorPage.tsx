@@ -1913,13 +1913,15 @@ const WorldEditorPage: React.FC = () => {
                            keysPressed.current.has('arrowleft') || keysPressed.current.has('arrowright');
 
         if (isMovingNow && runningJumpAnimRef.current) {
-          runningJumpAnimRef.current.start(false); // no loop
+          runningJumpAnimRef.current.speedRatio = 1.0;
+          runningJumpAnimRef.current.start(false, 1.0, runningJumpAnimRef.current.from, runningJumpAnimRef.current.to, false);
           currentAnimRef.current = 'runningJump';
-          console.log('[WorldEditor] Moving Jump!');
+          console.log('[WorldEditor] Moving Jump! frames:', runningJumpAnimRef.current.from, '-', runningJumpAnimRef.current.to);
         } else if (jumpAnimRef.current) {
-          jumpAnimRef.current.start(false); // no loop
+          jumpAnimRef.current.speedRatio = 1.0;
+          jumpAnimRef.current.start(false, 1.0, jumpAnimRef.current.from, jumpAnimRef.current.to, false);
           currentAnimRef.current = 'jump';
-          console.log('[WorldEditor] Standing Jump!');
+          console.log('[WorldEditor] Standing Jump! frames:', jumpAnimRef.current.from, '-', jumpAnimRef.current.to);
         }
       }
 
