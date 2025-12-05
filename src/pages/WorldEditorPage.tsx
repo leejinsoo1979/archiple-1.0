@@ -47,7 +47,16 @@ import { SkyMaterial } from '@babylonjs/materials/sky';
 import styles from './WorldEditorPage.module.css';
 import { MapSelector } from '../world/components';
 import type { SelectedArea } from '../world/components/MapSelector';
-import { fetchCityData, fetchVWorldCityData, generateCityMeshes, disposeCityMeshes, type CityMeshes } from '../world/utils';
+import {
+  fetchCityData,
+  fetchVWorldCityData,
+  generateCityMeshes,
+  disposeCityMeshes,
+  generateArchitecturalCity,
+  disposeArchitecturalCity,
+  type CityMeshes,
+  type ArchitecturalMeshes,
+} from '../world/utils';
 
 // ARCHIPLE WORLD Logo component with theme color support
 interface ArchipleWorldLogoProps {
@@ -116,6 +125,13 @@ interface ExportOptions {
   scale: number;
 }
 
+interface RenderingOptions {
+  style: 'satellite' | 'architectural';  // satellite = current, architectural = maps3d.io style
+  enableSSAO: boolean;
+  enableShadows: boolean;
+  shadowQuality: 'low' | 'medium' | 'high';
+}
+
 interface WorldConfig {
   id: string;
   name: string;
@@ -124,6 +140,7 @@ interface WorldConfig {
   buildings: BuildingOptions;
   mesh: MeshOptions;
   export: ExportOptions;
+  rendering: RenderingOptions;
 }
 
 interface WorldObject {
@@ -203,6 +220,12 @@ const WorldEditorPage: React.FC = () => {
       format: 'glb',
       includeTextures: true,
       scale: 1.0,
+    },
+    rendering: {
+      style: 'architectural',  // Default to maps3d.io style
+      enableSSAO: true,
+      enableShadows: true,
+      shadowQuality: 'high',
     },
   });
 
@@ -1270,6 +1293,7 @@ const WorldEditorPage: React.FC = () => {
 
   // Reference to current city meshes for cleanup
   const cityMeshesRef = useRef<CityMeshes | null>(null);
+  const architecturalMeshesRef = useRef<ArchitecturalMeshes | null>(null);
 
   // Handle area selection (STEP 1) and generate 3D city from OSM data
   const handleAreaSelect = useCallback(async (area: WorldArea) => {
@@ -1287,6 +1311,10 @@ const WorldEditorPage: React.FC = () => {
         if (cityMeshesRef.current) {
           disposeCityMeshes(cityMeshesRef.current);
           cityMeshesRef.current = null;
+        }
+        if (architecturalMeshesRef.current) {
+          disposeArchitecturalCity(architecturalMeshesRef.current);
+          architecturalMeshesRef.current = null;
         }
 
         // Also remove legacy terrain
@@ -1328,30 +1356,82 @@ const WorldEditorPage: React.FC = () => {
         setLoadingProgress(50);
         setLoadingMessage(`Creating ${cityData.buildings.length} buildings...`);
 
-        // Generate 3D meshes from OSM data
-        const meshes = await generateCityMeshes(
-          cityData,
-          sceneRef.current,
-          {
-            buildingsEnabled: worldConfig.buildings.enabled,
-            roadsEnabled: true,
-            waterEnabled: true, // Re-enabled - only closed water bodies
-            greenEnabled: false, // Disabled - polygon issues causing cyan artifacts
-            groundEnabled: true,
-            terrainEnabled: true, // Enable real elevation terrain
-            buildingColor: '#e5e7eb', // Light gray buildings
-            roadColor: '#6b7280', // Medium gray roads
-            waterColor: '#60a5fa', // Blue water
-            greenColor: '#4ade80', // Green areas
-            groundColor: '#a3a87a', // Olive/tan terrain color
-            heightScale: worldConfig.terrain.verticalExaggeration,
-            terrainScale: worldConfig.terrain.verticalExaggeration, // 1:1 real terrain elevation
-            terrainResolution: 100, // Higher resolution for smoother terrain
-            useSatelliteTexture: true, // Enable satellite texture on terrain
-          }
-        );
+        // Generate 3D meshes based on rendering style
+        let buildingCount = 0;
+        let roadCount = 0;
+        let waterCount = 0;
 
-        cityMeshesRef.current = meshes;
+        if (worldConfig.rendering.style === 'architectural') {
+          // Use maps3d.io style architectural renderer
+          setLoadingMessage('Generating architectural model (maps3d.io style)...');
+
+          const archMeshes = await generateArchitecturalCity(
+            cityData,
+            sceneRef.current,
+            sceneRef.current.activeCamera,
+            {
+              buildingColor: '#f5f5f5', // Clean white buildings
+              buildingRoughness: 0.95,
+              buildingMetallic: 0,
+              roadColor: '#4a4a4a', // Dark gray roads
+              roadWidth: 8,
+              terrainColor: '#e8e8e8', // Light gray terrain
+              waterColor: '#a8d4e6', // Light blue water
+              enableSSAO: worldConfig.rendering.enableSSAO,
+              enableShadows: worldConfig.rendering.enableShadows,
+              shadowQuality: worldConfig.rendering.shadowQuality,
+              heightScale: worldConfig.terrain.verticalExaggeration,
+              mergeBuildings: true, // Enable mesh merging for performance
+            },
+            null // No elevation data for now
+          );
+
+          architecturalMeshesRef.current = archMeshes;
+          buildingCount = archMeshes.buildings.length;
+          roadCount = archMeshes.roads.length;
+          waterCount = archMeshes.water.length;
+
+          console.log(`[Architectural] Generated:`);
+          console.log(`  - Buildings: ${buildingCount} (merged: ${archMeshes.buildingsMerged ? 'yes' : 'no'})`);
+          console.log(`  - Roads: ${roadCount}`);
+          console.log(`  - Water: ${waterCount}`);
+          console.log(`  - SSAO: ${archMeshes.ssao ? 'enabled' : 'disabled'}`);
+          console.log(`  - Shadows: ${archMeshes.shadowGenerator ? 'enabled' : 'disabled'}`);
+        } else {
+          // Use satellite texture mode (original renderer)
+          const meshes = await generateCityMeshes(
+            cityData,
+            sceneRef.current,
+            {
+              buildingsEnabled: worldConfig.buildings.enabled,
+              roadsEnabled: true,
+              waterEnabled: true, // Re-enabled - only closed water bodies
+              greenEnabled: false, // Disabled - polygon issues causing cyan artifacts
+              groundEnabled: true,
+              terrainEnabled: true, // Enable real elevation terrain
+              buildingColor: '#e5e7eb', // Light gray buildings
+              roadColor: '#6b7280', // Medium gray roads
+              waterColor: '#60a5fa', // Blue water
+              greenColor: '#4ade80', // Green areas
+              groundColor: '#a3a87a', // Olive/tan terrain color
+              heightScale: worldConfig.terrain.verticalExaggeration,
+              terrainScale: worldConfig.terrain.verticalExaggeration, // 1:1 real terrain elevation
+              terrainResolution: 100, // Higher resolution for smoother terrain
+              useSatelliteTexture: true, // Enable satellite texture on terrain
+            }
+          );
+
+          cityMeshesRef.current = meshes;
+          buildingCount = meshes.buildings.length;
+          roadCount = meshes.roads.length;
+          waterCount = meshes.water.length;
+
+          console.log(`[Satellite] Generated:`);
+          console.log(`  - Buildings: ${buildingCount}`);
+          console.log(`  - Roads: ${roadCount}`);
+          console.log(`  - Water: ${waterCount}`);
+          console.log(`  - Green: ${meshes.green.length}`);
+        }
 
         setLoadingProgress(90);
         setLoadingMessage('Finalizing city...');
@@ -1372,11 +1452,7 @@ const WorldEditorPage: React.FC = () => {
         });
 
         // Add summary info
-        console.log(`[City] Generated:`);
-        console.log(`  - Buildings: ${meshes.buildings.length}`);
-        console.log(`  - Roads: ${meshes.roads.length}`);
-        console.log(`  - Water: ${meshes.water.length}`);
-        console.log(`  - Green: ${meshes.green.length}`);
+        console.log(`[City] Total: ${buildingCount} buildings, ${roadCount} roads, ${waterCount} water bodies`);
 
         setWorldObjects(prev => [...prev, ...newObjects]);
         setLoadingProgress(100);
@@ -3100,20 +3176,20 @@ const WorldEditorPage: React.FC = () => {
             {/* Import Model Section */}
             <div className={styles.toolSection}>
               <h4>Import Model</h4>
-              <button
-                className={styles.toolBtnFull}
-                onClick={() => {
-                  console.log('[WorldEditor] Import button clicked, fileInputRef:', fileInputRef.current);
-                  fileInputRef.current?.click();
-                }}
-              >
+              <label className={styles.toolBtnFull} style={{ cursor: 'pointer' }}>
+                <input
+                  type="file"
+                  accept=".glb,.gltf,.obj,.fbx"
+                  style={{ display: 'none' }}
+                  onChange={handleModelFileImport}
+                />
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="17,8 12,3 7,8" />
                   <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
                 <span>Import 3D Model</span>
-              </button>
+              </label>
               <div className={styles.helperText}>
                 GLB, GLTF, OBJ 지원<br />
                 FBX는 GLB로 변환 필요
