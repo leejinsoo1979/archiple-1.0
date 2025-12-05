@@ -41,7 +41,10 @@ import {
   Matrix,
 } from '@babylonjs/core';
 import '@babylonjs/loaders/glTF/2.0';
-import '@babylonjs/loaders/OBJ';
+import { OBJFileLoader } from '@babylonjs/loaders/OBJ';
+
+// Configure OBJ loader to skip MTL files (they can't be loaded from blob URLs)
+OBJFileLoader.SKIP_MATERIALS = true;
 import { GridMaterial } from '@babylonjs/materials/grid';
 import { SkyMaterial } from '@babylonjs/materials/sky';
 import styles from './WorldEditorPage.module.css';
