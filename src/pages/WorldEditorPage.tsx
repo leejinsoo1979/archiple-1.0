@@ -1767,8 +1767,8 @@ const WorldEditorPage: React.FC = () => {
           loadRetargetedAnimation('booty_hip_hop_dance.glb', '/animation/moving/', 'dance2', false),
           loadRetargetedAnimation('snake_hip_hop_dance.glb', '/animation/moving/', 'dance3', false),
           loadRetargetedAnimation('standing_greeting.glb', '/animation/moving/', 'greeting', false),
-          loadRetargetedAnimation('RunningJump.glb', '/animation/moving/', 'runningJump', false),
-          loadRetargetedAnimation('jump.glb', '/animation/moving/', 'jump', false),
+          loadRetargetedAnimation('Jumping3.glb', '/animation/moving/', 'runningJump', false),
+          loadRetargetedAnimation('StandJump.glb', '/animation/moving/', 'jump', false),
         ]);
 
         if (idleAnim) {
@@ -1906,11 +1906,16 @@ const WorldEditorPage: React.FC = () => {
         jumpAnimRef.current?.stop();
         runningJumpAnimRef.current?.stop();
 
-        // 달리는 중이면 runningJump, 아니면 일반 jump 애니메이션
-        if (isRunningRef.current && runningJumpAnimRef.current) {
+        // 걷거나 달리는 중이면 Jumping3 (movingJump), 아니면 StandJump
+        const isMovingNow = keysPressed.current.has('w') || keysPressed.current.has('a') ||
+                           keysPressed.current.has('s') || keysPressed.current.has('d') ||
+                           keysPressed.current.has('arrowup') || keysPressed.current.has('arrowdown') ||
+                           keysPressed.current.has('arrowleft') || keysPressed.current.has('arrowright');
+
+        if (isMovingNow && runningJumpAnimRef.current) {
           runningJumpAnimRef.current.start(false); // no loop
           currentAnimRef.current = 'runningJump';
-          console.log('[WorldEditor] Running Jump!');
+          console.log('[WorldEditor] Moving Jump!');
         } else if (jumpAnimRef.current) {
           jumpAnimRef.current.start(false); // no loop
           currentAnimRef.current = 'jump';
