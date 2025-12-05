@@ -457,6 +457,7 @@ const WorldEditorPage: React.FC = () => {
   const emote3Ref = useRef<AnimationGroup | null>(null); // dance2
   const emote4Ref = useRef<AnimationGroup | null>(null); // greeting
   const runningJumpAnimRef = useRef<AnimationGroup | null>(null); // running jump
+  const jumpAnimRef = useRef<AnimationGroup | null>(null); // standing jump
   const isEmotingRef = useRef<boolean>(false);
 
   // Movement state - Game-style physics like Studio
@@ -1759,7 +1760,7 @@ const WorldEditorPage: React.FC = () => {
 
         // Load additional animations in parallel (movement + emotes)
         // Emotes same as Studio: 1=Tut Hip Hop, 2=Booty Hip Hop, 3=Snake Hip Hop, 4=Greeting
-        const [idleAnim, runAnim, emote1, emote2, emote3, emote4, runningJumpAnim] = await Promise.all([
+        const [idleAnim, runAnim, emote1, emote2, emote3, emote4, runningJumpAnim, jumpAnim] = await Promise.all([
           loadRetargetedAnimation('idle.glb', '/animation/moving/', 'idle', true),
           loadRetargetedAnimation('running2.glb', '/animation/moving/', 'run', true),
           loadRetargetedAnimation('Tut_Hip_Hop_Dance.glb', '/animation/', 'dance1', false),
@@ -1767,6 +1768,7 @@ const WorldEditorPage: React.FC = () => {
           loadRetargetedAnimation('snake_hip_hop_dance.glb', '/animation/moving/', 'dance3', false),
           loadRetargetedAnimation('standing_greeting.glb', '/animation/moving/', 'greeting', false),
           loadRetargetedAnimation('RunningJump.glb', '/animation/moving/', 'runningJump', false),
+          loadRetargetedAnimation('jump.glb', '/animation/moving/', 'jump', false),
         ]);
 
         if (idleAnim) {
@@ -1784,8 +1786,9 @@ const WorldEditorPage: React.FC = () => {
         if (emote3) emote3Ref.current = emote3;
         if (emote4) emote4Ref.current = emote4;
         if (runningJumpAnim) runningJumpAnimRef.current = runningJumpAnim;
+        if (jumpAnim) jumpAnimRef.current = jumpAnim;
 
-        console.log('[WorldEditor] All animations loaded - idle:', !!idleAnim, ', walk:', !!walkAnimationRef.current, ', run:', !!runAnim, ', runningJump:', !!runningJumpAnim);
+        console.log('[WorldEditor] All animations loaded - idle:', !!idleAnim, ', walk:', !!walkAnimationRef.current, ', run:', !!runAnim, ', runningJump:', !!runningJumpAnim, ', jump:', !!jumpAnim);
         console.log('[WorldEditor] Emotes loaded - 1:', !!emote1, ', 2:', !!emote2, ', 3:', !!emote3, ', 4:', !!emote4);
 
         // Setup camera based on viewMode (default: third-person)
@@ -1896,16 +1899,22 @@ const WorldEditorPage: React.FC = () => {
         isJumping = true;
         localVerticalVelocity = CHARACTER_CONFIG.jumpForce;
 
-        // 달리는 중이면 runningJump 애니메이션, 아니면 일반 idle 유지
+        // Stop all movement animations
+        idleAnimationRef.current?.stop();
+        walkAnimationRef.current?.stop();
+        runAnimationRef.current?.stop();
+        jumpAnimRef.current?.stop();
+        runningJumpAnimRef.current?.stop();
+
+        // 달리는 중이면 runningJump, 아니면 일반 jump 애니메이션
         if (isRunningRef.current && runningJumpAnimRef.current) {
-          // Stop all movement animations
-          idleAnimationRef.current?.stop();
-          walkAnimationRef.current?.stop();
-          runAnimationRef.current?.stop();
-          // Play running jump
           runningJumpAnimRef.current.start(false); // no loop
           currentAnimRef.current = 'runningJump';
           console.log('[WorldEditor] Running Jump!');
+        } else if (jumpAnimRef.current) {
+          jumpAnimRef.current.start(false); // no loop
+          currentAnimRef.current = 'jump';
+          console.log('[WorldEditor] Standing Jump!');
         }
       }
 
@@ -2070,20 +2079,14 @@ const WorldEditorPage: React.FC = () => {
       // Skip animation updates if currently emoting (1,2,3,4 key actions)
       if (isEmotingRef.current) return;
 
-      // 점프 중에 runningJump 애니메이션이 재생 중이면 애니메이션 변경하지 않음
-      if (isJumping && currentAnimRef.current === 'runningJump') {
+      // 점프 중에는 애니메이션 변경하지 않음 (jump or runningJump)
+      if (isJumping && (currentAnimRef.current === 'runningJump' || currentAnimRef.current === 'jump')) {
         return;
       }
 
       if (currentViewMode !== 'first-person') {
         let targetAnim = 'idle';
-        if (isJumping) {
-          // 이미 runningJump가 재생 중이면 유지
-          if (currentAnimRef.current === 'runningJump') {
-            return;
-          }
-          targetAnim = 'jump';
-        } else if (isMoving) {
+        if (isMoving) {
           targetAnim = isRunning ? 'run' : 'walk';
         }
 
@@ -2092,6 +2095,7 @@ const WorldEditorPage: React.FC = () => {
           idleAnimationRef.current?.stop();
           walkAnimationRef.current?.stop();
           runAnimationRef.current?.stop();
+          jumpAnimRef.current?.stop();
           runningJumpAnimRef.current?.stop();
 
           // Start target animation
@@ -2099,9 +2103,6 @@ const WorldEditorPage: React.FC = () => {
             runAnimationRef.current.start(true);
           } else if (targetAnim === 'walk' && walkAnimationRef.current) {
             walkAnimationRef.current.start(true);
-          } else if (targetAnim === 'jump') {
-            // 제자리 점프 시 idle 유지 (별도 점프 애니메이션 없음)
-            idleAnimationRef.current?.start(true);
           } else if (targetAnim === 'idle' && idleAnimationRef.current) {
             idleAnimationRef.current.start(true);
           }
