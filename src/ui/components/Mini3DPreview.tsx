@@ -1,5 +1,4 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { ArcRotateCamera, Vector3, type Engine, type Scene } from '@babylonjs/core';
 import styles from './Mini3DPreview.module.css';
 import type { Babylon3DCanvasRef } from '../../babylon/Babylon3DCanvas';
 
@@ -27,7 +26,6 @@ const MAX_HEIGHT = 400;
 const DEFAULT_HEIGHT = 200;
 
 const Mini3DPreview: React.FC<Mini3DPreviewProps> = ({
-  floorplanData,
   rooms = [],
   selectedRoomId,
   onRoomSelect,
@@ -41,10 +39,6 @@ const Mini3DPreview: React.FC<Mini3DPreviewProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const canvas3DRef = useRef<HTMLCanvasElement>(null);
   const canvas2DRef = useRef<HTMLCanvasElement>(null);
-  const previewCameraRef = useRef<ArcRotateCamera | null>(null);
-  const viewRef = useRef<any>(null);
-  const engineRef = useRef<Engine | null>(null);
-  const sceneRef = useRef<Scene | null>(null);
 
   // Preview mode is opposite of main view mode
   const previewMode = viewMode === '2D' ? '3d' : '2d';
@@ -59,11 +53,6 @@ const Mini3DPreview: React.FC<Mini3DPreviewProps> = ({
   const transform2DRef = useRef({ offsetX: 0, offsetY: 0, scale: 1 });
   const dragging2DRef = useRef(false);
   const lastMouse2DRef = useRef({ x: 0, y: 0 });
-
-  // 3D preview interaction state
-  const dragging3DRef = useRef(false);
-  const lastMouse3DRef = useRef({ x: 0, y: 0 });
-  const isRightMouseRef = useRef(false);
 
   const startYRef = useRef<number>(0);
   const startHeightRef = useRef<number>(height);
@@ -99,99 +88,96 @@ const Mini3DPreview: React.FC<Mini3DPreviewProps> = ({
     };
   }, [isResizing, onHeightChange]);
 
-  // Initialize 3D preview using engine.registerView (shares scene with main canvas)
+  // Initialize 3D preview by copying from main Babylon canvas
+  // Note: Using canvas copy instead of registerView because registerView doesn't work
+  // when the main canvas container has visibility:hidden or opacity:0
   useEffect(() => {
     if (isCollapsed || activeTab !== 'preview' || previewMode !== '3d') return;
-    if (!canvas3DRef.current || !babylon3DCanvasRef) return;
+    if (!canvas3DRef.current || !babylon3DCanvasRef || !containerRef.current) return;
 
     const canvas = canvas3DRef.current;
-    let retryCount = 0;
-    const maxRetries = 50;
-    let retryTimer: ReturnType<typeof setTimeout>;
+    const container = containerRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animationFrameId: number;
     let isCleanedUp = false;
 
-    const tryInitialize = () => {
+    const setupAndDraw = () => {
       if (isCleanedUp) return;
 
       const refCurrent = babylon3DCanvasRef?.current;
       if (!refCurrent) {
-        if (retryCount < maxRetries) {
-          retryCount++;
-          retryTimer = setTimeout(tryInitialize, 100);
-        }
+        animationFrameId = requestAnimationFrame(setupAndDraw);
         return;
       }
 
-      const engine = refCurrent.getEngine();
-      const scene = refCurrent.getScene();
-
-      if (!engine || !scene) {
-        if (retryCount < maxRetries) {
-          retryCount++;
-          retryTimer = setTimeout(tryInitialize, 100);
-        }
+      const mainCanvas = refCurrent.getCanvas();
+      if (!mainCanvas || mainCanvas.width === 0 || mainCanvas.height === 0) {
+        animationFrameId = requestAnimationFrame(setupAndDraw);
         return;
       }
 
-      engineRef.current = engine;
-      sceneRef.current = scene;
-
-      // Create a preview camera that matches the scene's target
-      const existingCamera = scene.activeCamera;
-      let target = new Vector3(0, 0, 0);
-      let radius = 15;
-
-      if (existingCamera && 'target' in existingCamera) {
-        target = (existingCamera as ArcRotateCamera).target.clone();
-        radius = (existingCamera as ArcRotateCamera).radius || 15;
+      // Set preview canvas size
+      const rect = container.getBoundingClientRect();
+      if (rect.width <= 0 || height <= 0) {
+        animationFrameId = requestAnimationFrame(setupAndDraw);
+        return;
       }
 
-      const previewCamera = new ArcRotateCamera(
-        'previewCamera',
-        -Math.PI / 4,
-        Math.PI / 3,
-        radius * 1.2,
-        target,
-        scene
-      );
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${height}px`;
 
-      previewCamera.lowerRadiusLimit = 3;
-      previewCamera.upperRadiusLimit = 100;
-      previewCamera.lowerBetaLimit = 0.1;
-      previewCamera.upperBetaLimit = Math.PI / 2 - 0.1;
-      previewCamera.wheelPrecision = 50;
-      previewCamera.panningSensibility = 500;
-      previewCamera.attachControl(canvas, true);
+      // Mark as initialized
+      if (!is3DInitialized) {
+        setIs3DInitialized(true);
+      }
 
-      previewCameraRef.current = previewCamera;
+      // Draw main Babylon canvas content to preview
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Register view with engine - shares the same scene
-      const view = engine.registerView(canvas, previewCamera);
-      viewRef.current = view;
+      // Calculate aspect-fit scaling
+      const srcAspect = mainCanvas.width / mainCanvas.height;
+      const dstAspect = canvas.width / canvas.height;
 
-      setIs3DInitialized(true);
+      let drawWidth, drawHeight, drawX, drawY;
+      if (srcAspect > dstAspect) {
+        // Source is wider - fit to width
+        drawWidth = canvas.width;
+        drawHeight = canvas.width / srcAspect;
+        drawX = 0;
+        drawY = (canvas.height - drawHeight) / 2;
+      } else {
+        // Source is taller - fit to height
+        drawHeight = canvas.height;
+        drawWidth = canvas.height * srcAspect;
+        drawX = (canvas.width - drawWidth) / 2;
+        drawY = 0;
+      }
+
+      try {
+        ctx.drawImage(mainCanvas, drawX, drawY, drawWidth, drawHeight);
+      } catch {
+        // Canvas might be tainted or not ready, ignore
+      }
+
+      // Continue animation loop
+      animationFrameId = requestAnimationFrame(setupAndDraw);
     };
 
-    tryInitialize();
+    setupAndDraw();
 
     return () => {
       isCleanedUp = true;
-      clearTimeout(retryTimer);
-
-      if (viewRef.current && engineRef.current) {
-        engineRef.current.unRegisterView(canvas);
-        viewRef.current = null;
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
       }
-      if (previewCameraRef.current) {
-        previewCameraRef.current.detachControl();
-        previewCameraRef.current.dispose();
-        previewCameraRef.current = null;
-      }
-      engineRef.current = null;
-      sceneRef.current = null;
       setIs3DInitialized(false);
     };
-  }, [isCollapsed, activeTab, previewMode, babylon3DCanvasRef]);
+  }, [isCollapsed, activeTab, previewMode, babylon3DCanvasRef, height, is3DInitialized]);
 
   // Initialize 2D preview canvas
   useEffect(() => {
@@ -372,101 +358,8 @@ const Mini3DPreview: React.FC<Mini3DPreviewProps> = ({
     };
   }, [previewMode]);
 
-  // 3D preview mouse interactions (manual control since registerView doesn't handle input well)
-  useEffect(() => {
-    if (previewMode !== '3d' || !canvas3DRef.current || !is3DInitialized) return;
-
-    const canvas = canvas3DRef.current;
-    const camera = previewCameraRef.current;
-    if (!camera) return;
-
-    const handleMouseDown = (e: MouseEvent) => {
-      e.preventDefault();
-      dragging3DRef.current = true;
-      isRightMouseRef.current = e.button === 2;
-      lastMouse3DRef.current = { x: e.clientX, y: e.clientY };
-      canvas.style.cursor = 'grabbing';
-    };
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!dragging3DRef.current || !camera) return;
-
-      const dx = e.clientX - lastMouse3DRef.current.x;
-      const dy = e.clientY - lastMouse3DRef.current.y;
-      lastMouse3DRef.current = { x: e.clientX, y: e.clientY };
-
-      if (isRightMouseRef.current) {
-        // Right mouse: pan
-        const panSpeed = 0.01 * camera.radius;
-        camera.target.x -= dx * panSpeed * Math.cos(camera.alpha);
-        camera.target.z -= dx * panSpeed * Math.sin(camera.alpha);
-        camera.target.y += dy * panSpeed;
-      } else {
-        // Left mouse: rotate
-        camera.alpha -= dx * 0.01;
-        camera.beta -= dy * 0.01;
-        camera.beta = Math.max(0.1, Math.min(Math.PI / 2 - 0.1, camera.beta));
-      }
-    };
-
-    const handleMouseUp = () => {
-      dragging3DRef.current = false;
-      isRightMouseRef.current = false;
-      canvas.style.cursor = 'grab';
-    };
-
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      if (!camera) return;
-
-      const zoomDelta = e.deltaY > 0 ? 1.1 : 0.9;
-      camera.radius = Math.max(3, Math.min(100, camera.radius * zoomDelta));
-    };
-
-    const handleContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-    };
-
-    canvas.addEventListener('mousedown', handleMouseDown);
-    canvas.addEventListener('mousemove', handleMouseMove);
-    canvas.addEventListener('mouseup', handleMouseUp);
-    canvas.addEventListener('mouseleave', handleMouseUp);
-    canvas.addEventListener('wheel', handleWheel, { passive: false });
-    canvas.addEventListener('contextmenu', handleContextMenu);
-
-    return () => {
-      canvas.removeEventListener('mousedown', handleMouseDown);
-      canvas.removeEventListener('mousemove', handleMouseMove);
-      canvas.removeEventListener('mouseup', handleMouseUp);
-      canvas.removeEventListener('mouseleave', handleMouseUp);
-      canvas.removeEventListener('wheel', handleWheel);
-      canvas.removeEventListener('contextmenu', handleContextMenu);
-    };
-  }, [previewMode, is3DInitialized]);
-
-  // Handle 3D canvas resize
-  useEffect(() => {
-    if (!canvas3DRef.current || !is3DInitialized || previewMode !== '3d') return;
-
-    const canvas = canvas3DRef.current;
-    const container = containerRef.current;
-    if (!container) return;
-
-    const resizeCanvas = () => {
-      const rect = container.getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = height;
-    };
-
-    resizeCanvas();
-
-    const resizeObserver = new ResizeObserver(resizeCanvas);
-    resizeObserver.observe(container);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [height, is3DInitialized, previewMode]);
+  // Note: 3D preview interactions removed - now using canvas copy from main Babylon canvas
+  // The preview is read-only, showing what the main 3D view displays
 
   return (
     <div className={styles.container}>

@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BottomControlBar, type BottomControlBarRef } from './components/BottomControlBar';
-import FloorplanCanvas from '../floorplan/FloorplanCanvas';
+import FloorplanCanvas, { type Furniture2D } from '../floorplan/FloorplanCanvas';
 import Babylon3DCanvas, { type Babylon3DCanvasRef } from '../babylon/Babylon3DCanvas';
 import styles from './EditorPage.module.css';
 import { ToolType } from '../core/types/EditorState';
@@ -31,6 +31,8 @@ import { TbViewportWide } from 'react-icons/tb';
 import { BiCabinet } from 'react-icons/bi';
 import { LiaPencilRulerSolid } from 'react-icons/lia';
 import { eventBus } from '../core/events/EventBus';
+import { ASSET_EVENTS, type DragEndPayload, type DragStartPayload, type DragMovePayload, type IAssetMetadata } from '../core/events/AssetEvents';
+import { assetCatalog } from '../core/assets/AssetCatalog';
 import { EditorEvents } from '../core/events/EditorEvents';
 import type { Light, LightType } from '../core/types/Light';
 import { CameraSettingsModal } from '../ui/modals/CameraSettingsModal';
@@ -40,6 +42,7 @@ import { useCameraSettingsStore } from '../stores/cameraSettingsStore';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 import { AIRenderModal } from '../ui/landing/components/AIRenderModal';
+import type { ViewMode } from '../game/types';
 import FloorplanPreview from '../ui/components/FloorplanPreview';
 import Mini3DPreview from '../ui/components/Mini3DPreview';
 import Compass2D from '../ui/components/Compass2D';
@@ -48,6 +51,11 @@ import FloorPropertiesPanel, { type FloorProperties } from './components/FloorPr
 import LevelPropertiesPanel, { type LevelProperties } from './components/LevelPropertiesPanel';
 import ElevationModal, { type WallInfo, type ViewDirection } from './components/ElevationModal';
 import ElevationViewer from './components/ElevationViewer';
+import LibraryPanel from './components/LibraryPanel';
+import { useFurnitureSpawner } from '../viewer3d/hooks/useFurnitureSpawner';
+import type { Scene } from '@babylonjs/core';
+import { FurnitureToolbar } from './components/FurnitureToolbar';
+import type { FurnitureSelectionEvent } from '../babylon/FurnitureManager';
 
 type ToolCategory = 'walls' | 'door' | 'window' | 'structure';
 
@@ -66,6 +74,7 @@ const EditorPage = () => {
   const _setProjectionType = useCameraSettingsStore((state) => state.setProjectionType);
   const [_activeCategory, _setActiveCategory] = useState<ToolCategory>('walls');
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
+  const [libraryPanelOpen, setLibraryPanelOpen] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [activeTool, setActiveTool] = useState<ToolType>(ToolType.SELECT);
   const [viewMode, setViewMode] = useState<'2D' | '3D'>('2D');
@@ -122,7 +131,9 @@ const EditorPage = () => {
     return Math.max(0, Math.min(90, altitude));
   };
   const [playMode, setPlayMode] = useState(false); // FPS mode toggle
+  const [gameViewMode, setGameViewMode] = useState<ViewMode>('first-person'); // 1인칭/3인칭/ISO
   const [showCharacter, setShowCharacter] = useState(false); // Character toggle
+
   const [photoRealisticMode, setPhotoRealisticMode] = useState(true); // Photo-realistic rendering
   const [exportModalOpen, setExportModalOpen] = useState(false); // Export modal toggle
   const [aiRenderModalOpen, setAiRenderModalOpen] = useState(false); // New AI Render Modal toggle
@@ -183,15 +194,28 @@ const EditorPage = () => {
   const [previewHeight, setPreviewHeight] = useState(200);
 
   // 3D Visibility settings
-  const [view3DVisibility, setView3DVisibility] = useState({
+  const [view3DVisibility, setView3DVisibilityState] = useState({
     showHidden: false,
     ceiling: true,
     furniture: true,
     customProduct: true,
     dimensionLine: true,
     wall: false, // false = auto wall hiding enabled, true = show all walls
-    modeling: true
+    modeling: true,
+    character: false
   });
+
+  // Wrapper to sync character visibility with showCharacter state
+  const setView3DVisibility = useCallback((newVisibility: typeof view3DVisibility | ((prev: typeof view3DVisibility) => typeof view3DVisibility)) => {
+    setView3DVisibilityState((prev) => {
+      const next = typeof newVisibility === 'function' ? newVisibility(prev) : newVisibility;
+      // Sync character visibility with showCharacter state
+      if (next.character !== prev.character) {
+        setShowCharacter(next.character);
+      }
+      return next;
+    });
+  }, []);
 
   // Selected room state (for right panel info)
   const [selectedRoom, setSelectedRoom] = useState<{ id: string; name: string; area: number } | null>(null);
@@ -272,6 +296,284 @@ const EditorPage = () => {
   // Wall settings state (for right panel)
   const [wallHeight, setWallHeight] = useState(2400); // mm
   const [wallThickness, setWallThickness] = useState(200); // mm
+
+  // Furniture selection state
+  const [selectedFurniture, setSelectedFurniture] = useState<{
+    id: string;
+    name: string;
+    screenPosition: { x: number; y: number };
+  } | null>(null);
+
+  // Handle furniture selection from Babylon3DCanvas (3D mode)
+  const handleFurnitureSelect = useCallback((event: FurnitureSelectionEvent) => {
+    if (event.furniture && event.screenPosition) {
+      setSelectedFurniture({
+        id: event.furniture.id,
+        name: event.furniture.name,
+        screenPosition: event.screenPosition,
+      });
+    } else {
+      setSelectedFurniture(null);
+    }
+  }, []);
+
+  // 2D Furniture state
+  const [furniture2D, setFurniture2D] = useState<Furniture2D[]>([]);
+  const [selectedFurniture2D, setSelectedFurniture2D] = useState<{
+    furniture: Furniture2D;
+    screenPosition: { x: number; y: number };
+  } | null>(null);
+
+  // 2D Drag state for furniture placement from LibraryPanel
+  const [dragState2D, setDragState2D] = useState<{
+    isDragging: boolean;
+    metadata: IAssetMetadata | null;
+    mouseX: number;
+    mouseY: number;
+  }>({ isDragging: false, metadata: null, mouseX: 0, mouseY: 0 });
+
+  // Handle 2D furniture selection from FloorplanCanvas
+  const handleFurniture2DSelect = useCallback((furniture: Furniture2D | null, screenPosition?: { x: number; y: number }) => {
+    if (furniture && screenPosition) {
+      setSelectedFurniture2D({
+        furniture,
+        screenPosition,
+      });
+    } else {
+      setSelectedFurniture2D(null);
+    }
+  }, []);
+
+  // Handle 2D furniture move
+  const handleFurniture2DMove = useCallback((id: string, x: number, y: number) => {
+    setFurniture2D(prev => prev.map(f =>
+      f.id === id ? { ...f, x, y } : f
+    ));
+    // Dispatch event for 3D sync (2D x/y -> 3D x/z in meters)
+    const event = new CustomEvent('FURNITURE_MOVE_2D', {
+      detail: {
+        furnitureId: id,
+        position: {
+          x: x / 1000, // mm to m
+          y: 0, // Keep y at ground level
+          z: y / 1000, // 2D y -> 3D z
+        }
+      }
+    });
+    window.dispatchEvent(event);
+  }, []);
+
+  // Handle 2D furniture rotate
+  const handleFurniture2DRotate = useCallback((id: string, rotation: number) => {
+    setFurniture2D(prev => prev.map(f =>
+      f.id === id ? { ...f, rotation } : f
+    ));
+    // Dispatch event for 3D sync
+    const event = new CustomEvent('FURNITURE_ROTATE_2D', {
+      detail: {
+        furnitureId: id,
+        rotation: { x: 0, y: rotation, z: 0 } // 2D rotation -> 3D Y rotation
+      }
+    });
+    window.dispatchEvent(event);
+  }, []);
+
+  // Handle 2D furniture resize
+  const handleFurniture2DResize = useCallback((id: string, width: number, depth: number) => {
+    setFurniture2D(prev => prev.map(f =>
+      f.id === id ? { ...f, width, depth } : f
+    ));
+  }, []);
+
+  // Handle 2D furniture duplicate
+  const handleFurniture2DDuplicate = useCallback((id: string) => {
+    const source = furniture2D.find(f => f.id === id);
+    if (!source) return;
+
+    const newFurniture: Furniture2D = {
+      ...source,
+      id: `${source.id}_copy_${Date.now()}`,
+      x: source.x + 500, // Offset by 500mm
+      y: source.y + 500,
+    };
+    setFurniture2D(prev => [...prev, newFurniture]);
+  }, [furniture2D]);
+
+  // Handle 2D furniture delete
+  const handleFurniture2DDelete = useCallback((id: string) => {
+    setFurniture2D(prev => prev.filter(f => f.id !== id));
+    if (selectedFurniture2D?.furniture.id === id) {
+      setSelectedFurniture2D(null);
+    }
+    // Dispatch event for 3D sync
+    const event = new CustomEvent('FURNITURE_DELETE_2D', {
+      detail: { furnitureId: id }
+    });
+    window.dispatchEvent(event);
+  }, [selectedFurniture2D]);
+
+  // Handle 2D furniture flip
+  const handleFurniture2DFlip = useCallback((id: string) => {
+    setFurniture2D(prev => prev.map(f =>
+      f.id === id ? { ...f, flippedX: !f.flippedX } : f
+    ));
+  }, []);
+
+  // Handle 2D furniture hide
+  const handleFurniture2DHide = useCallback((id: string) => {
+    setFurniture2D(prev => prev.map(f =>
+      f.id === id ? { ...f, visible: false } : f
+    ));
+    if (selectedFurniture2D?.furniture.id === id) {
+      setSelectedFurniture2D(null);
+    }
+  }, [selectedFurniture2D]);
+
+  // 2D drag and drop for furniture placement from LibraryPanel
+  useEffect(() => {
+    if (viewMode !== '2D') return;
+
+    const handleDragStart = (payload: DragStartPayload) => {
+      console.log('[EditorPage] 2D Drag started:', payload.metadata.name);
+      setDragState2D({
+        isDragging: true,
+        metadata: payload.metadata,
+        mouseX: payload.mouseX,
+        mouseY: payload.mouseY,
+      });
+    };
+
+    const handleDragMove = (payload: DragMovePayload) => {
+      if (dragState2D.isDragging) {
+        setDragState2D(prev => ({
+          ...prev,
+          mouseX: payload.mouseX,
+          mouseY: payload.mouseY,
+        }));
+      }
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (dragState2D.isDragging) {
+        eventBus.emit(ASSET_EVENTS.DRAG_MOVE, { mouseX: e.clientX, mouseY: e.clientY });
+      }
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (dragState2D.isDragging && dragState2D.metadata) {
+        // Get canvas element to convert screen coords to world coords
+        const canvasRect = floorplanCanvas?.getBoundingClientRect();
+        if (canvasRect) {
+          // Check if mouse is inside the canvas area
+          const isInsideCanvas =
+            e.clientX >= canvasRect.left &&
+            e.clientX <= canvasRect.right &&
+            e.clientY >= canvasRect.top &&
+            e.clientY <= canvasRect.bottom;
+
+          if (isInsideCanvas) {
+            // Convert screen position to approximate world position (mm)
+            // This is a rough conversion - the camera zoom affects the actual scale
+            const canvasCenterX = canvasRect.width / 2;
+            const canvasCenterY = canvasRect.height / 2;
+            const relativeX = e.clientX - canvasRect.left - canvasCenterX;
+            const relativeY = e.clientY - canvasRect.top - canvasCenterY;
+
+            // Assume 1 pixel = 2mm at default zoom (this is approximate)
+            const pxPerMm = 0.5;
+            const worldX = relativeX / pxPerMm;
+            const worldY = relativeY / pxPerMm;
+
+            // Create furniture at this position
+            const newFurniture: Furniture2D = {
+              id: `furniture_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              name: dragState2D.metadata.name,
+              category: dragState2D.metadata.category,
+              thumbnailUrl: dragState2D.metadata.thumbnailUrl,
+              x: worldX,
+              y: worldY,
+              width: dragState2D.metadata.dimensions.width,
+              depth: dragState2D.metadata.dimensions.depth,
+              rotation: 0,
+              scale: 1,
+              flippedX: false,
+              flippedY: false,
+              visible: true,
+            };
+
+            setFurniture2D(prev => [...prev, newFurniture]);
+            console.log('[EditorPage] Placed 2D furniture via drag:', newFurniture);
+
+            // Also emit DRAG_END for 3D sync
+            eventBus.emit<DragEndPayload>(ASSET_EVENTS.DRAG_END, {
+              assetId: dragState2D.metadata.id,
+              position: { x: worldX / 1000, y: 0, z: worldY / 1000 }, // mm to m
+              rotation: { x: 0, y: 0, z: 0 },
+              cancelled: false,
+            });
+          }
+        }
+
+        setDragState2D({ isDragging: false, metadata: null, mouseX: 0, mouseY: 0 });
+      }
+    };
+
+    eventBus.on<DragStartPayload>(ASSET_EVENTS.DRAG_START, handleDragStart);
+    eventBus.on<DragMovePayload>(ASSET_EVENTS.DRAG_MOVE, handleDragMove);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      eventBus.off(ASSET_EVENTS.DRAG_START, handleDragStart);
+      eventBus.off(ASSET_EVENTS.DRAG_MOVE, handleDragMove);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [viewMode, dragState2D.isDragging, dragState2D.metadata, floorplanCanvas]);
+
+  // Listen for furniture drag end from 3D mode to add to 2D view (for sync purposes)
+  useEffect(() => {
+    // Only listen when NOT in 2D mode (2D mode handles its own DRAG_END)
+    if (viewMode === '2D') return;
+
+    const handleDragEnd = (payload: DragEndPayload) => {
+      if (payload.cancelled) return;
+
+      const metadata = assetCatalog.getAsset(payload.assetId);
+      if (!metadata) {
+        console.warn('[EditorPage] Asset not found:', payload.assetId);
+        return;
+      }
+
+      // Create 2D furniture from the spawned position
+      // Position is in 3D world coords, convert x/z to 2D x/y (mm)
+      const newFurniture: Furniture2D = {
+        id: `furniture_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: metadata.name,
+        category: metadata.category,
+        thumbnailUrl: metadata.thumbnailUrl,
+        // In Babylon, x and z are the floor plane, y is up
+        // Convert to 2D: 3D x -> 2D x, 3D z -> 2D y
+        x: payload.position.x * 1000, // m to mm
+        y: payload.position.z * 1000, // m to mm (z is "forward" in 3D, y in 2D)
+        width: metadata.dimensions.width,
+        depth: metadata.dimensions.depth,
+        rotation: payload.rotation.y, // Rotation around Y axis in 3D = rotation in 2D
+        scale: 1,
+        flippedX: false,
+        flippedY: false,
+        visible: true,
+      };
+
+      setFurniture2D(prev => [...prev, newFurniture]);
+      console.log('[EditorPage] Added 2D furniture from 3D mode:', newFurniture);
+    };
+
+    eventBus.on<DragEndPayload>(ASSET_EVENTS.DRAG_END, handleDragEnd);
+    return () => {
+      eventBus.off(ASSET_EVENTS.DRAG_END, handleDragEnd);
+    };
+  }, [viewMode]);
 
   // Close dropdown menus when clicking outside
   useEffect(() => {
@@ -390,6 +692,24 @@ const EditorPage = () => {
 
   // Babylon3DCanvas ref for screenshot capture
   const babylon3DCanvasRef = useRef<Babylon3DCanvasRef | null>(null);
+
+  // 3D Scene state for furniture spawning
+  const [babylonScene, setBabylonScene] = useState<Scene | null>(null);
+
+  // Initialize furniture spawner hook
+  useFurnitureSpawner({
+    scene: babylonScene,
+  });
+
+  // Update scene reference when Babylon3DCanvas is ready
+  useEffect(() => {
+    if (babylon3DCanvasRef.current && viewMode === '3D') {
+      const scene = babylon3DCanvasRef.current.getScene();
+      if (scene && !babylonScene) {
+        setBabylonScene(scene);
+      }
+    }
+  }, [viewMode, babylonScene]);
 
   // Capture and download high-quality render
   const _handleCaptureScreenshot = async () => {
@@ -887,6 +1207,7 @@ ARTISTIC APPROACH:
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', themeMode);
     document.documentElement.style.setProperty('--theme-color', themeColor);
+    document.documentElement.style.setProperty('--theme-color-light', `${themeColor}0d`); // 5% opacity
 
     // Save to localStorage
     localStorage.setItem('themeMode', themeMode);
@@ -1722,6 +2043,10 @@ ARTISTIC APPROACH:
               if (!playMode && viewMode === '2D') {
                 setViewMode('3D');
               }
+              // STOP 누르면 3D 모드로 돌아감
+              if (playMode) {
+                setViewMode('3D');
+              }
               setPlayMode(!playMode);
             }}
           >
@@ -1781,7 +2106,10 @@ ARTISTIC APPROACH:
           className={`${styles.sidebarBtn} ${leftPanelOpen ? styles.active : ''}`}
           onClick={() => {
             setLeftPanelOpen(!leftPanelOpen);
-            if (!leftPanelOpen) setAdvancedToolPanelOpen(false);
+            if (!leftPanelOpen) {
+              setAdvancedToolPanelOpen(false);
+              setLibraryPanelOpen(false);
+            }
           }}
           title="Create Room"
         >
@@ -1791,7 +2119,17 @@ ARTISTIC APPROACH:
         </button>
 
         {/* Asset Library */}
-        <button className={styles.sidebarBtn} title="Asset Library">
+        <button
+          className={`${styles.sidebarBtn} ${libraryPanelOpen ? styles.active : ''}`}
+          onClick={() => {
+            setLibraryPanelOpen(!libraryPanelOpen);
+            if (!libraryPanelOpen) {
+              setLeftPanelOpen(false);
+              setAdvancedToolPanelOpen(false);
+            }
+          }}
+          title="Asset Library"
+        >
           <div className={styles.icon}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -1852,6 +2190,16 @@ ARTISTIC APPROACH:
       </div>
 
       <div className={styles.sidebarBottom}>
+        {/* Archiple World - Planet Icon */}
+        <button className={styles.sidebarBtn} onClick={() => navigate('/world')} title="Archiple World">
+          <div className={styles.icon}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="12" cy="12" r="10" />
+              <ellipse cx="12" cy="12" rx="10" ry="4" />
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+          </div>
+        </button>
         {/* Settings */}
         <button className={styles.sidebarBtn} onClick={() => setThemeSettingsOpen(!themeSettingsOpen)} title="설정">
           <div className={styles.icon}>
@@ -1873,9 +2221,14 @@ ARTISTIC APPROACH:
   )
 }
 
+{/* Library Panel */}
+{!playMode && libraryPanelOpen && (
+  <LibraryPanel onClose={() => setLibraryPanelOpen(false)} />
+)}
+
 {/* Left Tools Panel */ }
 {
-  !playMode && !advancedToolPanelOpen && (
+  !playMode && !advancedToolPanelOpen && !libraryPanelOpen && (
     leftPanelOpen ? (
       <div className={styles.leftPanel}>
         <div className={styles.panelHeader}>
@@ -2402,6 +2755,13 @@ ARTISTIC APPROACH:
       onCanvasReady={setFloorplanCanvas}
       view2DType={view2DType}
       onCeilingSelect={setSelectedCeiling2D}
+      // 2D Furniture props
+      furniture2D={furniture2D}
+      selectedFurnitureId={selectedFurniture2D?.furniture.id ?? null}
+      onFurnitureSelect={handleFurniture2DSelect}
+      onFurnitureMove={handleFurniture2DMove}
+      onFurnitureRotate={handleFurniture2DRotate}
+      onFurnitureResize={handleFurniture2DResize}
     />
 
     {/* 2D Compass */}
@@ -2544,6 +2904,7 @@ ARTISTIC APPROACH:
           )} */}
 
   {/* 3D View - Main Viewport */}
+  {/* Note: Use zIndex instead of visibility:hidden so Babylon engine keeps rendering for Mini3DPreview */}
   <div
     onMouseDown={() => bottomControlBarRef.current?.closeAllModals()}
     style={{
@@ -2552,14 +2913,15 @@ ARTISTIC APPROACH:
     left: 0,
     width: '100%',
     height: '100%',
-    visibility: playMode || viewMode === '3D' ? 'visible' : 'hidden',
+    zIndex: playMode || viewMode === '3D' ? 1 : -1,
+    opacity: playMode || viewMode === '3D' ? 1 : 0,
     pointerEvents: playMode || viewMode === '3D' ? 'auto' : 'none',
     cursor: lightPlacementMode ? 'crosshair' : 'default'
   }}>
     <Babylon3DCanvas
       ref={babylon3DCanvasRef}
       floorplanData={floorplanData}
-      visible={playMode || viewMode === '3D'}
+      visible={true}  /* Always render for Mini3DPreview support */
       sunSettings={{
         ...sunSettings,
         altitude: calculateSunAltitude(sunSettings.month, sunSettings.hour)
@@ -2578,10 +2940,117 @@ ARTISTIC APPROACH:
       showGrid={showGrid}
       showWalls={view3DVisibility.wall}
       showEdges={hiddenLineMode}
+      viewMode={gameViewMode}
+      characterModel="/animation/moving/female_walking.glb"
+      is2DMode={viewMode === '2D'}
+      onFurnitureSelect={handleFurnitureSelect}
     />
 
     {/* 3D Axis Gizmo (isolated component to prevent parent re-renders) */}
     <CameraGizmoWrapper visible={!playMode} size={120} />
+
+    {/* View Mode Toggle - Only visible in Play Mode */}
+    {playMode && (
+      <div style={{
+        position: 'absolute',
+        top: '20px',
+        left: '20px',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        background: 'rgba(20, 20, 20, 0.85)',
+        backdropFilter: 'blur(20px)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: '12px',
+        padding: '6px',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+        gap: '4px',
+      }}>
+        <button
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '4px',
+            padding: '10px 16px',
+            background: gameViewMode === 'first-person' ? '#3dbc58' : 'transparent',
+            border: 'none',
+            borderRadius: '8px',
+            color: gameViewMode === 'first-person' ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
+            fontSize: '11px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            minWidth: '70px',
+            boxShadow: gameViewMode === 'first-person' ? '0 4px 12px rgba(63, 174, 122, 0.4)' : 'none',
+          }}
+          onClick={() => setGameViewMode('first-person')}
+          title="1인칭 뷰"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
+          </svg>
+          <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>1인칭</span>
+        </button>
+        <button
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '4px',
+            padding: '10px 16px',
+            background: gameViewMode === 'third-person' ? '#3dbc58' : 'transparent',
+            border: 'none',
+            borderRadius: '8px',
+            color: gameViewMode === 'third-person' ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
+            fontSize: '11px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            minWidth: '70px',
+            boxShadow: gameViewMode === 'third-person' ? '0 4px 12px rgba(63, 174, 122, 0.4)' : 'none',
+          }}
+          onClick={() => setGameViewMode('third-person')}
+          title="3인칭 뷰"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="8" r="4" />
+            <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+          </svg>
+          <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>3인칭</span>
+        </button>
+        <button
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '4px',
+            padding: '10px 16px',
+            background: gameViewMode === 'iso' ? '#3dbc58' : 'transparent',
+            border: 'none',
+            borderRadius: '8px',
+            color: gameViewMode === 'iso' ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
+            fontSize: '11px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            minWidth: '70px',
+            boxShadow: gameViewMode === 'iso' ? '0 4px 12px rgba(63, 174, 122, 0.4)' : 'none',
+          }}
+          onClick={() => setGameViewMode('iso')}
+          title="ISO 뷰"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5z" />
+            <path d="M2 17l10 5 10-5" />
+            <path d="M2 12l10 5 10-5" />
+          </svg>
+          <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ISO</span>
+        </button>
+      </div>
+    )}
+
 
     {/* Light Placement Guide Overlay */}
     {lightPlacementMode && viewMode === '3D' && (
@@ -3408,6 +3877,160 @@ ARTISTIC APPROACH:
   themeMode={themeMode}
   babylon3DCanvasRef={babylon3DCanvasRef}
 />
+
+{/* Furniture Toolbar - shows when furniture is selected in 3D mode */}
+<FurnitureToolbar
+  visible={selectedFurniture !== null && !playMode && viewMode === '3D'}
+  position={selectedFurniture?.screenPosition || { x: 0, y: 0 }}
+  onMove={() => {
+    // Move mode is handled by gizmo in Babylon3DCanvas
+    console.log('Move furniture:', selectedFurniture?.id);
+  }}
+  onRotate={() => {
+    // Rotate furniture by 90 degrees
+    if (babylon3DCanvasRef.current && selectedFurniture) {
+      const event = new CustomEvent('FURNITURE_ROTATE', {
+        detail: { furnitureId: selectedFurniture.id }
+      });
+      window.dispatchEvent(event);
+    }
+  }}
+  onFlip={() => {
+    // Flip furniture horizontally
+    if (babylon3DCanvasRef.current && selectedFurniture) {
+      const event = new CustomEvent('FURNITURE_FLIP', {
+        detail: { furnitureId: selectedFurniture.id }
+      });
+      window.dispatchEvent(event);
+    }
+  }}
+  onDuplicate={() => {
+    if (babylon3DCanvasRef.current && selectedFurniture) {
+      const event = new CustomEvent('FURNITURE_DUPLICATE', {
+        detail: { furnitureId: selectedFurniture.id }
+      });
+      window.dispatchEvent(event);
+    }
+  }}
+  onHide={() => {
+    if (babylon3DCanvasRef.current && selectedFurniture) {
+      const event = new CustomEvent('FURNITURE_HIDE', {
+        detail: { furnitureId: selectedFurniture.id }
+      });
+      window.dispatchEvent(event);
+      setSelectedFurniture(null);
+    }
+  }}
+  onFavorite={() => {
+    console.log('Add to favorites:', selectedFurniture?.id);
+  }}
+  onDelete={() => {
+    if (babylon3DCanvasRef.current && selectedFurniture) {
+      const event = new CustomEvent('FURNITURE_DELETE', {
+        detail: { furnitureId: selectedFurniture.id }
+      });
+      window.dispatchEvent(event);
+      setSelectedFurniture(null);
+    }
+  }}
+  onMaterialEditor={() => {
+    console.log('Open material editor:', selectedFurniture?.id);
+  }}
+/>
+
+{/* Furniture Toolbar - shows when furniture is selected in 2D mode */}
+<FurnitureToolbar
+  visible={selectedFurniture2D !== null && !playMode && viewMode === '2D'}
+  position={selectedFurniture2D?.screenPosition || { x: 0, y: 0 }}
+  onMove={() => {
+    // Move is handled by drag in FurnitureLayer
+    console.log('Move furniture (2D):', selectedFurniture2D?.furniture.id);
+  }}
+  onRotate={() => {
+    // Rotate furniture by 90 degrees in 2D
+    if (selectedFurniture2D) {
+      const newRotation = selectedFurniture2D.furniture.rotation + Math.PI / 2;
+      handleFurniture2DRotate(selectedFurniture2D.furniture.id, newRotation);
+    }
+  }}
+  onFlip={() => {
+    // Flip furniture horizontally in 2D
+    if (selectedFurniture2D) {
+      handleFurniture2DFlip(selectedFurniture2D.furniture.id);
+    }
+  }}
+  onDuplicate={() => {
+    if (selectedFurniture2D) {
+      handleFurniture2DDuplicate(selectedFurniture2D.furniture.id);
+    }
+  }}
+  onHide={() => {
+    if (selectedFurniture2D) {
+      handleFurniture2DHide(selectedFurniture2D.furniture.id);
+    }
+  }}
+  onFavorite={() => {
+    console.log('Add to favorites (2D):', selectedFurniture2D?.furniture.id);
+  }}
+  onDelete={() => {
+    if (selectedFurniture2D) {
+      handleFurniture2DDelete(selectedFurniture2D.furniture.id);
+    }
+  }}
+  onMaterialEditor={() => {
+    console.log('Open material editor (2D):', selectedFurniture2D?.furniture.id);
+  }}
+/>
+
+{/* 2D Drag Ghost - shows preview while dragging furniture from library */}
+{dragState2D.isDragging && dragState2D.metadata && (
+  <div
+    style={{
+      position: 'fixed',
+      left: dragState2D.mouseX - 40,
+      top: dragState2D.mouseY - 40,
+      width: 80,
+      height: 80,
+      pointerEvents: 'none',
+      zIndex: 10000,
+      opacity: 0.8,
+      transform: 'translate(0, 0)',
+    }}
+  >
+    {dragState2D.metadata.thumbnailUrl ? (
+      <img
+        src={dragState2D.metadata.thumbnailUrl}
+        alt={dragState2D.metadata.name}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+          borderRadius: 8,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          background: 'rgba(255,255,255,0.9)',
+        }}
+      />
+    ) : (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          background: 'rgba(59, 130, 246, 0.3)',
+          border: '2px dashed #3b82f6',
+          borderRadius: 8,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#3b82f6',
+          fontSize: 12,
+          fontWeight: 500,
+        }}
+      >
+        {dragState2D.metadata.name}
+      </div>
+    )}
+  </div>
+)}
     </div >
   );
 };
